@@ -137,6 +137,10 @@ var (
 		Use:   "debug",
 		Short: "Print debug information like config paths",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Initialize logging early to prevent nil pointer panic
+			log.Initialize(false)
+			defer log.Close()
+			
 			// Load config first so we can configure logging properly
 			cfg := config.LoadConfig()
 			// Convert config to log config
