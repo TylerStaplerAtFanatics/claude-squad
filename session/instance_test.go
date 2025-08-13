@@ -42,7 +42,11 @@ func TestFromInstanceDataWithMissingWorktree(t *testing.T) {
 			"test-branch",
 			"abcdef1234567890",
 		),
+<<<<<<< HEAD
 		started: true,
+=======
+		started:     true,
+>>>>>>> 6211f28 (fix: Detect deleted worktrees on instance load)
 	}
 
 	// Test 1: Worktree exists - instance should not be paused
@@ -58,6 +62,7 @@ func TestFromInstanceDataWithMissingWorktree(t *testing.T) {
 	// We need to use a modified approach since we can't call the actual FromInstanceData
 	// which would try to start a real session
 	instance = &Instance{
+<<<<<<< HEAD
 		Title:     "Test Instance",
 		Path:      "/path/to/repo",
 		Branch:    "test-branch",
@@ -67,6 +72,17 @@ func TestFromInstanceDataWithMissingWorktree(t *testing.T) {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Program:   "claude",
+=======
+		Title:       "Test Instance",
+		Path:        "/path/to/repo",
+		Branch:      "test-branch",
+		Status:      Ready,
+		Height:      100,
+		Width:       200,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+		Program:     "claude",
+>>>>>>> 6211f28 (fix: Detect deleted worktrees on instance load)
 		gitWorktree: git.NewGitWorktreeFromStorage(
 			"/path/to/repo",
 			worktreePath,
@@ -74,7 +90,11 @@ func TestFromInstanceDataWithMissingWorktree(t *testing.T) {
 			"test-branch",
 			"abcdef1234567890",
 		),
+<<<<<<< HEAD
 		started: true,
+=======
+		started:     true,
+>>>>>>> 6211f28 (fix: Detect deleted worktrees on instance load)
 	}
 
 	// Test 2: Apply our fix - check if worktree exists and update status
@@ -98,6 +118,7 @@ func checkInstanceStatus(t *testing.T, instance *Instance, worktreePath string, 
 	}
 }
 
+<<<<<<< HEAD
 func TestStatusEnumValues(t *testing.T) {
 	// Test that all status values are defined correctly
 	tests := []struct {
@@ -118,3 +139,5 @@ func TestStatusEnumValues(t *testing.T) {
 		}
 	}
 }
+=======
+>>>>>>> 6211f28 (fix: Detect deleted worktrees on instance load)
