@@ -57,6 +57,12 @@ type Instance struct {
 	Prompt string
 	// ExistingWorktree is an optional path to an existing worktree to reuse
 	ExistingWorktree string
+	// Category is the user-defined category for grouping sessions
+	Category string
+	// Tags is a list of user-defined tags for filtering sessions
+	Tags []string
+	// IsExpanded tracks if the category is expanded in the UI (for collapsible categories)
+	IsExpanded bool
 
 	// DiffStats stores the current git diff statistics
 	diffStats *git.DiffStats
@@ -85,6 +91,9 @@ func (i *Instance) ToInstanceData() InstanceData {
 		Program:    i.Program,
 		AutoYes:    i.AutoYes,
 		Prompt:     i.Prompt,
+		Category:   i.Category,
+		Tags:       i.Tags,
+		IsExpanded: i.IsExpanded,
 	}
 
 	// Only include worktree data if gitWorktree is initialized
@@ -124,6 +133,9 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		UpdatedAt:  data.UpdatedAt,
 		Program:    data.Program,
 		Prompt:     data.Prompt,
+		Category:   data.Category,
+		Tags:       data.Tags,
+		IsExpanded: data.IsExpanded,
 		gitWorktree: git.NewGitWorktreeFromStorage(
 			data.Worktree.RepoPath,
 			data.Worktree.WorktreePath,
@@ -180,6 +192,10 @@ type InstanceOptions struct {
 	Prompt string
 	// ExistingWorktree is an optional path to an existing worktree to reuse
 	ExistingWorktree string
+	// Category is the user-defined category for grouping sessions
+	Category string
+	// Tags is a list of user-defined tags for filtering sessions
+	Tags []string
 }
 
 func NewInstance(opts InstanceOptions) (*Instance, error) {
@@ -192,16 +208,19 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 	}
 
 	return &Instance{
-		Title:     opts.Title,
-		Status:    Ready,
-		Path:      absPath,
-		Program:   opts.Program,
-		Height:    0,
-		Width:     0,
-		CreatedAt: t,
-		UpdatedAt: t,
-		AutoYes:   opts.AutoYes,
-		Prompt:    opts.Prompt,
+		Title:      opts.Title,
+		Status:     Ready,
+		Path:       absPath,
+		Program:    opts.Program,
+		Height:     0,
+		Width:      0,
+		CreatedAt:  t,
+		UpdatedAt:  t,
+		AutoYes:    opts.AutoYes,
+		Prompt:     opts.Prompt,
+		Category:   opts.Category,
+		Tags:       opts.Tags,
+		IsExpanded: true, // New instances are expanded by default
 	}, nil
 }
 
@@ -639,4 +658,22 @@ func (i *Instance) SendKeys(keys string) error {
 		return fmt.Errorf("cannot send keys to instance that has not been started or is paused")
 	}
 	return i.tmuxSession.SendKeys(keys)
+}
+
+// GetIndicator returns a string indicator based on the instance status
+func (i *Instance) GetIndicator() string {
+	switch i.Status {
+	case Running:
+		return "Running"
+	case Ready:
+		return "Ready"
+	case Loading:
+		return "Loading"
+	case Paused:
+		return "Paused"
+	case NeedsApproval:
+		return "NeedsApproval"
+	default:
+		return ""
+	}
 }

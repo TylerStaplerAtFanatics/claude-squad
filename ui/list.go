@@ -11,6 +11,23 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// ListInterface defines the interface that both List and SearchableList implement
+type ListInterface interface {
+	AddInstance(*session.Instance) func()
+	SetSize(width, height int)
+	SetSessionPreviewSize(width, height int) error
+	Kill()
+	GetInstances() []*session.Instance
+	GetSelectedInstance() *session.Instance
+	Up()
+	Down()
+	String() string
+	NumInstances() int
+	Attach() (chan struct{}, error)
+	GetIndicator() string
+	SetSelectedInstance(int)
+}
+
 const readyIcon = "● "
 const pausedIcon = "⏸ "
 const needsApprovalIcon = "❗ "
@@ -104,132 +121,17 @@ func (l *List) NumInstances() int {
 	return len(l.items)
 }
 
-// InstanceRenderer handles rendering of session.Instance objects
-type InstanceRenderer struct {
-	spinner *spinner.Model
-	width   int
-}
+// Reference to the InstanceRenderer is now kept here but the implementation is moved to renderer.go
 
-func (r *InstanceRenderer) setWidth(width int) {
-	r.width = AdjustPreviewWidth(width)
-}
-
-// ɹ and ɻ are other options.
-const branchIcon = "Ꮧ"
-
-func (r *InstanceRenderer) Render(i *session.Instance, idx int, selected bool, hasMultipleRepos bool) string {
-	prefix := fmt.Sprintf(" %d. ", idx)
-	if idx >= 10 {
-		prefix = prefix[:len(prefix)-1]
-	}
-	titleS := selectedTitleStyle
-	descS := selectedDescStyle
-	if !selected {
-		titleS = titleStyle
-		descS = listDescStyle
-	}
-
-	// add spinner next to title if it's running
-	var join string
-	switch i.Status {
-	case session.Running:
-		join = fmt.Sprintf("%s ", r.spinner.View())
-	case session.Ready:
-		join = readyStyle.Render(readyIcon)
-	case session.Paused:
-		join = pausedStyle.Render(pausedIcon)
-	case session.NeedsApproval:
-		join = needsApprovalStyle.Render(needsApprovalIcon)
-	default:
-	}
-
-	// Cut the title if it's too long
-	titleText := i.Title
-	widthAvail := r.width - 3 - len(prefix) - 1
-	if widthAvail > 0 && widthAvail < len(titleText) && len(titleText) >= widthAvail-3 {
-		titleText = titleText[:widthAvail-3] + "..."
-	}
-	title := titleS.Render(lipgloss.JoinHorizontal(
-		lipgloss.Left,
-		lipgloss.Place(r.width-3, 1, lipgloss.Left, lipgloss.Center, fmt.Sprintf("%s %s", prefix, titleText)),
-		" ",
-		join,
-	))
-
-	stat := i.GetDiffStats()
-
-	var diff string
-	var addedDiff, removedDiff string
-	if stat == nil || stat.Error != nil || stat.IsEmpty() {
-		// Don't show diff stats if there's an error or if they don't exist
-		addedDiff = ""
-		removedDiff = ""
-		diff = ""
-	} else {
-		addedDiff = fmt.Sprintf("+%d", stat.Added)
-		removedDiff = fmt.Sprintf("-%d ", stat.Removed)
-		diff = lipgloss.JoinHorizontal(
-			lipgloss.Center,
-			addedLinesStyle.Background(descS.GetBackground()).Render(addedDiff),
-			lipgloss.Style{}.Background(descS.GetBackground()).Foreground(descS.GetForeground()).Render(","),
-			removedLinesStyle.Background(descS.GetBackground()).Render(removedDiff),
-		)
-	}
-
-	remainingWidth := r.width
-	remainingWidth -= len(prefix)
-	remainingWidth -= len(branchIcon)
-
-	diffWidth := len(addedDiff) + len(removedDiff)
-	if diffWidth > 0 {
-		diffWidth += 1
-	}
-
-	// Use fixed width for diff stats to avoid layout issues
-	remainingWidth -= diffWidth
-
-	branch := i.Branch
-	if i.Started() {
-		// Skip repo name retrieval for paused instances
-		if !i.Paused() {
-			repoName, err := i.RepoName()
-			if err != nil {
-				// Log at warning level but don't break rendering
-				log.WarningLog.Printf("could not get repo name in instance renderer: %v", err)
-			} else {
-				branch += fmt.Sprintf(" (%s)", repoName)
-			}
+// GetIndicator returns the current indicator string for the selected instance
+func (l *List) GetIndicator() string {
+	if l.selectedIdx >= 0 && l.selectedIdx < len(l.items) {
+		selectedInstance := l.items[l.selectedIdx]
+		if selectedInstance != nil {
+			return selectedInstance.GetIndicator()
 		}
 	}
-	// Don't show branch if there's no space for it. Or show ellipsis if it's too long.
-	if remainingWidth < 0 {
-		branch = ""
-	} else if remainingWidth < len(branch) {
-		if remainingWidth < 3 {
-			branch = ""
-		} else {
-			// We know the remainingWidth is at least 4 and branch is longer than that, so this is safe.
-			branch = branch[:remainingWidth-3] + "..."
-		}
-	}
-	remainingWidth -= len(branch)
-
-	// Add spaces to fill the remaining width.
-	spaces := ""
-	if remainingWidth > 0 {
-		spaces = strings.Repeat(" ", remainingWidth)
-	}
-
-	branchLine := fmt.Sprintf("%s %s-%s%s%s", strings.Repeat(" ", len(prefix)), branchIcon, branch, spaces, diff)
-
-	// join title and subtitle
-	text := lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		descS.Render(branchLine),
-	)
-
-	return text
+	return ""
 }
 
 func (l *List) String() string {

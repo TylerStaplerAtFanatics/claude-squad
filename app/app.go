@@ -17,7 +17,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const GlobalInstanceLimit = 10
+const GlobalInstanceLimit = 100 // Increased from 10 to support more sessions with navigation improvements
 
 // Run is the main entrypoint into the application.
 func Run(ctx context.Context, program string, autoYes bool) error {
@@ -83,7 +83,7 @@ type home struct {
 	// -- UI Components --
 
 	// list displays the list of instances
-	list *ui.List
+	list ui.ListInterface
 	// menu displays the bottom menu
 	menu *ui.Menu
 	// tabbedWindow displays the tabbed window with preview and diff panes
@@ -129,7 +129,7 @@ func newHome(ctx context.Context, program string, autoYes bool) *home {
 		state:        stateDefault,
 		appState:     appState,
 	}
-	h.list = ui.NewList(&h.spinner, autoYes)
+	h.list = ui.NewSearchableList(&h.spinner, autoYes)
 
 	// Load saved instances
 	instances, err := storage.LoadInstances()
@@ -582,6 +582,49 @@ func (m *home) handleKeyPress(msg tea.KeyMsg) (mod tea.Model, cmd tea.Cmd) {
 		m.state = stateNew
 		m.menu.SetState(ui.StateNewInstance)
 
+		return m, nil
+	case keys.KeySearch:
+		// Handle search mode activation if using SearchableList
+		if searchableList, ok := m.list.(*ui.SearchableList); ok {
+			searchableList.EnterSearchMode()
+			return m, m.instanceChanged()
+		}
+		return m, nil
+	case keys.KeyToggleGroup:
+		// Toggle expand/collapse of current category if using SearchableList
+		if searchableList, ok := m.list.(*ui.SearchableList); ok {
+			selected := m.list.GetSelectedInstance()
+			if selected != nil && selected.Category != "" {
+				searchableList.ToggleCategoryExpanded(selected.Category)
+				return m, m.instanceChanged()
+			}
+		}
+		return m, nil
+	case keys.KeyRight:
+		// Expand current category if using SearchableList
+		if searchableList, ok := m.list.(*ui.SearchableList); ok {
+			selected := m.list.GetSelectedInstance()
+			if selected != nil && selected.Category != "" {
+				// Make sure category is expanded
+				if !searchableList.IsCategoryExpanded(selected.Category) {
+					searchableList.ToggleCategoryExpanded(selected.Category)
+				}
+				return m, m.instanceChanged()
+			}
+		}
+		return m, nil
+	case keys.KeyLeft:
+		// Collapse current category if using SearchableList
+		if searchableList, ok := m.list.(*ui.SearchableList); ok {
+			selected := m.list.GetSelectedInstance()
+			if selected != nil && selected.Category != "" {
+				// Make sure category is collapsed
+				if searchableList.IsCategoryExpanded(selected.Category) {
+					searchableList.ToggleCategoryExpanded(selected.Category)
+				}
+				return m, m.instanceChanged()
+			}
+		}
 		return m, nil
 	case keys.KeyUp:
 		m.list.Up()

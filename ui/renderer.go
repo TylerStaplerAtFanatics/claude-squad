@@ -46,10 +46,9 @@ func (r *InstanceRenderer) RenderWithHighlights(i *session.Instance, idx int, se
 	}
 	
 	titleS := selectedTitleStyle
-	descS := selectedDescStyle
+	// Using only titleS in this function, descS is not needed
 	if !selected {
 		titleS = titleStyle
-		descS = listDescStyle
 	}
 	
 	// Handle status icon

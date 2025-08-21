@@ -378,4 +378,9 @@ func (l *SearchableList) HandleSearchKeyPress(msg tea.KeyMsg) bool {
 	return false
 }
 
+// GetIndicator implements the ListInterface for SearchableList
+func (l *SearchableList) GetIndicator() string {
+	return l.List.GetIndicator()
+}
+
 // Note: RenderWithHighlights is implemented in renderer.go
