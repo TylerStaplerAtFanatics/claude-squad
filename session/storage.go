@@ -26,6 +26,11 @@ type InstanceData struct {
 	ExistingWorktree string          `json:"existing_worktree,omitempty"`
 	Worktree         GitWorktreeData `json:"worktree"`
 	DiffStats        DiffStatsData   `json:"diff_stats"`
+	
+	// New fields for session organization and grouping
+	Category   string   `json:"category,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
+	IsExpanded bool     `json:"is_expanded,omitempty"`
 }
 
 // GitWorktreeData represents the serializable data of a GitWorktree

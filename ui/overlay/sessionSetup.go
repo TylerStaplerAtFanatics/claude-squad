@@ -18,6 +18,7 @@ const (
 	StepName SessionSetupStep = iota
 	StepLocation
 	StepProgram
+	StepCategory
 	StepRepository
 	StepDirectory
 	StepWorktree
@@ -41,6 +42,8 @@ type SessionSetupOverlay struct {
 	program           string
 	branch            string
 	existingWorktree  string
+	category          string
+	tags              []string
 	
 	// Step-specific states
 	locationChoice    string // "current", "different", "existing"
@@ -49,6 +52,8 @@ type SessionSetupOverlay struct {
 	// UI components for different steps
 	nameInput         *TextInputOverlay
 	programInput      *TextInputOverlay
+	categoryInput     *TextInputOverlay
+	categorySelector  *FuzzyInputOverlay
 	repoSelector      *FuzzyInputOverlay
 	dirBrowser        *FuzzyInputOverlay
 	worktreeSelector  *FuzzyInputOverlay
@@ -111,8 +116,8 @@ func NewSessionSetupOverlay() *SessionSetupOverlay {
 	
 	// Create input components
 	nameInput := NewTextInputOverlay("Session Name", "")
-	
 	programInput := NewTextInputOverlay("Program", defaultProgram)
+	categoryInput := NewTextInputOverlay("Category", "")
 	
 	// Create an empty session setup overlay
 	return &SessionSetupOverlay{
@@ -127,12 +132,15 @@ func NewSessionSetupOverlay() *SessionSetupOverlay {
 		workingDir:    "",   // Default to repository root
 		program:       defaultProgram,
 		branch:        "",   // Will be generated based on session name
+		category:      "",   // Default to no category
+		tags:          []string{},
 		
 		locationChoice: "current",
 		branchChoice:   "new",
 		
 		nameInput:     nameInput,
 		programInput:  programInput,
+		categoryInput: categoryInput,
 		
 		titleStyle:    titleStyle,
 		stepStyle:     stepStyle,
@@ -156,6 +164,14 @@ func (s *SessionSetupOverlay) SetSize(width, height int) {
 	
 	if s.programInput != nil {
 		s.programInput.SetSize(width-20, 5)
+	}
+	
+	if s.categoryInput != nil {
+		s.categoryInput.SetSize(width-20, 5)
+	}
+	
+	if s.categorySelector != nil {
+		s.categorySelector.SetSize(width-10, height-10)
 	}
 	
 	if s.repoSelector != nil {
@@ -201,6 +217,11 @@ func (s *SessionSetupOverlay) Focus() {
 			// TextInputOverlay will handle focus internally
 		}
 		break
+	case StepCategory:
+		if s.categoryInput != nil {
+			// TextInputOverlay will handle focus internally
+		}
+		break
 	case StepRepository:
 		if s.repoSelector != nil {
 			s.repoSelector.Focus()
@@ -226,6 +247,10 @@ func (s *SessionSetupOverlay) Blur() {
 	
 	// Blur all inputs
 	// TextInputOverlay handles focus internally
+	
+	if s.categorySelector != nil {
+		s.categorySelector.Blur()
+	}
 	
 	if s.repoSelector != nil {
 		s.repoSelector.Blur()
@@ -262,6 +287,12 @@ func (s *SessionSetupOverlay) nextStep() {
 		if s.program == "" {
 			s.program = config.LoadConfig().DefaultProgram
 		}
+		s.step = StepCategory
+		// TextInputOverlay doesn't have explicit Focus method
+	
+	case StepCategory:
+		s.category = s.categoryInput.GetValue()
+		// Category is optional, can be empty
 		s.step = StepLocation
 	
 	case StepLocation:
@@ -311,14 +342,17 @@ func (s *SessionSetupOverlay) nextStep() {
 	case StepConfirm:
 		// Complete the setup
 		if s.onComplete != nil {
-			options := session.InstanceOptions{
+			instance := session.InstanceOptions{
 				Title:            s.sessionName,
 				Path:             s.repoPath,
 				WorkingDir:       s.workingDir,
 				Program:          s.program,
 				ExistingWorktree: s.existingWorktree,
+				Category:         s.category,
+				Tags:             s.tags,
 			}
-			s.onComplete(options)
+			
+			s.onComplete(instance)
 		}
 	}
 	
@@ -339,8 +373,12 @@ func (s *SessionSetupOverlay) prevStep() {
 		s.step = StepName
 		// TextInputOverlay doesn't have explicit Focus method
 	
-	case StepLocation:
+	case StepCategory:
 		s.step = StepProgram
+		// TextInputOverlay doesn't have explicit Focus method
+	
+	case StepLocation:
+		s.step = StepCategory
 		// TextInputOverlay doesn't have explicit Focus method
 	
 	case StepRepository:
@@ -525,7 +563,7 @@ func (s *SessionSetupOverlay) Update(msg tea.Msg) tea.Cmd {
 			
 		case tea.KeyEnter:
 			// Special case for selection steps
-			if s.step == StepName || s.step == StepProgram {
+			if s.step == StepName || s.step == StepProgram || s.step == StepCategory {
 				s.nextStep()
 				return nil
 			} else if s.step == StepLocation {
@@ -576,6 +614,11 @@ func (s *SessionSetupOverlay) Update(msg tea.Msg) tea.Cmd {
 		if msg, ok := msg.(tea.KeyMsg); ok && s.programInput != nil {
 			s.programInput.HandleKeyPress(msg)
 		}
+	
+	case StepCategory:
+		if msg, ok := msg.(tea.KeyMsg); ok && s.categoryInput != nil {
+			s.categoryInput.HandleKeyPress(msg)
+		}
 		
 	case StepRepository:
 		if s.repoSelector != nil {
@@ -620,6 +663,8 @@ func (s *SessionSetupOverlay) View() string {
 		stepText += "Session Name"
 	case StepProgram:
 		stepText += "Choose Program"
+	case StepCategory:
+		stepText += "Choose Category"
 	case StepLocation:
 		stepText += "Location Type"
 	case StepRepository:
@@ -647,6 +692,11 @@ func (s *SessionSetupOverlay) View() string {
 		sb.WriteString(s.programInput.View())
 		sb.WriteString("\n")
 		sb.WriteString(s.infoStyle.Render("Enter the program to run (e.g. claude, aider, gemini)"))
+	
+	case StepCategory:
+		sb.WriteString(s.categoryInput.View())
+		sb.WriteString("\n")
+		sb.WriteString(s.infoStyle.Render("Enter a category name to help organize sessions (optional)"))
 	
 	case StepLocation:
 		sb.WriteString("Where do you want to create the session?\n\n")
@@ -729,6 +779,10 @@ func (s *SessionSetupOverlay) View() string {
 		sb.WriteString("Session Settings Summary:\n\n")
 		sb.WriteString(fmt.Sprintf("Name: %s\n", s.sessionName))
 		sb.WriteString(fmt.Sprintf("Program: %s\n", s.program))
+		
+		if s.category != "" {
+			sb.WriteString(fmt.Sprintf("Category: %s\n", s.category))
+		}
 		
 		if s.locationChoice == "current" {
 			sb.WriteString("Location: Current Repository\n")

@@ -28,6 +28,12 @@ const (
 	// Diff keybindings
 	KeyShiftUp
 	KeyShiftDown
+	
+	// Session organization keybindings
+	KeySearch      // Search for sessions
+	KeyRight       // Expand category
+	KeyLeft        // Collapse category
+	KeyToggleGroup // Toggle expand/collapse category
 )
 
 // GlobalKeyStringsMap is a global, immutable map string to keybinding.
@@ -49,6 +55,10 @@ var GlobalKeyStringsMap = map[string]KeyName{
 	"r":          KeyResume,
 	"p":          KeySubmit,
 	"?":          KeyHelp,
+	"right":      KeyRight,
+	"left":       KeyLeft,
+	"s":          KeySearch,
+	"space":      KeyToggleGroup,
 }
 
 // GlobalkeyBindings is a global, immutable map of KeyName tot keybinding.
@@ -108,6 +118,24 @@ var GlobalkeyBindings = map[KeyName]key.Binding{
 	KeyResume: key.NewBinding(
 		key.WithKeys("r"),
 		key.WithHelp("r", "resume"),
+	),
+	
+	// Session organization bindings
+	KeySearch: key.NewBinding(
+		key.WithKeys("s"),
+		key.WithHelp("s", "search sessions"),
+	),
+	KeyRight: key.NewBinding(
+		key.WithKeys("right"),
+		key.WithHelp("→", "expand category"),
+	),
+	KeyLeft: key.NewBinding(
+		key.WithKeys("left"),
+		key.WithHelp("←", "collapse category"),
+	),
+	KeyToggleGroup: key.NewBinding(
+		key.WithKeys("space"),
+		key.WithHelp("space", "toggle category"),
 	),
 
 	// -- Special keybindings --
