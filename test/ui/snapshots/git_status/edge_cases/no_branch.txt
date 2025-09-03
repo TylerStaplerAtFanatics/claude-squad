@@ -1,0 +1,24 @@
+╭────────────────────────────────────────────────────────────────────────────╮
+│                                                                            │
+│  Git Status                                                                │
+│                                                                            │
+│   M file.go                                                                │
+│                                                                            │
+│  Git Status - Press ? for help                                             │
+│                                                                            │
+│  Keybindings:                                                              │
+│    s - stage file                                                          │
+│    u - unstage file                                                        │
+│    - - toggle staging                                                      │
+│    U - unstage all                                                         │
+│    cc - commit                                                             │
+│    ca - amend commit                                                       │
+│    dd - show diff                                                          │
+│    p - push                                                                │
+│    P - pull                                                                │
+│    ↵ - open file                                                           │
+│    ? - toggle help                                                         │
+│    esc - exit                                                              │
+│                                                                            │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯

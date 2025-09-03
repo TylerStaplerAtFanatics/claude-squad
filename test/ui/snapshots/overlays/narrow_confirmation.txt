@@ -1,0 +1,8 @@
+╭──────────────────────────────╮
+│                              │
+│  Test with different width   │
+│                              │
+│  Press y to confirm, n or    │
+│  esc to cancel               │
+│                              │
+╰──────────────────────────────╯

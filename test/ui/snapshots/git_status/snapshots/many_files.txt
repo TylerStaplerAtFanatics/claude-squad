@@ -1,0 +1,30 @@
+╭────────────────────────────────────────────────────────────────────────────╮
+│                                                                            │
+│  Git Status on develop                                                     │
+│                                                                            │
+│     file_01.go                                                             │
+│   M file_02.go                                                             │
+│   ● file_03.go                                                             │
+│   M file_04.go                                                             │
+│     file_05.go                                                             │
+│   ● file_06.go                                                             │
+│     file_07.go                                                             │
+│  \n[1-7/20]                                                                │
+│  Git Status - Press ? for help                                             │
+│                                                                            │
+│  Keybindings:                                                              │
+│    s - stage file                                                          │
+│    u - unstage file                                                        │
+│    - - toggle staging                                                      │
+│    U - unstage all                                                         │
+│    cc - commit                                                             │
+│    ca - amend commit                                                       │
+│    dd - show diff                                                          │
+│    p - push                                                                │
+│    P - pull                                                                │
+│    ↵ - open file                                                           │
+│    ? - toggle help                                                         │
+│    esc - exit                                                              │
+│                                                                            │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
