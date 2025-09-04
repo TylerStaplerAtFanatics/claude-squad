@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+ Instances                                                                      
+                                                                                
+ ▼ Backend (1)                                                                  
+                                                                                
+  1.  test-session-3                                                   ●        
+      Ꮧ-                                                                        
+                                                                                
+                                                                                
+                                                                                
+ ► Frontend (2)                                                                 
+                                                                                
+ ▼ Uncategorized (1)                                                            
+                                                                                
+  2.  test-session-1                                                   ●        
+      Ꮧ-                                                                        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                

@@ -1,0 +1,27 @@
+╭────────────────────────────────────────────────────────────────────────────╮
+│                                                                            │
+│  Git Status on main                                                        │
+│                                                                            │
+│   ● complex_file.go                                                        │
+│   ● staged_only.go                                                         │
+│   M modified_only.go                                                       │
+│   ? untracked_file.txt                                                     │
+│                                                                            │
+│  Git Status - Press ? for help                                             │
+│                                                                            │
+│  Keybindings:                                                              │
+│    s - stage file                                                          │
+│    u - unstage file                                                        │
+│    - - toggle staging                                                      │
+│    U - unstage all                                                         │
+│    cc - commit                                                             │
+│    ca - amend commit                                                       │
+│    dd - show diff                                                          │
+│    p - push                                                                │
+│    P - pull                                                                │
+│    ↵ - open file                                                           │
+│    ? - toggle help                                                         │
+│    esc - exit                                                              │
+│                                                                            │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
