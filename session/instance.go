@@ -149,7 +149,7 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 			Content: data.DiffStats.Content,
 		},
 	}
-	
+
 	// Initialize session-specific logging
 	_ = log.GetSessionLoggers
 
@@ -208,20 +208,20 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 	}
 
 	return &Instance{
-		Title:     opts.Title,
-		Status:    Ready,
-		Path:      absPath,
-		Program:   opts.Program,
-		Height:    0,
-		Width:     0,
-		CreatedAt: t,
-		UpdatedAt: t,
-		AutoYes:   opts.AutoYes,
-		Prompt:    opts.Prompt,
+		Title:            opts.Title,
+		Status:           Ready,
+		Path:             absPath,
+		Program:          opts.Program,
+		Height:           0,
+		Width:            0,
+		CreatedAt:        t,
+		UpdatedAt:        t,
+		AutoYes:          opts.AutoYes,
+		Prompt:           opts.Prompt,
 		ExistingWorktree: opts.ExistingWorktree,
-		Category:   opts.Category,
-		Tags:       opts.Tags,
-		IsExpanded: true, // Default to expanded for newly created instances
+		Category:         opts.Category,
+		Tags:             opts.Tags,
+		IsExpanded:       true, // Default to expanded for newly created instances
 	}, nil
 }
 
@@ -375,6 +375,12 @@ func (i *Instance) Preview() (string, error) {
 	if !i.started || i.Status == Paused {
 		return "", nil
 	}
+
+	// Check if the tmux session is still alive before trying to capture content
+	if !i.TmuxAlive() {
+		return "", nil
+	}
+
 	return i.tmuxSession.CapturePaneContent()
 }
 
@@ -638,6 +644,12 @@ func (i *Instance) PreviewFullHistory() (string, error) {
 	if !i.started || i.Status == Paused {
 		return "", nil
 	}
+
+	// Check if the tmux session is still alive before trying to capture content
+	if !i.TmuxAlive() {
+		return "", nil
+	}
+
 	return i.tmuxSession.CapturePaneContentWithOptions("-", "-")
 }
 

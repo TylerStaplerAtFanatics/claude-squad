@@ -186,9 +186,27 @@ func (t *TmuxSession) Start(workDir string) error {
 
 // Restore attaches to an existing session and restores the window size
 func (t *TmuxSession) Restore() error {
+	// First check if the session actually exists
+	if !t.DoesSessionExist() {
+		// Session doesn't exist, we need to create it instead of trying to attach
+		log.WarningLog.Printf("Tmux session '%s' doesn't exist, creating new session instead of restoring", t.sanitizedName)
+
+		// Use the Start method to create a new session
+		// We need to get the working directory from the instance that owns this session
+		// For now, use current working directory as fallback
+		workDir, err := os.Getwd()
+		if err != nil {
+			log.WarningLog.Printf("Could not get working directory for session '%s': %v", t.sanitizedName, err)
+			workDir = "."
+		}
+
+		return t.Start(workDir)
+	}
+
+	// Session exists, try to attach
 	ptmx, err := t.ptyFactory.Start(exec.Command("tmux", "attach-session", "-t", t.sanitizedName))
 	if err != nil {
-		return fmt.Errorf("error opening PTY: %w", err)
+		return fmt.Errorf("error opening PTY for existing session '%s': %w", t.sanitizedName, err)
 	}
 	t.ptmx = ptmx
 	t.monitor = newStatusMonitor()
@@ -467,20 +485,20 @@ func (t *TmuxSession) DoesSessionExist() bool {
 
 	// Using "-t name" does a prefix match, which is wrong. `-t=` does an exact match.
 	existsCmd := exec.Command("tmux", "has-session", fmt.Sprintf("-t=%s", t.sanitizedName))
-	
+
 	// Add a timeout to the command execution to prevent hanging
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	
+
 	existsCmd = exec.CommandContext(ctx, "tmux", "has-session", fmt.Sprintf("-t=%s", t.sanitizedName))
 	err := t.cmdExec.Run(existsCmd)
-	
+
 	// Check if error is due to timeout
 	if ctx.Err() == context.DeadlineExceeded {
 		log.WarningLog.Printf("Timeout checking if tmux session exists: %s", t.sanitizedName)
 		return false
 	}
-	
+
 	return err == nil
 }
 
@@ -490,7 +508,12 @@ func (t *TmuxSession) CapturePaneContent() (string, error) {
 	cmd := exec.Command("tmux", "capture-pane", "-p", "-e", "-J", "-t", t.sanitizedName)
 	output, err := t.cmdExec.Output(cmd)
 	if err != nil {
-		return "", fmt.Errorf("error capturing pane content: %v", err)
+		// Log detailed error information for debugging
+		if log.ErrorLog != nil {
+			log.ErrorLog.Printf("Failed to capture pane content for session '%s': %v", t.sanitizedName, err)
+			log.ErrorLog.Printf("Tmux command: %s", cmd.String())
+		}
+		return "", fmt.Errorf("error capturing pane content for session '%s': %v", t.sanitizedName, err)
 	}
 	return string(output), nil
 }

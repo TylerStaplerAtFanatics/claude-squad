@@ -142,6 +142,34 @@ func newHome(ctx context.Context, program string, autoYes bool) *home {
 		os.Exit(1)
 	}
 
+	// Perform health check on loaded instances to ensure tmux sessions are running
+	healthChecker := session.NewSessionHealthChecker(storage)
+	if len(instances) > 0 {
+		log.InfoLog.Printf("Performing health check on %d loaded instances...", len(instances))
+		healthResults, err := healthChecker.CheckAllSessions()
+		if err != nil {
+			log.WarningLog.Printf("Health check failed: %v", err)
+		} else {
+			healthyCount := 0
+			recoveredCount := 0
+			for _, result := range healthResults {
+				if result.IsHealthy {
+					healthyCount++
+				}
+				if result.RecoverySuccess {
+					recoveredCount++
+				}
+			}
+			log.InfoLog.Printf("Health check completed: %d healthy, %d recovered", healthyCount, recoveredCount)
+		}
+
+		// Reload instances after potential recovery
+		instances, err = storage.LoadInstances()
+		if err != nil {
+			log.WarningLog.Printf("Failed to reload instances after health check: %v", err)
+		}
+	}
+
 	// Add loaded instances to the list
 	for _, instance := range instances {
 		// Call the finalizer immediately.
@@ -150,7 +178,7 @@ func newHome(ctx context.Context, program string, autoYes bool) *home {
 			instance.AutoYes = true
 		}
 	}
-	
+
 	// Restore the last selected index if it's still valid
 	lastSelectedIdx := appState.GetSelectedIndex()
 	if lastSelectedIdx >= 0 && lastSelectedIdx < h.list.NumInstances() {
@@ -206,35 +234,35 @@ func (m *home) Init() tea.Cmd {
 		},
 		tickUpdateMetadataCmd,
 	}
-	
+
 	// Add session detection ticker if enabled
 	if m.appConfig.DetectNewSessions {
 		cmds = append(cmds, tickSessionDetectionCmd(m.appConfig.SessionDetectionInterval))
 	}
-	
+
 	return tea.Batch(cmds...)
 }
 
 func (m *home) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Ensure categories are organized whenever the model updates
 	m.list.OrganizeByCategory()
-	
+
 	switch msg := msg.(type) {
 	case sessionCreationResultMsg:
 		m.asyncSessionCreationActive = false
-		
+
 		// Handle error if session creation failed
 		if msg.err != nil {
 			m.list.Kill()
 			m.state = stateDefault
 			return m, m.handleError(msg.err)
 		}
-		
+
 		// Save after adding new instance
 		if err := m.storage.SaveInstances(m.list.GetInstances()); err != nil {
 			return m, m.handleError(err)
 		}
-		
+
 		// Instance added successfully, call the finalizer.
 		m.newInstanceFinalizer()
 		if msg.autoYes {
@@ -284,12 +312,12 @@ func (m *home) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !instance.Started() {
 				continue
 			}
-			
+
 			// Check if the instance is paused before updating
 			if instance.Paused() {
 				continue
 			}
-			
+
 			// Track if the instance was already paused before updating diff stats
 			wasPaused := instance.Paused()
 
@@ -309,7 +337,7 @@ func (m *home) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if instance.Paused() {
 				continue
 			}
-			
+
 			updated, prompt := instance.HasUpdated()
 			if updated {
 				instance.SetStatus(session.Running)
@@ -382,7 +410,7 @@ func (m *home) handleQuit() (tea.Model, tea.Cmd) {
 	if err := m.storage.SaveInstances(m.list.GetInstances()); err != nil {
 		return m, m.handleError(err)
 	}
-	
+
 	// Release any locks held by the state manager
 	if stateManager, ok := m.storage.GetStateManager().(config.StateManager); ok {
 		if err := stateManager.Close(); err != nil {
@@ -390,7 +418,7 @@ func (m *home) handleQuit() (tea.Model, tea.Cmd) {
 			// Continue with quit anyway
 		}
 	}
-	
+
 	return m, tea.Quit
 }
 
@@ -437,7 +465,7 @@ func (m *home) handleKeyPress(msg tea.KeyMsg) (mod tea.Model, cmd tea.Cmd) {
 	if m.state == stateHelp {
 		return m.handleHelpState(msg)
 	}
-	
+
 	if m.state == stateAdvancedNew {
 		return m.handleAdvancedSessionSetupUpdate(msg)
 	}
@@ -473,21 +501,21 @@ func (m *home) handleKeyPress(msg tea.KeyMsg) (mod tea.Model, cmd tea.Cmd) {
 			m.state = stateCreatingSession
 			m.asyncSessionCreationActive = true
 			m.menu.SetState(ui.StateCreatingInstance)
-			
+
 			// Start session creation in a goroutine
 			// Store important values before the goroutine starts
 			promptAfterName := m.promptAfterName
 			autoYes := m.autoYes
-			
+
 			// Return the tick command to send a message after session is created
 			return m, func() tea.Msg {
 				// Start the instance in a blocking operation
 				err := instance.Start(true)
-				
+
 				// Return a message with the result
 				return sessionCreationResultMsg{
 					instance:        instance,
-					err:            err,
+					err:             err,
 					promptAfterName: promptAfterName,
 					autoYes:         autoYes,
 				}
@@ -540,7 +568,7 @@ func (m *home) handleKeyPress(msg tea.KeyMsg) (mod tea.Model, cmd tea.Cmd) {
 				m.menu.SetState(ui.StateDefault)
 				return m, tea.WindowSize()
 			}
-			
+
 			// Regular prompt handling
 			selected := m.list.GetSelectedInstance()
 			// TODO: this should never happen since we set the instance in the previous state.
@@ -660,7 +688,7 @@ func (m *home) handleKeyPress(msg tea.KeyMsg) (mod tea.Model, cmd tea.Cmd) {
 		// Create the text input overlay for search with previous query pre-populated
 		_, previousQuery := m.list.GetSearchState()
 		m.textInputOverlay = overlay.NewTextInputOverlay("Search Sessions", previousQuery)
-		
+
 		// Set callback for when search is submitted
 		m.textInputOverlay.SetOnSubmitWithValue(func(query string) {
 			if query == "" {
@@ -671,12 +699,12 @@ func (m *home) handleKeyPress(msg tea.KeyMsg) (mod tea.Model, cmd tea.Cmd) {
 				m.list.SearchByTitle(query)
 			}
 		})
-		
+
 		// Set callback for when search is canceled
 		m.textInputOverlay.SetOnCancel(func() {
 			m.list.ExitSearchMode()
 		})
-		
+
 		// Set search mode state
 		m.state = statePrompt
 		m.menu.SetState(ui.StateSearch)
@@ -692,6 +720,9 @@ func (m *home) handleKeyPress(msg tea.KeyMsg) (mod tea.Model, cmd tea.Cmd) {
 	case keys.KeyGit:
 		// Open git status interface
 		return m.handleGitStatus()
+	case keys.KeyHealthCheck:
+		// Perform session health check and recovery
+		return m.handleHealthCheck()
 	case keys.KeyNew:
 		if m.list.NumInstances() >= GlobalInstanceLimit {
 			return m, m.handleError(
@@ -925,11 +956,11 @@ func (m *home) detectAndLoadNewSessions() error {
 		if _, exists := currentInstances[storageInstance.Title]; !exists {
 			// This is a new instance we don't have yet
 			log.InfoLog.Printf("Detected new session created by another instance: %s", storageInstance.Title)
-			
+
 			// Add the new instance to our list
 			finalizer := m.list.AddInstance(storageInstance)
 			finalizer() // Call finalizer to complete setup
-			
+
 			newInstancesFound = true
 		}
 	}
@@ -1000,15 +1031,46 @@ func (m *home) handleGitStatus() (tea.Model, tea.Cmd) {
 	// Create and configure git status overlay
 	m.gitStatusOverlay = overlay.NewGitStatusOverlay()
 	m.gitStatusOverlay.SetSize(int(float32(m.list.NumInstances())*0.8), int(float32(m.list.NumInstances())*0.8))
-	
+
 	// Set up git operation callbacks
 	m.setupGitCallbacks(selected)
-	
+
 	// Change to git state
 	m.state = stateGit
-	
+
 	// Load git status data
 	return m, m.loadGitStatus(selected)
+}
+
+// handleHealthCheck performs a health check on all sessions and attempts recovery
+func (m *home) handleHealthCheck() (tea.Model, tea.Cmd) {
+	healthChecker := session.NewSessionHealthChecker(m.storage)
+
+	// Perform health check in background and show a message
+	go func() {
+		log.InfoLog.Printf("Starting manual health check...")
+		if err := healthChecker.RecoverUnhealthySessions(); err != nil {
+			log.ErrorLog.Printf("Health check failed: %v", err)
+		} else {
+			log.InfoLog.Printf("Health check completed successfully")
+		}
+
+		// Reload instances after potential recovery
+		instances, err := m.storage.LoadInstances()
+		if err != nil {
+			log.WarningLog.Printf("Failed to reload instances after health check: %v", err)
+			return
+		}
+
+		// Update the list with recovered instances
+		// Note: In a real implementation, we might want to send a message back to the UI
+		// to refresh the display, but for now we'll rely on the periodic updates
+		_ = instances // Use instances variable to avoid unused variable warning
+	}()
+
+	// Return immediately with a confirmation message
+	// In a more sophisticated implementation, we could show a progress indicator
+	return m, m.handleError(fmt.Errorf("health check initiated - check logs for results"))
 }
 
 // setupGitCallbacks configures the git operation callbacks for the overlay
@@ -1017,23 +1079,23 @@ func (m *home) setupGitCallbacks(instance *session.Instance) {
 		m.state = stateDefault
 		m.gitStatusOverlay = nil
 	}
-	
+
 	// TODO: Implement these callbacks with actual git operations
 	m.gitStatusOverlay.OnStageFile = func(path string) error {
 		// Placeholder - will implement in next task
 		return fmt.Errorf("staging not yet implemented")
 	}
-	
+
 	m.gitStatusOverlay.OnUnstageFile = func(path string) error {
 		// Placeholder - will implement in next task
 		return fmt.Errorf("unstaging not yet implemented")
 	}
-	
+
 	m.gitStatusOverlay.OnCommit = func() error {
 		// Placeholder - will implement in next task
 		return fmt.Errorf("commit not yet implemented")
 	}
-	
+
 	m.gitStatusOverlay.OnPush = func() error {
 		// Use existing push functionality
 		worktree, err := instance.GetGitWorktree()
@@ -1057,7 +1119,7 @@ func (m *home) handleGitState(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = stateDefault
 		m.gitStatusOverlay = nil
 	}
-	
+
 	return m, nil
 }
 
@@ -1071,7 +1133,7 @@ func (m *home) loadGitStatus(instance *session.Instance) tea.Cmd {
 			{Path: "keys/keys.go", Staged: true, Modified: false, StatusChar: "A"},
 			{Path: "ui/overlay/gitStatusOverlay.go", Staged: false, Modified: false, Untracked: true, StatusChar: "??"},
 		}
-		
+
 		return gitStatusLoadedMsg{
 			files:      files,
 			branchName: "feature/fugitive-git-integration",

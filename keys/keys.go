@@ -29,15 +29,16 @@ const (
 	// Diff keybindings
 	KeyShiftUp
 	KeyShiftDown
-	
+
 	// Session organization keybindings
-	KeySearch      // Search for sessions
-	KeyRight       // Expand category
-	KeyLeft        // Collapse category
-	KeyToggleGroup // Toggle expand/collapse category
+	KeySearch       // Search for sessions
+	KeyRight        // Expand category
+	KeyLeft         // Collapse category
+	KeyToggleGroup  // Toggle expand/collapse category
 	KeyFilterPaused // Toggle visibility of paused sessions
 	KeyClearFilters // Clear all filters and search
 	KeyGit          // Enter git mode (:G command)
+	KeyHealthCheck  // Check session health and recover dead sessions
 )
 
 // GlobalKeyStringsMap is a global, immutable map string to keybinding.
@@ -71,6 +72,7 @@ var GlobalKeyStringsMap = map[string]KeyName{
 	"f":          KeyFilterPaused,
 	"C":          KeyClearFilters,
 	"g":          KeyGit,
+	"H":          KeyHealthCheck,
 	"esc":        KeyEsc,
 }
 
@@ -132,7 +134,7 @@ var GlobalkeyBindings = map[KeyName]key.Binding{
 		key.WithKeys("r"),
 		key.WithHelp("r", "resume"),
 	),
-	
+
 	// Session organization bindings
 	KeySearch: key.NewBinding(
 		key.WithKeys("s", "/"),
@@ -167,6 +169,10 @@ var GlobalkeyBindings = map[KeyName]key.Binding{
 	KeyEsc: key.NewBinding(
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "cancel"),
+	),
+	KeyHealthCheck: key.NewBinding(
+		key.WithKeys("H"),
+		key.WithHelp("H", "health check sessions"),
 	),
 
 	// -- Special keybindings --
