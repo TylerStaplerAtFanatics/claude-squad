@@ -135,7 +135,7 @@ func (t *TmuxSession) Start(workDir string) error {
 		log.InfoLog.Printf("Warning: failed to set history-limit for session %s: %v", t.sanitizedName, err)
 	}
 
-	err = t.Restore()
+	err = t.RestoreWithWorkDir(workDir)
 	if err != nil {
 		if cleanupErr := t.Close(); cleanupErr != nil {
 			err = fmt.Errorf("%v (cleanup error: %v)", err, cleanupErr)
@@ -186,18 +186,23 @@ func (t *TmuxSession) Start(workDir string) error {
 
 // Restore attaches to an existing session and restores the window size
 func (t *TmuxSession) Restore() error {
+	return t.RestoreWithWorkDir("")
+}
+
+func (t *TmuxSession) RestoreWithWorkDir(workDir string) error {
 	// First check if the session actually exists
 	if !t.DoesSessionExist() {
 		// Session doesn't exist, we need to create it instead of trying to attach
 		log.WarningLog.Printf("Tmux session '%s' doesn't exist, creating new session instead of restoring", t.sanitizedName)
 
-		// Use the Start method to create a new session
-		// We need to get the working directory from the instance that owns this session
-		// For now, use current working directory as fallback
-		workDir, err := os.Getwd()
-		if err != nil {
-			log.WarningLog.Printf("Could not get working directory for session '%s': %v", t.sanitizedName, err)
-			workDir = "."
+		// Use the provided working directory, fall back to current directory if not provided
+		if workDir == "" {
+			var err error
+			workDir, err = os.Getwd()
+			if err != nil {
+				log.WarningLog.Printf("Could not get working directory for session '%s': %v", t.sanitizedName, err)
+				workDir = "."
+			}
 		}
 
 		return t.Start(workDir)

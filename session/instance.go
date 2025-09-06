@@ -280,8 +280,12 @@ func (i *Instance) Start(firstTimeSetup bool) error {
 	}()
 
 	if !firstTimeSetup {
-		// Reuse existing session
-		if err := tmuxSession.Restore(); err != nil {
+		// Reuse existing session - use worktree path if available
+		var workDir string
+		if i.gitWorktree != nil {
+			workDir = i.gitWorktree.GetWorktreePath()
+		}
+		if err := tmuxSession.RestoreWithWorkDir(workDir); err != nil {
 			setupErr = fmt.Errorf("failed to restore existing session: %w", err)
 			return setupErr
 		}
@@ -540,12 +544,13 @@ func (i *Instance) Resume() error {
 	}
 
 	// Check if tmux session still exists from pause, otherwise create new one
+	worktreePath := i.gitWorktree.GetWorktreePath()
 	if i.tmuxSession.DoesSessionExist() {
 		// Session exists, just restore PTY connection to it
-		if err := i.tmuxSession.Restore(); err != nil {
+		if err := i.tmuxSession.RestoreWithWorkDir(worktreePath); err != nil {
 			log.ErrorLog.Print(err)
 			// If restore fails, fall back to creating new session
-			if err := i.tmuxSession.Start(i.gitWorktree.GetWorktreePath()); err != nil {
+			if err := i.tmuxSession.Start(worktreePath); err != nil {
 				log.ErrorLog.Print(err)
 				// Cleanup git worktree if tmux session creation fails
 				if cleanupErr := i.gitWorktree.Cleanup(); cleanupErr != nil {
