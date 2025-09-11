@@ -34,16 +34,36 @@ go test -cover ./...
 go test ./ui -run TestSpecificFunction
 
 # Run benchmarks (performance tests)
-go test -bench=. -benchmem ./app
+# CRITICAL: Benchmarks take 5-30 minutes and MUST be run in background with &
+# Do NOT run benchmarks without & as they will block your terminal
+go test -bench=. -benchmem ./app -timeout=30m &
 
-# Run specific benchmarks
-go test -bench=BenchmarkNavigation -benchmem ./app
-go test -bench=BenchmarkInstanceChangedComponents -benchmem ./app
-go test -bench=BenchmarkListRendering -benchmem ./app
+# Run specific benchmark categories
+go test -bench=BenchmarkNavigation -benchmem ./app -timeout=10m &
+go test -bench=BenchmarkInstanceChangedComponents -benchmem ./app -timeout=10m &
+go test -bench=BenchmarkListRendering -benchmem ./app -timeout=10m &
+
+# New comprehensive performance benchmarks
+go test -bench=BenchmarkLargeSessionNavigation -benchmem ./app -timeout=20m &
+go test -bench=BenchmarkAttachDetachPerformance -benchmem ./app -timeout=15m &
+go test -bench=BenchmarkFilteringPerformance -benchmem ./app -timeout=10m &
+go test -bench=BenchmarkCategoryOrganization -benchmem ./app -timeout=10m &
+go test -bench=BenchmarkRenderingPerformance -benchmem ./app -timeout=15m &
+go test -bench=BenchmarkMemoryUsage -benchmem ./app -timeout=15m &
+go test -bench=BenchmarkStartupPerformance -benchmem ./app -timeout=10m &
+go test -bench=BenchmarkRealtimeUpdates -benchmem ./app -timeout=10m &
 
 # Profile benchmarks for detailed performance analysis
-go test -bench=BenchmarkNavigation -benchmem -cpuprofile=cpu.prof ./app
+go test -bench=BenchmarkLargeSessionNavigation -benchmem -cpuprofile=cpu.prof ./app -timeout=20m
 go tool pprof cpu.prof
+
+# Memory profiling for large session counts
+go test -bench=BenchmarkMemoryUsage -benchmem -memprofile=mem.prof ./app -timeout=15m
+go tool pprof mem.prof
+
+# Trace profiling for detailed execution analysis
+go test -bench=BenchmarkAttachDetachPerformance -trace=trace.out ./app -timeout=15m
+go tool trace trace.out
 ```
 
 ### Code Quality

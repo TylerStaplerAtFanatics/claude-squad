@@ -421,8 +421,10 @@ func (t *TmuxSession) Detach() {
 	// TODO: control flow is a bit messy here. If there's an error,
 	// I'm not sure if we get into a bad state. Needs testing.
 	defer func() {
-		close(t.attachCh)
-		t.attachCh = nil
+		if t.attachCh != nil {
+			close(t.attachCh)
+			t.attachCh = nil
+		}
 		t.cancel = nil
 		t.ctx = nil
 		t.wg = nil
@@ -447,8 +449,12 @@ func (t *TmuxSession) Detach() {
 	}
 
 	// Cancel goroutines created by Attach.
-	t.cancel()
-	t.wg.Wait()
+	if t.cancel != nil {
+		t.cancel()
+	}
+	if t.wg != nil {
+		t.wg.Wait()
+	}
 }
 
 // Close terminates the tmux session and cleans up resources

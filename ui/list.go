@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/lipgloss"
@@ -85,6 +86,10 @@ type List struct {
 
 	// Performance optimization: track if categories need reorganization
 	categoriesNeedUpdate bool
+	
+	// Performance optimization: debounce state saving during navigation
+	stateSaveTimer *time.Timer
+	stateSaveDelay time.Duration
 }
 
 func NewList(spinner *spinner.Model, autoYes bool, stateManager *config.State) *List {
@@ -100,6 +105,7 @@ func NewList(spinner *spinner.Model, autoYes bool, stateManager *config.State) *
 		hidePaused:           false,
 		stateManager:         stateManager,
 		categoriesNeedUpdate: true, // Initialize as needing update
+		stateSaveDelay:       200 * time.Millisecond, // Debounce state saves during navigation
 	}
 
 	// Load persisted UI state if available
@@ -763,15 +769,23 @@ func (l *List) saveUIState() {
 	}
 }
 
-// saveSelectedIndex saves just the selected index
+// saveSelectedIndex saves just the selected index with debouncing
 func (l *List) saveSelectedIndex() {
 	if l.stateManager == nil {
 		return
 	}
 
-	if err := l.stateManager.SetSelectedIndex(l.selectedIdx); err != nil {
-		log.ErrorLog.Printf("Failed to save selected index: %v", err)
+	// Cancel any existing timer
+	if l.stateSaveTimer != nil {
+		l.stateSaveTimer.Stop()
 	}
+
+	// Start new debounced save timer
+	l.stateSaveTimer = time.AfterFunc(l.stateSaveDelay, func() {
+		if err := l.stateManager.SetSelectedIndex(l.selectedIdx); err != nil {
+			log.ErrorLog.Printf("Failed to save selected index: %v", err)
+		}
+	})
 }
 
 // ToggleCategory toggles the expanded state of a category

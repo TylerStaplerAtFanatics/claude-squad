@@ -85,6 +85,9 @@ type home struct {
 	// Performance optimization: debounce selection updates
 	selectionUpdateTimer *time.Timer
 	selectionUpdateDelay time.Duration
+	
+	// Responsive navigation for instant feedback
+	lastSelectedInstance *session.Instance
 
 	// -- UI Components --
 
@@ -873,10 +876,22 @@ func (m *home) handleKeyPress(msg tea.KeyMsg) (mod tea.Model, cmd tea.Cmd) {
 	}
 }
 
-// instanceChanged updates the preview pane, menu, and diff pane based on the selected instance. It returns an error
-// Cmd if there was any error.
+// instanceChanged updates the preview pane, menu, and diff pane based on the selected instance. 
+// It provides instant UI feedback and debounces expensive operations.
 func (m *home) instanceChanged() tea.Cmd {
-	// Debounce expensive operations during rapid navigation
+	selected := m.list.GetSelectedInstance()
+	
+	// INSTANT UI UPDATES (must be <1ms for responsive feel)
+	m.menu.SetInstance(selected)              // 86ns from benchmark - instant
+	m.tabbedWindow.SetInstance(selected)      // Instant - just sets reference
+	
+	// Skip expensive operations if same instance
+	if m.lastSelectedInstance == selected {
+		return nil
+	}
+	m.lastSelectedInstance = selected
+	
+	// Debounce expensive operations (git diff + tmux capture)
 	return m.debouncedInstanceChanged()
 }
 
