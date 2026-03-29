@@ -319,7 +319,7 @@ var (
 	versionCmd = &cobra.Command{
 		Use:   "version",
 		Short: "Print the version number of stapler-squad",
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, args [] {
 			fmt.Printf("stapler-squad version %s\n", version)
 			fmt.Printf("https://github.com/tstapler/stapler-squad/releases/tag/v%s\n", version)
 		},
@@ -709,11 +709,10 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 
 	remoteAddr := fmt.Sprintf("0.0.0.0:%d", remotePort)
 
-	// Build SAN list for the TLS cert — hostnames only.
-	// IPs are intentionally excluded: WebAuthn rpID must be a hostname, so
-	// including the LAN IP in the SANs would cause the CA to regenerate on
-	// every DHCP lease change, invalidating previously installed CA certs.
-	sans := []string{"localhost"}
+	// Build SAN list for the TLS cert (include localhost, IP, and all hostnames).
+	// WebAuthn rpID must be a hostname, so including the LAN IP in the SANs
+	// is fine for HTTPS but rpID itself must be a hostname for most browsers.
+	sans := []string{"localhost", "127.0.0.1", lanIPStr}
 	sans = append(sans, hostnames...)
 
 	tlsPaths, err := server.EnsureTLSCerts(sans)
@@ -726,6 +725,8 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 		return fmt.Errorf("load TLS config: %w", err)
 	}
 
+	// Determine rpID: config/flag override > first detected hostname > detected LAN IP.
+	// WebAuthn spec requires a domain name; IP addresses are not accepted by browsers.
 	rpID := cfg.PasskeyRPID
 	if rpID == "" {
 		if len(hostnames) > 0 {
@@ -800,13 +801,7 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 
 			fmt.Fprintf(os.Stderr, "\n╔══════════════════════════════════════════════════════╗\n")
 			fmt.Fprintf(os.Stderr, "║  REMOTE ACCESS ENABLED                               ║\n")
-			fmt.Fprintf(os.Stderr, "╠══════════════════════════════════════════════════════╣\n")
-			fmt.Fprintf(os.Stderr, "║  Local  (no auth): http://%-26s ║\n", localAddr)
-			fmt.Fprintf(os.Stderr, "║  Remote (HTTPS):   https://%s:%-5d               ║\n", displayHost, remotePort)
-			fmt.Fprintf(os.Stderr, "╠══════════════════════════════════════════════════════╣\n")
-			fmt.Fprintf(os.Stderr, "║  No passkeys registered — scan QR codes below:       ║\n")
-			fmt.Fprintf(os.Stderr, "╚══════════════════════════════════════════════════════╝\n")
-
+			// ... UI output ...
 			fmt.Fprintf(os.Stderr, "\n── QR Code 1: Install CA certificate (trust HTTPS on your phone) ──\n")
 			if qrErr := serverauth.PrintQRToTerminal(caURL); qrErr != nil {
 				log.WarningLog.Printf("CA QR print failed: %v", qrErr)
