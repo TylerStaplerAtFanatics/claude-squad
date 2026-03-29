@@ -135,6 +135,7 @@ func NewServer(addr string) *Server {
 			deps.ExternalDiscovery,
 			deps.TmuxStreamerManager,
 			deps.ExternalApprovalMonitor,
+			deps.ExternalStatusPoller, // Wired for external session activity detection
 			deps.EventBus,
 		)
 		srv.mux.HandleFunc("/api/external/approvals", externalWsHandler.HandleApprovals)

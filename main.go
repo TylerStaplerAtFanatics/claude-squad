@@ -319,7 +319,7 @@ var (
 	versionCmd = &cobra.Command{
 		Use:   "version",
 		Short: "Print the version number of stapler-squad",
-		Run: func(cmd *cobra.Command, args [] {
+		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Printf("stapler-squad version %s\n", version)
 			fmt.Printf("https://github.com/tstapler/stapler-squad/releases/tag/v%s\n", version)
 		},
