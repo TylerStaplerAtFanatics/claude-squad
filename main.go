@@ -801,7 +801,13 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 
 			fmt.Fprintf(os.Stderr, "\n╔══════════════════════════════════════════════════════╗\n")
 			fmt.Fprintf(os.Stderr, "║  REMOTE ACCESS ENABLED                               ║\n")
-			// ... UI output ...
+			fmt.Fprintf(os.Stderr, "╠══════════════════════════════════════════════════════╣\n")
+			fmt.Fprintf(os.Stderr, "║  Local  (no auth): http://%-26s ║\n", localAddr)
+			fmt.Fprintf(os.Stderr, "║  Remote (HTTPS):   https://%s:%-5d               ║\n", displayHost, remotePort)
+			fmt.Fprintf(os.Stderr, "╠══════════════════════════════════════════════════════╣\n")
+			fmt.Fprintf(os.Stderr, "║  No passkeys registered — scan QR codes below:       ║\n")
+			fmt.Fprintf(os.Stderr, "╚══════════════════════════════════════════════════════╝\n")
+
 			fmt.Fprintf(os.Stderr, "\n── QR Code 1: Install CA certificate (trust HTTPS on your phone) ──\n")
 			if qrErr := serverauth.PrintQRToTerminal(caURL); qrErr != nil {
 				log.WarningLog.Printf("CA QR print failed: %v", qrErr)
