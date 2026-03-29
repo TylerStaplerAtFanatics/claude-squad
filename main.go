@@ -745,6 +745,13 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 		origins = append(origins, fmt.Sprintf("https://%s:%d", hn, remotePort))
 	}
 	origins = append(origins, fmt.Sprintf("https://localhost:%d", remotePort))
+
+	displayHost := rpID
+	if len(hostnames) > 0 {
+		displayHost = hostnames[0]
+	}
+	origin := fmt.Sprintf("https://%s:%d", displayHost, remotePort)
+
 	srv.SetOrigins(append(srv.GetOrigins(), origins...))
 
 	displayHost := rpID
