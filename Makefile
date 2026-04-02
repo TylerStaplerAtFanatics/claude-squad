@@ -12,6 +12,7 @@ GO_FILES := $(shell find . -maxdepth 3 -name "*.go" -not -path "./vendor/*" -not
 WEB_FILES := $(shell find web-app/src -type f 2>/dev/null)
 PROTO_FILES := $(shell find proto -name "*.proto" 2>/dev/null)
 PROTO_STAMP := .proto-gen.stamp
+WEB_STAMP := .web-build.stamp
 PROTO_OUT_DIRS := gen/proto/go web-app/src/gen
 ASDF_STAMP := .asdf-install.stamp
 
@@ -23,6 +24,7 @@ $(ASDF_STAMP): .tool-versions
 ifneq ($(wildcard .tool-versions),)
 	@if which asdf >/dev/null 2>&1; then \
 		echo "🔍 asdf detected, ensuring versions from .tool-versions are installed..."; \
+		asdf plugin add nodejs || true; \
 		asdf install; \
 	fi
 endif
