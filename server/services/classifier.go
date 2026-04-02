@@ -78,8 +78,10 @@ const (
 
 // builtinAgentTools is the set of Claude Code tool names that are planning / task-management
 // tools with no side effects requiring review.
+// Note: AskUserQuestion is intentionally excluded — it should be escalated to the review queue
+// so users can see and respond to Claude's questions via the web UI.
 var builtinAgentTools = map[string]bool{
-	"exitplanmode": true, "enterplanmode": true, "askuserquestion": true,
+	"exitplanmode": true, "enterplanmode": true,
 	"todowrite": true, "taskcreate": true, "taskupdate": true, "taskget": true,
 	"tasklist": true, "taskoutput": true, "taskstop": true,
 	"notebookedit": true, "skill": true,
