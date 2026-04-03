@@ -19,9 +19,12 @@ import (
 // benchServiceFixture holds the live server, client, and cleanup function for
 // a single benchmark setup. The server is started once and reused across all
 // iterations to measure pure RPC overhead rather than startup cost.
+// repo is exposed so benchmarks that need to pre-seed data can do so without
+// duplicating the full setup sequence.
 type benchServiceFixture struct {
 	server  *httptest.Server
 	client  sessionv1connect.SessionServiceClient
+	repo    *session.EntRepository
 	cleanup func()
 }
 
@@ -80,6 +83,7 @@ func benchmarkServiceSetup(b *testing.B) *benchServiceFixture {
 	return &benchServiceFixture{
 		server:  srv,
 		client:  client,
+		repo:    repo,
 		cleanup: cleanup,
 	}
 }
@@ -129,8 +133,6 @@ func BenchmarkSessionService_ListSessions_Empty(b *testing.B) {
 
 	b.StopTimer()
 	b.Cleanup(func() {
-		var ms runtime.MemStats
-		runtime.ReadMemStats(&ms)
 		b.ReportMetric(float64(runtime.NumGoroutine()), "goroutines")
 	})
 }
@@ -138,45 +140,10 @@ func BenchmarkSessionService_ListSessions_Empty(b *testing.B) {
 // BenchmarkSessionService_ListSessions_50Sessions measures ListSessions with
 // 50 sessions pre-loaded in the database.
 func BenchmarkSessionService_ListSessions_50Sessions(b *testing.B) {
-	// We need the raw repo to pre-seed, so build the fixture manually.
-	tmpDir, err := os.MkdirTemp("", "bench-session-svc-50-*")
-	if err != nil {
-		b.Fatalf("failed to create temp dir: %v", err)
-	}
-	dbPath := fmt.Sprintf("%s/sessions.db", tmpDir)
+	fix := benchmarkServiceSetup(b)
+	b.Cleanup(fix.cleanup)
 
-	repo, err := session.NewEntRepository(session.WithDatabasePath(dbPath))
-	if err != nil {
-		os.RemoveAll(tmpDir)
-		b.Fatalf("failed to create repository: %v", err)
-	}
-
-	// Pre-load 50 sessions before the benchmark starts.
-	preloadSessions(b, repo, 50)
-
-	storage, err := session.NewStorageWithRepository(repo)
-	if err != nil {
-		repo.Close()
-		os.RemoveAll(tmpDir)
-		b.Fatalf("failed to create storage: %v", err)
-	}
-
-	bus := events.NewEventBus(64)
-	svc := NewSessionService(storage, bus)
-
-	mux := http.NewServeMux()
-	path, handler := sessionv1connect.NewSessionServiceHandler(svc)
-	mux.Handle(path, handler)
-
-	srv := httptest.NewServer(mux)
-	client := sessionv1connect.NewSessionServiceClient(srv.Client(), srv.URL)
-
-	b.Cleanup(func() {
-		srv.Close()
-		bus.Close()
-		repo.Close()
-		os.RemoveAll(tmpDir)
-	})
+	preloadSessions(b, fix.repo, 50)
 
 	ctx := context.Background()
 
@@ -185,7 +152,7 @@ func BenchmarkSessionService_ListSessions_50Sessions(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		resp, err := client.ListSessions(ctx, connect.NewRequest(&sessionv1.ListSessionsRequest{}))
+		resp, err := fix.client.ListSessions(ctx, connect.NewRequest(&sessionv1.ListSessionsRequest{}))
 		if err != nil {
 			b.Fatalf("ListSessions failed: %v", err)
 		}
@@ -201,62 +168,27 @@ func BenchmarkSessionService_ListSessions_50Sessions(b *testing.B) {
 // BenchmarkSessionService_GetSession measures GetSession for a known session
 // title. The session is looked up via the storage fallback path (no poller).
 func BenchmarkSessionService_GetSession(b *testing.B) {
-	tmpDir, err := os.MkdirTemp("", "bench-session-svc-get-*")
-	if err != nil {
-		b.Fatalf("failed to create temp dir: %v", err)
-	}
-	dbPath := fmt.Sprintf("%s/sessions.db", tmpDir)
-
-	repo, err := session.NewEntRepository(session.WithDatabasePath(dbPath))
-	if err != nil {
-		os.RemoveAll(tmpDir)
-		b.Fatalf("failed to create repository: %v", err)
-	}
+	fix := benchmarkServiceSetup(b)
+	b.Cleanup(fix.cleanup)
 
 	const targetTitle = "bench-get-target"
 	ctx := context.Background()
-	if err := repo.Create(ctx, session.InstanceData{
+	if err := fix.repo.Create(ctx, session.InstanceData{
 		Title:   targetTitle,
 		Path:    "/tmp/bench",
 		Branch:  "main",
 		Status:  session.Running,
 		Program: "claude",
 	}); err != nil {
-		repo.Close()
-		os.RemoveAll(tmpDir)
 		b.Fatalf("failed to create target session: %v", err)
 	}
-
-	storage, err := session.NewStorageWithRepository(repo)
-	if err != nil {
-		repo.Close()
-		os.RemoveAll(tmpDir)
-		b.Fatalf("failed to create storage: %v", err)
-	}
-
-	bus := events.NewEventBus(64)
-	svc := NewSessionService(storage, bus)
-
-	mux := http.NewServeMux()
-	path, handler := sessionv1connect.NewSessionServiceHandler(svc)
-	mux.Handle(path, handler)
-
-	srv := httptest.NewServer(mux)
-	client := sessionv1connect.NewSessionServiceClient(srv.Client(), srv.URL)
-
-	b.Cleanup(func() {
-		srv.Close()
-		bus.Close()
-		repo.Close()
-		os.RemoveAll(tmpDir)
-	})
 
 	runtime.GC()
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		resp, err := client.GetSession(ctx, connect.NewRequest(&sessionv1.GetSessionRequest{
+		resp, err := fix.client.GetSession(ctx, connect.NewRequest(&sessionv1.GetSessionRequest{
 			Id: targetTitle,
 		}))
 		if err != nil {

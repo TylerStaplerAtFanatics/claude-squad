@@ -58,6 +58,7 @@
     "ts-jest": "^29.4.4",
     "typescript": "^5.9.3",
     "@size-limit/file": "^11.0.0",
-    "size-limit": "^11.0.0"
+    "size-limit": "^11.0.0",
+    "wait-on": "^8.0.1"
   }
 }
