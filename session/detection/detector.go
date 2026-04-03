@@ -362,6 +362,13 @@ func getDefaultPatterns() StatusPatterns {
 				Description: "Claude Code command prompt",
 				Priority:    1,
 			},
+			// Gemini CLI status indicators
+			{
+				Name:        "gemini_ready",
+				Pattern:     `(?:◇|✓).*(?:Ready|ready)`,
+				Description: "Gemini CLI ready status (◇ Ready)",
+				Priority:    5,
+			},
 		},
 		Processing: []StatusPattern{
 			{
@@ -387,6 +394,13 @@ func getDefaultPatterns() StatusPatterns {
 				Pattern:     `→\s*(Read|Write|Edit|Create|Delete)\b`,
 				Description: "OpenCode tool action arrow (→ Read, → Write, etc.)",
 				Priority:    10,
+			},
+			// Gemini CLI working status
+			{
+				Name:        "gemini_working",
+				Pattern:     `(?:✦|⏲).*(?:Working|working)`,
+				Description: "Gemini CLI working status (✦ Working)",
+				Priority:    11,
 			},
 		},
 		NeedsApproval: []StatusPattern{
