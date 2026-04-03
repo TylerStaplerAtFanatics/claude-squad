@@ -13,7 +13,11 @@
     "test:stress": "playwright test tests/e2e/terminal-stress",
     "test:stress:headed": "playwright test tests/e2e/terminal-stress --headed",
     "test:stress:debug": "playwright test tests/e2e/terminal-stress --debug",
-    "test:report": "playwright show-report"
+    "test:report": "playwright show-report",
+    "size-limit": "size-limit",
+    "test:benchmark": "playwright test tests/e2e/benchmarks/",
+    "test:benchmark:throughput": "playwright test tests/e2e/benchmarks/terminal-throughput.spec.ts",
+    "test:benchmark:latency": "playwright test tests/e2e/benchmarks/rpc-latency.spec.ts"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.11.0",
@@ -52,6 +56,8 @@
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
     "ts-jest": "^29.4.4",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@size-limit/file": "^11.0.0",
+    "size-limit": "^11.0.0"
   }
 }
