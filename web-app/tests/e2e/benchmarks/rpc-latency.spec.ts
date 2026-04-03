@@ -53,8 +53,11 @@ test.describe('RPC Latency Benchmark', () => {
           (r) => r.url().includes(LIST_SESSIONS_PATH),
           { timeout: 10_000 },
         ),
-        // Trigger a ListSessions RPC via fetch inside the page context
-        // Using page.evaluate to avoid Playwright IPC overhead on the fetch itself
+        // Trigger a ListSessions RPC via fetch inside the page context.
+        // Using page.evaluate initiates the request within the page, so
+        // response.timing() captures accurate HAR-style timing from Playwright's
+        // network layer. IPC overhead applies only to the response interception,
+        // not to the fetch itself or its timing measurement.
         page.evaluate(async (url: string) => {
           const response = await fetch(url, {
             method: 'POST',
