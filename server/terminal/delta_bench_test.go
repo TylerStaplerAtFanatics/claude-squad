@@ -128,8 +128,10 @@ func BenchmarkDeltaGenerator_FullScreen_WithCompression(b *testing.B) {
 	dg := NewDeltaGenerator(cols, rows)
 
 	// Warm up the delta generator so the compression dictionary is populated.
-	// This triggers at least one full sync cycle (after fullSyncInterval=50 deltas).
-	for i := 0; i < 55; i++ {
+	// fullSyncInterval is 50 deltas; warmupIters exceeds it by 5 to guarantee
+	// at least one full sync cycle before timing begins.
+	const warmupIters = 55 // fullSyncInterval(50) + 5
+	for i := 0; i < warmupIters; i++ {
 		dg.GenerateDelta(content)
 	}
 

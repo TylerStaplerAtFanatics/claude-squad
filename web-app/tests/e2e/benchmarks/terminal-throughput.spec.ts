@@ -12,6 +12,12 @@
  * - Uses page.waitForFunction() for settling instead of page.waitForTimeout().
  * - All timing is done inside a single evaluate() call to eliminate IPC overhead.
  *
+ * Note on renderer: GitHub Actions' headless Chromium disables GPU acceleration,
+ * so xterm.js falls back from WebGL to the canvas renderer in CI. Baselines
+ * therefore reflect canvas-renderer throughput. Local runs with a GPU may use
+ * WebGL and produce higher numbers — baselines are renderer-specific and not
+ * cross-comparable between environments.
+ *
  * @see ADR-003: Frontend Performance Measurement Strategy
  */
 

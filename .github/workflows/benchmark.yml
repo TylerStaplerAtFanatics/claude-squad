@@ -27,10 +27,6 @@ concurrency:
   group: benchmarks-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: write     # Required to push to benchmarks branch
-  pull-requests: write # Required to post PR comments
-
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # Tier 1: Critical-path Go benchmarks — run on every PR and push to main.
@@ -45,6 +41,9 @@ jobs:
   go-tier1:
     name: Go Benchmarks (Tier 1)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write      # Push to benchmarks branch
+      pull-requests: write # Post PR comments on regression alerts
     steps:
       - uses: actions/checkout@v4
 
@@ -64,7 +63,7 @@ jobs:
             ./... | tee tier1-bench.txt
 
       - name: Store Tier 1 benchmark results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@a60cea5bc7b49e15c1f58f411161f99e0df48372 # v1.22.0
         with:
           name: Go Benchmarks (Tier 1)
           tool: 'go'
@@ -87,6 +86,9 @@ jobs:
   go-tier2:
     name: Go Benchmarks (Tier 2 - Extended)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write      # Push to benchmarks branch
+      pull-requests: write # Post PR comments on regression alerts
     # Only run on push to main, not on PRs (too slow for per-PR checks)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
@@ -108,7 +110,7 @@ jobs:
             ./... | tee tier2-bench.txt
 
       - name: Store Tier 2 benchmark results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@a60cea5bc7b49e15c1f58f411161f99e0df48372 # v1.22.0
         with:
           name: Go Benchmarks (Tier 2 - Full Suite)
           tool: 'go'
@@ -157,6 +159,9 @@ jobs:
     name: Frontend Terminal Throughput
     runs-on: ubuntu-latest
     needs: frontend-bundle
+    permissions:
+      contents: write      # Push to benchmarks branch
+      pull-requests: write # Post PR comments on regression alerts
     steps:
       - uses: actions/checkout@v4
 
@@ -179,8 +184,8 @@ jobs:
       - name: Start server
         run: |
           cd web-app && npm run start &
-          # Wait for server to be ready
-          npx wait-on http://localhost:3001 --timeout 30000
+          # Wait for server to be ready (use local installation to avoid npx download)
+          cd web-app && npx wait-on http://localhost:3001 --timeout 30000
 
       - name: Run terminal throughput benchmark
         run: cd web-app && npx playwright test tests/e2e/benchmarks/terminal-throughput.spec.ts --reporter=json 2>&1 | tee /tmp/throughput-raw.txt
@@ -193,7 +198,7 @@ jobs:
           fi
 
       - name: Store frontend throughput results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@a60cea5bc7b49e15c1f58f411161f99e0df48372 # v1.22.0
         if: hashFiles('web-app/benchmark-results.json') != ''
         with:
           name: Frontend Terminal Throughput
@@ -257,6 +262,9 @@ jobs:
     name: E2E RPC Latency
     runs-on: ubuntu-latest
     needs: frontend-bundle
+    permissions:
+      contents: write      # Push to benchmarks branch
+      pull-requests: write # Post PR comments on regression alerts
     steps:
       - uses: actions/checkout@v4
 
@@ -288,19 +296,19 @@ jobs:
       - name: Start backend server
         run: |
           ./stapler-squad &
-          npx wait-on http://localhost:8543 --timeout 30000
+          cd web-app && npx wait-on http://localhost:8543 --timeout 30000
 
       - name: Start frontend server
         run: |
           cd web-app && npm run start &
-          npx wait-on http://localhost:3001 --timeout 30000
+          cd web-app && npx wait-on http://localhost:3001 --timeout 30000
 
       - name: Run E2E latency benchmark
         run: cd web-app && npx playwright test tests/e2e/benchmarks/rpc-latency.spec.ts
         continue-on-error: true
 
       - name: Store E2E latency results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@a60cea5bc7b49e15c1f58f411161f99e0df48372 # v1.22.0
         if: hashFiles('web-app/e2e-latency-results.json') != ''
         with:
           name: E2E RPC Latency
