@@ -1,0 +1,314 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'web-app/src/**'
+      - 'web-app/package.json'
+      - 'web-app/package-lock.json'
+      - '.github/workflows/benchmark.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'web-app/src/**'
+      - 'web-app/package.json'
+      - 'web-app/package-lock.json'
+      - '.github/workflows/benchmark.yml'
+
+# Only one benchmark run per branch at a time; cancel in-progress runs on new push.
+concurrency:
+  group: benchmarks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write     # Required to push to benchmarks branch
+  pull-requests: write # Required to post PR comments
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Tier 1: Critical-path Go benchmarks — run on every PR and push to main.
+  # Regex covers the highest-signal benchmarks across the codebase:
+  #   - EventBus (events package)
+  #   - DeltaGeneration (terminal package)
+  #   - CircularBuffer (scrollback package)
+  #   - SessionService_ListSessions, GetSession (services package)
+  # Threshold: alert at 120% (noise floor ~15-20%), fail at 150%.
+  # -count=8 gives benchstat enough samples for statistical comparison.
+  # ─────────────────────────────────────────────────────────────────────────────
+  go-tier1:
+    name: Go Benchmarks (Tier 1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Run Tier 1 benchmarks
+        run: |
+          go test \
+            -bench='BenchmarkEventBus|BenchmarkDeltaGeneration|BenchmarkCircularBuffer|BenchmarkSessionService_List|BenchmarkSessionService_Get' \
+            -benchmem \
+            -count=8 \
+            -timeout=10m \
+            ./... | tee tier1-bench.txt
+
+      - name: Store Tier 1 benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmarks (Tier 1)
+          tool: 'go'
+          output-file-path: tier1-bench.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Only push updated baseline when landing on main (not on fork PRs)
+          auto-push: ${{ github.event_name == 'push' }}
+          gh-pages-branch: benchmarks
+          benchmark-data-dir-path: go
+          alert-threshold: '120%'
+          fail-threshold: '150%'
+          comment-on-alert: true
+          summary-always: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Tier 2: Full Go benchmark suite — push to main only.
+  # Runs the complete benchmark suite to establish a comprehensive baseline.
+  # Uses a separate data dir (go-extended) so it never pollutes the Tier 1 baseline.
+  # ─────────────────────────────────────────────────────────────────────────────
+  go-tier2:
+    name: Go Benchmarks (Tier 2 - Extended)
+    runs-on: ubuntu-latest
+    # Only run on push to main, not on PRs (too slow for per-PR checks)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Run full benchmark suite
+        run: |
+          go test \
+            -bench=. \
+            -benchmem \
+            -count=8 \
+            -timeout=30m \
+            ./... | tee tier2-bench.txt
+
+      - name: Store Tier 2 benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmarks (Tier 2 - Full Suite)
+          tool: 'go'
+          output-file-path: tier2-bench.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          gh-pages-branch: benchmarks
+          benchmark-data-dir-path: go-extended
+          alert-threshold: '130%'
+          fail-threshold: '200%'
+          comment-on-alert: true
+          summary-always: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Frontend: Bundle size gate via size-limit.
+  # Blocks PRs where the JS bundle grows by more than 10%.
+  # ─────────────────────────────────────────────────────────────────────────────
+  frontend-bundle:
+    name: Frontend Bundle Size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install dependencies
+        run: cd web-app && npm ci
+
+      - name: Build Next.js app
+        run: cd web-app && npm run build
+
+      - name: Check bundle size
+        run: cd web-app && npx size-limit
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Frontend: Playwright terminal throughput benchmark.
+  # Measures bytes/second rendered by xterm.js under realistic load.
+  # Uses customBiggerIsBetter since higher throughput is better.
+  # ─────────────────────────────────────────────────────────────────────────────
+  frontend-throughput:
+    name: Frontend Terminal Throughput
+    runs-on: ubuntu-latest
+    needs: frontend-bundle
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install dependencies
+        run: cd web-app && npm ci
+
+      - name: Install Playwright browsers
+        run: cd web-app && npx playwright install --with-deps chromium
+
+      - name: Build Next.js app
+        run: cd web-app && npm run build
+
+      - name: Start server
+        run: |
+          cd web-app && npm run start &
+          # Wait for server to be ready
+          npx wait-on http://localhost:3001 --timeout 30000
+
+      - name: Run terminal throughput benchmark
+        run: cd web-app && npx playwright test tests/e2e/benchmarks/terminal-throughput.spec.ts --reporter=json 2>&1 | tee /tmp/throughput-raw.txt
+        continue-on-error: true
+
+      - name: Output benchmark results
+        run: |
+          if [ -f web-app/benchmark-results.json ]; then
+            cat web-app/benchmark-results.json
+          fi
+
+      - name: Store frontend throughput results
+        uses: benchmark-action/github-action-benchmark@v1
+        if: hashFiles('web-app/benchmark-results.json') != ''
+        with:
+          name: Frontend Terminal Throughput
+          tool: 'customBiggerIsBetter'
+          output-file-path: web-app/benchmark-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: ${{ github.event_name == 'push' }}
+          gh-pages-branch: benchmarks
+          benchmark-data-dir-path: frontend
+          alert-threshold: '150%'
+          fail-threshold: '200%'
+          comment-on-alert: true
+          summary-always: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Lighthouse CI: Advisory performance audit (non-blocking).
+  # Runs Core Web Vitals and performance audits; never blocks merge.
+  # ─────────────────────────────────────────────────────────────────────────────
+  lighthouse:
+    name: Lighthouse CI (Advisory)
+    runs-on: ubuntu-latest
+    needs: frontend-bundle
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install dependencies
+        run: cd web-app && npm ci
+
+      - name: Build Next.js app
+        run: cd web-app && npm run build
+
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli
+
+      - name: Run Lighthouse CI
+        run: cd web-app && lhci autorun
+        continue-on-error: true  # Advisory only — never blocks merge
+
+      - name: Upload Lighthouse results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-results
+          path: web-app/.lighthouseci/
+          retention-days: 14
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # E2E Latency: Playwright RPC timing benchmarks.
+  # Measures ListSessions TTFB, total RPC time, and React render time separately.
+  # Uses customSmallerIsBetter since lower latency is better.
+  # Thresholds are looser than Go benchmarks due to measurement variance.
+  # ─────────────────────────────────────────────────────────────────────────────
+  e2e-latency:
+    name: E2E RPC Latency
+    runs-on: ubuntu-latest
+    needs: frontend-bundle
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install dependencies
+        run: cd web-app && npm ci
+
+      - name: Install Playwright browsers
+        run: cd web-app && npx playwright install --with-deps chromium
+
+      - name: Build Go binary
+        run: go build -o stapler-squad .
+
+      - name: Build Next.js app
+        run: cd web-app && npm run build
+
+      - name: Start backend server
+        run: ./stapler-squad &
+
+      - name: Start frontend server
+        run: |
+          cd web-app && npm run start &
+          npx wait-on http://localhost:3001 --timeout 30000
+
+      - name: Run E2E latency benchmark
+        run: cd web-app && npx playwright test tests/e2e/benchmarks/rpc-latency.spec.ts
+        continue-on-error: true
+
+      - name: Store E2E latency results
+        uses: benchmark-action/github-action-benchmark@v1
+        if: hashFiles('web-app/e2e-latency-results.json') != ''
+        with:
+          name: E2E RPC Latency
+          tool: 'customSmallerIsBetter'
+          output-file-path: web-app/e2e-latency-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: ${{ github.event_name == 'push' }}
+          gh-pages-branch: benchmarks
+          benchmark-data-dir-path: e2e
+          alert-threshold: '150%'
+          fail-threshold: '200%'
+          comment-on-alert: true
+          summary-always: true

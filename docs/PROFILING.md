@@ -1,376 +1,506 @@
-# Profiling and Performance Debugging
+# Profiling Runbook
 
-This guide covers comprehensive profiling techniques for diagnosing lock-ups, performance issues, and concurrency problems in Stapler Squad.
+See the Profiling section in CLAUDE.md for the basic workflow overview.
 
-## Quick Start: Diagnosing Lock-Ups
+This document is the comprehensive reference: copy-paste commands, interpretation guidance, and tool comparisons for every profiling dimension.
 
-If the app is locking up or freezing, use this workflow:
+---
+
+## Quick Start
+
+The fastest way to start with profiling enabled:
 
 ```bash
-# 1. Run with profiling and tracing enabled
+make restart-web-profile
+```
+
+This builds the UI, restarts the server with `--profile --trace`, and prints the available endpoints. The profiling HTTP server starts on `localhost:6060` by default.
+
+To use a custom port:
+
+```bash
+make restart-web PROFILE_FLAGS="--profile --trace" PROFILE_PORT=8080
+```
+
+Or run the binary directly:
+
+```bash
 ./stapler-squad --profile --trace
-
-# 2. When the lock-up occurs, capture profiles in another terminal:
-# Goroutine stacks (shows what all goroutines are doing)
-curl http://localhost:6060/debug/pprof/goroutine?debug=2 > goroutines.txt
-
-# Block profile (shows where goroutines are blocking)
-curl http://localhost:6060/debug/pprof/block?debug=1 > block.txt
-
-# Mutex profile (shows lock contention)
-curl http://localhost:6060/debug/pprof/mutex?debug=1 > mutex.txt
-
-# 3. Exit the app to save the trace file
-# 4. Analyze the trace:
-go tool trace /tmp/stapler-squad-trace-<PID>.out
-```
-
-## Available Profiling Flags
-
-### `--profile`
-Enables comprehensive runtime profiling:
-- HTTP server on `localhost:6060` with pprof endpoints
-- Block profiling (shows where goroutines block)
-- Mutex profiling (shows lock contention)
-- Periodic goroutine count monitoring
-
-```bash
-./stapler-squad --profile
-```
-
-### `--profile-port <port>`
-Change the profiling HTTP server port (default: 6060):
-
-```bash
 ./stapler-squad --profile --profile-port 8080
+./stapler-squad --trace   # execution trace only, no pprof server
 ```
 
-### `--trace`
-Enables execution tracing to capture detailed goroutine execution:
-- Creates `/tmp/stapler-squad-trace-<PID>.out`
-- Shows goroutine scheduling, blocking, and system calls
-- Visualize with `go tool trace`
+### Available Flags
 
-```bash
-./stapler-squad --trace
+| Flag | Effect |
+|------|--------|
+| `--profile` | Starts pprof HTTP server on `:6060`, enables block and mutex profiling |
+| `--profile-port <N>` | Override pprof port (default: 6060) |
+| `--trace` | Writes execution trace to `/tmp/stapler-squad-trace-<PID>.out` |
+
+### pprof Endpoint Index
+
+When `--profile` is active, all standard Go pprof endpoints are available:
+
+```
+http://localhost:6060/debug/pprof/           index page (browser)
+http://localhost:6060/debug/pprof/goroutine  goroutine stacks
+http://localhost:6060/debug/pprof/heap       heap snapshot
+http://localhost:6060/debug/pprof/allocs     allocation counts
+http://localhost:6060/debug/pprof/block      blocking events
+http://localhost:6060/debug/pprof/mutex      mutex contention
+http://localhost:6060/debug/pprof/profile    CPU profile (streaming)
+http://localhost:6060/debug/pprof/trace      execution trace (streaming)
 ```
 
-### Combined Usage
+---
+
+## CPU Profiling
+
+CPU profiling samples the call stack at ~100 Hz to show where execution time is spent.
+
+### Capture
+
 ```bash
-# Full profiling + tracing
-./stapler-squad --profile --trace
+# 30-second CPU profile while exercising the app
+curl "http://localhost:6060/debug/pprof/profile?seconds=30" > cpu.prof
 ```
 
-## Profiling Endpoints
-
-When `--profile` is enabled, these HTTP endpoints are available:
-
-### View in Browser
-- **Index**: http://localhost:6060/debug/pprof/
-- **Goroutines**: http://localhost:6060/debug/pprof/goroutine?debug=1
-- **Heap**: http://localhost:6060/debug/pprof/heap
-- **Block**: http://localhost:6060/debug/pprof/block?debug=1
-- **Mutex**: http://localhost:6060/debug/pprof/mutex?debug=1
-- **Allocs**: http://localhost:6060/debug/pprof/allocs
-
-### Capture Profiles via CLI
+### Analyze
 
 ```bash
-# CPU profiling (30 seconds)
-curl http://localhost:6060/debug/pprof/profile?seconds=30 > cpu.prof
+# Interactive web UI (flamegraph, top, graph views)
 go tool pprof -http=:8081 cpu.prof
 
-# Heap snapshot
+# Text top-N (no browser)
+go tool pprof -top cpu.prof
+
+# Annotated source
+go tool pprof -source cpu.prof
+```
+
+### Reading the Flamegraph
+
+Open the browser UI and select View > Flame Graph.
+
+- The x-axis is the percentage of samples (wider = more time consumed).
+- The y-axis is the call stack depth (callers above, callees below in Go's default orientation — hottest leaf frames are at the **top**).
+- Click any frame to zoom into that subtree.
+- Look for wide frames near the leaf level — those are the actual hotspots.
+
+Common patterns to investigate:
+
+- `runtime.gcBgMarkWorker` taking > 20% — excessive allocation rate.
+- `sync.(*Mutex).Lock` or `sync.(*RWMutex).RLock` in hot paths — lock contention (see Mutex Profiling below).
+- `syscall.Read` / `syscall.Write` — I/O bottleneck, consider buffering.
+- `runtime.mallocgc` high — allocation pressure (see Heap Profiling below).
+
+---
+
+## Heap Profiling
+
+Heap profiles capture in-use allocations and total allocation counts.
+
+### Capture
+
+```bash
+# Current live heap (inuse_space / inuse_objects)
 curl http://localhost:6060/debug/pprof/heap > heap.prof
+
+# All allocations since start (alloc_space / alloc_objects)
+curl "http://localhost:6060/debug/pprof/heap?debug=0" > heap_allocs.prof
+
+# Allocs profile (same data, alternative endpoint)
+curl http://localhost:6060/debug/pprof/allocs > allocs.prof
+```
+
+### Analyze
+
+```bash
+# Interactive web UI — use View > Flame Graph
 go tool pprof -http=:8081 heap.prof
 
-# Goroutine dump (text format)
-curl http://localhost:6060/debug/pprof/goroutine?debug=2 > goroutines.txt
+# Sample type: inuse_space = live retained bytes (default)
+go tool pprof -sample_index=inuse_space -http=:8081 heap.prof
 
-# Block profile (where goroutines block)
+# Sample type: alloc_space = total bytes ever allocated (find allocation hotspots)
+go tool pprof -sample_index=alloc_space -http=:8081 heap.prof
+```
+
+### Diff Two Profiles (Before / After)
+
+```bash
+# Capture baseline
+curl http://localhost:6060/debug/pprof/heap > heap_before.prof
+
+# Exercise the suspect path, wait, then capture again
+curl http://localhost:6060/debug/pprof/heap > heap_after.prof
+
+# Show the diff (positive = growth)
+go tool pprof -base=heap_before.prof -http=:8081 heap_after.prof
+```
+
+Positive values in the diff mean allocations grew between snapshots. Use this to isolate memory leaks to specific call sites.
+
+---
+
+## Goroutine Analysis
+
+Goroutine dumps show the full call stack of every live goroutine. Use them to find leaks and deadlocks.
+
+### Capture
+
+```bash
+# Summary count per unique stack (debug=1)
+curl "http://localhost:6060/debug/pprof/goroutine?debug=1" > goroutines_summary.txt
+
+# Full stacks for every goroutine (debug=2) — use for deadlock diagnosis
+curl "http://localhost:6060/debug/pprof/goroutine?debug=2" > goroutines.txt
+
+# Via Makefile (uses PROFILE_PORT variable)
+make profile-goroutines
+```
+
+### Detect Leaks
+
+Goroutine leaks appear as a count that grows monotonically without bound. The server's `MonitorGoroutines` function (in `profiling/profiling.go`) logs goroutine counts every 30 seconds when `--profile` is active and warns when count exceeds 100.
+
+To track manually:
+
+```bash
+# Capture count now
+curl -s "http://localhost:6060/debug/pprof/goroutine?debug=1" | head -3
+
+# Wait 60 seconds, capture again
+sleep 60
+curl -s "http://localhost:6060/debug/pprof/goroutine?debug=1" | head -3
+```
+
+If the number climbs steadily, look for goroutines blocked on:
+
+- `chan receive` with no sender — missing close or signal.
+- `chan send` — unbuffered channel with no receiver.
+- `time.Sleep` with no context cancellation — goroutine that should have exited.
+- `net.(*netFD).Read` — idle network connections holding goroutines.
+
+The `debug=2` dump includes goroutine creation call sites (`created by ...`), which is the fastest way to find the leak source.
+
+---
+
+## Block Profiling
+
+Block profiling records events where goroutines blocked on synchronization primitives (channels, mutexes, select). Requires `--profile` to be active (the server calls `runtime.SetBlockProfileRate(1)` when enabled).
+
+### Capture
+
+```bash
 curl http://localhost:6060/debug/pprof/block > block.prof
-go tool pprof -http=:8081 block.prof
 
-# Mutex profile (lock contention)
+# Via Makefile
+make profile-block
+```
+
+### Analyze
+
+```bash
+go tool pprof -http=:8081 block.prof
+```
+
+### Interpretation
+
+The profile counts `contentionSeconds` — total time goroutines spent blocked. A function appearing at the top of the block profile with high `contentionSeconds` is a synchronization bottleneck.
+
+Key views in the web UI:
+
+- **Top**: sorted list of call sites by blocking time.
+- **Graph**: call graph with edge weights showing cumulative blocking.
+- **Flame Graph**: where blocking originates relative to callers.
+
+Common block patterns:
+
+| Pattern | Cause | Fix |
+|---------|-------|-----|
+| `sync.(*Mutex).Lock` | Lock held too long | Reduce critical section size |
+| `chan receive` | Sender slow or never fires | Add buffering or check producer rate |
+| `select` | All cases blocked | Check channel consumer goroutines |
+| `sync.(*WaitGroup).Wait` | Slow or leaked goroutines | Profile CPU/goroutines for slow workers |
+
+---
+
+## Mutex Profiling
+
+Mutex profiling records contention on `sync.Mutex` and `sync.RWMutex`. Also enabled automatically when `--profile` is active (`runtime.SetMutexProfileFraction(1)`).
+
+### Capture
+
+```bash
 curl http://localhost:6060/debug/pprof/mutex > mutex.prof
+
+# Via Makefile
+make profile-mutex
+```
+
+### Analyze
+
+```bash
 go tool pprof -http=:8081 mutex.prof
 ```
 
-## Execution Trace Analysis
+### Interpretation
 
-Execution traces provide the most detailed view of goroutine behavior:
+The mutex profile shows call stacks at the `Lock()` call site that was *contended* (another goroutine was already holding the lock). High `contentionSeconds` at a particular call site means multiple goroutines are frequently racing to acquire the same mutex.
 
-```bash
-# 1. Run with tracing
-./stapler-squad --trace
+Strategies once you identify the hot lock:
 
-# 2. Reproduce the lock-up, then exit the app
+1. **Reduce scope**: narrow the critical section to the minimum code that needs the lock.
+2. **Use `sync.RWMutex`**: if reads dominate, `RLock` allows concurrent readers.
+3. **Shard**: split one lock into N locks indexed by key (e.g., session ID).
+4. **Eliminate**: redesign to use channels or lock-free structures if contention is fundamental.
 
-# 3. Open trace in browser
-go tool trace /tmp/stapler-squad-trace-<PID>.out
-```
+---
 
-### Trace Viewer Features
-- **View trace**: Timeline view of all goroutines
-- **Goroutine analysis**: See goroutine creation and blocking
-- **Network blocking profile**: Network I/O delays
-- **Synchronization blocking profile**: Lock contention
-- **Syscall blocking profile**: System call delays
-- **Scheduler latency profile**: GC and scheduling overhead
+## Execution Tracing
 
-### What to Look For in Traces
-1. **Long blocking periods**: Goroutines stuck for > 100ms
-2. **Lock contention**: Multiple goroutines waiting on same lock
-3. **Goroutine leaks**: Ever-increasing goroutine count
-4. **Scheduler issues**: High scheduling latency
+The `--trace` flag writes a Go execution trace to `/tmp/stapler-squad-trace-<PID>.out`. This is the highest-fidelity tool: it records exact goroutine scheduling events, GC phases, syscalls, and heap size over time.
 
-## Race Detector
+### Start
 
-Detect data races (concurrent access without synchronization):
-
-```bash
-# Build with race detector
-go build -race .
-
-# Run with race detection
-./stapler-squad --profile
-
-# Any data races will be printed to stderr with stack traces
-```
-
-**Note**: Race detector adds ~10x overhead, don't use in production.
-
-## SQLite-Specific Diagnostics
-
-The app includes SQLite-specific diagnostics for database lock-ups:
-
-### Connection Pool Monitoring
-Automatically logged every 10 seconds when `--profile` is enabled:
-- Open connections
-- In-use vs idle connections
-- Wait count and duration
-- Pool exhaustion warnings
-
-### Manual Database Diagnostics
-
-Add this to your code to enable SQLite diagnostics:
-
-```go
-import "stapler-squad/session"
-
-// Create diagnostics helper
-diag := session.NewSQLiteDiagnostics(db)
-
-// Log connection pool stats
-diag.LogConnectionPoolStats()
-
-// Check for database locks
-diag.CheckDatabaseLocks()
-
-// Measure query time
-err := diag.MeasureQueryTime("LoadInstances", func() error {
-    return storage.LoadInstances()
-})
-
-// Check database integrity
-diag.CheckIntegrity()
-
-// Get database size
-diag.GetDatabaseSize()
-
-// Monitor pool continuously (in goroutine)
-done := make(chan struct{})
-go diag.MonitorConnectionPool(10*time.Second, done)
-defer close(done)
-```
-
-## Common Lock-Up Patterns
-
-### 1. Database Connection Pool Exhaustion
-
-**Symptoms:**
-- App freezes when switching pages
-- High "Wait Count" in connection pool stats
-- All connections "In Use"
-
-**Diagnosis:**
-```bash
-./stapler-squad --profile
-curl http://localhost:6060/debug/pprof/goroutine?debug=1 | grep -A 5 "database/sql"
-```
-
-**Look for:**
-- Multiple goroutines waiting on `(*DB).conn()`
-- High wait duration in pool stats
-
-**Solutions:**
-- Increase `MaxOpenConns` in database config
-- Check for missing `rows.Close()` or `tx.Rollback()`
-- Reduce concurrent database operations
-
-### 2. Deadlock Between Goroutines
-
-**Symptoms:**
-- Complete app freeze
-- Goroutine count stops increasing
-- Multiple goroutines in "chan receive" state
-
-**Diagnosis:**
 ```bash
 ./stapler-squad --profile --trace
-# After freeze:
-curl http://localhost:6060/debug/pprof/goroutine?debug=2 > goroutines.txt
-# Look for circular dependencies in blocked goroutines
+# or
+make restart-web-profile
 ```
 
-**Look for:**
-- Goroutine A waiting for channel from B
-- Goroutine B waiting for channel from A
+The trace file path is printed to the log on startup: `Execution trace enabled: /tmp/stapler-squad-trace-<PID>.out`.
 
-### 3. Mutex Lock Contention
+### Analyze
 
-**Symptoms:**
-- Slow response times
-- High CPU usage
-- Multiple goroutines waiting on same mutex
-
-**Diagnosis:**
 ```bash
-./stapler-squad --profile
-curl http://localhost:6060/debug/pprof/mutex > mutex.prof
-go tool pprof -http=:8081 mutex.prof
+# Open trace viewer in browser (auto-starts HTTP server)
+go tool trace /tmp/stapler-squad-trace-12345.out
+
+# If multiple trace files exist
+go tool trace /tmp/stapler-squad-trace-*.out
 ```
 
-**Look for:**
-- Hot paths in mutex profile flame graph
-- Long-held locks in critical sections
+### Key Views in the Trace Viewer
 
-**Solutions:**
-- Reduce critical section size
-- Use RWMutex for read-heavy workloads
-- Consider lock-free data structures
+| View | What it Shows |
+|------|---------------|
+| **View trace** | Timeline: every goroutine as a row, colored by state (running, waiting, blocked) |
+| **Goroutine analysis** | Per-goroutine breakdown: time running vs scheduling latency vs blocking |
+| **Network blocking profile** | Time goroutines spent waiting on network I/O |
+| **Synchronization blocking profile** | Time blocked on channels and mutexes |
+| **Syscall blocking profile** | Time in system calls |
+| **Scheduler latency profile** | Delay between goroutine becoming runnable and actually running |
+| **User-defined tasks** | Custom spans (if added via `trace.NewTask`) |
 
-### 4. Channel Blocking
+### What to Look For
 
-**Symptoms:**
-- Goroutines stuck in "chan send" or "chan receive"
-- Gradual performance degradation
+- **Scheduler latency profile**: latency > 1ms at P99 suggests GC pauses or GOMAXPROCS starvation.
+- **Long GC stop-the-world**: in the timeline, all goroutines go grey simultaneously — indicates high allocation rate.
+- **Goroutines stuck in "chan receive"**: horizontal grey bars with no transitions — possible leak or deadlock.
+- **Uneven goroutine distribution across Ps**: some P cores idle while others are saturated — lock serialization.
 
-**Diagnosis:**
+### Trace File Size
+
+Traces grow at ~1 MB/s under moderate load. For a 30-second capture the file is typically 10-50 MB. To keep it manageable: start the server, reproduce the specific scenario, then exit promptly.
+
+---
+
+## Benchmark Profiling
+
+For micro-level profiling of specific code paths, profile individual benchmarks rather than the live server.
+
+### CPU Profile from Benchmark
+
 ```bash
-./stapler-squad --trace
-go tool trace /tmp/stapler-squad-trace-<PID>.out
-# View "Synchronization blocking profile"
+# Profile a specific benchmark
+go test -bench=BenchmarkDeltaGeneration -benchmem -cpuprofile=cpu.prof ./server/terminal/
+go tool pprof -http=:8081 cpu.prof
+
+# Profile all benchmarks in a package
+go test -bench=. -benchmem -cpuprofile=cpu.prof ./app/ -timeout=30m &
+go tool pprof -http=:8081 cpu.prof
 ```
 
-**Look for:**
-- Unbuffered channels with no receiver
-- Full buffered channels with no consumer
-- Closed channels with pending sends
+### Memory Profile from Benchmark
 
-### 5. SQLite Database Locks
-
-**Symptoms:**
-- "database is locked" errors
-- Timeouts on write operations
-- SQLITE_BUSY errors
-
-**Diagnosis:**
-Check logs for SQLite diagnostics:
 ```bash
-grep "SQLite" ~/.stapler-squad/logs/stapler-squad.log
+go test -bench=BenchmarkDeltaGeneration -benchmem -memprofile=mem.prof ./server/terminal/
+go tool pprof -sample_index=alloc_space -http=:8081 mem.prof
 ```
 
-**Solutions:**
-- Enable WAL mode: `PRAGMA journal_mode=WAL`
-- Increase busy timeout: `PRAGMA busy_timeout=5000`
-- Reduce transaction duration
-- Use `BEGIN IMMEDIATE` for write transactions
-
-## Performance Benchmarking
-
-Compare performance before/after changes:
+### Execution Trace from Benchmark
 
 ```bash
-# Baseline benchmark
-go test -bench=. -benchmem ./... > baseline.txt
+go test -bench=BenchmarkAttachDetachPerformance -trace=trace.out ./app/ -timeout=15m
+go tool trace trace.out
+```
+
+### Makefile Targets for Benchmark Profiling
+
+```bash
+# CPU profiling across all packages
+make profile-cpu
+
+# Memory profiling across all packages
+make profile-memory
+```
+
+### Compare Benchmarks (benchstat)
+
+```bash
+# Install benchstat
+go install golang.org/x/perf/cmd/benchstat@latest
+
+# Baseline
+go test -bench=BenchmarkNavigation -count=5 -benchmem ./app/ > before.txt
 
 # After changes
-go test -bench=. -benchmem ./... > after.txt
+go test -bench=BenchmarkNavigation -count=5 -benchmem ./app/ > after.txt
 
-# Compare
-go install golang.org/x/perf/cmd/benchstat@latest
-benchstat baseline.txt after.txt
+# Comparison (shows statistical significance)
+benchstat before.txt after.txt
 ```
 
-## Continuous Monitoring
+---
 
-For production monitoring, integrate profiling endpoints:
+## Speedscope (Time-Order View)
 
-```go
-import (
-    "net/http"
-    _ "net/http/pprof"
-)
+`go tool pprof` flame graphs aggregate samples — they don't show the *order* in which functions were called. Speedscope adds a time-order ("sandwich") view that can reveal bursty behavior invisible in aggregated profiles.
 
-// In production code (separate port)
-go func() {
-    log.Println(http.ListenAndServe("localhost:6060", nil))
-}()
-```
+### Install and Use
 
-Then use external monitoring tools:
-- Prometheus (via pprof exporter)
-- Grafana dashboards
-- DataDog APM
-- New Relic
-
-## Profiling Best Practices
-
-1. **Always profile with realistic workloads**: Don't profile empty databases
-2. **Profile in production-like environments**: Race detector is too slow for production
-3. **Compare before/after**: Benchmark baseline before optimizing
-4. **Focus on hottest paths**: Use flame graphs to find bottlenecks
-5. **Profile different dimensions**:
-   - CPU: Where time is spent
-   - Memory: Allocation patterns and leaks
-   - Goroutines: Concurrency issues
-   - Block: Where goroutines wait
-   - Mutex: Lock contention
-
-## Troubleshooting Profiling
-
-### Profiling Server Won't Start
 ```bash
-# Check if port is in use
-lsof -i :6060
-
-# Use different port
-./stapler-squad --profile --profile-port 8080
+# Run via npx (no install required)
+npx speedscope cpu.prof
 ```
 
-### Trace File Too Large
-```bash
-# Limit trace duration
-# Start app, reproduce issue quickly, exit immediately
+### When to Use Speedscope vs go tool pprof
 
-# Or filter trace
-go tool trace -http=:8081 /tmp/stapler-squad-trace-<PID>.out
+| Use Case | Tool |
+|----------|------|
+| Finding hottest function overall | `go tool pprof` flame graph |
+| Comparing two profiles (diff) | `go tool pprof -base` |
+| Seeing call order and time-based patterns | Speedscope "Time Order" view |
+| Identifying bursty vs steady workloads | Speedscope "Sandwich" view |
+| Sharing profiles with non-Go engineers | Speedscope (browser URL) |
+| GC / scheduler investigation | `go tool trace` |
+
+Speedscope's "Left Heavy" view is equivalent to pprof's flame graph. Start there, then switch to "Time Order" if the aggregated view doesn't explain the behavior.
+
+---
+
+## Common Scenarios
+
+### Diagnosing a Lock-Up
+
+```bash
+# 1. Start with profiling
+make restart-web-profile
+
+# 2. Reproduce the lock-up
+
+# 3. Immediately capture goroutine state
+curl "http://localhost:6060/debug/pprof/goroutine?debug=2" > goroutines.txt
+curl http://localhost:6060/debug/pprof/block > block.prof
+curl http://localhost:6060/debug/pprof/mutex > mutex.prof
+
+# 4. Exit the server to save the trace file
+
+# 5. Analyze: look for circular blocking in goroutines.txt
+grep -A 20 "chan receive\|chan send\|semacquire" goroutines.txt
+
+# 6. Analyze block and mutex profiles
+go tool pprof -http=:8081 block.prof
+go tool pprof -http=:8081 mutex.prof
+
+# 7. Analyze execution trace for scheduler and GC context
+go tool trace /tmp/stapler-squad-trace-*.out
 ```
 
-### No Profile Data
+### Finding a Memory Leak
+
 ```bash
-# Ensure profiling is enabled
+# 1. Capture baseline heap
+curl http://localhost:6060/debug/pprof/heap > heap_before.prof
+
+# 2. Exercise the suspect feature repeatedly
+
+# 3. Capture heap after
+curl http://localhost:6060/debug/pprof/heap > heap_after.prof
+
+# 4. Diff: positive values = retained allocations
+go tool pprof -base=heap_before.prof -http=:8081 heap_after.prof
+
+# 5. If leaking goroutines, check goroutine count trend
+for i in 1 2 3; do
+  curl -s "http://localhost:6060/debug/pprof/goroutine?debug=1" | head -1
+  sleep 30
+done
+```
+
+### Race Condition Detection
+
+```bash
+# Build and run with race detector (~10x slower, use only for testing)
+go build -race .
 ./stapler-squad --profile
 
-# Check logs for profiling messages
-tail -f ~/.stapler-squad/logs/stapler-squad.log | grep -i profil
+# Or run race-enabled tests
+go test -race ./...
 ```
+
+---
+
+## Troubleshooting
+
+**pprof server not responding**
+
+```bash
+# Check if process started with --profile
+ps aux | grep stapler-squad
+
+# Check port availability
+lsof -i :6060
+
+# Use a different port
+./stapler-squad --profile --profile-port 8081
+```
+
+**Trace file not found**
+
+```bash
+# Find by PID pattern
+ls /tmp/stapler-squad-trace-*.out
+
+# Check logs for the path
+grep "trace" ~/.stapler-squad/logs/stapler-squad.log | tail -5
+```
+
+**Block or mutex profiles empty**
+
+Both require `--profile` to be active at startup (the flag calls `SetBlockProfileRate(1)` and `SetMutexProfileFraction(1)`). These cannot be enabled at runtime after the fact.
+
+**go tool pprof web UI port conflict**
+
+```bash
+# Use a different port
+go tool pprof -http=:8082 cpu.prof
+```
+
+**Trace file too large to open**
+
+Use `go tool trace -http=:8081 file.out` to open a specific file, or restrict the trace duration by exiting promptly after reproducing the scenario.
+
+---
 
 ## Further Reading
 
-- [Go Profiling Guide](https://go.dev/blog/pprof)
+- [Go Diagnostics](https://go.dev/doc/diagnostics)
+- [Profiling Go Programs](https://go.dev/blog/profiling-go-programs)
 - [Execution Tracer](https://go.dev/doc/diagnostics#execution-tracer)
 - [Race Detector](https://go.dev/doc/articles/race_detector)
-- [SQLite Locking](https://www.sqlite.org/lockingv3.html)
-- [Profiling Go Programs](https://go.dev/blog/profiling-go-programs)
+- [benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat)
+- [Speedscope](https://www.speedscope.app/)

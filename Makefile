@@ -335,7 +335,7 @@ benchmark-compare: ensure-tools proto-gen ## Run benchmarks and compare against 
 benchmark-tier1: ensure-tools proto-gen ## Run Tier 1 critical-path benchmarks (fast, ~5 min)
 	@echo "Running Tier 1 benchmarks..."
 	go test \
-		-bench='BenchmarkEventBus|BenchmarkDeltaGenerat|BenchmarkCircularBuffer|BenchmarkSessionService_List|BenchmarkSessionService_Get' \
+		-bench='BenchmarkEventBus|BenchmarkDeltaGeneration|BenchmarkCircularBuffer|BenchmarkSessionService_List|BenchmarkSessionService_Get' \
 		-benchmem \
 		-count=8 \
 		-timeout=10m \
