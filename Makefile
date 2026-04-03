@@ -172,7 +172,7 @@ install-tools: ensure-tools ## Install all development and analysis tools
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
-	go install github.com/jtbonhomme/go-nilcheck@latest
+	go install github.com/jtbonhomme/go-nilcheck/cmd/nilcheck@latest
 	go install golang.org/x/tools/cmd/deadcode@latest
 	@echo "All tools installed successfully!"
 
@@ -202,7 +202,7 @@ nil-safety: ensure-tools ## Run comprehensive nil safety analysis
 	@echo ""
 	@echo "For detailed analysis, run individual tools:"
 	@echo "  make nilaway"
-	@echo "  make staticcheck" 
+	@echo "  make staticcheck"
 
 nilaway: ensure-tools ## Run NilAway nil safety analyzer
 	nilaway -include-pkgs="github.com/tstapler/stapler-squad" ./...
