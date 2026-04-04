@@ -49,10 +49,12 @@ jobs:
         curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
           -o /usr/local/bin/buf && chmod +x /usr/local/bin/buf
 
+    - name: Install web-app dependencies
+      working-directory: web-app
+      run: npm ci
+
     - name: Generate protobuf code
-      run: |
-        cd web-app && npm ci
-        buf generate proto
+      run: buf generate proto
 
     - name: Create web dist stub
       run: |
