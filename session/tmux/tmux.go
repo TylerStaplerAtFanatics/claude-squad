@@ -1478,7 +1478,7 @@ func CleanupSessionsOnServer(cmdExec executor.Executor, serverSocket string) err
 	return nil
 }
 
-// sanitizeUTF8String converts raw bytes to valid UTF-8 string, preserving ANSI escape sequences
+// sanitizeUTF8String converts raw bytes to valid UTF-8 string, replacing invalid sequences
 // This prevents xterm.js parsing errors from invalid byte sequences while maintaining
 // terminal formatting and color information
 func sanitizeUTF8String(rawBytes []byte) string {
