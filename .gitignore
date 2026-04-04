@@ -24,6 +24,14 @@ test-results/
 tests/playwright-report/
 tests/test-results/
 tests/test-results.json
+coverage.out
+
+# Build artifacts
+server/web/dist/
+/web-app/out/
+
+# Tool version stamps
+.asdf-install.stamp
 
 # Playwright test artifacts
 assets/demo-recording/.last-run.json
