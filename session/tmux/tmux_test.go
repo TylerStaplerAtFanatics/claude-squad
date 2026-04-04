@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tstapler/stapler-squad/executor"
 )
 
 type MockPtyFactory struct {
@@ -198,10 +199,12 @@ func TestEnsureServerRunning_NoOp(t *testing.T) {
 		_ = exec.Command("tmux", "-L", socketName, "kill-server").Run()
 	})
 
-	// Start the isolated server first.
-	require.NoError(t, exec.Command("tmux", "-L", socketName, "start-server").Run())
+	// Start the isolated server and keep it alive with a detached session.
+	// Without a session, tmux exits immediately (exit-empty=on by default), causing
+	// the follow-up check in EnsureServerRunning to falsely report the server as dead.
+	require.NoError(t, exec.Command("tmux", "-L", socketName, "new-session", "-d", "-s", "keepalive").Run())
 
-	// With the server already running, EnsureServerRunning should return nil.
+	// With the server running and a live session, EnsureServerRunning should be a no-op.
 	err := EnsureServerRunning(socketName)
 	require.NoError(t, err, "EnsureServerRunning should be a no-op when server is already running")
 }
@@ -318,11 +321,11 @@ func TestRecoverFromServerFailure_ConcurrentGuard(t *testing.T) {
 	recoveryMu.Lock()
 	recoveryInFlight = true
 	recoveryMu.Unlock()
-	defer func() {
+	t.Cleanup(func() {
 		recoveryMu.Lock()
 		recoveryInFlight = false
 		recoveryMu.Unlock()
-	}()
+	})
 
 	ptyFactory := NewMockPtyFactory(t)
 	cmdExec := MockCmdExec{
@@ -407,5 +410,97 @@ func TestDoesSessionExist_LockReleasedBeforeRecovery(t *testing.T) {
 		require.False(t, result2, "second DoesSessionExist call should also return false")
 	case <-time.After(2 * time.Second):
 		t.Fatal("DoesSessionExist deadlocked on second call — existsCacheMutex was not released before recovery ran")
+	}
+}
+
+// TestPrependSocket verifies that prependSocket returns args unmodified when the socket
+// is empty and prepends "-L <socket>" when the socket is non-empty.
+func TestPrependSocket(t *testing.T) {
+	tests := []struct {
+		name     string
+		socket   string
+		args     []string
+		expected []string
+	}{
+		{
+			name:     "empty socket returns args unchanged",
+			socket:   "",
+			args:     []string{"list-sessions"},
+			expected: []string{"list-sessions"},
+		},
+		{
+			name:     "non-empty socket prepends -L flag",
+			socket:   "test-socket",
+			args:     []string{"list-sessions"},
+			expected: []string{"-L", "test-socket", "list-sessions"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := prependSocket(tc.socket, tc.args)
+			require.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+// TestRegistryKeyUnregisteredOnClose verifies that Close() unregisters the session's
+// circuit breaker executor from the global registry. This prevents stale entries from
+// accumulating in ResetAll() calls across long-lived processes.
+func TestRegistryKeyUnregisteredOnClose(t *testing.T) {
+	ptyFactory := NewMockPtyFactory(t)
+
+	// Build a mock cmdExec that makes DoesSessionExist return false (no kill-session needed).
+	cmdExec := MockCmdExec{
+		CombinedOutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+			return []byte(""), nil // empty sessions list → session doesn't exist → skip kill
+		},
+		RunFunc:    func(cmd *exec.Cmd) error { return nil },
+		OutputFunc: func(cmd *exec.Cmd) ([]byte, error) { return []byte(""), nil },
+	}
+
+	session := newTmuxSession("reg-close-test", "echo", ptyFactory, cmdExec, TmuxPrefix)
+
+	// Register a CircuitBreakerExecutor in the global registry under a unique key,
+	// mirroring what NewTmuxSession does at construction time.
+	key := "tmux-reg-close-test-" + t.Name()
+	session.registryKey = key
+
+	// Use a failing delegate so we can trip the breaker and confirm its presence via AllBreakers.
+	failingDelegate := MockCmdExec{
+		RunFunc:    func(cmd *exec.Cmd) error { return fmt.Errorf("simulated failure") },
+		OutputFunc: func(cmd *exec.Cmd) ([]byte, error) { return nil, fmt.Errorf("simulated failure") },
+	}
+	cbExec := executor.NewCircuitBreakerExecutor(failingDelegate, executor.CircuitBreakerConfig{
+		FailureThreshold: 1,
+		RecoveryTimeout:  30 * time.Second,
+	})
+	executor.GetGlobalRegistry().Register(key, cbExec)
+	t.Cleanup(func() {
+		// Defensive cleanup in case Close() doesn't run.
+		executor.GetGlobalRegistry().Unregister(key)
+	})
+
+	// Trip the breaker so AllBreakers returns a non-empty snapshot for this executor.
+	_ = cbExec.Run(exec.Command("tmux", "list-sessions"))
+	breakersBefore := executor.GetGlobalRegistry().AllBreakers()
+	found := false
+	for k := range breakersBefore {
+		if strings.HasPrefix(k, key+"/") {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "registry should contain executor key %q before Close()", key)
+
+	// Close() should call GetGlobalRegistry().Unregister(registryKey).
+	err := session.Close()
+	require.NoError(t, err)
+
+	// Verify the key is absent after Close().
+	breakersAfter := executor.GetGlobalRegistry().AllBreakers()
+	for k := range breakersAfter {
+		require.False(t, strings.HasPrefix(k, key+"/"),
+			"registry should not contain executor key %q after Close()", key)
 	}
 }

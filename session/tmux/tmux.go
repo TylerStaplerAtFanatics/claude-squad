@@ -2,8 +2,6 @@ package tmux
 
 import (
 	"bytes"
-	"github.com/tstapler/stapler-squad/executor"
-	"github.com/tstapler/stapler-squad/log"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -16,6 +14,9 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/tstapler/stapler-squad/executor"
+	"github.com/tstapler/stapler-squad/log"
 
 	"github.com/creack/pty"
 )
@@ -101,6 +102,15 @@ type windowSize struct {
 const TmuxPrefix = "staplersquad_"
 const LegacyTmuxPrefix = "claudesquad_"
 
+// Timeout and interval constants for session lifecycle operations.
+const (
+	sessionExistsTimeout        = 3 * time.Second
+	sessionExistsNoCacheTimeout = 5 * time.Second
+	existsCacheDefaultTTL       = 500 * time.Millisecond
+	sessionCreateTimeout        = 10 * time.Second
+	sessionPollInitialDelay     = 5 * time.Millisecond
+)
+
 var whiteSpaceRegex = regexp.MustCompile(`\s+`)
 
 // recoveryMu and recoveryInFlight guard against concurrent tmux server recovery attempts.
@@ -144,7 +154,6 @@ func checkServerNotRunning(serverSocket string) bool {
 	return err != nil && serverNotRunning(out)
 }
 
-
 // prependSocket prepends "-L <socket>" to args when socket is non-empty.
 // This lets package-level tmux functions target an isolated server socket
 // (used in tests) without modifying the args slice in place.
@@ -170,6 +179,11 @@ func EnsureServerRunning(serverSocket string) error {
 	log.InfoLog.Printf("[tmux] server started successfully")
 	return nil
 }
+
+// ensureServerRunning is a package-level variable holding the function called by
+// recoverFromServerFailure. Tests can replace it to inject a controlled failure
+// without depending on real tmux socket behavior.
+var ensureServerRunning = EnsureServerRunning
 
 // SetExitEmpty sets the tmux server-level exit-empty option.
 // When enabled=false, the server stays alive even when all sessions are closed.
@@ -326,7 +340,7 @@ func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory
 		cmdExec:          cmdExec,
 		bannerFilter:     NewBannerFilter(),          // Initialize banner filter for terminal output filtering
 		externalResizeCh: make(chan windowSize, 10), // Buffered channel for resize events
-		existsCacheTTL:   500 * time.Millisecond,    // Cache session existence for 500ms
+		existsCacheTTL:   existsCacheDefaultTTL,
 	}
 }
 
@@ -349,7 +363,7 @@ func NewTmuxSessionFromExisting(exactSessionName string) *TmuxSession {
 		registryKey:      key,
 		bannerFilter:     NewBannerFilter(),
 		externalResizeCh: make(chan windowSize, 10),
-		existsCacheTTL:   500 * time.Millisecond,
+		existsCacheTTL:   existsCacheDefaultTTL,
 	}
 }
 
@@ -467,10 +481,10 @@ func (t *TmuxSession) start(workDir string, setupCleanup bool, cleanup *CleanupF
 	t.invalidateExistsCache()
 
 	// Poll for session existence with exponential backoff.
-	// 10 seconds gives enough headroom when the tmux server is under load from
-	// multiple active sessions (ReviewQueuePoller, control-mode streaming, etc.).
-	timeout := time.After(10 * time.Second)
-	sleepDuration := 5 * time.Millisecond
+	// sessionCreateTimeout gives enough headroom when the tmux server is under load
+	// from multiple active sessions (ReviewQueuePoller, control-mode streaming, etc.).
+	timeout := time.After(sessionCreateTimeout)
+	sleepDuration := sessionPollInitialDelay
 	for !t.DoesSessionExist() {
 		select {
 		case <-timeout:
@@ -1192,7 +1206,7 @@ func recoverFromServerFailure(serverSocket, caller string) {
 		recoveryMu.Unlock()
 	}()
 
-	if restartErr := EnsureServerRunning(serverSocket); restartErr == nil {
+	if restartErr := ensureServerRunning(serverSocket); restartErr == nil {
 		log.InfoLog.Printf("[tmux] server restarted from %s, resetting circuit breakers", caller)
 		executor.GetGlobalRegistry().ResetAll()
 		if serverSocket == "" {
@@ -1201,7 +1215,11 @@ func recoverFromServerFailure(serverSocket, caller string) {
 			}
 		}
 	} else {
-		log.WarningLog.Printf("[tmux] failed to restart tmux server from %s: %v", caller, restartErr)
+		// Log at ERROR level: if the server cannot be restarted, all session operations
+		// will continue to fail until the user manually intervenes.
+		// Note: individual user sessions are NOT automatically re-created after recovery;
+		// they will be restarted on the next user interaction (e.g., Resume() call).
+		log.ErrorLog.Printf("[tmux] failed to restart tmux server from %s: %v", caller, restartErr)
 	}
 }
 
@@ -1256,8 +1274,8 @@ func (t *TmuxSession) DoesSessionExist() bool {
 	}
 
 	// Use list-sessions to get actual running sessions for reliable checking.
-	// Use a 3 second timeout to be more resilient under high system load.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	// sessionExistsTimeout is sized to be more resilient under high system load.
+	ctx, cancel := context.WithTimeout(context.Background(), sessionExistsTimeout)
 	defer cancel()
 
 	output, err := t.listSessionsRaw(ctx)
@@ -1317,7 +1335,7 @@ func (t *TmuxSession) DoesSessionExistNoCache() bool {
 	}
 
 	// Direct check without cache — use a longer timeout for critical validation.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), sessionExistsNoCacheTimeout)
 	defer cancel()
 
 	output, err := t.listSessionsRaw(ctx)
