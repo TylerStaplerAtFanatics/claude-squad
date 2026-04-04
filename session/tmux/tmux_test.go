@@ -342,7 +342,7 @@ func TestRecoverFromServerFailure_ConcurrentGuard(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			session.recoverFromServerFailure("TestRecoverFromServerFailure_ConcurrentGuard")
+			recoverFromServerFailure(session.serverSocket, "TestRecoverFromServerFailure_ConcurrentGuard")
 			done <- struct{}{}
 		}()
 	}

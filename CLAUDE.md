@@ -45,6 +45,12 @@ fswatch -o web-app/src | xargs -n1 -I{} make restart-web PROFILE_FLAGS="--profil
 # - Combines full history (capture-pane) + real-time updates (control mode)
 # To disable and use legacy capture-pane polling:
 STAPLER_SQUAD_USE_CONTROL_MODE=false ./stapler-squad
+
+# Tmux server resilience (Layer 1)
+# By default, tmux exits when all sessions close. Use this flag to configure
+# tmux to keep the server alive even when all user sessions end.
+# (Sets tmux global option exit-empty off; Layer 3 keepalive session is always created.)
+./stapler-squad --tmux-keep-server
 ```
 
 ### Profiling and Debugging Lock-Ups

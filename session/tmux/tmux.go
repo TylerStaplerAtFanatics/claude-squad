@@ -72,6 +72,10 @@ type TmuxSession struct {
 	detachMutex sync.Mutex
 	detaching   bool
 
+	// registryKey is the key used to register this session's circuit breaker executor
+	// in the global registry. Stored here so Close() can unregister it on teardown.
+	registryKey string
+
 	// Session existence caching to avoid repeated list-sessions calls
 	existsCacheMutex sync.RWMutex
 	existsCache      bool
@@ -237,8 +241,11 @@ func tmuxCircuitBreakerConfig() executor.CircuitBreakerConfig {
 func NewTmuxSession(name string, program string) *TmuxSession {
 	baseExec := executor.MakeExecutor()
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
-	executor.GetGlobalRegistry().Register("tmux-"+name, cbExec)
-	return newTmuxSession(name, program, MakePtyFactory(), cbExec, TmuxPrefix)
+	key := "tmux-" + name
+	executor.GetGlobalRegistry().Register(key, cbExec)
+	s := newTmuxSession(name, program, MakePtyFactory(), cbExec, TmuxPrefix)
+	s.registryKey = key
+	return s
 }
 
 // NewTmuxSessionWithPrefix creates a new TmuxSession with a custom prefix for process isolation.
@@ -246,8 +253,11 @@ func NewTmuxSession(name string, program string) *TmuxSession {
 func NewTmuxSessionWithPrefix(name string, program string, prefix string) *TmuxSession {
 	baseExec := executor.MakeExecutor()
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
-	executor.GetGlobalRegistry().Register("tmux-"+name, cbExec)
-	return newTmuxSession(name, program, MakePtyFactory(), cbExec, prefix)
+	key := "tmux-" + name
+	executor.GetGlobalRegistry().Register(key, cbExec)
+	s := newTmuxSession(name, program, MakePtyFactory(), cbExec, prefix)
+	s.registryKey = key
+	return s
 }
 
 // NewTmuxSessionWithCleanup creates a new TmuxSession and returns it along with a cleanup function.
@@ -280,8 +290,11 @@ func NewTmuxSessionWithPrefixAndCleanup(name string, program string, prefix stri
 func NewTmuxSessionWithServerSocket(name string, program string, prefix string, serverSocket string) *TmuxSession {
 	baseExec := executor.MakeExecutor()
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
-	executor.GetGlobalRegistry().Register("tmux-"+name, cbExec)
-	return newTmuxSessionWithSocket(name, program, MakePtyFactory(), cbExec, prefix, serverSocket)
+	key := "tmux-" + name
+	executor.GetGlobalRegistry().Register(key, cbExec)
+	s := newTmuxSessionWithSocket(name, program, MakePtyFactory(), cbExec, prefix, serverSocket)
+	s.registryKey = key
+	return s
 }
 
 // NewTmuxSessionWithServerSocketAndCleanup creates a TmuxSession with server isolation and cleanup.
@@ -325,13 +338,15 @@ func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory
 func NewTmuxSessionFromExisting(exactSessionName string) *TmuxSession {
 	baseExec := executor.MakeExecutor()
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
-	executor.GetGlobalRegistry().Register("tmux-ext-"+exactSessionName, cbExec)
+	key := "tmux-ext-" + exactSessionName
+	executor.GetGlobalRegistry().Register(key, cbExec)
 	return &TmuxSession{
 		sanitizedName:    exactSessionName, // Use exact name - no prefix transformation
 		program:          "",               // Unknown - external session
 		serverSocket:     "",               // Use default server
 		ptyFactory:       MakePtyFactory(),
 		cmdExec:          cbExec,
+		registryKey:      key,
 		bannerFilter:     NewBannerFilter(),
 		externalResizeCh: make(chan windowSize, 10),
 		existsCacheTTL:   500 * time.Millisecond,
@@ -1055,6 +1070,12 @@ func (t *TmuxSession) Close() error {
 		log.InfoLog.Printf("Tmux session '%s' doesn't exist, no need to kill", t.sanitizedName)
 	}
 
+	// Unregister circuit breaker from global registry to prevent stale entries
+	// accumulating in ResetAll() iteration across long-lived processes.
+	if t.registryKey != "" {
+		executor.GetGlobalRegistry().Unregister(t.registryKey)
+	}
+
 	if len(errs) == 0 {
 		return nil
 	}
@@ -1156,7 +1177,7 @@ func (t *TmuxSession) SetWindowSize(cols, rows int) error {
 //
 // Only one recovery attempt runs at a time across all sessions. Concurrent callers
 // return immediately if a recovery is already in progress (the first caller handles it).
-func (t *TmuxSession) recoverFromServerFailure(caller string) {
+func recoverFromServerFailure(serverSocket, caller string) {
 	recoveryMu.Lock()
 	if recoveryInFlight {
 		recoveryMu.Unlock()
@@ -1171,11 +1192,11 @@ func (t *TmuxSession) recoverFromServerFailure(caller string) {
 		recoveryMu.Unlock()
 	}()
 
-	if restartErr := EnsureServerRunning(t.serverSocket); restartErr == nil {
+	if restartErr := EnsureServerRunning(serverSocket); restartErr == nil {
 		log.InfoLog.Printf("[tmux] server restarted from %s, resetting circuit breakers", caller)
 		executor.GetGlobalRegistry().ResetAll()
-		if t.serverSocket == "" {
-			if keepErr := CreateKeepaliveSession(t.serverSocket); keepErr != nil {
+		if serverSocket == "" {
+			if keepErr := CreateKeepaliveSession(serverSocket); keepErr != nil {
 				log.WarningLog.Printf("[tmux] failed to recreate keepalive session: %v", keepErr)
 			}
 		}
@@ -1258,7 +1279,7 @@ func (t *TmuxSession) DoesSessionExist() bool {
 		t.existsCacheTime = time.Now()
 		t.existsCacheMutex.Unlock()
 		if needsRecovery {
-			t.recoverFromServerFailure("DoesSessionExist")
+			recoverFromServerFailure(t.serverSocket, "DoesSessionExist")
 		}
 		return false
 	}
@@ -1304,7 +1325,7 @@ func (t *TmuxSession) DoesSessionExistNoCache() bool {
 		log.WarningLog.Printf("DoesSessionExistNoCache: tmux list-sessions failed: %v", err)
 		// Only attempt auto-recovery for the default server (not isolated test servers).
 		if t.serverSocket == "" && serverNotRunning(output) {
-			t.recoverFromServerFailure("DoesSessionExistNoCache")
+			recoverFromServerFailure(t.serverSocket, "DoesSessionExistNoCache")
 		}
 		return false
 	}
