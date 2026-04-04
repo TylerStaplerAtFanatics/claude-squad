@@ -29,6 +29,28 @@ jobs:
           go-version: '1.23'
           cache: false
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install buf
+        run: |
+          curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
+            -o /usr/local/bin/buf && chmod +x /usr/local/bin/buf
+
+      - name: Generate protobuf code
+        run: |
+          cd web-app && npm ci
+          buf generate proto
+
+      - name: Create web dist stub
+        run: |
+          mkdir -p server/web/dist
+          printf '<!DOCTYPE html><html><body></body></html>' > server/web/dist/index.html
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
