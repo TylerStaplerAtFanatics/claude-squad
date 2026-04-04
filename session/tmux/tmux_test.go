@@ -7,7 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -302,4 +304,108 @@ func TestSetExitEmpty(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, strings.ToLower(string(out)), "on",
 		"exit-empty should be on after SetExitEmpty(true)")
+}
+
+// --- recoverFromServerFailure correctness tests ---
+
+// TestRecoverFromServerFailure_ConcurrentGuard verifies that when recoveryInFlight is
+// already true, concurrent callers of recoverFromServerFailure return immediately
+// without attempting another recovery. This tests the recoveryMu + recoveryInFlight
+// guard that prevents N sessions from all calling EnsureServerRunning simultaneously
+// when the tmux server goes down.
+func TestRecoverFromServerFailure_ConcurrentGuard(t *testing.T) {
+	// Pre-set recoveryInFlight = true to simulate a recovery already running.
+	recoveryMu.Lock()
+	recoveryInFlight = true
+	recoveryMu.Unlock()
+	defer func() {
+		recoveryMu.Lock()
+		recoveryInFlight = false
+		recoveryMu.Unlock()
+	}()
+
+	ptyFactory := NewMockPtyFactory(t)
+	cmdExec := MockCmdExec{
+		RunFunc:            func(cmd *exec.Cmd) error { return nil },
+		OutputFunc:         func(cmd *exec.Cmd) ([]byte, error) { return []byte(""), nil },
+		CombinedOutputFunc: func(cmd *exec.Cmd) ([]byte, error) { return []byte(""), nil },
+	}
+	session := newTmuxSession("guard-test", "echo", ptyFactory, cmdExec, TmuxPrefix)
+
+	// recoverFromServerFailure should detect recoveryInFlight=true and return immediately
+	// without calling EnsureServerRunning (which would try to exec real tmux).
+	const numGoroutines = 5
+	var wg sync.WaitGroup
+	done := make(chan struct{}, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			session.recoverFromServerFailure("TestRecoverFromServerFailure_ConcurrentGuard")
+			done <- struct{}{}
+		}()
+	}
+
+	// All goroutines should finish quickly since the guard should short-circuit them.
+	completedInTime := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(completedInTime)
+	}()
+
+	select {
+	case <-completedInTime:
+		// All goroutines returned without blocking — guard is working.
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("recoverFromServerFailure did not return quickly with recoveryInFlight=true; possible deadlock or missing guard")
+	}
+
+	require.Equal(t, numGoroutines, len(done),
+		"all goroutines should have completed and sent to done channel")
+}
+
+// TestDoesSessionExist_LockReleasedBeforeRecovery verifies that DoesSessionExist
+// releases existsCacheMutex before calling recoverFromServerFailure. If the mutex
+// were still held during recovery, a subsequent DoesSessionExist call (which tries
+// to acquire the write lock) would deadlock.
+func TestDoesSessionExist_LockReleasedBeforeRecovery(t *testing.T) {
+	ptyFactory := NewMockPtyFactory(t)
+	cmdExec := MockCmdExec{
+		CombinedOutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+			if strings.Contains(cmd.String(), "list-sessions") {
+				// Simulate the tmux server being down so recovery is triggered.
+				return []byte("no server running"), fmt.Errorf("exit status 1")
+			}
+			return []byte(""), nil
+		},
+		RunFunc:    func(cmd *exec.Cmd) error { return nil },
+		OutputFunc: func(cmd *exec.Cmd) ([]byte, error) { return []byte(""), nil },
+	}
+	// Use serverSocket="" so needsRecovery=true is set in DoesSessionExist, exercising
+	// the unlock-before-recovery code path.
+	session := newTmuxSession("lock-test", "echo", ptyFactory, cmdExec, TmuxPrefix)
+
+	// First call: should detect "no server running", release existsCacheMutex,
+	// attempt recovery (which calls real tmux — it will fail, but quickly), and
+	// return false.
+	result := session.DoesSessionExist()
+	require.False(t, result, "DoesSessionExist should return false when server is not running")
+
+	// Second call in a goroutine: if existsCacheMutex were still held from the first
+	// call's recovery phase, this goroutine would deadlock indefinitely.
+	done := make(chan bool, 1)
+	go func() {
+		// Invalidate the cache so the second call re-executes the check.
+		session.invalidateExistsCache()
+		done <- session.DoesSessionExist()
+	}()
+
+	select {
+	case result2 := <-done:
+		// Lock was released correctly — second call proceeded without blocking.
+		require.False(t, result2, "second DoesSessionExist call should also return false")
+	case <-time.After(2 * time.Second):
+		t.Fatal("DoesSessionExist deadlocked on second call — existsCacheMutex was not released before recovery ran")
+	}
 }

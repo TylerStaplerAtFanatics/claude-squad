@@ -134,13 +134,21 @@ func serverNotRunning(output []byte) bool {
 // checkServerNotRunning runs tmux list-sessions directly (bypassing any circuit breaker)
 // and returns true if the server is not running.
 func checkServerNotRunning(serverSocket string) bool {
-	args := []string{"list-sessions"}
-	if serverSocket != "" {
-		args = append([]string{"-L", serverSocket}, args...)
-	}
+	args := prependSocket(serverSocket, []string{"list-sessions"})
 	cmd := exec.Command("tmux", args...)
 	out, err := cmd.CombinedOutput()
 	return err != nil && serverNotRunning(out)
+}
+
+
+// prependSocket prepends "-L <socket>" to args when socket is non-empty.
+// This lets package-level tmux functions target an isolated server socket
+// (used in tests) without modifying the args slice in place.
+func prependSocket(socket string, args []string) []string {
+	if socket == "" {
+		return args
+	}
+	return append([]string{"-L", socket}, args...)
 }
 
 // EnsureServerRunning starts the tmux server if it is not already running.
@@ -149,10 +157,7 @@ func EnsureServerRunning(serverSocket string) error {
 	if !checkServerNotRunning(serverSocket) {
 		return nil // server is already running
 	}
-	args := []string{"start-server"}
-	if serverSocket != "" {
-		args = append([]string{"-L", serverSocket}, args...)
-	}
+	args := prependSocket(serverSocket, []string{"start-server"})
 	cmd := exec.Command("tmux", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -170,10 +175,7 @@ func SetExitEmpty(serverSocket string, enabled bool) error {
 	if enabled {
 		value = "on"
 	}
-	args := []string{"set-option", "-g", "exit-empty", value}
-	if serverSocket != "" {
-		args = append([]string{"-L", serverSocket}, args...)
-	}
+	args := prependSocket(serverSocket, []string{"set-option", "-g", "exit-empty", value})
 	cmd := exec.Command("tmux", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -189,19 +191,13 @@ func CreateKeepaliveSession(serverSocket string) error {
 	keepaliveName := TmuxPrefix + "keepalive"
 
 	// Check if already exists
-	hasArgs := []string{"has-session", "-t", keepaliveName}
-	if serverSocket != "" {
-		hasArgs = append([]string{"-L", serverSocket}, hasArgs...)
-	}
+	hasArgs := prependSocket(serverSocket, []string{"has-session", "-t", keepaliveName})
 	if exec.Command("tmux", hasArgs...).Run() == nil {
 		return nil // already exists
 	}
 
 	// Create a detached session with an idle shell
-	newArgs := []string{"new-session", "-d", "-s", keepaliveName}
-	if serverSocket != "" {
-		newArgs = append([]string{"-L", serverSocket}, newArgs...)
-	}
+	newArgs := prependSocket(serverSocket, []string{"new-session", "-d", "-s", keepaliveName})
 	cmd := exec.Command("tmux", newArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1174,7 +1170,6 @@ func (t *TmuxSession) recoverFromServerFailure(caller string) {
 		recoveryInFlight = false
 		recoveryMu.Unlock()
 	}()
-
 
 	if restartErr := EnsureServerRunning(t.serverSocket); restartErr == nil {
 		log.InfoLog.Printf("[tmux] server restarted from %s, resetting circuit breakers", caller)
