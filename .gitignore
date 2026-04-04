@@ -33,3 +33,5 @@ assets/demo-recording/demo-Demo-Flow-chromium/
 
 bench-*.txt
 benchmark_results.txt
+/web-app/out/
+/server/web/dist/
