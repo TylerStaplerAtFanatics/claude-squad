@@ -105,6 +105,15 @@ message Session {
 
   // External instance metadata (only populated for external sessions)
   ExternalInstanceMetadata external_metadata = 32;
+
+  // Path to the Claude Code JSONL history file for this session.
+  // Populated by HistoryLinker once the session's open files are detected.
+  // Used to pass --resume <uuid> when reattaching after server restart.
+  string history_file_path = 33;
+
+  // Claude Code conversation UUID extracted from the history file path.
+  // Matches the UUID in the JSONL filename under ~/.claude/projects/<dir>/<uuid>.jsonl.
+  string claude_conversation_uuid = 34;
 }
 
 // SessionStatus represents the current state of a session.
@@ -168,6 +177,41 @@ message ExternalInstanceMetadata {
 
   // Source terminal that spawned this Claude session (e.g., "IntelliJ", "VSCode", "Terminal")
   string source_terminal = 8;
+}
+
+// ============================================================================
+// Checkpoint Types
+// ============================================================================
+
+// CheckpointProto represents a named bookmark of a session's state at a point in time.
+// Maps to session.Checkpoint in Go.
+message CheckpointProto {
+  // Unique checkpoint identifier (UUID).
+  string id = 1;
+
+  // Session ID this checkpoint belongs to.
+  string session_id = 2;
+
+  // Parent checkpoint ID (for tree navigation), empty for root checkpoints.
+  string parent_id = 3;
+
+  // Human-readable label.
+  string label = 4;
+
+  // Scrollback sequence number at checkpoint time.
+  uint64 scrollback_seq = 5;
+
+  // Path to persisted scrollback snapshot (may be empty).
+  string scrollback_path = 6;
+
+  // Claude Code conversation UUID at checkpoint time.
+  string claude_conv_uuid = 7;
+
+  // Git HEAD commit SHA at checkpoint time.
+  string git_commit_sha = 8;
+
+  // When the checkpoint was created.
+  google.protobuf.Timestamp timestamp = 9;
 }
 
 // DiffStats contains git diff statistics for a session.

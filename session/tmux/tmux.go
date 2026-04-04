@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1278,6 +1279,40 @@ func (t *TmuxSession) GetPaneDimensions() (width, height int, err error) {
 	}
 
 	return paneWidth, paneHeight, nil
+}
+
+// GetPaneCurrentPath returns the current working directory of the pane.
+// This is used by CaptureCurrentState to persist the working directory before shutdown.
+func (t *TmuxSession) GetPaneCurrentPath() (string, error) {
+	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
+		"#{pane_current_path}")
+
+	output, err := t.cmdExec.Output(cmd)
+	if err != nil {
+		return "", fmt.Errorf("failed to get pane current path for session '%s': %w", t.sanitizedName, err)
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+// GetPanePID returns the PID of the foreground process in the pane.
+// This is used by HistoryLinker to correlate open files with session records.
+func (t *TmuxSession) GetPanePID() (int32, error) {
+	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
+		"#{pane_pid}")
+
+	output, err := t.cmdExec.Output(cmd)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get pane PID for session '%s': %w", t.sanitizedName, err)
+	}
+
+	pidStr := strings.TrimSpace(string(output))
+	pid, err := strconv.ParseInt(pidStr, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid pane PID %q for session '%s': %w", pidStr, t.sanitizedName, err)
+	}
+
+	return int32(pid), nil
 }
 
 // CleanupSessions kills all tmux sessions that start with "session-" on the default server
