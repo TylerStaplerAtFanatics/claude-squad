@@ -140,6 +140,16 @@ func TestCommandClass(t *testing.T) {
 			cmd:      exec.Command("/usr/bin/git", "status"),
 			expected: "git-status",
 		},
+		{
+			name:     "tmux with -L socket flag before subcommand",
+			cmd:      exec.Command("tmux", "-L", "mysocket", "list-sessions", "-F", "#{session_name}"),
+			expected: "tmux-list-sessions",
+		},
+		{
+			name:     "tmux new-session with -L socket flag",
+			cmd:      exec.Command("tmux", "-L", "mysocket", "new-session", "-d", "-s", "myname"),
+			expected: "tmux-new-session",
+		},
 	}
 
 	for _, tc := range tests {
@@ -615,4 +625,166 @@ func TestNewCircuitBreakerExecutor_UsesRealClock(t *testing.T) {
 	// Should work with real time.
 	err := cbe.Run(dummyCmd("echo", "hello"))
 	assert.NoError(t, err)
+}
+
+// --- Reset / ResetAll tests ---
+
+func TestCircuitBreakerExecutor_Reset_FromOpen(t *testing.T) {
+	clock := newMockClock(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
+	cfg := CircuitBreakerConfig{
+		FailureThreshold: 2,
+		RecoveryTimeout:  30 * time.Second,
+	}
+	cbe := NewCircuitBreakerExecutorWithClock(failingExecutor(), cfg, clock)
+
+	// Trip breaker to OPEN.
+	for i := 0; i < 2; i++ {
+		_ = cbe.Run(dummyCmd("tmux", "list-sessions"))
+	}
+	require.Equal(t, CircuitOpen, cbe.AllBreakers()["tmux-list-sessions"].State)
+
+	// Reset brings it back to CLOSED.
+	cbe.Reset()
+	snap := cbe.AllBreakers()["tmux-list-sessions"]
+	assert.Equal(t, CircuitClosed, snap.State)
+	assert.Equal(t, 0, snap.ConsecutiveFailures)
+	assert.False(t, snap.LastStateChange.IsZero())
+}
+
+func TestCircuitBreakerExecutor_Reset_FromHalfOpen(t *testing.T) {
+	clock := newMockClock(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
+	cfg := CircuitBreakerConfig{
+		FailureThreshold: 2,
+		RecoveryTimeout:  10 * time.Second,
+	}
+	cbe := NewCircuitBreakerExecutorWithClock(failingExecutor(), cfg, clock)
+
+	// Trip breaker to OPEN.
+	for i := 0; i < 2; i++ {
+		_ = cbe.Run(dummyCmd("tmux", "list-sessions"))
+	}
+
+	// Advance past recovery timeout to allow HALF-OPEN transition.
+	clock.Advance(11 * time.Second)
+
+	// One probe attempt transitions to HALF-OPEN.
+	_ = cbe.Run(dummyCmd("tmux", "list-sessions"))
+	require.Equal(t, CircuitOpen, cbe.AllBreakers()["tmux-list-sessions"].State) // failed probe → back to OPEN
+
+	// Reset while in OPEN should still restore to CLOSED.
+	cbe.Reset()
+	snap := cbe.AllBreakers()["tmux-list-sessions"]
+	assert.Equal(t, CircuitClosed, snap.State)
+}
+
+func TestCircuitBreakerRegistry_ResetAll(t *testing.T) {
+	clock := newMockClock(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
+	cfg := CircuitBreakerConfig{
+		FailureThreshold: 2,
+		RecoveryTimeout:  30 * time.Second,
+	}
+
+	// Create two executors and register them in a local registry.
+	registry := &CircuitBreakerRegistry{
+		executors: make(map[string]*CircuitBreakerExecutor),
+	}
+
+	cbe1 := NewCircuitBreakerExecutorWithClock(failingExecutor(), cfg, clock)
+	cbe2 := NewCircuitBreakerExecutorWithClock(failingExecutor(), cfg, clock)
+	registry.Register("tmux-session1", cbe1)
+	registry.Register("tmux-session2", cbe2)
+
+	// Trip breakers in both executors.
+	for i := 0; i < 2; i++ {
+		_ = cbe1.Run(dummyCmd("tmux", "list-sessions"))
+		_ = cbe2.Run(dummyCmd("tmux", "has-session"))
+	}
+	require.Equal(t, CircuitOpen, cbe1.AllBreakers()["tmux-list-sessions"].State)
+	require.Equal(t, CircuitOpen, cbe2.AllBreakers()["tmux-has-session"].State)
+
+	// ResetAll restores both executors.
+	registry.ResetAll()
+
+	snap1 := cbe1.AllBreakers()["tmux-list-sessions"]
+	snap2 := cbe2.AllBreakers()["tmux-has-session"]
+	assert.Equal(t, CircuitClosed, snap1.State, "executor 1 breaker should be CLOSED after ResetAll")
+	assert.Equal(t, CircuitClosed, snap2.State, "executor 2 breaker should be CLOSED after ResetAll")
+}
+
+func TestCircuitBreakerRegistry_Unregister(t *testing.T) {
+	clock := newMockClock(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
+	cfg := DefaultCircuitBreakerConfig()
+
+	registry := &CircuitBreakerRegistry{
+		executors: make(map[string]*CircuitBreakerExecutor),
+	}
+	cbe := NewCircuitBreakerExecutorWithClock(failingExecutor(), cfg, clock)
+	registry.Register("key", cbe)
+
+	// Run a command through the executor to create a breaker entry.
+	_ = cbe.Run(dummyCmd("tmux", "list-sessions"))
+
+	// AllBreakers prefixes keys as "<execKey>/<breakerKey>", so after running
+	// "tmux list-sessions" through the executor registered as "key", we expect
+	// the composite key "key/tmux-list-sessions" to be present.
+	snapsBefore := registry.AllBreakers()
+	require.Contains(t, snapsBefore, "key/tmux-list-sessions",
+		"breaker should appear under executor key before unregister")
+
+	registry.Unregister("key")
+
+	// After unregister the executor's breakers are no longer aggregated.
+	snapsAfter := registry.AllBreakers()
+	_, found := snapsAfter["key/tmux-list-sessions"]
+	assert.False(t, found, "unregistered executor breakers should not appear in AllBreakers")
+	assert.Empty(t, snapsAfter, "AllBreakers should be empty after unregistering the only executor")
+}
+
+// TestCircuitBreakerExecutor_IsFailure verifies that a custom IsFailure classifier controls
+// which errors count as circuit breaker failures.
+func TestCircuitBreakerExecutor_IsFailure(t *testing.T) {
+	softErr := errors.New("soft error: no sessions")
+	hardErr := errors.New("hard error: no server running")
+
+	config := CircuitBreakerConfig{
+		FailureThreshold: 3,
+		RecoveryTimeout:  30 * time.Second,
+		// Only treat hard errors as real failures
+		IsFailure: func(class string, output []byte, err error) bool {
+			if err == nil {
+				return false
+			}
+			return err == hardErr
+		},
+	}
+
+	mock := &mockExecutor{}
+	cbe := NewCircuitBreakerExecutor(mock, config)
+	cmd := exec.Command("tmux", "list-sessions")
+
+	t.Run("soft errors do not trip the breaker", func(t *testing.T) {
+		mock.combinedOutputFunc = func(_ *exec.Cmd) ([]byte, error) {
+			return nil, softErr
+		}
+		// Exceed the failure threshold with soft errors
+		for i := 0; i < config.FailureThreshold+2; i++ {
+			_, err := cbe.CombinedOutput(cmd)
+			require.Equal(t, softErr, err, "should pass through the original error")
+		}
+		// Breaker should remain closed — soft errors don't count
+		snap := cbe.AllBreakers()["tmux-list-sessions"]
+		assert.Equal(t, CircuitClosed, snap.State, "breaker should stay closed for soft errors")
+		assert.Equal(t, 0, snap.ConsecutiveFailures, "soft errors should not accumulate failures")
+	})
+
+	t.Run("hard errors trip the breaker after threshold", func(t *testing.T) {
+		mock.combinedOutputFunc = func(_ *exec.Cmd) ([]byte, error) {
+			return nil, hardErr
+		}
+		for i := 0; i < config.FailureThreshold; i++ {
+			_, _ = cbe.CombinedOutput(cmd)
+		}
+		snap := cbe.AllBreakers()["tmux-list-sessions"]
+		assert.Equal(t, CircuitOpen, snap.State, "breaker should open after hard error threshold")
+	})
 }

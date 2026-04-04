@@ -197,14 +197,21 @@ func testSessionRecoveryWithRealTmux(t *testing.T) {
 	require.NoError(t, err)
 
 	sessionName := "test-real-recovery"
-	tmuxSessionName := "staplersquad_" + sessionName
+	tmuxSessionName := TmuxPrefix + sessionName
 
-	// Clean up any existing session
-	killCmd := exec.Command("tmux", "kill-session", "-t", tmuxSessionName)
+	// Use an isolated tmux server socket so this test does not interfere with
+	// other packages that share the default tmux server when running `go test ./...`.
+	socketName := fmt.Sprintf("test_recovery_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		_ = exec.Command("tmux", "-L", socketName, "kill-server").Run()
+	})
+
+	// Clean up any existing session on the isolated server
+	killCmd := exec.Command("tmux", "-L", socketName, "kill-session", "-t", tmuxSessionName)
 	_ = killCmd.Run()
 
-	// Create session using our RestoreWithWorkDir logic
-	session := NewTmuxSession(sessionName, "pwd; sleep 1")
+	// Create session using our RestoreWithWorkDir logic on the isolated server
+	session := NewTmuxSessionWithServerSocket(sessionName, "pwd; sleep 1", TmuxPrefix, socketName)
 
 	// This should create the session in the worktree directory
 	err = session.RestoreWithWorkDir(worktreeDir)
