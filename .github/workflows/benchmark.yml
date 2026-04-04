@@ -77,6 +77,22 @@ jobs:
             echo "No baseline yet — will be established on next push to main." > benchstat-tier1.txt
           fi
 
+      - name: Fail on regressions (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          # Exit 1 if any benchmark regressed by more than 10% with statistical significance.
+          # benchstat marks non-significant changes with "~"; significant ones show "+N.NN% (p=...)".
+          THRESHOLD=10
+          REGRESSIONS=$(grep -E '\+[0-9]+\.[0-9]+%.*\(p=' benchstat-tier1.txt 2>/dev/null \
+            | grep -oE '\+[0-9]+\.[0-9]+%' | tr -d '+%' \
+            | awk -v t="$THRESHOLD" '$0+0 > t')
+          if [ -n "$REGRESSIONS" ]; then
+            echo "::error::Performance regression(s) >${THRESHOLD}% detected — see benchstat output."
+            cat benchstat-tier1.txt
+            exit 1
+          fi
+          echo "No significant regressions (>${THRESHOLD}%) detected."
+
       - name: Post PR comment
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7

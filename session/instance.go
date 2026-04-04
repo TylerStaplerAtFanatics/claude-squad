@@ -104,6 +104,10 @@ type Instance struct {
 	// Sessions can have multiple tags and appear in multiple groups simultaneously
 	// Examples: ["frontend", "urgent", "client-work"]
 	Tags []string
+	// AutonomousMode enables autonomous Earpiece mode (crew autonomy).
+	// When true, the Fixer will inject correction prompts without user confirmation.
+	// When false (default), the session runs in supervised mode.
+	AutonomousMode bool `json:"autonomous_mode,omitempty"`
 
 	// GitHub integration fields for PR/URL-based session creation
 	// GitHubPRNumber is the PR number if this session was created from a PR URL
@@ -206,6 +210,8 @@ func (i *Instance) ToInstanceData() InstanceData {
 		// Worktree detection fields
 		MainRepoPath: i.MainRepoPath,
 		IsWorktree:   i.IsWorktree,
+		// Crew autonomy mode
+		AutonomousMode: i.AutonomousMode,
 	}
 
 	// Only include worktree data if gitWorktree is initialized
@@ -318,6 +324,8 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		// Worktree detection fields
 		MainRepoPath: data.MainRepoPath,
 		IsWorktree:   data.IsWorktree,
+		// Crew autonomy mode
+		AutonomousMode: data.AutonomousMode,
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice
