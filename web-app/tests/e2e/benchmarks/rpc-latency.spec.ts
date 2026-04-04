@@ -17,7 +17,7 @@
  * Design notes:
  * - First 2 samples discarded as warmup (connection pool cold-start).
  * - All timing uses response.timing() — no page.evaluate() IPC overhead.
- * - Backend URL hardcoded to localhost:8543 (standard dev port).
+ * - Backend URL defaults to localhost:8543; override with BACKEND_URL env var.
  *
  * @see ADR-003: Frontend Performance Measurement Strategy
  */
@@ -30,8 +30,8 @@ const E2E_RESULTS_PATH = path.resolve(
   __dirname,
   '../../e2e-latency-results.json',
 );
-// ConnectRPC endpoint on the Go backend
-const BACKEND_URL = 'http://localhost:8543';
+// ConnectRPC endpoint on the Go backend. Override with BACKEND_URL env var in CI.
+const BACKEND_URL = process.env['BACKEND_URL'] ?? 'http://localhost:8543';
 const LIST_SESSIONS_PATH = '/session.v1.SessionService/ListSessions';
 const WARMUP_RUNS = 2;
 const TOTAL_RUNS = 10;
@@ -107,7 +107,7 @@ test.describe('RPC Latency Benchmark', () => {
     console.log(`  TTFB  mean: ${ttfbStats.mean.toFixed(1)}ms  p95: ${ttfbStats.p95.toFixed(1)}ms  cv: ${(ttfbStats.cv * 100).toFixed(1)}%`);
     console.log(`  Total mean: ${totalStats.mean.toFixed(1)}ms  p95: ${totalStats.p95.toFixed(1)}ms  cv: ${(totalStats.cv * 100).toFixed(1)}%`);
 
-    // Write results for github-action-benchmark (customSmallerIsBetter)
+    // Write results for CI baseline comparison (customSmallerIsBetter)
     writeBenchmarkResults(E2E_RESULTS_PATH, [
       {
         name: 'list-sessions-ttfb-mean',

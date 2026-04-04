@@ -1,12 +1,12 @@
 /**
- * Helper for writing benchmark results in the format expected by
- * benchmark-action/github-action-benchmark.
+ * Helper for writing benchmark results as JSON for CI baseline comparison.
  *
  * Supported schemas:
  *   - customBiggerIsBetter: higher value = better (throughput, FPS, etc.)
  *   - customSmallerIsBetter: lower value = better (latency, duration, etc.)
  *
- * @see https://github.com/benchmark-action/github-action-benchmark#examples-for-custom-tools
+ * The CI pipeline (benchmark.yml) commits these JSON files as baselines on main
+ * and uses Node.js comparison scripts to detect regressions on PRs.
  */
 
 import * as fs from 'fs';
@@ -21,8 +21,7 @@ export interface BenchmarkEntry {
 }
 
 /**
- * Write benchmark results as JSON to a file for consumption by
- * benchmark-action/github-action-benchmark.
+ * Write benchmark results as JSON to a file for CI baseline comparison.
  *
  * @param outputPath  Absolute or relative path to write the JSON file.
  * @param entries     Array of benchmark measurements.
