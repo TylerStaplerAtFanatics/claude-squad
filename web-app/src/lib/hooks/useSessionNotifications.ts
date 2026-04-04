@@ -61,8 +61,9 @@ function mapNotificationType(type: NotificationType): NotificationData["notifica
   switch (type) {
     case NotificationType.APPROVAL_NEEDED:
     case NotificationType.CONFIRMATION_NEEDED:
-    case NotificationType.INPUT_REQUIRED:
       return "approval_needed";
+    case NotificationType.INPUT_REQUIRED:
+      return "question";
     case NotificationType.ERROR:
     case NotificationType.FAILURE:
       return "error";

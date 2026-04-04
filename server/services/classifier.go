@@ -78,10 +78,8 @@ const (
 
 // builtinAgentTools is the set of Claude Code tool names that are planning / task-management
 // tools with no side effects requiring review.
-// Note: AskUserQuestion is intentionally excluded — it should be escalated to the review queue
-// so users can see and respond to Claude's questions via the web UI.
 var builtinAgentTools = map[string]bool{
-	"exitplanmode": true, "enterplanmode": true,
+	"exitplanmode": true, "enterplanmode": true, "askuserquestion": true,
 	"todowrite": true, "taskcreate": true, "taskupdate": true, "taskget": true,
 	"tasklist": true, "taskoutput": true, "taskstop": true,
 	"notebookedit": true, "skill": true,
@@ -1309,6 +1307,8 @@ func SeedRules() []Rule {
 			// Core Claude Code agent interaction and task management tools.
 			// These tools pose no risk (they ask questions, manage task lists, or signal
 			// plan approval) and should never require manual review.
+			// AskUserQuestion is included — it surfaces Claude's questions directly to the user
+			// via the standard permission prompt rather than blocking in the review queue.
 			// Uses ToolCategory so new agent tools are auto-matched without rule updates.
 			ID:           "seed-allow-agent-tools",
 			Name:         "Allow Claude Code agent and planning tools",

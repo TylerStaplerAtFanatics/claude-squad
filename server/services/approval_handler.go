@@ -195,6 +195,16 @@ func (h *ApprovalHandler) HandlePermissionRequest(w http.ResponseWriter, r *http
 		}
 	}
 
+	// AskUserQuestion: fire an informational notification so the user knows to check the
+	// terminal, then immediately allow. No approval_id is included in the notification
+	// metadata so the UI renders a plain ❓ toast with no Approve/Deny buttons.
+	if strings.EqualFold(payload.ToolName, "AskUserQuestion") {
+		log.InfoLog.Printf("[ApprovalHandler] AskUserQuestion from session %s — notifying and allowing", sessionID)
+		h.broadcastQuestionNotification(sessionID, payload)
+		h.writeDecision(w, "allow", "")
+		return
+	}
+
 	// Classify the request: auto-allow/deny if a rule matches; escalate to manual review otherwise.
 	if h.classifier != nil {
 		start := time.Now()
@@ -282,8 +292,8 @@ createApproval:
 				log.WarningLog.Printf("[ApprovalHandler] Could not stamp timeout on notification %s: %v", approvalID, err)
 			}
 		}
-		log.InfoLog.Printf("[ApprovalHandler] Approval %s timed out — returning empty response (native dialog fallback)", approvalID)
-		w.WriteHeader(http.StatusOK)
+		log.InfoLog.Printf("[ApprovalHandler] Approval %s timed out — deferring to native terminal dialog", approvalID)
+		h.writeDeferDecision(w)
 		return
 	case <-r.Context().Done():
 		// Claude Code disconnected (e.g., stapler-squad restarted, network issue)
@@ -328,6 +338,31 @@ func (h *ApprovalHandler) broadcastApprovalNotification(sessionID string, approv
 		title,
 		message,
 		metadata,
+	)
+	h.eventBus.Publish(event)
+}
+
+// broadcastQuestionNotification fires an INPUT_REQUIRED notification when Claude uses
+// AskUserQuestion. It omits approval_id from metadata so no Approve/Deny buttons are shown —
+// only a ❓ toast directing the user to respond in the terminal.
+func (h *ApprovalHandler) broadcastQuestionNotification(sessionID string, payload PermissionRequestPayload) {
+	message := "Check the terminal to respond."
+	if prompt, ok := payload.ToolInput["prompt"].(string); ok && prompt != "" {
+		if len(prompt) > 120 {
+			prompt = prompt[:120] + "..."
+		}
+		message = prompt
+	}
+
+	event := events.NewNotificationEvent(
+		sessionID,
+		sessionID,
+		uuid.New().String(),
+		int32(sessionv1.NotificationType_NOTIFICATION_TYPE_INPUT_REQUIRED),
+		int32(sessionv1.NotificationPriority_NOTIFICATION_PRIORITY_HIGH),
+		"Claude has a question",
+		message,
+		nil,
 	)
 	h.eventBus.Publish(event)
 }
@@ -400,6 +435,14 @@ func (h *ApprovalHandler) normalizeSessionID(sessionID string) string {
 		}
 	}
 	return sessionID
+}
+
+// writeDeferDecision returns an empty HTTP 200 with no body.
+// Claude Code interprets the absence of hookSpecificOutput as "no decision made by the hook"
+// and falls back to its native terminal permission dialog.  This is the only way to encode
+// "neither approve nor deny" — the hook API has no formal "pass" or "defer" value.
+func (h *ApprovalHandler) writeDeferDecision(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusOK)
 }
 
 // writeDecision writes the hookSpecificOutput JSON response to the HTTP response.
