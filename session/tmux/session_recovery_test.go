@@ -104,8 +104,12 @@ func testKilledSessionRestoresInCorrectWorktree(t *testing.T) {
 // testCompareOldVsNewRestoreBehavior demonstrates the difference between
 // the old buggy behavior and the new fixed behavior
 func testCompareOldVsNewRestoreBehavior(t *testing.T) {
+	// Use separate temp dirs so currentDir is not a path prefix of worktreeDir.
+	// Without this, assertions like NotContains(cmd, currentDir) would fail
+	// because worktreeDir = currentDir + "/subdir" contains currentDir as a prefix.
 	tempDir := t.TempDir()
-	worktreeDir := filepath.Join(tempDir, "session-worktree")
+	worktreeParentDir := t.TempDir() // independent from tempDir
+	worktreeDir := filepath.Join(worktreeParentDir, "session-worktree")
 	err := os.MkdirAll(worktreeDir, 0755)
 	require.NoError(t, err)
 
