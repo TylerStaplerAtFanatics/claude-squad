@@ -201,6 +201,76 @@ func TestApprovalFlow_SessionIDFromHeader(t *testing.T) {
 	postPermissionRequest(t, h, "my-session", "Read")
 }
 
+// TestApprovalFlow_AskUserQuestion_ImmediateAllow verifies that AskUserQuestion:
+//  1. Returns "allow" immediately without blocking.
+//  2. Does NOT create a PendingApproval in the store.
+//  3. Is case-insensitive ("askuserquestion" also fast-paths).
+func TestApprovalFlow_AskUserQuestion_ImmediateAllow(t *testing.T) {
+	t.Run("ImmediateAllow", func(t *testing.T) {
+		h, store := newTestHandler(5 * time.Second)
+
+		payload := map[string]interface{}{
+			"tool_name": "AskUserQuestion",
+			"tool_input": map[string]interface{}{
+				"prompt": "Which database should I use?",
+			},
+			"cwd": "/tmp",
+		}
+		body, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/hooks/permission-request", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-CS-Session-ID", "test-session")
+
+		rr := httptest.NewRecorder()
+		h.HandlePermissionRequest(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rr.Code)
+		}
+		var resp hookDecisionResponse
+		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v (body=%q)", err, rr.Body.String())
+		}
+		if resp.HookSpecificOutput.Decision.Behavior != "allow" {
+			t.Errorf("expected behavior=allow, got %q", resp.HookSpecificOutput.Decision.Behavior)
+		}
+		// No approval record must be created — this is not a gated action.
+		if got := store.ListAll(); len(got) != 0 {
+			t.Errorf("expected empty approval store, got %d entries", len(got))
+		}
+	})
+
+	t.Run("CaseInsensitive", func(t *testing.T) {
+		h, store := newTestHandler(5 * time.Second)
+
+		payload := map[string]interface{}{
+			"tool_name":  "askuserquestion", // lowercase
+			"tool_input": map[string]interface{}{},
+			"cwd":        "/tmp",
+		}
+		body, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/hooks/permission-request", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-CS-Session-ID", "test-session")
+
+		rr := httptest.NewRecorder()
+		h.HandlePermissionRequest(rr, req)
+
+		var resp hookDecisionResponse
+		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp.HookSpecificOutput.Decision.Behavior != "allow" {
+			t.Errorf("expected behavior=allow for lowercase tool name, got %q", resp.HookSpecificOutput.Decision.Behavior)
+		}
+		if got := store.ListAll(); len(got) != 0 {
+			t.Errorf("expected empty approval store, got %d entries", len(got))
+		}
+	})
+}
+
 func TestRepairSettingsJSON(t *testing.T) {
 	tests := []struct {
 		name    string

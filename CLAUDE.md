@@ -175,6 +175,11 @@ go tool pprof mem.prof
 # Trace profiling for detailed execution analysis
 go test -bench=BenchmarkAttachDetachPerformance -trace=trace.out ./app -timeout=15m
 go tool trace trace.out
+
+# Service-layer benchmarks (ConnectRPC + SessionService)
+make benchmark-tier1           # Run Tier 1 critical-path benchmarks locally (~5 min)
+make benchmark-baseline        # Capture current results as the new comparison baseline
+make benchmark-compare         # Compare current results against the saved baseline
 ```
 
 

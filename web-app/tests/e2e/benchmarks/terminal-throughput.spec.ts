@@ -37,6 +37,7 @@ const WARMUP_RUNS = 2;
 const TOTAL_RUNS = 10;
 // 100KB payload: a realistic terminal burst from a Claude Code session
 const PRESET = 'PAYLOAD_100KB';
+// Expected payload size — used for documentation; actual bytes are read from metrics
 const PAYLOAD_BYTES = 100 * 1024;
 
 test.describe('Terminal Throughput Benchmark', () => {
@@ -45,6 +46,7 @@ test.describe('Terminal Throughput Benchmark', () => {
 
   test('measure xterm.js render throughput over 10 runs', async ({ page }) => {
     const throughputSamples: number[] = [];
+    let lastBytesRendered = 0;
 
     for (let run = 0; run < TOTAL_RUNS; run++) {
       // Navigate fresh for each run to get a clean xterm.js state.
@@ -78,6 +80,7 @@ test.describe('Terminal Throughput Benchmark', () => {
 
       const metrics = await getMetrics(page);
       const bytesRendered = metrics.bytesGenerated;
+      lastBytesRendered = bytesRendered;
       const bytesPerSec =
         durationMs > 0 ? (bytesRendered / durationMs) * 1000 : 0;
 
@@ -107,7 +110,7 @@ test.describe('Terminal Throughput Benchmark', () => {
         name: 'terminal-throughput-mean',
         unit: 'bytes/sec',
         value: Math.round(stats.mean),
-        extra: `p50=${(stats.p50 / 1024).toFixed(0)}KB/s p95=${(stats.p95 / 1024).toFixed(0)}KB/s cv=${(stats.cv * 100).toFixed(1)}% payload=${PAYLOAD_BYTES / 1024}KB runs=${TOTAL_RUNS - WARMUP_RUNS}`,
+        extra: `p50=${(stats.p50 / 1024).toFixed(0)}KB/s p95=${(stats.p95 / 1024).toFixed(0)}KB/s cv=${(stats.cv * 100).toFixed(1)}% payload=${(lastBytesRendered / 1024).toFixed(0)}KB runs=${TOTAL_RUNS - WARMUP_RUNS}`,
       },
       {
         name: 'terminal-throughput-p50',

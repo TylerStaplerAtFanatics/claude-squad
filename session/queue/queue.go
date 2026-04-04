@@ -107,6 +107,47 @@ func (p Priority) Emoji() string {
 	}
 }
 
+// Score contains the assembled quality gate results for a passing Sweep.
+// Populated by the Fixer after a successful Lookout run.
+type Score struct {
+	TestResults  *TestResults
+	DiffSummary  *DiffSummary
+	RetryHistory *RetryHistory
+}
+
+// TestResults holds a Sweep's test run outcome.
+type TestResults struct {
+	Passed           bool
+	OutputExcerpt    string // Capped at 2000 chars
+	DurationMs       int64
+	TestsRun         int32
+	TestsFailed      int32
+	FailingTestNames []string
+}
+
+// DiffSummary summarises the git diff at the time of the sweep.
+type DiffSummary struct {
+	FilesChanged int32
+	ChangedFiles []string
+	LinesAdded   int32
+	LinesDeleted int32
+	Excerpt      string // Capped at 1000 chars
+}
+
+// RetryHistory tracks each correction loop attempt.
+type RetryHistory struct {
+	AttemptCount int32
+	MaxRetries   int32
+	Attempts     []RetryAttempt
+}
+
+// RetryAttempt captures one correction iteration.
+type RetryAttempt struct {
+	Number        int32
+	FailureReason string // Capped at 500 chars
+	TimestampMs   int64
+}
+
 // ReviewItem represents a session that needs user attention.
 type ReviewItem struct {
 	SessionID   string            `json:"session_id"`
@@ -128,6 +169,10 @@ type ReviewItem struct {
 	Category     string         `json:"category"`      // Session category
 	DiffStats    *git.DiffStats `json:"diff_stats"`    // Git diff statistics (nullable)
 	LastActivity time.Time      `json:"last_activity"` // Last meaningful output time (used for sorting and display)
+
+	// Score is set by the Fixer after a successful Sweep quality gate.
+	// Nil if the Sweep has not yet completed or was not triggered.
+	Score *Score `json:"score,omitempty"`
 }
 
 // ReviewQueueObserver is notified when the review queue changes.

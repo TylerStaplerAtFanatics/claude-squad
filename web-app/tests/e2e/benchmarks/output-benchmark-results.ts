@@ -26,16 +26,31 @@ export interface BenchmarkEntry {
  *
  * @param outputPath  Absolute or relative path to write the JSON file.
  * @param entries     Array of benchmark measurements.
+ * @param merge       When true, existing entries in the output file are
+ *                    preserved and new entries are appended. Useful when
+ *                    multiple tests write to the same results file.
  */
 export function writeBenchmarkResults(
   outputPath: string,
   entries: BenchmarkEntry[],
+  merge = false,
 ): void {
   const dir = path.dirname(outputPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  fs.writeFileSync(outputPath, JSON.stringify(entries, null, 2));
+  let finalEntries = entries;
+  if (merge && fs.existsSync(outputPath)) {
+    try {
+      const existing = JSON.parse(
+        fs.readFileSync(outputPath, 'utf-8'),
+      ) as BenchmarkEntry[];
+      finalEntries = [...existing, ...entries];
+    } catch {
+      // If the existing file is malformed, fall back to writing only the new entries
+    }
+  }
+  fs.writeFileSync(outputPath, JSON.stringify(finalEntries, null, 2));
 }
 
 /**
@@ -59,7 +74,9 @@ export function computeStats(
   }
   const sorted = [...data].sort((a, b) => a - b);
   const mean = data.reduce((s, v) => s + v, 0) / data.length;
-  const variance = data.reduce((s, v) => s + (v - mean) ** 2, 0) / data.length;
+  // Use Bessel's correction (n-1) for sample variance
+  const variance =
+    data.reduce((s, v) => s + (v - mean) ** 2, 0) / (data.length - 1);
   const stddev = Math.sqrt(variance);
 
   return {
