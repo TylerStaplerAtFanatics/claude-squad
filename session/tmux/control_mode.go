@@ -111,7 +111,7 @@ func (t *TmuxSession) StopControlMode() error {
 	case <-time.After(2 * time.Second):
 		// Timeout after 2 seconds - force kill
 		log.WarningLog.Printf("Control mode process did not exit cleanly, killing")
-		t.controlModeCmd.Process.Kill()
+		_ = t.controlModeCmd.Process.Kill()
 		<-done // Wait for kill to complete
 	}
 

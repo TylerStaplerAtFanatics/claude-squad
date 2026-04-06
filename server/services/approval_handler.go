@@ -109,6 +109,7 @@ func (h *ApprovalHandler) SetNotificationStamper(s approvalNotificationStamper) 
 // This endpoint is configured as an HTTP hook in Claude Code's settings.
 // It blocks until the user approves/denies or the context is canceled.
 func (h *ApprovalHandler) HandlePermissionRequest(w http.ResponseWriter, r *http.Request) {
+	log.InfoLog.Printf("[ApprovalHandler] Received request from %s (method=%s, path=%s)", r.RemoteAddr, r.Method, r.URL.Path)
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -210,7 +211,7 @@ func (h *ApprovalHandler) HandlePermissionRequest(w http.ResponseWriter, r *http
 			log.InfoLog.Printf("[ApprovalHandler] Auto-denied %s/%s (rule=%s): %s", sessionID, payload.ToolName, result.RuleID, msg)
 			h.writeDecision(w, "deny", msg)
 			return
-		// Escalate: fall through to manual review queue
+			// Escalate: fall through to manual review queue
 		}
 	}
 
@@ -409,18 +410,6 @@ type hookEntry struct {
 type hookMatcherGroup struct {
 	Matcher string      `json:"matcher,omitempty"`
 	Hooks   []hookEntry `json:"hooks"`
-}
-
-// claudeSettingsHooks is the top-level hooks map in settings.local.json.
-type claudeSettingsHooks struct {
-	PermissionRequest []hookMatcherGroup `json:"PermissionRequest,omitempty"`
-}
-
-// claudeSettings is the partial structure of .claude/settings.local.json.
-// Only the "hooks" key is read/written; other fields are preserved via rawOther.
-type claudeSettings struct {
-	Hooks     claudeSettingsHooks        `json:"hooks"`
-	rawOther  map[string]json.RawMessage // preserves unknown fields
 }
 
 const (

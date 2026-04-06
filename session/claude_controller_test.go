@@ -338,7 +338,7 @@ func TestClaudeController_CancelCommandWithoutInit(t *testing.T) {
 	}
 
 	// Should handle nil queue gracefully
-	err = controller.CancelCommand("test-cmd")
+	_ = controller.CancelCommand("test-cmd")
 	// May panic or return error depending on implementation
 }
 

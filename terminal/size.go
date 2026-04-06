@@ -17,9 +17,7 @@ import (
 
 // Rate limiting for terminal size logging to prevent spam
 var (
-	lastLoggedSize    string
-	lastLogTime       time.Time
-	logCooldownPeriod = 10 * time.Second // Only log if size changes or 10 seconds have passed
+	lastLoggedSize string
 )
 
 // SizeInfo contains comprehensive terminal size information
@@ -114,7 +112,6 @@ func (m *Manager) DetectSize() *SizeInfo {
 		}
 
 		lastLoggedSize = currentSize
-		lastLogTime = time.Now()
 	}
 
 	// Update tracking
@@ -184,7 +181,9 @@ func queryTerminalSizeEscape() (int, int) {
 		log.WarningLog.Printf("Failed to set terminal to raw mode: %v", err)
 		return 0, 0
 	}
-	defer term.Restore(stdinFd, oldState)
+	defer func() {
+		_ = term.Restore(stdinFd, oldState)
+	}()
 
 	// Move cursor to extreme position (bottom-right corner)
 	_, err = os.Stdout.Write([]byte("\033[9999;9999H"))

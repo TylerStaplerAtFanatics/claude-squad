@@ -1,10 +1,10 @@
 package session
 
 import (
-	"github.com/tstapler/stapler-squad/log"
-	"github.com/tstapler/stapler-squad/server/analytics"
 	"context"
 	"fmt"
+	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/server/analytics"
 	"io"
 	"strings"
 	"sync"
@@ -36,7 +36,7 @@ type ResponseStream struct {
 	cancel       context.CancelFunc
 	wg           sync.WaitGroup
 	started      bool
-	bufferSize   int // Channel buffer size for each subscriber
+	bufferSize   int                         // Channel buffer size for each subscriber
 	escapeParser *analytics.EscapeCodeParser // For escape code analytics
 }
 
@@ -148,9 +148,11 @@ func (rs *ResponseStream) streamLoop() {
 					// Timeout is expected, continue loop
 					continue
 				}
-				// Check for "file already closed" errors which indicate EOF
+				// Check for "file already closed" or Linux PTY "input/output error" which indicate EOF
 				errMsg := err.Error()
-				if strings.Contains(errMsg, "file already closed") || strings.Contains(errMsg, "bad file descriptor") {
+				if strings.Contains(errMsg, "file already closed") ||
+					strings.Contains(errMsg, "bad file descriptor") ||
+					strings.Contains(errMsg, "input/output error") {
 					// PTY has been closed, stop streaming
 					rs.closeAllSubscribers()
 					return

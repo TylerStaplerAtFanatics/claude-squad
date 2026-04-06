@@ -93,7 +93,7 @@ func InteractiveSessionPicker() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to set raw mode: %w", err)
 	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
+	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
 
 	selected := 0
 	reader := bufio.NewReader(os.Stdin)
@@ -155,7 +155,7 @@ func InteractiveSessionPicker() (string, error) {
 			// Check if it's an escape sequence (arrow keys)
 			if b == 27 {
 				// Try to read more bytes for escape sequence
-				reader.ReadByte() // [
+				_, _ = reader.ReadByte() // [
 				arrow, _ := reader.ReadByte()
 				switch arrow {
 				case 'A': // Up arrow

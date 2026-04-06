@@ -1,8 +1,8 @@
 package tmux
 
 import (
-	"github.com/tstapler/stapler-squad/executor"
 	"fmt"
+	"github.com/tstapler/stapler-squad/executor"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -118,7 +118,7 @@ func TestRestoreFallbackToWorkingDirectory(t *testing.T) {
 	testDir := t.TempDir()
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	err = os.Chdir(testDir)
 	require.NoError(t, err)

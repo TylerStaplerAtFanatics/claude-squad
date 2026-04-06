@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 
@@ -430,27 +429,4 @@ func GetJJVersion() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
-}
-
-// parseJJTimestamp parses JJ timestamp formats
-func parseJJTimestamp(ts string) time.Time {
-	// Try various formats
-	formats := []string{
-		time.RFC3339,
-		"2006-01-02 15:04:05 -0700",
-		"2006-01-02 15:04:05",
-	}
-
-	for _, format := range formats {
-		if t, err := time.Parse(format, ts); err == nil {
-			return t
-		}
-	}
-
-	// Try Unix timestamp
-	if i, err := strconv.ParseInt(ts, 10, 64); err == nil {
-		return time.Unix(i, 0)
-	}
-
-	return time.Time{}
 }

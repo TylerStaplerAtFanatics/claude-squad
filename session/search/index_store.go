@@ -19,11 +19,11 @@ type IndexStore struct {
 
 // IndexVersion tracks metadata about the persisted index.
 type IndexVersion struct {
-	Version      int       `json:"version"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	Version       int       `json:"version"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 	DocumentCount int       `json:"document_count"`
-	TermCount    int       `json:"term_count"`
+	TermCount     int       `json:"term_count"`
 }
 
 const (
@@ -263,8 +263,13 @@ func (s *IndexStore) SaveSyncMetadata(meta *IndexSyncMetadata) error {
 	return nil
 }
 
+var (
+	// ErrMetadataNotFound is returned when sync metadata is not found.
+	ErrMetadataNotFound = fmt.Errorf("sync metadata not found")
+)
+
 // LoadSyncMetadata reads the sync metadata from disk.
-// Returns nil, nil if metadata doesn't exist (fresh index).
+// Returns nil, ErrMetadataNotFound if metadata doesn't exist (fresh index).
 func (s *IndexStore) LoadSyncMetadata() (*IndexSyncMetadata, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -273,7 +278,7 @@ func (s *IndexStore) LoadSyncMetadata() (*IndexSyncMetadata, error) {
 
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return nil, nil // No metadata yet, this is fine
+		return nil, ErrMetadataNotFound // No metadata yet, this is fine
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to read sync metadata: %w", err)

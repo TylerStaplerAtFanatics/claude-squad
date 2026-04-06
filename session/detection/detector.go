@@ -32,7 +32,6 @@ type StatusPattern struct {
 	Pattern     string `yaml:"pattern"`
 	Description string `yaml:"description"`
 	Priority    int    `yaml:"priority"` // Higher priority patterns checked first
-	compiled    *regexp.Regexp
 }
 
 // StatusPatterns contains all patterns for status detection.
@@ -68,7 +67,7 @@ func NewStatusDetector() *StatusDetector {
 	sd := &StatusDetector{
 		patterns: getDefaultPatterns(),
 	}
-	sd.compilePatterns()
+	_ = sd.compilePatterns()
 	return sd
 }
 

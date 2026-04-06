@@ -71,11 +71,14 @@ func NewServer(addr string) *Server {
 		},
 	}
 
+	log.InfoLog.Printf("Building server dependencies...")
+	startTime := time.Now()
 	deps, err := BuildDependencies()
 	if err != nil {
 		log.ErrorLog.Printf("Failed to build server dependencies: %v", err)
 		// Continue without services — all RPC calls will return errors
 	} else {
+		log.InfoLog.Printf("Server dependencies built in %v", time.Since(startTime))
 		// Start background components
 		serverCtx := context.Background()
 		go deps.ReactiveQueueMgr.Start(serverCtx)

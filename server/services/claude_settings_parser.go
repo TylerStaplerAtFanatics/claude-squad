@@ -22,13 +22,18 @@ type claudeSettingsFile struct {
 	Permissions *ClaudePermissions `json:"permissions,omitempty"`
 }
 
+var (
+	// ErrSettingsNotFound is returned when the Claude settings file is not found.
+	ErrSettingsNotFound = fmt.Errorf("settings file not found")
+)
+
 // ParseClaudeSettings reads a Claude settings.json file and extracts permissions.
 // Returns nil permissions (no error) if the file does not exist or has no permissions key.
 func ParseClaudeSettings(path string) (*ClaudePermissions, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, ErrSettingsNotFound
 		}
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}

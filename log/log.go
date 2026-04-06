@@ -102,15 +102,15 @@ type LogConfig struct {
 	LogMaxAge      int
 	LogCompress    bool
 	UseSessionLogs bool
-	LogLevel       LogLevel    // Deprecated: Use FileLevel and ConsoleLevel instead
+	LogLevel       LogLevel // Deprecated: Use FileLevel and ConsoleLevel instead
 	StructuredLogs bool
-	PrettyLogs     bool        // For development - formats JSON logs for readability
+	PrettyLogs     bool // For development - formats JSON logs for readability
 
 	// Dual-stream logging configuration (file + console)
-	ConsoleEnabled bool        // Enable/disable console output (default: true)
-	ConsoleLevel   LogLevel    // Minimum level for console (default: ERROR for tests, INFO for production)
-	FileEnabled    bool        // Enable/disable file output (default: true)
-	FileLevel      LogLevel    // Minimum level for file (default: DEBUG)
+	ConsoleEnabled bool     // Enable/disable console output (default: true)
+	ConsoleLevel   LogLevel // Minimum level for console (default: ERROR for tests, INFO for production)
+	FileEnabled    bool     // Enable/disable file output (default: true)
+	FileLevel      LogLevel // Minimum level for file (default: DEBUG)
 }
 
 // DefaultLogConfig returns the default logging configuration
@@ -118,9 +118,9 @@ func DefaultLogConfig() *LogConfig {
 	return &LogConfig{
 		LogsEnabled:    true,
 		LogsDir:        "",
-		LogMaxSize:     10,    // 10MB
-		LogMaxFiles:    5,     // 5 backups
-		LogMaxAge:      30,    // 30 days
+		LogMaxSize:     10, // 10MB
+		LogMaxFiles:    5,  // 5 backups
+		LogMaxAge:      30, // 30 days
 		LogCompress:    true,
 		UseSessionLogs: true,
 		LogLevel:       INFO,  // Deprecated: kept for backward compatibility
@@ -129,7 +129,7 @@ func DefaultLogConfig() *LogConfig {
 
 		// Dual-stream defaults (production settings)
 		ConsoleEnabled: true,
-		ConsoleLevel:   INFO,  // Show INFO and above on console
+		ConsoleLevel:   INFO, // Show INFO and above on console
 		FileEnabled:    true,
 		FileLevel:      DEBUG, // Log everything to file
 	}
@@ -140,16 +140,16 @@ var logFileName = filepath.Join(os.TempDir(), "staplersquad.log")
 
 // StructuredLogEntry represents a structured log entry
 type StructuredLogEntry struct {
-	Timestamp  time.Time         `json:"timestamp"`
-	Level      string            `json:"level"`
-	Message    string            `json:"message"`
-	SessionID  string            `json:"session_id,omitempty"`
-	Component  string            `json:"component,omitempty"`
-	Function   string            `json:"function,omitempty"`
-	File       string            `json:"file,omitempty"`
-	Line       int               `json:"line,omitempty"`
-	Fields     map[string]interface{} `json:"fields,omitempty"`
-	Error      string            `json:"error,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
+	Level     string                 `json:"level"`
+	Message   string                 `json:"message"`
+	SessionID string                 `json:"session_id,omitempty"`
+	Component string                 `json:"component,omitempty"`
+	Function  string                 `json:"function,omitempty"`
+	File      string                 `json:"file,omitempty"`
+	Line      int                    `json:"line,omitempty"`
+	Fields    map[string]interface{} `json:"fields,omitempty"`
+	Error     string                 `json:"error,omitempty"`
 }
 
 // StructuredLogger provides structured logging functionality
@@ -209,12 +209,12 @@ func (sl *StructuredLogger) Log(level LogLevel, message string, fields map[strin
 
 	if err != nil {
 		// Fallback to simple text logging if JSON marshaling fails
-		fmt.Fprintf(sl.writer, "%s [%s] %s\n", entry.Timestamp.Format(time.RFC3339), entry.Level, entry.Message)
+		_, _ = fmt.Fprintf(sl.writer, "%s [%s] %s\n", entry.Timestamp.Format(time.RFC3339), entry.Level, entry.Message)
 		return
 	}
 
-	sl.writer.Write(output)
-	sl.writer.Write([]byte("\n"))
+	_, _ = sl.writer.Write(output)
+	_, _ = sl.writer.Write([]byte("\n"))
 }
 
 // LogWithFields logs a message with additional fields
@@ -350,6 +350,11 @@ func GetSessionLogFilePath(cfg *LogConfig, sessionID string) (string, error) {
 	return filepath.Join(logDir, fmt.Sprintf("session_%s.log", safeSessionID)), nil
 }
 
+var (
+	// ErrSessionLogsDisabled is returned when session logs are disabled in config
+	ErrSessionLogsDisabled = fmt.Errorf("session logs disabled in config")
+)
+
 // GetSessionLoggers creates or retrieves loggers for a specific session
 func GetSessionLoggers(sessionID string) (*SessionLoggers, error) {
 	sessionMutex.RLock()
@@ -360,9 +365,9 @@ func GetSessionLoggers(sessionID string) (*SessionLoggers, error) {
 	}
 	sessionMutex.RUnlock()
 
-	// If session logs are disabled in config, return nil
+	// If session logs are disabled in config, return an error
 	if globalConfig != nil && !globalConfig.UseSessionLogs {
-		return nil, nil
+		return nil, ErrSessionLogsDisabled
 	}
 
 	sessionMutex.Lock()
@@ -499,9 +504,9 @@ func FatalS(message string, fields ...map[string]interface{}) {
 
 // levelFilterWriter wraps an io.Writer and filters out logs below a certain level
 type levelFilterWriter struct {
-	writer    io.Writer
-	level     LogLevel
-	logLevel  LogLevel // The level of logs this writer should handle
+	writer   io.Writer
+	level    LogLevel
+	logLevel LogLevel // The level of logs this writer should handle
 }
 
 // Write implements io.Writer interface with level filtering
@@ -561,7 +566,8 @@ func Initialize(daemon bool) {
 //   - consoleLevel: Minimum level for console logging (typically ERROR to avoid noise)
 //
 // Example:
-//   log.InitializeForTests(log.DEBUG, log.ERROR)  // DEBUG→file, ERROR→console
+//
+//	log.InitializeForTests(log.DEBUG, log.ERROR)  // DEBUG→file, ERROR→console
 func InitializeForTests(fileLevel LogLevel, consoleLevel LogLevel) {
 	cfg := DefaultLogConfig()
 	cfg.FileLevel = fileLevel

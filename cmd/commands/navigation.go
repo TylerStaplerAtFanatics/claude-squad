@@ -1,22 +1,22 @@
 package commands
 
 import (
-	"github.com/tstapler/stapler-squad/cmd/interfaces"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tstapler/stapler-squad/cmd/interfaces"
 )
 
 // NavigationHandlers contains handlers for navigation commands
 type NavigationHandlers struct {
-	OnUp                 func() (tea.Model, tea.Cmd)
-	OnDown               func() (tea.Model, tea.Cmd)
-	OnLeft               func() (tea.Model, tea.Cmd)
-	OnRight              func() (tea.Model, tea.Cmd)
-	OnPageUp             func() (tea.Model, tea.Cmd)
-	OnPageDown           func() (tea.Model, tea.Cmd)
-	OnSearch             func() (tea.Model, tea.Cmd)
-	OnNextReview         func() (tea.Model, tea.Cmd)
-	OnPreviousReview     func() (tea.Model, tea.Cmd)
-	OnToggleReviewQueue  func() (tea.Model, tea.Cmd)
+	OnUp                func() (tea.Model, tea.Cmd)
+	OnDown              func() (tea.Model, tea.Cmd)
+	OnLeft              func() (tea.Model, tea.Cmd)
+	OnRight             func() (tea.Model, tea.Cmd)
+	OnPageUp            func() (tea.Model, tea.Cmd)
+	OnPageDown          func() (tea.Model, tea.Cmd)
+	OnSearch            func() (tea.Model, tea.Cmd)
+	OnNextReview        func() (tea.Model, tea.Cmd)
+	OnPreviousReview    func() (tea.Model, tea.Cmd)
+	OnToggleReviewQueue func() (tea.Model, tea.Cmd)
 }
 
 var navigationHandlers = &NavigationHandlers{}
@@ -36,9 +36,6 @@ func UpCommand(ctx *interfaces.CommandContext) error {
 		model, teaCmd := navigationHandlers.OnUp()
 		ctx.Args["model"] = model
 		ctx.Args["cmd"] = teaCmd
-	} else {
-		// Handler not initialized - this is the bug!
-		// Don't log here as it would spam, let HandleKeyString log it
 	}
 	return nil
 }

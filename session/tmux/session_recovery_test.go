@@ -75,7 +75,7 @@ func testKilledSessionRestoresInCorrectWorktree(t *testing.T) {
 	// Restore after session was killed - this is where the bug would occur
 	// OLD behavior: would use os.Getwd()
 	// NEW behavior: should use the provided worktreeDir
-	err = session.RestoreWithWorkDir(worktreeDir)
+	_ = session.RestoreWithWorkDir(worktreeDir)
 
 	// The restore will timeout with our mock, but that's expected
 	// The important thing is that it attempts to create a new session
@@ -106,21 +106,21 @@ func testKilledSessionRestoresInCorrectWorktree(t *testing.T) {
 func testCompareOldVsNewRestoreBehavior(t *testing.T) {
 	// Create test directories
 	tempDir := t.TempDir()
-currentDirBase := filepath.Join(tempDir, "current-dir")
-worktreeDir := filepath.Join(tempDir, "session-worktree")
-err := os.MkdirAll(currentDirBase, 0755)
-require.NoError(t, err)
-err = os.MkdirAll(worktreeDir, 0755)
-require.NoError(t, err)
+	currentDirBase := filepath.Join(tempDir, "current-dir")
+	worktreeDir := filepath.Join(tempDir, "session-worktree")
+	err := os.MkdirAll(currentDirBase, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(worktreeDir, 0755)
+	require.NoError(t, err)
 
-// Change to a different directory to simulate the bug condition
-originalDir, _ := os.Getwd()
-differentDir := currentDirBase // Separate from worktree
-defer os.Chdir(originalDir)
-err = os.Chdir(differentDir)
-require.NoError(t, err)
+	// Change to a different directory to simulate the bug condition
+	originalDir, _ := os.Getwd()
+	differentDir := currentDirBase // Separate from worktree
+	defer func() { _ = os.Chdir(originalDir) }()
+	err = os.Chdir(differentDir)
+	require.NoError(t, err)
 
-currentDir, _ := os.Getwd()
+	currentDir, _ := os.Getwd()
 
 	// Resolve paths to handle /var vs /private/var on macOS
 	resolvedCurrentDir, _ := filepath.EvalSymlinks(currentDir)

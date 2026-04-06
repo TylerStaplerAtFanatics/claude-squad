@@ -13,10 +13,10 @@ package services
 // See: docs/tasks/unified-websocket-streaming.md
 
 import (
+	"fmt"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/session"
 	"github.com/tstapler/stapler-squad/session/detection"
-	"fmt"
 	"net/http"
 )
 
@@ -79,7 +79,7 @@ func (h *ExternalWebSocketHandler) HandleApprovals(w http.ResponseWriter, r *htt
 	}
 	response += "}"
 
-	w.Write([]byte(response))
+	_, _ = w.Write([]byte(response))
 }
 
 // HandleApprovalResponse handles user response to an approval request

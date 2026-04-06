@@ -110,7 +110,7 @@ func TestWriteReadUserOptions(t *testing.T) {
 		t.Fatalf("create tmux session: %v", err)
 	}
 	t.Cleanup(func() {
-		exec.Command("tmux", "kill-session", "-t", sessionName).Run()
+		_ = exec.Command("tmux", "kill-session", "-t", sessionName).Run()
 	})
 
 	socketPath := "/tmp/claude-mux-test-99999.sock"
@@ -163,7 +163,7 @@ func TestScanFromUserOptions_RegistersSession(t *testing.T) {
 		t.Fatalf("create tmux session: %v", err)
 	}
 	t.Cleanup(func() {
-		exec.Command("tmux", "kill-session", "-t", sessionName).Run()
+		_ = exec.Command("tmux", "kill-session", "-t", sessionName).Run()
 	})
 
 	socketPath := "/tmp/claude-mux-test-88888.sock"

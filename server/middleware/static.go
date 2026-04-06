@@ -37,7 +37,7 @@ func StaticFileServer(fileSystem fs.FS, indexFile string) http.Handler {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			w.WriteHeader(http.StatusOK)
-			w.Write(indexContent)
+			_, _ = w.Write(indexContent)
 			return
 		}
 
@@ -50,7 +50,7 @@ func StaticFileServer(fileSystem fs.FS, indexFile string) http.Handler {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 				w.WriteHeader(http.StatusOK)
-				w.Write(dirIndexContent)
+				_, _ = w.Write(dirIndexContent)
 				return
 			}
 
@@ -64,7 +64,7 @@ func StaticFileServer(fileSystem fs.FS, indexFile string) http.Handler {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			w.WriteHeader(http.StatusOK)
-			w.Write(rootIndexContent)
+			_, _ = w.Write(rootIndexContent)
 			return
 		}
 

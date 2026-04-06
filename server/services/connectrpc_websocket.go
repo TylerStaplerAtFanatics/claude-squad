@@ -445,7 +445,11 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 	if err := tmuxSession.StartControlMode(); err != nil {
 		return fmt.Errorf("failed to start control mode: %w", err)
 	}
-	defer tmuxSession.StopControlMode()
+	defer func() {
+		if err := tmuxSession.StopControlMode(); err != nil {
+			log.ErrorLog.Printf("Error stopping control mode: %v", err)
+		}
+	}()
 
 	// Subscribe to control mode updates
 	subscriberID, updateChan := tmuxSession.SubscribeToControlModeUpdates()
@@ -574,7 +578,9 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 						}
 						errorBytes, _ := proto.Marshal(errorData)
 						errorEnvelope := protocol.CreateEnvelope(0, errorBytes)
-						stream.WriteMessage(websocket.BinaryMessage, errorEnvelope)
+						if err := stream.WriteMessage(websocket.BinaryMessage, errorEnvelope); err != nil {
+							log.ErrorLog.Printf("[streamViaControlMode] Failed to send input error to client: %v", err)
+						}
 						continue
 					}
 				}
@@ -849,7 +855,9 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 						}
 						if errBytes, err := proto.Marshal(errorData); err == nil {
 							errEnvelope := protocol.CreateEnvelope(0, errBytes)
-							stream.WriteMessage(websocket.BinaryMessage, errEnvelope)
+							if err := stream.WriteMessage(websocket.BinaryMessage, errEnvelope); err != nil {
+								log.ErrorLog.Printf("[streamViaTmuxCapture] Failed to send input error to client: %v", err)
+							}
 						}
 					} else {
 						log.DebugLog.Printf("[streamViaTmuxCapture] Sent input (%d bytes) to tmux '%s'",
@@ -1124,7 +1132,9 @@ func parseConnectHeaders(headersText string) map[string]string {
 // sendErrorResponse sends an error response over WebSocket
 func sendErrorResponse(conn *websocket.Conn, errorMsg string) {
 	responseHeaders := fmt.Sprintf("Status-Code: 500\r\nContent-Type: text/plain\r\n\r\n%s", errorMsg)
-	conn.WriteMessage(websocket.TextMessage, []byte(responseHeaders))
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(responseHeaders)); err != nil {
+		log.ErrorLog.Printf("Failed to send error response headers: %v", err)
+	}
 }
 
 // sendEndStreamSuccess sends a successful EndStream message
@@ -1152,7 +1162,9 @@ func sendEndStreamError(stream *connectWebSocketStream, err error) {
 	dataBytes := fmt.Appendf(nil, `{"error":{"code":"internal","message":%s}}`, errMsg)
 
 	envelope := protocol.CreateEnvelope(protocol.EndStreamFlag, dataBytes)
-	stream.WriteMessage(websocket.BinaryMessage, envelope)
+	if err := stream.WriteMessage(websocket.BinaryMessage, envelope); err != nil {
+		log.ErrorLog.Printf("Failed to send EndStreamError: %v", err)
+	}
 }
 
 // detectContentWidth analyzes captured terminal content to determine the actual

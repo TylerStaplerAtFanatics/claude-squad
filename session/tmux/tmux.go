@@ -2,12 +2,12 @@ package tmux
 
 import (
 	"bytes"
-	"github.com/tstapler/stapler-squad/executor"
-	"github.com/tstapler/stapler-squad/log"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/tstapler/stapler-squad/executor"
+	"github.com/tstapler/stapler-squad/log"
 	"io"
 	"os"
 	"os/exec"
@@ -79,13 +79,13 @@ type TmuxSession struct {
 	existsCacheTTL   time.Duration
 
 	// Control mode streaming infrastructure (replaces pipe-pane + FIFO)
-	controlModeCmd       *exec.Cmd               // tmux -C attach process
-	controlModeStdout    io.ReadCloser           // stdout pipe for control mode notifications
-	controlModeStdin     io.WriteCloser          // stdin pipe for control mode commands
-	controlModeDone      chan struct{}           // Signal channel for control mode termination
+	controlModeCmd         *exec.Cmd              // tmux -C attach process
+	controlModeStdout      io.ReadCloser          // stdout pipe for control mode notifications
+	controlModeStdin       io.WriteCloser         // stdin pipe for control mode commands
+	controlModeDone        chan struct{}          // Signal channel for control mode termination
 	controlModeSubscribers map[string]chan []byte // WebSocket clients subscribed to control mode updates
-	controlModeSubMu     sync.RWMutex            // Protects controlModeSubscribers map and controlModeExited
-	controlModeExited    bool                    // True after readControlModeOutput exits; new subscribers get pre-closed channel
+	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers map and controlModeExited
+	controlModeExited      bool                   // True after readControlModeOutput exits; new subscribers get pre-closed channel
 }
 
 // windowSize represents terminal dimensions from external sources (like BubbleTea)
@@ -102,11 +102,6 @@ var whiteSpaceRegex = regexp.MustCompile(`\s+`)
 // ToStaplerSquadTmuxName converts a string to a valid tmux session name with the default prefix
 func ToStaplerSquadTmuxName(str string) string {
 	return toStaplerSquadTmuxNameWithPrefix(str, TmuxPrefix)
-}
-
-// toStaplerSquadTmuxName is the internal version for backward compatibility
-func toStaplerSquadTmuxName(str string) string {
-	return ToStaplerSquadTmuxName(str)
 }
 
 func toStaplerSquadTmuxNameWithPrefix(str string, prefix string) string {
@@ -198,7 +193,7 @@ func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory
 		serverSocket:     serverSocket,
 		ptyFactory:       ptyFactory,
 		cmdExec:          cmdExec,
-		bannerFilter:     NewBannerFilter(),          // Initialize banner filter for terminal output filtering
+		bannerFilter:     NewBannerFilter(),         // Initialize banner filter for terminal output filtering
 		externalResizeCh: make(chan windowSize, 10), // Buffered channel for resize events
 		existsCacheTTL:   500 * time.Millisecond,    // Cache session existence for 500ms
 	}
@@ -637,7 +632,7 @@ func (t *TmuxSession) detectPromptInContent(content string) bool {
 						trimmed := strings.TrimSpace(lines[j])
 						// Check for numbered options (1., 2., 3., etc.)
 						if len(trimmed) > 0 && (trimmed[0] >= '1' && trimmed[0] <= '9') &&
-						   len(trimmed) > 1 && trimmed[1] == '.' {
+							len(trimmed) > 1 && trimmed[1] == '.' {
 							return true
 						}
 					}
@@ -1057,7 +1052,7 @@ func (t *TmuxSession) DoesSessionExist() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "tmux")
+	var cmd *exec.Cmd
 	// Add server socket isolation if specified
 	if t.serverSocket != "" {
 		cmd = exec.CommandContext(ctx, "tmux", "-L", t.serverSocket, "list-sessions", "-F", "#{session_name}")
@@ -1116,7 +1111,7 @@ func (t *TmuxSession) DoesSessionExistNoCache() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "tmux")
+	var cmd *exec.Cmd
 	// Add server socket isolation if specified
 	if t.serverSocket != "" {
 		cmd = exec.CommandContext(ctx, "tmux", "-L", t.serverSocket, "list-sessions", "-F", "#{session_name}")
@@ -1389,4 +1384,3 @@ func sanitizeUTF8String(rawBytes []byte) string {
 
 	return result.String()
 }
-

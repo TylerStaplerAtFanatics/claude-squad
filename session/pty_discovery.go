@@ -316,26 +316,6 @@ func (pd *PTYDiscovery) getPTYInfoFromTmux(sessionName string) (string, int, err
 	return ptyPath, pid, nil
 }
 
-// getPIDForPTY gets the PID using a PTY
-func (pd *PTYDiscovery) getPIDForPTY(ptyPath string) (int, error) {
-	// Use fuser to find which process is using this PTY
-	cmd := exec.Command("fuser", ptyPath)
-	output, err := cmd.Output()
-	if err != nil {
-		// fuser returns non-zero if no processes found, but that's okay for us
-		// Just return a placeholder PID
-		return 0, fmt.Errorf("fuser failed: %w", err)
-	}
-
-	pidStr := strings.TrimSpace(string(output))
-	pid, err := strconv.Atoi(pidStr)
-	if err != nil {
-		return 0, fmt.Errorf("invalid PID %q: %w", pidStr, err)
-	}
-
-	return pid, nil
-}
-
 // discoverOrphanedPTYs finds unmanaged Claude processes in stapler-squad tmux sessions
 // This only discovers Claude processes running in tmux sessions with the stapler-squad prefix
 func (pd *PTYDiscovery) discoverOrphanedPTYs() []*PTYConnection {

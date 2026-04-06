@@ -15,13 +15,13 @@ import (
 
 // Config holds profiling configuration
 type Config struct {
-	Enabled       bool
-	HTTPPort      int
-	BlockProfile  bool
-	MutexProfile  bool
-	CPUProfile    bool
-	TraceEnabled  bool
-	TraceFile     string
+	Enabled      bool
+	HTTPPort     int
+	BlockProfile bool
+	MutexProfile bool
+	CPUProfile   bool
+	TraceEnabled bool
+	TraceFile    string
 }
 
 // StartProfiling enables runtime profiling based on config
@@ -93,7 +93,9 @@ func StartProfiling(cfg Config) (func(), error) {
 		cleanupFuncs = append(cleanupFuncs, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			srv.Shutdown(ctx)
+			if err := srv.Shutdown(ctx); err != nil {
+				log.ErrorLog.Printf("Error shutting down profiling server: %v", err)
+			}
 		})
 	}
 

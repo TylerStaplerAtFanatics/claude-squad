@@ -29,7 +29,7 @@ func (h *PushHandler) RegisterRoutes(mux *http.ServeMux) {
 // handleGetVapidKey returns the VAPID public key for client-side subscription
 func (h *PushHandler) handleGetVapidKey(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(h.pushService.GetVapidPublicKey()))
+	_, _ = w.Write([]byte(h.pushService.GetVapidPublicKey()))
 }
 
 // handleSubscribe handles push subscription requests
@@ -51,7 +51,7 @@ func (h *PushHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	log.InfoLog.Printf("New push subscription registered: %s", subID[:8])
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"subscriptionId": subID,
 	})
 }

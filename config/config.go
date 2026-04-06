@@ -1,11 +1,11 @@
 package config
 
 import (
-	"github.com/tstapler/stapler-squad/executor"
-	"github.com/tstapler/stapler-squad/log"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/tstapler/stapler-squad/executor"
+	"github.com/tstapler/stapler-squad/log"
 	"os"
 	"os/exec"
 	"os/user"
@@ -20,21 +20,6 @@ type CommandExecutor interface {
 	Command(name string, args ...string) *exec.Cmd
 	Output(cmd *exec.Cmd) ([]byte, error)
 	LookPath(file string) (string, error)
-}
-
-// realCommandExecutor implements CommandExecutor using actual system commands
-type realCommandExecutor struct{}
-
-func (r *realCommandExecutor) Command(name string, args ...string) *exec.Cmd {
-	return exec.Command(name, args...)
-}
-
-func (r *realCommandExecutor) Output(cmd *exec.Cmd) ([]byte, error) {
-	return cmd.Output()
-}
-
-func (r *realCommandExecutor) LookPath(file string) (string, error) {
-	return exec.LookPath(file)
 }
 
 // timeoutCommandExecutor wraps command execution with timeout protection
@@ -87,9 +72,9 @@ const (
 
 // isTestMode detects if the application is running in test/benchmark mode
 func isTestMode() bool {
+
 	// Check command line arguments for test/benchmark indicators
 	for _, arg := range os.Args {
-		// Match test binary names and flags
 		if strings.Contains(arg, ".test") ||
 			strings.Contains(arg, "-test.") ||
 			strings.HasSuffix(arg, ".test.exe") ||
@@ -131,7 +116,7 @@ func GetConfigDir() (string, error) {
 		legacyDir := filepath.Join(homeDir, ".claude-squad")
 		if _, legacyErr := os.Stat(legacyDir); legacyErr == nil {
 			if migrateErr := os.Rename(legacyDir, baseDir); migrateErr == nil {
-				fmt.Printf("Migrated data directory: %s → %s\n", legacyDir, baseDir)
+				log.InfoLog.Printf("Migrated data directory: %s → %s\n", legacyDir, baseDir)
 			}
 		}
 	}
@@ -145,7 +130,14 @@ func GetConfigDir() (string, error) {
 		return filepath.Join(baseDir, "instances", instanceID), nil
 	}
 
-	// Priority 2.5: Preferred workspace from preference file
+	// Priority 3: Test mode auto-detection (automatic isolation)
+	if isTestMode() {
+		// Each test/benchmark process gets its own isolated state
+		pid := os.Getpid()
+		return filepath.Join(baseDir, "test", fmt.Sprintf("test-%d", pid)), nil
+	}
+
+	// Priority 3.5: Preferred workspace from preference file
 	// Written by SwitchDatabase RPC; cleared automatically on removal.
 	if data, err := os.ReadFile(GetPreferredWorkspaceFile(baseDir)); err == nil {
 		prefDir := strings.TrimSpace(string(data))
@@ -155,13 +147,6 @@ func GetConfigDir() (string, error) {
 				return prefDir, nil
 			}
 		}
-	}
-
-	// Priority 3: Test mode auto-detection (automatic isolation)
-	if isTestMode() {
-		// Each test/benchmark process gets its own isolated state
-		pid := os.Getpid()
-		return filepath.Join(baseDir, "test", fmt.Sprintf("test-%d", pid)), nil
 	}
 
 	// Priority 4: Workspace-based isolation (production default)
@@ -261,15 +246,15 @@ func DefaultConfig() *Config {
 			}
 			return fmt.Sprintf("%s/", strings.ToLower(user.Username))
 		}(),
-		DetectNewSessions:        true,
-		SessionDetectionInterval: 5000,
-		StateRefreshInterval:     3000,
-		LogsEnabled:              true,
-		LogsDir:                  "", // Empty string means use default location
-		LogMaxSize:               10, // 10MB
-		LogMaxFiles:              5,  // Keep 5 rotated files
-		LogMaxAge:                30, // 30 days
-		LogCompress:              true,
+		DetectNewSessions:             true,
+		SessionDetectionInterval:      5000,
+		StateRefreshInterval:          3000,
+		LogsEnabled:                   true,
+		LogsDir:                       "", // Empty string means use default location
+		LogMaxSize:                    10, // 10MB
+		LogMaxFiles:                   5,  // Keep 5 rotated files
+		LogMaxAge:                     30, // 30 days
+		LogCompress:                   true,
 		UseSessionLogs:                true,
 		TmuxSessionPrefix:             "staplersquad_", // Default prefix for backward compatibility
 		PerformBackgroundHealthChecks: true,            // Enabled by default for automated session maintenance
