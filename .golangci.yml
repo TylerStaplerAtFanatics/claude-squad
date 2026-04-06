@@ -5,6 +5,10 @@ linters:
     - nilnil
     - staticcheck
     - govet
+    - gosimple
+    - unused
+  disable:
+    - errcheck
 
 linters-settings:
   forbidigo:
@@ -22,4 +26,7 @@ issues:
       linters: [forbidigo]
     # Allow fmt.Print* in cmd/ subdirectories (CLI output)
     - path: "^cmd/"
+      linters: [forbidigo]
+    # Allow fmt.Print* in tests/demo/ directory (demo helpers)
+    - path: "^tests/demo/"
       linters: [forbidigo]

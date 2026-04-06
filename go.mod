@@ -7,6 +7,7 @@ require (
 	connectrpc.com/otelconnect v0.8.0
 	entgo.io/ent v0.14.5
 	github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2
+	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/bufbuild/buf v1.57.2
 	github.com/bufbuild/connect-go v1.10.0
@@ -21,7 +22,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/klauspost/compress v1.18.0
 	github.com/mattn/go-runewidth v0.0.16
-	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/mattn/go-sqlite3 v1.14.40
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spaolacci/murmur3 v1.1.0
 	github.com/spf13/cobra v1.10.1
@@ -62,7 +63,6 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.5 // indirect
-	github.com/SherClockHolmes/webpush-go v1.4.0 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect

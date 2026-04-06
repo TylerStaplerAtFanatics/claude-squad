@@ -40,10 +40,29 @@ jobs:
           
           echo "✅ Tag version matches main.go version: $VERSION"
 
-      - name: Set up Go 1.23
-        uses: actions/setup-go@v4
+      - name: Set up Go 1.25.0
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25.0'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Protos
+        run: make proto-gen
+
+      - name: Build Web UI
+        run: make web-build
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
