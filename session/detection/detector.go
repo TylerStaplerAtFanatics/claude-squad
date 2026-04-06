@@ -727,6 +727,26 @@ func aiderPatterns() StatusPatterns {
 // opencodePatterns returns patterns specific to OpenCode's terminal UI.
 func opencodePatterns() StatusPatterns {
 	return StatusPatterns{
+		Processing: []StatusPattern{
+			{
+				Name:        "opencode_thinking",
+				Pattern:     `(?i)Thinking:`,
+				Description: "OpenCode is thinking about a request",
+				Priority:    11,
+			},
+			{
+				Name:        "opencode_reading",
+				Pattern:     `(?i)→ (Read|read)`,
+				Description: "OpenCode is reading a file",
+				Priority:    10,
+			},
+			{
+				Name:        "opencode_writing",
+				Pattern:     `(?i)→ (Write|write|Edit|edit)`,
+				Description: "OpenCode is writing/editing files",
+				Priority:    10,
+			},
+		},
 		NeedsApproval: []StatusPattern{
 			{
 				Name: "opencode_permission_required",
@@ -742,6 +762,33 @@ func opencodePatterns() StatusPatterns {
 				Pattern:     `Allow \(a\)`,
 				Description: "OpenCode allow button in permission dialog",
 				Priority:    17,
+			},
+		},
+		InputRequired: []StatusPattern{
+			{
+				// OpenCode uses ┃ prefixed numbered format in its prompt/footer area:
+				// "┃  4. Icons:" or "┃  1. Option A"
+				Name:        "opencode_numbered_options",
+				Pattern:     `(?m)┃\s*\d+\.\s+\S`,
+				Description: "OpenCode numbered selection options",
+				Priority:    16,
+			},
+			{
+				// OpenCode permission dialogs show inline button choices:
+				// "┃  Allow once   Allow always   Reject"
+				// "Reject   Allow always   Allow once"
+				Name:        "opencode_permission",
+				Pattern:     `(?i)┃?\s*allow\s+once\s+allow\s+always\s+reject|┃?\s*reject\s+allow\s+always\s+allow\s+once`,
+				Description: "OpenCode permission button choices",
+				Priority:    16,
+			},
+		},
+		Active: []StatusPattern{
+			{
+				Name:        "opencode_esc_interrupt",
+				Pattern:     `esc interrupt`,
+				Description: "OpenCode active operation that can be interrupted",
+				Priority:    24,
 			},
 		},
 	}
