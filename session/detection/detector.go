@@ -42,16 +42,16 @@ type StatusPatterns struct {
 	NeedsApproval []StatusPattern `yaml:"needs_approval"`
 	InputRequired []StatusPattern `yaml:"input_required"` // Explicit input prompts
 	Error         []StatusPattern `yaml:"error"`
-	TestsFailing  []StatusPattern `yaml:"tests_failing"`  // Tests are failing
+	TestsFailing  []StatusPattern `yaml:"tests_failing"` // Tests are failing
 	Idle          []StatusPattern `yaml:"idle"`           // Waiting for user input
 	Active        []StatusPattern `yaml:"active"`         // Actively executing commands
 	Success       []StatusPattern `yaml:"success"`        // Task completed successfully
 }
 
-// StatusDetector analyzes PTY output to determine the current status of a Claude instance.
-type StatusDetector struct {
-	patterns StatusPatterns
-	// Cache compiled regexes for performance
+// compiledProgramPatterns holds a StatusPatterns set with pre-compiled regexes
+// for a single program context.
+type compiledProgramPatterns struct {
+	patterns             StatusPatterns
 	readyRegexes         []*regexp.Regexp
 	processingRegexes    []*regexp.Regexp
 	needsApprovalRegexes []*regexp.Regexp
@@ -63,38 +63,33 @@ type StatusDetector struct {
 	successRegexes       []*regexp.Regexp
 }
 
-// NewStatusDetector creates a new status detector with default patterns.
+// StatusDetector analyzes PTY output to determine the current status of an AI tool session.
+// It holds separate compiled pattern sets per program (claude, gemini, aider, opencode)
+// plus a "" fallback that combines all patterns for backwards-compatible callers.
+type StatusDetector struct {
+	programs map[string]*compiledProgramPatterns
+}
+
+// NewStatusDetector creates a new status detector with default per-program patterns.
 func NewStatusDetector() *StatusDetector {
-	sd := &StatusDetector{
-		patterns: getDefaultPatterns(),
+	return &StatusDetector{
+		programs: buildDefaultProgramPatterns(),
 	}
-	sd.compilePatterns()
-	return sd
 }
 
 // NewStatusDetectorFromFile creates a status detector with patterns loaded from a YAML file.
+// The loaded patterns replace the fallback ("") pattern set; per-program sets are not affected.
 func NewStatusDetectorFromFile(path string) (*StatusDetector, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read status patterns file: %w", err)
-	}
-
-	var patterns StatusPatterns
-	if err := yaml.Unmarshal(data, &patterns); err != nil {
-		return nil, fmt.Errorf("failed to parse status patterns YAML: %w", err)
-	}
-
 	sd := &StatusDetector{
-		patterns: patterns,
+		programs: make(map[string]*compiledProgramPatterns),
 	}
-	if err := sd.compilePatterns(); err != nil {
+	if err := sd.LoadPatterns(path); err != nil {
 		return nil, err
 	}
-
 	return sd, nil
 }
 
-// LoadPatterns loads patterns from a YAML file.
+// LoadPatterns loads patterns from a YAML file, replacing the fallback ("") pattern set.
 func (sd *StatusDetector) LoadPatterns(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -106,339 +101,417 @@ func (sd *StatusDetector) LoadPatterns(path string) error {
 		return fmt.Errorf("failed to parse status patterns YAML: %w", err)
 	}
 
-	sd.patterns = patterns
-	return sd.compilePatterns()
-}
-
-// compilePatterns compiles all regex patterns for efficient matching.
-func (sd *StatusDetector) compilePatterns() error {
-	var err error
-
-	// Compile ready patterns
-	sd.readyRegexes = make([]*regexp.Regexp, len(sd.patterns.Ready))
-	for i, pattern := range sd.patterns.Ready {
-		sd.readyRegexes[i], err = regexp.Compile(pattern.Pattern)
-		if err != nil {
-			return fmt.Errorf("failed to compile ready pattern '%s': %w", pattern.Name, err)
-		}
+	cp, err := compileStatusPatterns(patterns)
+	if err != nil {
+		return err
 	}
-
-	// Compile processing patterns
-	sd.processingRegexes = make([]*regexp.Regexp, len(sd.patterns.Processing))
-	for i, pattern := range sd.patterns.Processing {
-		sd.processingRegexes[i], err = regexp.Compile(pattern.Pattern)
-		if err != nil {
-			return fmt.Errorf("failed to compile processing pattern '%s': %w", pattern.Name, err)
-		}
-	}
-
-	// Compile needs approval patterns
-	sd.needsApprovalRegexes = make([]*regexp.Regexp, len(sd.patterns.NeedsApproval))
-	for i, pattern := range sd.patterns.NeedsApproval {
-		sd.needsApprovalRegexes[i], err = regexp.Compile(pattern.Pattern)
-		if err != nil {
-			return fmt.Errorf("failed to compile needs_approval pattern '%s': %w", pattern.Name, err)
-		}
-	}
-
-	// Compile input required patterns
-	sd.inputRequiredRegexes = make([]*regexp.Regexp, len(sd.patterns.InputRequired))
-	for i, pattern := range sd.patterns.InputRequired {
-		sd.inputRequiredRegexes[i], err = regexp.Compile(pattern.Pattern)
-		if err != nil {
-			return fmt.Errorf("failed to compile input_required pattern '%s': %w", pattern.Name, err)
-		}
-	}
-
-	// Compile error patterns
-	sd.errorRegexes = make([]*regexp.Regexp, len(sd.patterns.Error))
-	for i, pattern := range sd.patterns.Error {
-		sd.errorRegexes[i], err = regexp.Compile(pattern.Pattern)
-		if err != nil {
-			return fmt.Errorf("failed to compile error pattern '%s': %w", pattern.Name, err)
-		}
-	}
-
-	// Compile tests failing patterns
-	sd.testsFailingRegexes = make([]*regexp.Regexp, len(sd.patterns.TestsFailing))
-	for i, pattern := range sd.patterns.TestsFailing {
-		sd.testsFailingRegexes[i], err = regexp.Compile(pattern.Pattern)
-		if err != nil {
-			return fmt.Errorf("failed to compile tests_failing pattern '%s': %w", pattern.Name, err)
-		}
-	}
-
-	// Compile idle patterns
-	sd.idleRegexes = make([]*regexp.Regexp, len(sd.patterns.Idle))
-	for i, pattern := range sd.patterns.Idle {
-		sd.idleRegexes[i], err = regexp.Compile(pattern.Pattern)
-		if err != nil {
-			return fmt.Errorf("failed to compile idle pattern '%s': %w", pattern.Name, err)
-		}
-	}
-
-	// Compile active patterns
-	sd.activeRegexes = make([]*regexp.Regexp, len(sd.patterns.Active))
-	for i, pattern := range sd.patterns.Active {
-		sd.activeRegexes[i], err = regexp.Compile(pattern.Pattern)
-		if err != nil {
-			return fmt.Errorf("failed to compile active pattern '%s': %w", pattern.Name, err)
-		}
-	}
-
-	// Compile success patterns
-	sd.successRegexes = make([]*regexp.Regexp, len(sd.patterns.Success))
-	for i, pattern := range sd.patterns.Success {
-		sd.successRegexes[i], err = regexp.Compile(pattern.Pattern)
-		if err != nil {
-			return fmt.Errorf("failed to compile success pattern '%s': %w", pattern.Name, err)
-		}
-	}
-
+	sd.programs[""] = cp
 	return nil
 }
 
-// ansiStripRegex matches ANSI escape sequences for stripping
+// ExportPatterns exports the fallback ("") pattern set to a YAML file.
+func (sd *StatusDetector) ExportPatterns(path string) error {
+	cp := sd.getCompiledPatterns("")
+	data, err := yaml.Marshal(&cp.patterns)
+	if err != nil {
+		return fmt.Errorf("failed to marshal status patterns: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("failed to write status patterns file: %w", err)
+	}
+	return nil
+}
+
+// getCompiledPatterns returns the compiled pattern set for the given program,
+// falling back to the "" set if the program is unrecognized.
+func (sd *StatusDetector) getCompiledPatterns(program string) *compiledProgramPatterns {
+	if cp, ok := sd.programs[program]; ok {
+		return cp
+	}
+	return sd.programs[""]
+}
+
+// ansiStripRegex matches ANSI escape sequences for stripping.
 var ansiStripRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07`)
 
-// stripANSI removes ANSI escape codes from text for cleaner pattern matching
+// stripANSI removes ANSI escape codes from text for cleaner pattern matching.
 func stripANSI(text string) string {
 	return ansiStripRegex.ReplaceAllString(text, "")
 }
 
-// Detect analyzes the provided PTY output and returns the detected status.
-// Patterns are checked in priority order: Error > TestsFailing > Success > NeedsApproval > InputRequired > Active > Processing > Idle > Ready.
-// Returns StatusUnknown if no patterns match.
-func (sd *StatusDetector) Detect(output []byte) DetectedStatus {
-	// Strip ANSI escape codes for cleaner pattern matching
-	// Terminal output often contains color codes like [38;5;153m that interrupt patterns
-	text := stripANSI(string(output))
-
-	// Check error patterns first (highest priority)
-	for _, regex := range sd.errorRegexes {
-		if regex.MatchString(text) {
+// detect runs the compiled patterns against pre-stripped text in priority order.
+// Order: Error > TestsFailing > Success > NeedsApproval > InputRequired > Active > Processing > Idle > Ready.
+func (cp *compiledProgramPatterns) detect(text string) DetectedStatus {
+	for _, re := range cp.errorRegexes {
+		if re.MatchString(text) {
 			return StatusError
 		}
 	}
-
-	// Check tests failing patterns (high priority - actionable failures)
-	for _, regex := range sd.testsFailingRegexes {
-		if regex.MatchString(text) {
+	for _, re := range cp.testsFailingRegexes {
+		if re.MatchString(text) {
 			return StatusTestsFailing
 		}
 	}
-
-	// Check success patterns (task completion)
-	for _, regex := range sd.successRegexes {
-		if regex.MatchString(text) {
+	for _, re := range cp.successRegexes {
+		if re.MatchString(text) {
 			return StatusSuccess
 		}
 	}
-
-	// Check needs approval patterns
-	for _, regex := range sd.needsApprovalRegexes {
-		if regex.MatchString(text) {
+	for _, re := range cp.needsApprovalRegexes {
+		if re.MatchString(text) {
 			return StatusNeedsApproval
 		}
 	}
-
-	// Check input required patterns (explicit prompts)
-	for _, regex := range sd.inputRequiredRegexes {
-		if regex.MatchString(text) {
+	for _, re := range cp.inputRequiredRegexes {
+		if re.MatchString(text) {
 			return StatusInputRequired
 		}
 	}
-
-	// Check active patterns (e.g., "esc to interrupt")
-	for _, regex := range sd.activeRegexes {
-		if regex.MatchString(text) {
+	for _, re := range cp.activeRegexes {
+		if re.MatchString(text) {
 			return StatusActive
 		}
 	}
-
-	// Check processing patterns
-	for _, regex := range sd.processingRegexes {
-		if regex.MatchString(text) {
+	for _, re := range cp.processingRegexes {
+		if re.MatchString(text) {
 			return StatusProcessing
 		}
 	}
-
-	// Check idle patterns (e.g., "— INSERT —")
-	for _, regex := range sd.idleRegexes {
-		if regex.MatchString(text) {
+	for _, re := range cp.idleRegexes {
+		if re.MatchString(text) {
 			return StatusIdle
 		}
 	}
-
-	// Check ready patterns
-	for _, regex := range sd.readyRegexes {
-		if regex.MatchString(text) {
+	for _, re := range cp.readyRegexes {
+		if re.MatchString(text) {
 			return StatusReady
 		}
 	}
-
 	return StatusUnknown
 }
 
-// DetectWithContext returns the detected status along with a user-friendly context message.
-// Uses the pattern's Description field for human-readable messages instead of raw matched text.
-func (sd *StatusDetector) DetectWithContext(output []byte) (DetectedStatus, string) {
-	// Strip ANSI escape codes for cleaner pattern matching
-	// Terminal output often contains color codes like [38;5;153m that interrupt patterns
-	text := stripANSI(string(output))
-
-	// Check error patterns first (highest priority)
-	for i, regex := range sd.errorRegexes {
-		if regex.MatchString(text) {
-			return StatusError, sd.patterns.Error[i].Description
+// detectWithContext runs patterns and returns the matching pattern's Description alongside the status.
+func (cp *compiledProgramPatterns) detectWithContext(text string) (DetectedStatus, string) {
+	for i, re := range cp.errorRegexes {
+		if re.MatchString(text) {
+			return StatusError, cp.patterns.Error[i].Description
 		}
 	}
-
-	// Check tests failing patterns (high priority - actionable failures)
-	for i, regex := range sd.testsFailingRegexes {
-		if regex.MatchString(text) {
-			return StatusTestsFailing, sd.patterns.TestsFailing[i].Description
+	for i, re := range cp.testsFailingRegexes {
+		if re.MatchString(text) {
+			return StatusTestsFailing, cp.patterns.TestsFailing[i].Description
 		}
 	}
-
-	// Check success patterns (task completion)
-	for i, regex := range sd.successRegexes {
-		if regex.MatchString(text) {
-			return StatusSuccess, sd.patterns.Success[i].Description
+	for i, re := range cp.successRegexes {
+		if re.MatchString(text) {
+			return StatusSuccess, cp.patterns.Success[i].Description
 		}
 	}
-
-	// Check needs approval patterns
-	for i, regex := range sd.needsApprovalRegexes {
-		if regex.MatchString(text) {
-			return StatusNeedsApproval, sd.patterns.NeedsApproval[i].Description
+	for i, re := range cp.needsApprovalRegexes {
+		if re.MatchString(text) {
+			return StatusNeedsApproval, cp.patterns.NeedsApproval[i].Description
 		}
 	}
-
-	// Check input required patterns
-	for i, regex := range sd.inputRequiredRegexes {
-		if regex.MatchString(text) {
-			return StatusInputRequired, sd.patterns.InputRequired[i].Description
+	for i, re := range cp.inputRequiredRegexes {
+		if re.MatchString(text) {
+			return StatusInputRequired, cp.patterns.InputRequired[i].Description
 		}
 	}
-
-	// Check active patterns
-	for i, regex := range sd.activeRegexes {
-		if regex.MatchString(text) {
-			return StatusActive, sd.patterns.Active[i].Description
+	for i, re := range cp.activeRegexes {
+		if re.MatchString(text) {
+			return StatusActive, cp.patterns.Active[i].Description
 		}
 	}
-
-	// Check processing patterns
-	for i, regex := range sd.processingRegexes {
-		if regex.MatchString(text) {
-			return StatusProcessing, sd.patterns.Processing[i].Description
+	for i, re := range cp.processingRegexes {
+		if re.MatchString(text) {
+			return StatusProcessing, cp.patterns.Processing[i].Description
 		}
 	}
-
-	// Check idle patterns
-	for i, regex := range sd.idleRegexes {
-		if regex.MatchString(text) {
-			return StatusIdle, sd.patterns.Idle[i].Description
+	for i, re := range cp.idleRegexes {
+		if re.MatchString(text) {
+			return StatusIdle, cp.patterns.Idle[i].Description
 		}
 	}
-
-	// Check ready patterns
-	for i, regex := range sd.readyRegexes {
-		if regex.MatchString(text) {
-			return StatusReady, sd.patterns.Ready[i].Description
+	for i, re := range cp.readyRegexes {
+		if re.MatchString(text) {
+			return StatusReady, cp.patterns.Ready[i].Description
 		}
 	}
-
 	return StatusUnknown, ""
 }
 
-// getDefaultPatterns returns the default status detection patterns for Claude Code.
-func getDefaultPatterns() StatusPatterns {
+// Detect analyzes the provided PTY output using all patterns (backwards-compatible fallback).
+// Use DetectForProgram when the program name is known for more precise matching.
+func (sd *StatusDetector) Detect(output []byte) DetectedStatus {
+	return sd.DetectForProgram(output, "")
+}
+
+// DetectWithContext returns the detected status plus the matching pattern's description.
+// Use DetectWithContextForProgram when the program name is known.
+func (sd *StatusDetector) DetectWithContext(output []byte) (DetectedStatus, string) {
+	return sd.DetectWithContextForProgram(output, "")
+}
+
+// DetectForProgram runs only patterns relevant to the given program (e.g. "claude", "gemini").
+// Falls back to the merged all-patterns set if the program is unrecognized.
+func (sd *StatusDetector) DetectForProgram(output []byte, program string) DetectedStatus {
+	text := stripANSI(string(output))
+	return sd.getCompiledPatterns(program).detect(text)
+}
+
+// DetectWithContextForProgram is like DetectForProgram but also returns the matching pattern's description.
+func (sd *StatusDetector) DetectWithContextForProgram(output []byte, program string) (DetectedStatus, string) {
+	text := stripANSI(string(output))
+	return sd.getCompiledPatterns(program).detectWithContext(text)
+}
+
+// DetectFromString is a convenience method that accepts a string instead of []byte.
+func (sd *StatusDetector) DetectFromString(output string) DetectedStatus {
+	return sd.Detect([]byte(output))
+}
+
+// DetectFromLines analyzes multiple lines of output and returns the most relevant status.
+// Lines are processed most-recent-first; the first match wins.
+func (sd *StatusDetector) DetectFromLines(lines []string) DetectedStatus {
+	for i := len(lines) - 1; i >= 0; i-- {
+		status := sd.DetectFromString(lines[i])
+		if status != StatusUnknown {
+			return status
+		}
+	}
+	return StatusUnknown
+}
+
+// DetectRecent analyzes the most recent n bytes of output for status detection.
+func (sd *StatusDetector) DetectRecent(output []byte, n int) DetectedStatus {
+	if n <= 0 || len(output) == 0 {
+		return StatusUnknown
+	}
+	startPos := len(output) - n
+	if startPos < 0 {
+		startPos = 0
+	}
+	return sd.Detect(output[startPos:])
+}
+
+// GetPatternNames returns the names of all loaded patterns for the given status
+// from the fallback ("") pattern set.
+func (sd *StatusDetector) GetPatternNames(status DetectedStatus) []string {
+	cp := sd.getCompiledPatterns("")
+	var patterns []StatusPattern
+	switch status {
+	case StatusReady:
+		patterns = cp.patterns.Ready
+	case StatusProcessing:
+		patterns = cp.patterns.Processing
+	case StatusNeedsApproval:
+		patterns = cp.patterns.NeedsApproval
+	case StatusInputRequired:
+		patterns = cp.patterns.InputRequired
+	case StatusError:
+		patterns = cp.patterns.Error
+	case StatusTestsFailing:
+		patterns = cp.patterns.TestsFailing
+	case StatusIdle:
+		patterns = cp.patterns.Idle
+	case StatusActive:
+		patterns = cp.patterns.Active
+	case StatusSuccess:
+		patterns = cp.patterns.Success
+	default:
+		return nil
+	}
+	names := make([]string, len(patterns))
+	for i, p := range patterns {
+		names[i] = p.Name
+	}
+	return names
+}
+
+// HasPattern checks if a specific pattern name exists for the given status in the fallback set.
+func (sd *StatusDetector) HasPattern(status DetectedStatus, name string) bool {
+	for _, p := range sd.GetPatternNames(status) {
+		if strings.EqualFold(p, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// StatusString converts DetectedStatus to a human-readable string.
+func (s DetectedStatus) String() string {
+	switch s {
+	case StatusReady:
+		return "Ready"
+	case StatusProcessing:
+		return "Processing"
+	case StatusNeedsApproval:
+		return "Needs Approval"
+	case StatusInputRequired:
+		return "Input Required"
+	case StatusError:
+		return "Error"
+	case StatusTestsFailing:
+		return "Tests Failing"
+	case StatusIdle:
+		return "Idle"
+	case StatusActive:
+		return "Active"
+	case StatusSuccess:
+		return "Success"
+	default:
+		return "Unknown"
+	}
+}
+
+// ── Pattern compilation ───────────────────────────────────────────────────────
+
+func compileRegexSlice(patterns []StatusPattern) ([]*regexp.Regexp, error) {
+	regexes := make([]*regexp.Regexp, len(patterns))
+	for i, p := range patterns {
+		re, err := regexp.Compile(p.Pattern)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compile pattern '%s': %w", p.Name, err)
+		}
+		regexes[i] = re
+	}
+	return regexes, nil
+}
+
+func compileStatusPatterns(patterns StatusPatterns) (*compiledProgramPatterns, error) {
+	cp := &compiledProgramPatterns{patterns: patterns}
+	var err error
+
+	if cp.readyRegexes, err = compileRegexSlice(patterns.Ready); err != nil {
+		return nil, err
+	}
+	if cp.processingRegexes, err = compileRegexSlice(patterns.Processing); err != nil {
+		return nil, err
+	}
+	if cp.needsApprovalRegexes, err = compileRegexSlice(patterns.NeedsApproval); err != nil {
+		return nil, err
+	}
+	if cp.inputRequiredRegexes, err = compileRegexSlice(patterns.InputRequired); err != nil {
+		return nil, err
+	}
+	if cp.errorRegexes, err = compileRegexSlice(patterns.Error); err != nil {
+		return nil, err
+	}
+	if cp.testsFailingRegexes, err = compileRegexSlice(patterns.TestsFailing); err != nil {
+		return nil, err
+	}
+	if cp.idleRegexes, err = compileRegexSlice(patterns.Idle); err != nil {
+		return nil, err
+	}
+	if cp.activeRegexes, err = compileRegexSlice(patterns.Active); err != nil {
+		return nil, err
+	}
+	if cp.successRegexes, err = compileRegexSlice(patterns.Success); err != nil {
+		return nil, err
+	}
+	return cp, nil
+}
+
+func mustCompileStatusPatterns(patterns StatusPatterns) *compiledProgramPatterns {
+	cp, err := compileStatusPatterns(patterns)
+	if err != nil {
+		panic(fmt.Sprintf("failed to compile default patterns: %v", err))
+	}
+	return cp
+}
+
+func mergePatterns(a, b StatusPatterns) StatusPatterns {
 	return StatusPatterns{
-		Ready: []StatusPattern{
-			{
-				Name:        "claude_prompt",
-				Pattern:     `.*`,
-				Description: "Claude Code command prompt",
-				Priority:    1,
-			},
-		},
-		Processing: []StatusPattern{
-			{
-				Name:        "thinking",
-				Pattern:     `(?i)(thinking|processing|analyzing|working)`,
-				Description: "Claude is processing a command",
-				Priority:    10,
-			},
-			{
-				Name:        "tool_use",
-				Pattern:     `(?i)(reading|writing|editing|executing|running)`,
-				Description: "Claude is using tools",
-				Priority:    9,
-			},
-		},
+		Ready:         append(append([]StatusPattern{}, a.Ready...), b.Ready...),
+		Processing:    append(append([]StatusPattern{}, a.Processing...), b.Processing...),
+		NeedsApproval: append(append([]StatusPattern{}, a.NeedsApproval...), b.NeedsApproval...),
+		InputRequired: append(append([]StatusPattern{}, a.InputRequired...), b.InputRequired...),
+		Error:         append(append([]StatusPattern{}, a.Error...), b.Error...),
+		TestsFailing:  append(append([]StatusPattern{}, a.TestsFailing...), b.TestsFailing...),
+		Idle:          append(append([]StatusPattern{}, a.Idle...), b.Idle...),
+		Active:        append(append([]StatusPattern{}, a.Active...), b.Active...),
+		Success:       append(append([]StatusPattern{}, a.Success...), b.Success...),
+	}
+}
+
+// buildDefaultProgramPatterns constructs the per-program compiled pattern map.
+// Each known program gets its own specific patterns merged with the common set.
+// The "" key holds all patterns merged together for backwards-compatible callers.
+func buildDefaultProgramPatterns() map[string]*compiledProgramPatterns {
+	common := commonPatterns()
+
+	perProgram := map[string]StatusPatterns{
+		"claude":   claudePatterns(),
+		"gemini":   geminiPatterns(),
+		"aider":    aiderPatterns(),
+		"opencode": opencodePatterns(),
+	}
+
+	result := make(map[string]*compiledProgramPatterns, len(perProgram)+1)
+
+	// Build per-program sets: program-specific first, then common as fallback.
+	// Program-specific patterns are checked before common ones within each status category.
+	var allSpecific StatusPatterns
+	for prog, specific := range perProgram {
+		result[prog] = mustCompileStatusPatterns(mergePatterns(specific, common))
+		allSpecific = mergePatterns(allSpecific, specific)
+	}
+
+	// "" = all patterns merged — used by Detect() for backwards compatibility.
+	result[""] = mustCompileStatusPatterns(mergePatterns(allSpecific, common))
+
+	return result
+}
+
+// ── Per-program pattern definitions ──────────────────────────────────────────
+
+// commonPatterns returns patterns that apply across all AI tools:
+// generic error/success detection, vim/shell UI states.
+func commonPatterns() StatusPatterns {
+	return StatusPatterns{
+		Ready: []StatusPattern{},
+		Processing: []StatusPattern{},
 		NeedsApproval: []StatusPattern{
-			{
-				Name:        "file_permission_claude",
-				Pattern:     `(?i)(Yes, allow reading|Yes, allow writing|Yes, allow once|No, and tell Claude)`,
-				Description: "Claude Code file permission prompt",
-				Priority:    20,
-			},
 			{
 				Name:        "proceed_prompt",
 				Pattern:     `(?i)Do you want to proceed\?`,
 				Description: "Generic proceed confirmation",
 				Priority:    19,
 			},
-			{
-				Name:        "aider_permission",
-				Pattern:     `\(Y\)es/\(N\)o/\(D\)on't ask again`,
-				Description: "Aider permission prompt",
-				Priority:    18,
-			},
-			{
-				Name:        "gemini_permission",
-				Pattern:     `(?i)Yes, allow once`,
-				Description: "Gemini permission prompt",
-				Priority:    17,
-			},
 		},
+		InputRequired: []StatusPattern{},
 		Error: []StatusPattern{
 			{
 				Name: "error_message",
 				// (?im) enables case-insensitive multiline matching.
 				// Anchors to start of line (^) OR after sentence-ending punctuation ([.!?]\s+)
-				// so that "Error:" in the middle of a paragraph (e.g. last N bytes of output)
-				// is still detected, while still avoiding false positives from indented
-				// shell/YAML content like `echo "ERROR: ..."` where ERROR is not at a
-				// line boundary or sentence boundary.
-				// error[\s:] matches "Error:" (colon) and "Error " (space) to catch
-				// variants like "Error occurred" and "Error while processing".
+				// so mid-paragraph "Error:" is still detected while avoiding false positives
+				// from indented shell/YAML content where ERROR appears mid-sentence.
 				Pattern:     `(?im)(^|[.!?]\s+)(error[\s:]|fatal error|exception:|traceback|panic:)`,
 				Description: "Generic error indicators (not test failures)",
 				Priority:    30,
 			},
 			{
-				Name: "connection_error",
-				// (?im) case-insensitive multiline; require these to appear on their own
-				// line to avoid matching variable names or code paths that contain these words.
-				Pattern:     `(?im)^.*(connection refused|network timeout|network error)`,
+				Name:    "connection_error",
+				Pattern: `(?im)^.*(connection refused|network timeout|network error)`,
 				Description: "Network and connection errors",
 				Priority:    29,
 			},
 		},
-		// TestsFailing: DISABLED - These patterns cause too many false positives.
-		// Test output varies wildly across languages/frameworks, and matching "FAIL"
-		// anywhere in output catches non-test-related content. Focus on Claude's
-		// actual status indicators (active, idle, approval, error) instead.
+		// TestsFailing: DISABLED - too many false positives across languages/frameworks.
 		TestsFailing: []StatusPattern{},
 		Idle: []StatusPattern{
 			{
 				Name:        "insert_mode",
 				Pattern:     `—\s*INSERT\s*—`,
-				Description: "Claude Code in INSERT mode, waiting for input",
+				Description: "Vim INSERT mode, waiting for input",
 				Priority:    15,
+			},
+			{
+				Name:        "vim_normal_mode",
+				Pattern:     `—\s*NORMAL\s*—`,
+				Description: "Vim NORMAL mode",
+				Priority:    13,
 			},
 			{
 				Name:        "command_prompt",
@@ -446,24 +519,12 @@ func getDefaultPatterns() StatusPatterns {
 				Description: "Shell command prompt at end of output",
 				Priority:    14,
 			},
-			{
-				Name:        "vim_normal_mode",
-				Pattern:     `—\s*NORMAL\s*—`,
-				Description: "Vim in NORMAL mode",
-				Priority:    13,
-			},
 		},
 		Active: []StatusPattern{
 			{
-				Name:        "esc_to_interrupt",
-				Pattern:     `esc to interrupt`,
-				Description: "Active operation that can be interrupted",
-				Priority:    25,
-			},
-			{
 				Name:        "synthesizing",
 				Pattern:     `(?i)Synthesizing\.{0,3}`,
-				Description: "Claude is synthesizing a response",
+				Description: "Tool is synthesizing a response",
 				Priority:    25,
 			},
 			{
@@ -517,140 +578,171 @@ func getDefaultPatterns() StatusPatterns {
 				Priority:    16,
 			},
 		},
-		InputRequired: []StatusPattern{
-			// Claude Code's AskUserQuestion prompts have a very specific format:
-			// "Do you want to proceed?"
-			// " ❯ 1. Yes"
-			// "   2. Type here to tell Claude what to do differently"
-			//
-			// We detect this by looking for the numbered option selector pattern.
-			// This is much more reliable than trying to match generic question text.
+	}
+}
+
+// claudePatterns returns patterns specific to Claude Code's terminal UI.
+func claudePatterns() StatusPatterns {
+	return StatusPatterns{
+		Ready: []StatusPattern{
 			{
+				Name:        "claude_prompt",
+				Pattern:     `.*`,
+				Description: "Claude Code command prompt",
+				Priority:    1,
+			},
+		},
+		Processing: []StatusPattern{
+			{
+				Name: "claude_thinking",
+				// Require the word at the START of a line so we don't match it
+				// mid-sentence ("current working directory", "analyzing the code").
+				// Claude shows processing state as "Thinking...", "Analyzing...", etc.
+				// at the beginning of a status line.
+				Pattern:     `(?im)^(thinking|processing|analyzing|working)\.{0,3}`,
+				Description: "Claude is thinking or processing",
+				Priority:    10,
+			},
+			{
+				Name: "claude_tool_use",
+				// Require the verb at the START of a line so we don't match it
+				// mid-sentence in Claude's conversational responses.
+				// Claude's tool-use output always starts with the verb: "Reading foo.py",
+				// "Writing bar.go" — not buried in prose like "currently running in?"
+				Pattern:     `(?im)^(Reading|Writing|Editing|Executing|Running)\s+\S`,
+				Description: "Claude is using a tool (reading/writing/executing)",
+				Priority:    9,
+			},
+		},
+		NeedsApproval: []StatusPattern{
+			{
+				Name:        "claude_file_permission",
+				Pattern:     `(?i)(Yes, allow reading|Yes, allow writing|Yes, allow once|No, and tell Claude)`,
+				Description: "Claude Code file permission prompt",
+				Priority:    20,
+			},
+		},
+		InputRequired: []StatusPattern{
+			{
+				// Claude Code's AskUserQuestion prompts show:
+				//   ❯ 1. Yes
+				//   2. No, and tell Claude what to do differently
+				//
+				// We match ONLY ❯ (U+276F), NOT ASCII >.
+				// The > character is ubiquitous in terminal output: shell prompts,
+				// Gradle output ("> Run gradlew tasks"), markdown blockquotes, heredocs.
+				// Using > caused false positives for any program that outputs numbered lists.
 				Name:        "numbered_option_selector",
-				// Matches Claude Code's numbered selection format with arrow selector
-				// Example: " ❯ 1. Yes" or "   2. No"
-				Pattern:     `[❯>]\s*\d+\.\s+\w`,
+				Pattern:     `❯\s+\d+\.\s+\S`,
 				Description: "Selection prompt with numbered options",
 				Priority:    16,
+			},
+		},
+		Idle: []StatusPattern{
+			{
+				Name: "claude_shortcuts_hint",
+				// "? for shortcuts" appears on the last line of the Claude Code UI
+				// when idle and waiting for user input. Unique to this state.
+				Pattern:     `\?\s+for shortcuts`,
+				Description: "Claude Code idle prompt",
+				Priority:    15,
+			},
+		},
+		Active: []StatusPattern{
+			{
+				Name:        "claude_esc_to_interrupt",
+				Pattern:     `esc to interrupt`,
+				Description: "Claude Code active operation (interruptible)",
+				Priority:    25,
+			},
+		},
+		Success: []StatusPattern{},
+	}
+}
+
+// geminiPatterns returns patterns specific to the Gemini CLI's terminal UI.
+func geminiPatterns() StatusPatterns {
+	return StatusPatterns{
+		NeedsApproval: []StatusPattern{
+			{
+				Name: "gemini_action_required",
+				// Gemini shows "Action Required" as the header of its approval dialog.
+				Pattern:     `Action Required`,
+				Description: "Gemini action required prompt",
+				Priority:    17,
+			},
+			{
+				Name: "gemini_allow_execution",
+				// Gemini shows "Allow execution of: '<command>'?" for shell approval.
+				Pattern:     `Allow execution of:`,
+				Description: "Gemini shell execution approval",
+				Priority:    17,
+			},
+		},
+		Active: []StatusPattern{
+			{
+				Name: "gemini_thinking",
+				// Gemini shows "Thinking... (esc to cancel, Ns)" while processing.
+				Pattern:     `Thinking\.\.\.\s+\(esc to cancel`,
+				Description: "Gemini is thinking",
+				Priority:    25,
+			},
+			{
+				Name: "gemini_running_agent",
+				// Gemini shows "= Running Agent... (ctrl+o to expand)" when executing a tool.
+				Pattern:     `= Running Agent\.\.\.`,
+				Description: "Gemini is running an agent",
+				Priority:    24,
+			},
+		},
+		Idle: []StatusPattern{
+			{
+				Name: "gemini_insert_mode",
+				// Gemini's status bar shows "[INSERT]" (not "— INSERT —" like vim) when
+				// idle and waiting for user input. Unlike the Active state where "Thinking..."
+				// is also visible, idle shows [INSERT] with no processing indicator.
+				// When Active, gemini_thinking (priority 25) fires before this (priority 15).
+				Pattern:     `\[INSERT\]`,
+				Description: "Gemini CLI idle in INSERT mode, waiting for input",
+				Priority:    15,
 			},
 		},
 	}
 }
 
-// StatusString converts DetectedStatus to a human-readable string.
-func (s DetectedStatus) String() string {
-	switch s {
-	case StatusReady:
-		return "Ready"
-	case StatusProcessing:
-		return "Processing"
-	case StatusNeedsApproval:
-		return "Needs Approval"
-	case StatusInputRequired:
-		return "Input Required"
-	case StatusError:
-		return "Error"
-	case StatusTestsFailing:
-		return "Tests Failing"
-	case StatusIdle:
-		return "Idle"
-	case StatusActive:
-		return "Active"
-	case StatusSuccess:
-		return "Success"
-	default:
-		return "Unknown"
+// aiderPatterns returns patterns specific to Aider's terminal UI.
+func aiderPatterns() StatusPatterns {
+	return StatusPatterns{
+		NeedsApproval: []StatusPattern{
+			{
+				Name:        "aider_permission",
+				Pattern:     `\(Y\)es/\(N\)o/\(D\)on't ask again`,
+				Description: "Aider permission prompt",
+				Priority:    18,
+			},
+		},
 	}
 }
 
-// ExportPatterns exports the current patterns to a YAML file.
-func (sd *StatusDetector) ExportPatterns(path string) error {
-	data, err := yaml.Marshal(&sd.patterns)
-	if err != nil {
-		return fmt.Errorf("failed to marshal status patterns: %w", err)
+// opencodePatterns returns patterns specific to OpenCode's terminal UI.
+func opencodePatterns() StatusPatterns {
+	return StatusPatterns{
+		NeedsApproval: []StatusPattern{
+			{
+				Name: "opencode_permission_required",
+				// OpenCode shows a bordered dialog with "Permission Required" as the title
+				// and "Allow (a)" / "Allow for session (s)" / "Deny (d)" buttons.
+				Pattern:     `Permission Required`,
+				Description: "OpenCode permission required dialog",
+				Priority:    17,
+			},
+			{
+				Name: "opencode_allow_button",
+				// The "Allow (a)" button text appears in opencode's permission dialog.
+				Pattern:     `Allow \(a\)`,
+				Description: "OpenCode allow button in permission dialog",
+				Priority:    17,
+			},
+		},
 	}
-
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write status patterns file: %w", err)
-	}
-
-	return nil
-}
-
-// GetPatternNames returns the names of all loaded patterns for a given status.
-func (sd *StatusDetector) GetPatternNames(status DetectedStatus) []string {
-	var patterns []StatusPattern
-	switch status {
-	case StatusReady:
-		patterns = sd.patterns.Ready
-	case StatusProcessing:
-		patterns = sd.patterns.Processing
-	case StatusNeedsApproval:
-		patterns = sd.patterns.NeedsApproval
-	case StatusInputRequired:
-		patterns = sd.patterns.InputRequired
-	case StatusError:
-		patterns = sd.patterns.Error
-	case StatusTestsFailing:
-		patterns = sd.patterns.TestsFailing
-	case StatusIdle:
-		patterns = sd.patterns.Idle
-	case StatusActive:
-		patterns = sd.patterns.Active
-	case StatusSuccess:
-		patterns = sd.patterns.Success
-	default:
-		return nil
-	}
-
-	names := make([]string, len(patterns))
-	for i, p := range patterns {
-		names[i] = p.Name
-	}
-	return names
-}
-
-// DetectFromString is a convenience method that accepts a string instead of []byte.
-func (sd *StatusDetector) DetectFromString(output string) DetectedStatus {
-	return sd.Detect([]byte(output))
-}
-
-// DetectFromLines analyzes multiple lines of output and returns the most relevant status.
-// This is useful for analyzing scrollback history where multiple status indicators may be present.
-// The most recent (last) matching pattern takes precedence.
-func (sd *StatusDetector) DetectFromLines(lines []string) DetectedStatus {
-	// Process lines in reverse order (most recent first)
-	for i := len(lines) - 1; i >= 0; i-- {
-		status := sd.DetectFromString(lines[i])
-		if status != StatusUnknown {
-			return status
-		}
-	}
-	return StatusUnknown
-}
-
-// DetectRecent analyzes the most recent n bytes of output for status detection.
-// This is optimized for real-time status monitoring.
-func (sd *StatusDetector) DetectRecent(output []byte, n int) DetectedStatus {
-	if n <= 0 || len(output) == 0 {
-		return StatusUnknown
-	}
-
-	startPos := len(output) - n
-	if startPos < 0 {
-		startPos = 0
-	}
-
-	return sd.Detect(output[startPos:])
-}
-
-// HasPattern checks if a specific pattern name exists for the given status.
-func (sd *StatusDetector) HasPattern(status DetectedStatus, name string) bool {
-	patterns := sd.GetPatternNames(status)
-	for _, p := range patterns {
-		if strings.EqualFold(p, name) {
-			return true
-		}
-	}
-	return false
 }
