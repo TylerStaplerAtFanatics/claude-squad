@@ -563,7 +563,7 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance) {
 		// sessions getContent() always calls Preview(), so no extra subprocess needed.
 		if content != "" {
 			// Detect status from terminal content using the shared status detector
-			detectedStatus, statusContext := rqp.statusDetector.DetectWithContext([]byte(content))
+			detectedStatus, statusContext := rqp.statusDetector.DetectWithContextForProgram([]byte(content), inst.Program)
 			log.DebugLog.Printf("[ReviewQueue] Session '%s': Detected status=%s from terminal content",
 				inst.Title, detectedStatus.String())
 
