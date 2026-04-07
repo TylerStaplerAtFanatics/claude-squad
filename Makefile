@@ -173,7 +173,11 @@ install-tools: ensure-tools ## Install all development and analysis tools
 
 # Code quality and analysis
 lint: ensure-tools ## Run golangci-lint with stable checks
-	golangci-lint run --no-config --disable-all --enable=nilnil,ineffassign,govet
+	@if ! which golangci-lint >/dev/null 2>&1; then \
+		echo "Installing golangci-lint..."; \
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+	fi
+	$$(go env GOPATH)/bin/golangci-lint run --no-config --disable-all --enable=nilnil,ineffassign,govet
 
 format: ensure-tools ## Format code with gofmt
 	go fmt ./...
