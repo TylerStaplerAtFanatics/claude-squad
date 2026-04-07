@@ -1,0 +1,80 @@
+name: Auto Tag on Merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  tag:
+    # Only run when the PR was actually merged, not just closed
+    if: github.event.pull_request.merged == true
+    name: Bump Version and Tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # RELEASE_TOKEN (a PAT) is required if branch protection blocks direct pushes.
+          # Create one at Settings → Developer settings → Personal access tokens with
+          # repo scope, then add it as a repository secret named RELEASE_TOKEN.
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Determine bump type from PR labels
+        id: bump
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            const semverLabels = ['major', 'minor', 'patch'];
+            const found = semverLabels.filter(l => labels.includes(l));
+            if (found.length !== 1) {
+              core.setFailed(
+                `Expected exactly one semver label, found: ${found.join(', ') || 'none'}`
+              );
+              return;
+            }
+            core.setOutput('type', found[0]);
+            core.info(`Bump type: ${found[0]}`);
+
+      - name: Read current version from main.go
+        id: current
+        run: |
+          VERSION=$(grep -E '^\s*version\s*=' main.go | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Current version: $VERSION"
+
+      - name: Compute next version
+        id: next
+        run: |
+          CURRENT="${{ steps.current.outputs.version }}"
+          BUMP="${{ steps.bump.outputs.type }}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH+1)) ;;
+          esac
+          NEXT="${MAJOR}.${MINOR}.${PATCH}"
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Next version: $NEXT"
+
+      - name: Update version in main.go
+        run: |
+          NEW_VERSION="${{ steps.next.outputs.version }}"
+          sed -Ei "s/version[[:space:]]*=[[:space:]]*\"[0-9]+\.[0-9]+\.[0-9]+\"/version           = \"${NEW_VERSION}\"/" main.go
+          echo "Updated main.go:"
+          grep 'version' main.go | grep -v '//' | head -3
+
+      - name: Commit, push, and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add main.go
+          git commit -m "chore: bump version to ${{ steps.next.outputs.version }} [skip ci]"
+          git push
+          git tag "v${{ steps.next.outputs.version }}"
+          git push origin "v${{ steps.next.outputs.version }}"

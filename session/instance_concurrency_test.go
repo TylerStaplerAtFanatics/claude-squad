@@ -52,7 +52,6 @@ func TestTransitionTo_ConcurrentPause(t *testing.T) {
 	}
 }
 
-
 func TestTransitionTo_ConcurrentApprove(t *testing.T) {
 	// Same pattern as ConcurrentPause but for Approve (NeedsApproval->Running).
 	inst := &Instance{
