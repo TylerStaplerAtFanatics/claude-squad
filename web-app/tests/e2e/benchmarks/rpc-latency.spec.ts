@@ -32,7 +32,7 @@ const E2E_RESULTS_PATH = path.resolve(
 );
 // ConnectRPC endpoint on the Go backend. Override with BACKEND_URL env var in CI.
 const BACKEND_URL = process.env['BACKEND_URL'] ?? 'http://localhost:8543';
-const LIST_SESSIONS_PATH = '/session.v1.SessionService/ListSessions';
+const LIST_SESSIONS_PATH = '/api/session.v1.SessionService/ListSessions';
 const WARMUP_RUNS = 2;
 const TOTAL_RUNS = 10;
 
