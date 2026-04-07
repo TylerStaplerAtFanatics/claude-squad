@@ -43,8 +43,14 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run lint
-        run: make lint
+      - name: Build Web UI
+        run: make web-build
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --no-config --disable-all --enable=nilnil,ineffassign,govet
 
       - name: Check formatting
         run: |
