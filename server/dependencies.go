@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/server/events"
@@ -9,7 +10,6 @@ import (
 	"github.com/tstapler/stapler-squad/session/detection"
 	"github.com/tstapler/stapler-squad/session/mux"
 	"github.com/tstapler/stapler-squad/session/scrollback"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"

@@ -1,8 +1,8 @@
 package git
 
 import (
-	"github.com/tstapler/stapler-squad/log"
 	"fmt"
+	"github.com/tstapler/stapler-squad/log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -208,8 +208,8 @@ func (g *GitWorktree) Cleanup() error {
 			// Check if this is the common "not a working tree" error - treat it as expected
 			errStr := err.Error()
 			isCorruptedWorktree := strings.Contains(errStr, "is not a working tree") ||
-								  strings.Contains(errStr, "not a git repository") ||
-								  strings.Contains(errStr, "worktree not found")
+				strings.Contains(errStr, "not a git repository") ||
+				strings.Contains(errStr, "worktree not found")
 
 			if isCorruptedWorktree {
 				log.InfoLog.Printf("Worktree is corrupted/invalid, cleaning up manually: %s", g.worktreePath)
@@ -296,8 +296,8 @@ func (g *GitWorktree) Remove() error {
 			// Check if this is the common "not a working tree" error - treat it as expected
 			errStr := err.Error()
 			isCorruptedWorktree := strings.Contains(errStr, "is not a working tree") ||
-									strings.Contains(errStr, "not a git repository") ||
-									strings.Contains(errStr, "worktree not found")
+				strings.Contains(errStr, "not a git repository") ||
+				strings.Contains(errStr, "worktree not found")
 
 			if isCorruptedWorktree {
 				log.InfoLog.Printf("Worktree is corrupted/invalid, cleaning up manually: %s", g.worktreePath)

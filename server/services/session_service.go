@@ -892,7 +892,7 @@ func (s *SessionService) StreamTerminal(
 	// Flow control state for backpressure management
 	// Reference: https://xtermjs.org/docs/guides/flowcontrol/
 	pauseCh := make(chan bool, 1) // Buffered channel for pause/resume signals
-	var ptyPaused bool             // Current PTY pause state
+	var ptyPaused bool            // Current PTY pause state
 
 	// Goroutine 1: Read from PTY and send deltas to client (terminal output)
 	go func() {
@@ -1779,14 +1779,14 @@ func checkpointToProto(cp *session.Checkpoint) *sessionv1.CheckpointProto {
 		return nil
 	}
 	return &sessionv1.CheckpointProto{
-		Id:            cp.ID,
-		SessionId:     cp.SessionID,
-		ParentId:      cp.ParentID,
-		Label:         cp.Label,
-		ScrollbackSeq: cp.ScrollbackSeq,
+		Id:             cp.ID,
+		SessionId:      cp.SessionID,
+		ParentId:       cp.ParentID,
+		Label:          cp.Label,
+		ScrollbackSeq:  cp.ScrollbackSeq,
 		ScrollbackPath: cp.ScrollbackPath,
 		ClaudeConvUuid: cp.ClaudeConvUUID,
-		GitCommitSha:  cp.GitCommitSHA,
-		Timestamp:     timestamppb.New(cp.Timestamp),
+		GitCommitSha:   cp.GitCommitSHA,
+		Timestamp:      timestamppb.New(cp.Timestamp),
 	}
 }

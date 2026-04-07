@@ -90,9 +90,9 @@ func TestHistoryFileDetector_ExtractsUUIDFromFilename(t *testing.T) {
 	require.NoError(t, err)
 
 	testCases := []struct {
-		name     string
-		uuid     string
-		wantNil  bool
+		name    string
+		uuid    string
+		wantNil bool
 	}{
 		{
 			name:    "valid UUID v4",

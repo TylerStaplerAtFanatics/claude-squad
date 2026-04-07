@@ -272,9 +272,9 @@ func TestMigrationOfCorruptedPaths(t *testing.T) {
 // captureStateExecutor is a minimal mock executor for CaptureCurrentState tests.
 // It controls DoesSessionExist (via list-sessions) and GetPaneCurrentPath (via display-message).
 type captureStateExecutor struct {
-	sessionExists    bool
-	paneCurrentPath  string
-	panePathErr      error
+	sessionExists   bool
+	paneCurrentPath string
+	panePathErr     error
 }
 
 func (m *captureStateExecutor) Run(cmd *exec.Cmd) error {

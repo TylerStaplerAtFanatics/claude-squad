@@ -26,8 +26,10 @@ func TestMultiplexer_BroadcastToClients(t *testing.T) {
 	// Create two client pairs.
 	c1s, c1c := net.Pipe()
 	c2s, c2c := net.Pipe()
-	defer c1s.Close(); defer c1c.Close()
-	defer c2s.Close(); defer c2c.Close()
+	defer c1s.Close()
+	defer c1c.Close()
+	defer c2s.Close()
+	defer c2c.Close()
 
 	m.clientsMu.Lock()
 	m.clients[c1s] = struct{}{}

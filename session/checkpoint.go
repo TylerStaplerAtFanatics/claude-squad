@@ -15,18 +15,18 @@ func newCheckpointID() string {
 // It captures the scrollback position, git SHA, and conversation UUID so that
 // the session can later be forked or restored from this exact state.
 type Checkpoint struct {
-	ID             string    `json:"id"`
-	SessionID      string    `json:"session_id"`
-	ParentID       string    `json:"parent_id,omitempty"`
-	Label          string    `json:"label"`
-	ScrollbackSeq  uint64    `json:"scrollback_seq"`
-	ScrollbackPath string    `json:"scrollback_path,omitempty"`
-	ClaudeConvUUID string    `json:"claude_conv_uuid,omitempty"`
+	ID             string `json:"id"`
+	SessionID      string `json:"session_id"`
+	ParentID       string `json:"parent_id,omitempty"`
+	Label          string `json:"label"`
+	ScrollbackSeq  uint64 `json:"scrollback_seq"`
+	ScrollbackPath string `json:"scrollback_path,omitempty"`
+	ClaudeConvUUID string `json:"claude_conv_uuid,omitempty"`
 	// ConvLineCount is the number of JSONL lines in the Claude conversation file at
 	// checkpoint time. Used by ForkClaudeConversation to truncate the fork correctly.
-	ConvLineCount  uint64    `json:"conv_line_count,omitempty"`
-	GitCommitSHA   string    `json:"git_commit_sha,omitempty"`
-	Timestamp      time.Time `json:"timestamp"`
+	ConvLineCount uint64    `json:"conv_line_count,omitempty"`
+	GitCommitSHA  string    `json:"git_commit_sha,omitempty"`
+	Timestamp     time.Time `json:"timestamp"`
 }
 
 // CheckpointList is a slice of Checkpoints with helper methods.
