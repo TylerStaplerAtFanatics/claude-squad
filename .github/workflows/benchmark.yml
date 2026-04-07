@@ -245,9 +245,9 @@ jobs:
 
       - name: Start server
         run: |
-          cd web-app && npm run start &
-          # Wait for server to be ready (use local installation to avoid npx download)
-          cd web-app && npx wait-on http://localhost:3001 --timeout 30000
+          npx serve out -l 3001 &
+          npx wait-on http://localhost:3001 --timeout 30000
+        working-directory: web-app
 
       - name: Run terminal throughput benchmark
         run: |
@@ -420,24 +420,30 @@ jobs:
       - name: Generate protobuf code
         run: buf generate
 
+      - name: Build Next.js app
+        run: npm run build
+        working-directory: web-app
+
+      - name: Copy web UI to dist
+        run: cp -r web-app/out server/web/dist
+
       - name: Install Playwright browsers
         run: cd web-app && npx playwright install --with-deps chromium
 
       - name: Build Go binary
         run: go build -o stapler-squad .
 
-      - name: Build Next.js app
-        run: cd web-app && npm run build
-
       - name: Start backend server
         run: |
           ./stapler-squad &
-          cd web-app && npx wait-on http://localhost:8543 --timeout 30000
+          npx wait-on http://localhost:8543 --timeout 30000
+        working-directory: web-app
 
       - name: Start frontend server
         run: |
-          cd web-app && npm run start &
-          cd web-app && npx wait-on http://localhost:3001 --timeout 30000
+          npx serve out -l 3001 &
+          npx wait-on http://localhost:3001 --timeout 30000
+        working-directory: web-app
 
       - name: Run E2E latency benchmark
         run: cd web-app && npx playwright test tests/e2e/benchmarks/rpc-latency.spec.ts
