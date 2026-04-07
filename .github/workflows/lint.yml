@@ -54,7 +54,7 @@ jobs:
           printf '<!DOCTYPE html><html><body></body></html>' > server/web/dist/index.html
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.11.4
           args: --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
