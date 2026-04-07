@@ -1,3 +1,7 @@
+run:
+  exclude-dirs:
+    - session/tmux/tmux_windows
+
 linters:
   enable:
     - forbidigo

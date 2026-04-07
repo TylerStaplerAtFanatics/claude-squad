@@ -104,14 +104,14 @@ func testKilledSessionRestoresInCorrectWorktree(t *testing.T) {
 // testCompareOldVsNewRestoreBehavior demonstrates the difference between
 // the old buggy behavior and the new fixed behavior
 func testCompareOldVsNewRestoreBehavior(t *testing.T) {
-	tempDir := t.TempDir()
-	worktreeDir := filepath.Join(tempDir, "session-worktree")
+	worktreeBase := t.TempDir()
+	worktreeDir := filepath.Join(worktreeBase, "session-worktree")
 	err := os.MkdirAll(worktreeDir, 0755)
 	require.NoError(t, err)
 
-	// Change to a different directory to simulate the bug condition
+	// Change to a separate directory so currentDir is not a prefix of worktreeDir
 	originalDir, _ := os.Getwd()
-	differentDir := tempDir // Different from worktree
+	differentDir := t.TempDir() // Separate temp dir — no path relationship to worktreeBase
 	defer os.Chdir(originalDir)
 	err = os.Chdir(differentDir)
 	require.NoError(t, err)
