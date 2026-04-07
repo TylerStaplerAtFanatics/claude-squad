@@ -194,7 +194,7 @@ jobs:
           version: '1.41.0'
 
       - name: Generate protobuf code
-        run: buf generate proto
+        run: buf generate
 
       - name: Build Next.js app
         run: cd web-app && npm run build
@@ -235,7 +235,7 @@ jobs:
           version: '1.41.0'
 
       - name: Generate protobuf code
-        run: buf generate proto
+        run: buf generate
 
       - name: Install Playwright browsers
         run: cd web-app && npx playwright install --with-deps chromium
@@ -359,7 +359,7 @@ jobs:
           version: '1.41.0'
 
       - name: Generate protobuf code
-        run: buf generate proto
+        run: buf generate
 
       - name: Build Next.js app
         run: cd web-app && npm run build
@@ -418,7 +418,7 @@ jobs:
           version: '1.41.0'
 
       - name: Generate protobuf code
-        run: buf generate proto
+        run: buf generate
 
       - name: Install Playwright browsers
         run: cd web-app && npx playwright install --with-deps chromium

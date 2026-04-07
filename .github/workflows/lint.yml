@@ -47,7 +47,7 @@ jobs:
           version: '1.41.0'
 
       - name: Generate protobuf code
-        run: buf generate proto
+        run: buf generate
 
       # golangci-lint compiles all packages including server/web which uses
       # //go:embed all:dist — create a placeholder so the embed resolves

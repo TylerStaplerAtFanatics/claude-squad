@@ -51,7 +51,7 @@ jobs:
           version: '1.41.0'
 
       - name: Generate protobuf code
-        run: buf generate proto
+        run: buf generate
 
       - name: Build web UI
         run: npm run build
