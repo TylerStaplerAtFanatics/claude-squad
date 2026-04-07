@@ -47,9 +47,11 @@ Both Homebrew and manual installation will install Stapler Squad as `ssq` on you
 #### Homebrew
 
 ```bash
-brew install stapler-squad
-ln -s "$(brew --prefix)/bin/stapler-squad" "$(brew --prefix)/bin/ssq"
+brew tap tstapler/stapler-squad https://github.com/tstapler/stapler-squad
+brew install tstapler/stapler-squad/stapler-squad
 ```
+
+This installs both `stapler-squad` and the `ssq` alias.
 
 #### Manual
 
@@ -160,19 +162,30 @@ NOTE: The default program is `claude` and we recommend using the latest version.
 
 #### Building from Source
 
+**Prerequisites** — install [Homebrew](https://brew.sh), then:
+
+```bash
+brew install tmux gh
+```
+
+> `go`, `buf`, and `node` are installed automatically by the Makefile via Homebrew (or [asdf](https://asdf-vm.com) if you have it).
+
 ```bash
 # Clone the repository
 git clone https://github.com/tstapler/stapler-squad.git
 cd stapler-squad
 
-# Set up development environment (installs all tools)
-make dev-setup
-
-# Build the application
+# Build (auto-installs go, buf, and node via Homebrew if missing)
 make build
+
+# Install analysis and dev tools
+make dev-setup
 
 # Quick validation (build + test + lint)
 make quick-check
+
+# Run the server
+./stapler-squad
 ```
 
 #### Using the Makefile
