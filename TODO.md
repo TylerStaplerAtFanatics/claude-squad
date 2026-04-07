@@ -10,12 +10,12 @@
 
 ---
 
-## IN PROGRESS: Permissions Extension (MDD)
+## ✅ COMPLETE: Permissions Extension (MDD)
 
-**Status**: Sprint 1 ✅ COMPLETE, Sprint 2 🏗️ IN PROGRESS
+**Status**: Stories 1-3 ✅ COMPLETE
 **Priority**: P1 - Modularize classification for multi-CLI support
 **Epic ID**: FEATURE-PERMISSIONS-MDD
-**Progress**: 60% (Shared package and CLI foundation complete)
+**Progress**: 100% (Shared package and standalone hooks complete)
 
 ### ✅ Completed Work:
 
@@ -131,10 +131,9 @@
 
 ### 🟡 Open Bugs (Require Investigation)
 
-**BUG-009** [HIGH]: Session Package Test Failures 🔍 Investigating
-- **Impact**: Core session management tests failing, unknown production impact
-- **Tests Affected**: `TestInstance_FieldAccess`, `TestInstance_Lifecycle`, `TestInstance_Serialization`
-- **Investigation Needed**: 4-7 hours (capture output, analyze, fix)
+**BUG-009** [HIGH]: Session Package Test Failures ✅ FIXED
+- **Impact**: Core session management tests were failing, resolved
+- **Result**: Tests now pass.
 - **Priority**: P1 - Critical for core domain integrity
 
 **BUG-010** [HIGH]: tmux Banner and Prompt Detection Failures 🔍 Investigating

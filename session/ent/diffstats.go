@@ -4,12 +4,17 @@ package ent
 
 import (
 	"fmt"
+<<<<<<< HEAD
 	"github.com/tstapler/stapler-squad/session/ent/diffstats"
 	"github.com/tstapler/stapler-squad/session/ent/session"
+=======
+>>>>>>> 38a8955 (docs: Update TODO.md and bug status based on analysis)
 	"strings"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/tstapler/stapler-squad/session/ent/diffstats"
+	"github.com/tstapler/stapler-squad/session/ent/session"
 )
 
 // DiffStats is the model entity for the DiffStats schema.

@@ -5,15 +5,21 @@ package ent
 import (
 	"context"
 	"fmt"
+<<<<<<< HEAD
 	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
 	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 	"github.com/tstapler/stapler-squad/session/ent/predicate"
+=======
+>>>>>>> 38a8955 (docs: Update TODO.md and bug status based on analysis)
 	"math"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
+	"github.com/tstapler/stapler-squad/session/ent/claudesession"
+	"github.com/tstapler/stapler-squad/session/ent/predicate"
 )
 
 // ClaudeMetadataQuery is the builder for querying ClaudeMetadata entities.

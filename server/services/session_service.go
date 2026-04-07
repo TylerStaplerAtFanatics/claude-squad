@@ -17,6 +17,7 @@ import (
 	"github.com/tstapler/stapler-squad/server/notifications"
 	"github.com/tstapler/stapler-squad/session"
 	"github.com/tstapler/stapler-squad/session/search"
+	"github.com/tstapler/stapler-squad/pkg/classifier"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -123,25 +124,19 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 	utilitySvc := NewUtilityService(approvalStore)
 
 	// Build rules store, analytics store, and classifier for approval rules service.
-	rulesFilePath := ""
-	analyticsFilePath := ""
-	if configErr == nil {
-		rulesFilePath = configDir + "/auto_approve_rules.json"
-		analyticsFilePath = configDir + "/approval_analytics.jsonl"
-	}
-	rulesStore, rulesErr := NewRulesStore(rulesFilePath)
+	rulesStore, rulesErr := NewRulesStore(storage)
 	if rulesErr != nil {
 		log.WarningLog.Printf("Failed to load rules store, using empty store: %v", rulesErr)
-		rulesStore = &RulesStore{}
+		rulesStore = &RulesStore{storage: storage}
 	}
-	analyticsStore := NewAnalyticsStore(analyticsFilePath)
+	analyticsStore := NewAnalyticsStore(storage)
 	analyticsStore.Start(context.Background())
-	classifier := NewRuleBasedClassifier()
+	classifierObj := classifier.NewRuleBasedClassifier()
 	// Merge user rules into the classifier.
 	if userRules := rulesStore.ToRules(); len(userRules) > 0 {
-		classifier.AddRules(userRules)
+		classifierObj.AddRules(userRules)
 	}
-	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifier)
+	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifierObj)
 
 	return &SessionService{
 		storage:           storage,
@@ -234,7 +229,7 @@ func (s *SessionService) GetApprovalStore() *ApprovalStore {
 }
 
 // GetClassifier returns the rule-based classifier for wiring up the ApprovalHandler.
-func (s *SessionService) GetClassifier() *RuleBasedClassifier {
+func (s *SessionService) GetClassifier() *classifier.RuleBasedClassifier {
 	if s.rulesSvc == nil {
 		return nil
 	}

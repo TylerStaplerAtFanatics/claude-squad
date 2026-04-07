@@ -5,8 +5,36 @@ package hook
 import (
 	"context"
 	"fmt"
+<<<<<<< HEAD
+=======
+
+>>>>>>> 38a8955 (docs: Update TODO.md and bug status based on analysis)
 	"github.com/tstapler/stapler-squad/session/ent"
 )
+
+// The ApprovalRuleFunc type is an adapter to allow the use of ordinary
+// function as ApprovalRule mutator.
+type ApprovalRuleFunc func(context.Context, *ent.ApprovalRuleMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ApprovalRuleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ApprovalRuleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ApprovalRuleMutation", m)
+}
+
+// The ClassificationAnalyticsFunc type is an adapter to allow the use of ordinary
+// function as ClassificationAnalytics mutator.
+type ClassificationAnalyticsFunc func(context.Context, *ent.ClassificationAnalyticsMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ClassificationAnalyticsFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ClassificationAnalyticsMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ClassificationAnalyticsMutation", m)
+}
 
 // The ClaudeMetadataFunc type is an adapter to allow the use of ordinary
 // function as ClaudeMetadata mutator.

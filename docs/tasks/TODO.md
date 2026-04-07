@@ -7,7 +7,6 @@ This file serves as a lightweight index of all feature plans in `docs/tasks/`.
 | Plan | Status | Stories | Priority |
 |------|--------|---------|----------|
 | [Review Queue Navigation](review-queue-navigation.md) | Draft | 3 stories, 11 tasks | High |
-| [Permissions Extension (MDD)](permissions-extension-mdd.md) | Planning | 3 stories, 5 tasks | High |
 | [Test Coverage: Core Business Logic](test-coverage-core-logic.md) | Draft | 3 stories, 15 tasks | High |
 | [History Page Decomposition](history-page-decomposition.md) | Draft | 5 stories, 20 tasks | Medium |
 | [Instance God Object Decomposition](instance-god-object-decomposition.md) | Draft | 5 stories | High |

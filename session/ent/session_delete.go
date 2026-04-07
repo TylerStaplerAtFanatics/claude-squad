@@ -4,12 +4,17 @@ package ent
 
 import (
 	"context"
+<<<<<<< HEAD
 	"github.com/tstapler/stapler-squad/session/ent/predicate"
 	"github.com/tstapler/stapler-squad/session/ent/session"
+=======
+>>>>>>> 38a8955 (docs: Update TODO.md and bug status based on analysis)
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/tstapler/stapler-squad/session/ent/predicate"
+	"github.com/tstapler/stapler-squad/session/ent/session"
 )
 
 // SessionDelete is the builder for deleting a Session entity.
