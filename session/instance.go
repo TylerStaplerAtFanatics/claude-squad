@@ -1,11 +1,13 @@
 package session
 
 import (
-	"github.com/tstapler/stapler-squad/log"
-	"github.com/tstapler/stapler-squad/session/git"
-	"github.com/tstapler/stapler-squad/session/tmux"
+	"bufio"
 	"context"
 	"fmt"
+	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/session/git"
+	"github.com/tstapler/stapler-squad/session/scrollback"
+	"github.com/tstapler/stapler-squad/session/tmux"
 	"os"
 	"os/exec"
 	"os/user"
@@ -123,6 +125,14 @@ type Instance struct {
 	MainRepoPath string `json:"main_repo_path,omitempty"`
 	// IsWorktree indicates whether Path is a git worktree (not the main repo)
 	IsWorktree bool `json:"is_worktree,omitempty"`
+
+	Checkpoints      CheckpointList
+	ActiveCheckpoint string
+	ForkedFromID     string
+
+	// HistoryFilePath is the path to the Claude conversation JSONL history file.
+	// Set by HistoryLinker when it correlates this session to an open JSONL file.
+	HistoryFilePath string
 
 	// Claude Code session information for persistence and re-attachment
 	claudeSession *ClaudeSessionData
@@ -1835,6 +1845,174 @@ func (i *Instance) SetClaudeSession(sessionData *ClaudeSessionData) {
 // HasClaudeSession returns true if this instance has Claude session data
 func (i *Instance) HasClaudeSession() bool {
 	return i.claudeSession != nil && i.claudeSession.SessionID != ""
+}
+
+// GetConversationUUID returns the Claude conversation UUID, or "" if not linked.
+func (i *Instance) GetConversationUUID() string {
+	if i.claudeSession == nil {
+		return ""
+	}
+	return i.claudeSession.SessionID
+}
+
+// GetPanePID returns the PID of the foreground process in the tmux pane.
+// Returns 0 and an error if the session is not alive or PID cannot be retrieved.
+func (i *Instance) GetPanePID() (int32, error) {
+	if !i.tmuxManager.DoesSessionExist() {
+		return 0, fmt.Errorf("tmux session not alive for '%s'", i.Title)
+	}
+	return i.tmuxManager.GetPanePID()
+}
+
+// SetHistoryInfo updates the conversation UUID and history file path.
+// Thread-safe: acquires stateMutex write lock.
+// No-op if the UUID is already set to the same value.
+func (i *Instance) SetHistoryInfo(conversationUUID, historyFilePath string) {
+	i.stateMutex.Lock()
+	defer i.stateMutex.Unlock()
+
+	currentUUID := ""
+	if i.claudeSession != nil {
+		currentUUID = i.claudeSession.SessionID
+	}
+	if currentUUID == conversationUUID && i.HistoryFilePath == historyFilePath {
+		return
+	}
+
+	if i.claudeSession == nil {
+		i.claudeSession = &ClaudeSessionData{}
+	}
+	i.claudeSession.SessionID = conversationUUID
+	i.HistoryFilePath = historyFilePath
+}
+
+// CreateCheckpoint captures a named state bookmark for this session.
+// scrollbackSeq should be the current scrollback high-water mark (from ScrollbackManager);
+// pass 0 if the caller does not have access to scrollback state.
+// Thread-safe: acquires stateMutex write lock.
+// Returns an error if the instance is not started.
+func (i *Instance) CreateCheckpoint(label string, scrollbackSeq uint64) (*Checkpoint, error) {
+	if !i.started {
+		return nil, fmt.Errorf("cannot create checkpoint on unstarted instance '%s'", i.Title)
+	}
+
+	i.stateMutex.Lock()
+	defer i.stateMutex.Unlock()
+
+	// Collect git SHA — gracefully empty if no worktree.
+	gitSHA, _ := i.gitManager.GetCurrentCommitSHA()
+
+	// Conversation UUID — empty if not yet linked.
+	convUUID := ""
+	if i.claudeSession != nil {
+		convUUID = i.claudeSession.SessionID
+	}
+
+	// Count lines in history file for accurate fork truncation later.
+	var convLineCount uint64
+	if i.HistoryFilePath != "" {
+		if f, err := os.Open(i.HistoryFilePath); err == nil {
+			defer f.Close()
+			sc := bufio.NewScanner(f)
+			for sc.Scan() {
+				if len(sc.Bytes()) > 0 {
+					convLineCount++
+				}
+			}
+			if scanErr := sc.Err(); scanErr != nil {
+				log.WarningLog.Printf("CreateCheckpoint: error scanning history file: %v", scanErr)
+			}
+		}
+	}
+
+	cp := Checkpoint{
+		ID:             newCheckpointID(),
+		SessionID:      i.Title,
+		Label:          label,
+		ScrollbackSeq:  scrollbackSeq,
+		ClaudeConvUUID: convUUID,
+		ConvLineCount:  convLineCount,
+		GitCommitSHA:   gitSHA,
+		Timestamp:      time.Now().UTC(),
+	}
+
+	i.Checkpoints = append(i.Checkpoints, cp)
+	i.ActiveCheckpoint = cp.ID
+
+	return &cp, nil
+}
+
+// ForkFromCheckpoint creates a new, unstarted Instance that is an independent branch of i,
+// seeded from the state captured at the checkpoint identified by checkpointID.
+func (i *Instance) ForkFromCheckpoint(checkpointID, newTitle string, configDir string) (*Instance, error) {
+	cp := i.Checkpoints.FindByID(checkpointID)
+	if cp == nil {
+		return nil, fmt.Errorf("checkpoint %q not found on session %q", checkpointID, i.Title)
+	}
+	if newTitle == "" {
+		return nil, fmt.Errorf("newTitle must not be empty")
+	}
+
+	// Fork Claude conversation if we have the data.
+	newConvUUID := ""
+	if cp.ConvLineCount > 0 && cp.ClaudeConvUUID != "" && i.HistoryFilePath != "" {
+		historyDir := filepath.Dir(i.HistoryFilePath)
+		uuid, err := ForkClaudeConversation(i.HistoryFilePath, cp.ConvLineCount, historyDir)
+		if err != nil {
+			log.WarningLog.Printf("ForkFromCheckpoint: skipping conversation fork: %v", err)
+		} else {
+			newConvUUID = uuid
+		}
+	}
+
+	// Fork scrollback.
+	srcScrollback := filepath.Join(configDir, i.Title, "scrollback.jsonl")
+	dstScrollback := filepath.Join(configDir, newTitle, "scrollback.jsonl")
+	if err := scrollback.ForkScrollback(srcScrollback, cp.ScrollbackSeq, dstScrollback); err != nil {
+		log.WarningLog.Printf("ForkFromCheckpoint: skipping scrollback fork: %v", err)
+	}
+
+	// Build the new instance.
+	opts := InstanceOptions{
+		Title:      newTitle,
+		Path:       i.Path,
+		WorkingDir: i.WorkingDir,
+		Program:    i.Program,
+		AutoYes:    i.AutoYes,
+		Category:   i.Category,
+		Tags:       append([]string(nil), i.Tags...),
+		ResumeId:   newConvUUID,
+	}
+
+	newInst, err := NewInstance(opts)
+	if err != nil {
+		return nil, fmt.Errorf("fork from checkpoint: create instance: %w", err)
+	}
+
+	// Attach a git worktree branched from the checkpoint SHA.
+	if i.gitManager.HasWorktree() && cp.GitCommitSHA != "" {
+		branchName := "fork/" + newTitle
+		wt, _, err := git.NewGitWorktreeFromCommitSHA(i.Path, newTitle, branchName, cp.GitCommitSHA)
+		if err != nil {
+			log.WarningLog.Printf("ForkFromCheckpoint: skipping git worktree: %v", err)
+		} else {
+			newInst.gitManager.SetWorktree(wt)
+		}
+	}
+
+	newInst.ForkedFromID = i.Title
+
+	return newInst, nil
+}
+
+// GetCheckpoints returns a snapshot copy of the checkpoint list, safe for
+// concurrent reads from outside the instance's lock domain.
+func (i *Instance) GetCheckpoints() CheckpointList {
+	i.stateMutex.RLock()
+	defer i.stateMutex.RUnlock()
+	cp := make(CheckpointList, len(i.Checkpoints))
+	copy(cp, i.Checkpoints)
+	return cp
 }
 
 // GetReviewQueue returns the review queue for this instance

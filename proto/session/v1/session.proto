@@ -178,6 +178,20 @@ service SessionService {
   // currently active database. Skips sessions whose titles already exist.
   // No server restart required — changes are immediately visible.
   rpc MergeDatabase(MergeDatabaseRequest) returns (MergeDatabaseResponse) {}
+
+  // Checkpoint RPCs
+
+  // CreateCheckpoint captures the current state of a session as a named bookmark.
+  // Records scrollback position, git HEAD SHA, and conversation UUID.
+  rpc CreateCheckpoint(CreateCheckpointRequest) returns (CreateCheckpointResponse) {}
+
+  // ListCheckpoints returns all checkpoints for the specified session.
+  rpc ListCheckpoints(ListCheckpointsRequest) returns (ListCheckpointsResponse) {}
+
+  // ForkSession creates a new independent session branched from a checkpoint.
+  // The fork receives truncated scrollback, conversation history, and a git worktree
+  // based on the checkpoint's recorded state.
+  rpc ForkSession(ForkSessionRequest) returns (ForkSessionResponse) {}
 }
 
 // ListSessionsRequest allows filtering sessions by various criteria.
@@ -1081,4 +1095,47 @@ message MergeDatabaseResponse {
 
   // Number of sessions skipped due to title conflicts.
   int32 sessions_skipped = 4;
+}
+
+// ============================================================================
+// Checkpoint Messages
+// ============================================================================
+
+message CreateCheckpointRequest {
+  // Session ID to checkpoint (uses session title as ID).
+  string session_id = 1;
+
+  // Human-readable label for this checkpoint.
+  string label = 2;
+}
+
+message CreateCheckpointResponse {
+  // The newly created checkpoint.
+  CheckpointProto checkpoint = 1;
+}
+
+message ListCheckpointsRequest {
+  // Session ID to list checkpoints for.
+  string session_id = 1;
+}
+
+message ListCheckpointsResponse {
+  // All checkpoints for the session, ordered by timestamp ascending.
+  repeated CheckpointProto checkpoints = 1;
+}
+
+message ForkSessionRequest {
+  // Source session ID to fork from.
+  string session_id = 1;
+
+  // Checkpoint ID on the source session to fork from.
+  string checkpoint_id = 2;
+
+  // Title for the new forked session. Must be unique.
+  string new_title = 3;
+}
+
+message ForkSessionResponse {
+  // The newly created forked session.
+  Session session = 1;
 }

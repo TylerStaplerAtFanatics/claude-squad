@@ -35,30 +35,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web-app/package-lock.json
-
-      - name: Install web dependencies
-        run: cd web-app && npm ci
-
-      - name: Set up buf
-        uses: bufbuild/buf-setup-action@v1
-        with:
-          version: '1.41.0'
-
-      - name: Generate protobuf code
-        run: buf generate
-
-      - name: Build web UI
-        run: npm run build
-        working-directory: web-app
-
-      - name: Copy web UI to dist
-        run: cp -r web-app/out server/web/dist
+      - name: Generate protos and build web UI
+        uses: ./.github/actions/prepare
 
       - name: Upload generated files
         uses: actions/upload-artifact@v4

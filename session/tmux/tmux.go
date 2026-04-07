@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1398,5 +1399,25 @@ func sanitizeUTF8String(rawBytes []byte) string {
 	}
 
 	return result.String()
+}
+
+// GetPanePID returns the PID of the foreground process in the pane.
+// This is used by HistoryLinker to correlate open files with session records.
+func (t *TmuxSession) GetPanePID() (int32, error) {
+	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
+		"#{pane_pid}")
+
+	output, err := t.cmdExec.Output(cmd)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get pane PID for session '%s': %w", t.sanitizedName, err)
+	}
+
+	pidStr := strings.TrimSpace(string(output))
+	pid, err := strconv.ParseInt(pidStr, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid pane PID %q for session '%s': %w", pidStr, t.sanitizedName, err)
+	}
+
+	return int32(pid), nil
 }
 

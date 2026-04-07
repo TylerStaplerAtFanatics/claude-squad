@@ -876,3 +876,38 @@ message DatabaseInfo {
   // When this workspace was last used (last server startup in this workspace).
   google.protobuf.Timestamp last_used = 8;
 }
+
+// ============================================================================
+// Checkpoint Types
+// ============================================================================
+
+// CheckpointProto represents a named bookmark of a session's state at a point in time.
+// Maps to session.Checkpoint in Go.
+message CheckpointProto {
+  // Unique checkpoint identifier (UUID).
+  string id = 1;
+
+  // Session ID this checkpoint belongs to.
+  string session_id = 2;
+
+  // Parent checkpoint ID (for tree navigation), empty for root checkpoints.
+  string parent_id = 3;
+
+  // Human-readable label.
+  string label = 4;
+
+  // Scrollback sequence number at checkpoint time.
+  uint64 scrollback_seq = 5;
+
+  // Path to persisted scrollback snapshot (may be empty).
+  string scrollback_path = 6;
+
+  // Claude Code conversation UUID at checkpoint time.
+  string claude_conv_uuid = 7;
+
+  // Git HEAD commit SHA at checkpoint time.
+  string git_commit_sha = 8;
+
+  // When the checkpoint was created.
+  google.protobuf.Timestamp timestamp = 9;
+}
