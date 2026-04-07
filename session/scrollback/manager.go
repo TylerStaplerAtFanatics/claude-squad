@@ -23,20 +23,20 @@ func DefaultScrollbackConfig() ScrollbackConfig {
 		MaxSizeBytes:     10 * 1024 * 1024, // 10MB
 		FlushInterval:    5 * time.Second,
 		CompressionType:  "zstd",
-		CompressionLevel: 3, // Zstd level 3: fast compression with good ratio
+		CompressionLevel: 3,  // Zstd level 3: fast compression with good ratio
 		StoragePath:      "", // Will be set by caller
 	}
 }
 
 // ScrollbackManager manages scrollback buffers for multiple sessions.
 type ScrollbackManager struct {
-	storage      ScrollbackStorage
-	buffers      map[string]*CircularBuffer
-	config       ScrollbackConfig
-	mutex        sync.RWMutex
-	stopChan     chan struct{}
-	stopOnce     sync.Once
-	flushTicker  *time.Ticker
+	storage     ScrollbackStorage
+	buffers     map[string]*CircularBuffer
+	config      ScrollbackConfig
+	mutex       sync.RWMutex
+	stopChan    chan struct{}
+	stopOnce    sync.Once
+	flushTicker *time.Ticker
 }
 
 // NewScrollbackManager creates a new scrollback manager.
@@ -301,9 +301,22 @@ func (m *ScrollbackManager) GetStats(sessionID string) (ScrollbackStats, error) 
 
 // ScrollbackStats provides information about scrollback usage.
 type ScrollbackStats struct {
-	SessionID       string
-	MemoryLines     int
-	StorageBytes    int64
-	OldestSequence  uint64
-	NewestSequence  uint64
+	SessionID      string
+	MemoryLines    int
+	StorageBytes   int64
+	OldestSequence uint64
+	NewestSequence uint64
+}
+
+// CurrentSequence returns the highest sequence number written for sessionID.
+// Returns 0 if the session has no buffered data yet.
+func (m *ScrollbackManager) CurrentSequence(sessionID string) uint64 {
+	m.mutex.RLock()
+	buffer, exists := m.buffers[sessionID]
+	m.mutex.RUnlock()
+
+	if !exists {
+		return 0
+	}
+	return buffer.GetNewestSequence()
 }

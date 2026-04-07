@@ -19,6 +19,7 @@ import (
 	"github.com/tstapler/stapler-squad/session/search"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Compile-time interface check: SessionService must implement the full ConnectRPC handler.
@@ -57,6 +58,15 @@ type SessionService struct {
 
 	// databaseSvc handles workspace/database switcher RPCs.
 	databaseSvc *DatabaseService
+
+	// scrollbackMgr provides access to per-session scrollback sequence numbers
+	// for checkpoint creation. May be nil if not wired (seq defaults to 0).
+	scrollbackMgr scrollbackSequencer
+}
+
+// scrollbackSequencer is the minimal interface SessionService needs from ScrollbackManager.
+type scrollbackSequencer interface {
+	CurrentSequence(sessionID string) uint64
 }
 
 // NewSessionService creates a new SessionService with the given storage and event bus.
@@ -882,7 +892,7 @@ func (s *SessionService) StreamTerminal(
 	// Flow control state for backpressure management
 	// Reference: https://xtermjs.org/docs/guides/flowcontrol/
 	pauseCh := make(chan bool, 1) // Buffered channel for pause/resume signals
-	var ptyPaused bool             // Current PTY pause state
+	var ptyPaused bool            // Current PTY pause state
 
 	// Goroutine 1: Read from PTY and send deltas to client (terminal output)
 	go func() {
@@ -1594,4 +1604,189 @@ func (s *SessionService) MergeDatabase(
 	req *connect.Request[sessionv1.MergeDatabaseRequest],
 ) (*connect.Response[sessionv1.MergeDatabaseResponse], error) {
 	return s.databaseSvc.MergeDatabase(ctx, req)
+}
+
+// SetScrollbackManager wires in the scrollback manager for seq-number lookups during checkpoint creation.
+func (s *SessionService) SetScrollbackManager(mgr scrollbackSequencer) {
+	s.scrollbackMgr = mgr
+}
+
+// CreateCheckpoint captures the current state of a session as a named bookmark.
+func (s *SessionService) CreateCheckpoint(
+	ctx context.Context,
+	req *connect.Request[sessionv1.CreateCheckpointRequest],
+) (*connect.Response[sessionv1.CreateCheckpointResponse], error) {
+	if req.Msg.SessionId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session_id is required"))
+	}
+	if req.Msg.Label == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("label is required"))
+	}
+
+	inst := s.findInstance(req.Msg.SessionId)
+	if inst == nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.SessionId))
+	}
+
+	var scrollbackSeq uint64
+	if s.scrollbackMgr != nil {
+		scrollbackSeq = s.scrollbackMgr.CurrentSequence(inst.Title)
+	}
+
+	cp, err := inst.CreateCheckpoint(req.Msg.Label, scrollbackSeq)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+
+	// Persist the updated instance state (checkpoints are stored on the instance).
+	if err := s.storage.SaveInstances(s.allInstances()); err != nil {
+		log.WarningLog.Printf("CreateCheckpoint: failed to persist checkpoint for '%s': %v", inst.Title, err)
+	}
+
+	return connect.NewResponse(&sessionv1.CreateCheckpointResponse{
+		Checkpoint: checkpointToProto(cp),
+	}), nil
+}
+
+// ListCheckpoints returns all checkpoints for the specified session.
+func (s *SessionService) ListCheckpoints(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ListCheckpointsRequest],
+) (*connect.Response[sessionv1.ListCheckpointsResponse], error) {
+	if req.Msg.SessionId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session_id is required"))
+	}
+
+	inst := s.findInstance(req.Msg.SessionId)
+	if inst == nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.SessionId))
+	}
+
+	checkpoints := inst.GetCheckpoints()
+	protos := make([]*sessionv1.CheckpointProto, 0, len(checkpoints))
+	for i := range checkpoints {
+		protos = append(protos, checkpointToProto(&checkpoints[i]))
+	}
+
+	return connect.NewResponse(&sessionv1.ListCheckpointsResponse{
+		Checkpoints: protos,
+	}), nil
+}
+
+// ForkSession creates a new independent session branched from a checkpoint on an existing session.
+func (s *SessionService) ForkSession(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ForkSessionRequest],
+) (*connect.Response[sessionv1.ForkSessionResponse], error) {
+	if req.Msg.SessionId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session_id is required"))
+	}
+	if req.Msg.CheckpointId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("checkpoint_id is required"))
+	}
+	if req.Msg.NewTitle == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("new_title is required"))
+	}
+	if strings.Contains(req.Msg.NewTitle, "..") || strings.ContainsRune(req.Msg.NewTitle, '/') || strings.ContainsRune(req.Msg.NewTitle, os.PathSeparator) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("new_title must not contain path separators or '..'"))
+	}
+
+	src := s.findInstance(req.Msg.SessionId)
+	if src == nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.SessionId))
+	}
+
+	// Verify new_title is unique.
+	if s.findInstance(req.Msg.NewTitle) != nil {
+		return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("session with title %q already exists", req.Msg.NewTitle))
+	}
+
+	configDir, err := config.GetConfigDir()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get config dir: %w", err))
+	}
+
+	newInst, err := src.ForkFromCheckpoint(req.Msg.CheckpointId, req.Msg.NewTitle, configDir)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+
+	if err := s.storage.AddInstance(newInst); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("persist forked session: %w", err))
+	}
+
+	// CRITICAL: Update the ReviewQueuePoller's instance references so the forked
+	// session is immediately findable by findInstance() and StreamTerminal.
+	if s.reviewQueuePoller != nil {
+		updatedInstances := append(s.reviewQueuePoller.GetInstances(), newInst)
+		s.reviewQueuePoller.SetInstances(updatedInstances)
+		log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after ForkSession for '%s'", newInst.Title)
+	}
+
+	// Capture response proto BEFORE launching goroutine to avoid a data race:
+	// the goroutine writes instance fields (Status, started) while Start() runs;
+	// InstanceToProto reads those same fields.
+	respProto := adapters.InstanceToProto(newInst)
+
+	go func() {
+		if startErr := newInst.Start(true); startErr != nil {
+			log.WarningLog.Printf("ForkSession: failed to start forked session '%s': %v", newInst.Title, startErr)
+			// Mark the session as Stopped so it is not permanently stuck in Loading state.
+			newInst.Status = session.Stopped
+			if saveErr := s.storage.UpdateInstance(newInst); saveErr != nil {
+				log.WarningLog.Printf("ForkSession: failed to persist Stopped status for '%s': %v", newInst.Title, saveErr)
+			}
+		}
+	}()
+
+	s.eventBus.Publish(events.NewSessionCreatedEvent(newInst))
+
+	return connect.NewResponse(&sessionv1.ForkSessionResponse{
+		Session: respProto,
+	}), nil
+}
+
+// findInstance finds an instance by title using the live in-memory poller.
+func (s *SessionService) findInstance(id string) *session.Instance {
+	if s.reviewQueuePoller != nil {
+		if inst := s.reviewQueuePoller.FindInstance(id); inst != nil {
+			return inst
+		}
+	}
+	if s.externalDiscovery != nil {
+		if inst := s.externalDiscovery.GetSession(id); inst != nil {
+			return inst
+		}
+	}
+	return nil
+}
+
+// allInstances returns all live instances from both the poller and external discovery.
+func (s *SessionService) allInstances() []*session.Instance {
+	var result []*session.Instance
+	if s.reviewQueuePoller != nil {
+		result = append(result, s.reviewQueuePoller.GetInstances()...)
+	}
+	if s.externalDiscovery != nil {
+		result = append(result, s.externalDiscovery.GetSessions()...)
+	}
+	return result
+}
+
+// checkpointToProto converts a session.Checkpoint to a proto CheckpointProto.
+func checkpointToProto(cp *session.Checkpoint) *sessionv1.CheckpointProto {
+	if cp == nil {
+		return nil
+	}
+	return &sessionv1.CheckpointProto{
+		Id:             cp.ID,
+		SessionId:      cp.SessionID,
+		ParentId:       cp.ParentID,
+		Label:          cp.Label,
+		ScrollbackSeq:  cp.ScrollbackSeq,
+		ScrollbackPath: cp.ScrollbackPath,
+		ClaudeConvUuid: cp.ClaudeConvUUID,
+		GitCommitSha:   cp.GitCommitSHA,
+		Timestamp:      timestamppb.New(cp.Timestamp),
+	}
 }

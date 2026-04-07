@@ -1,8 +1,8 @@
 package adapters
 
 import (
-	"github.com/tstapler/stapler-squad/session"
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
+	"github.com/tstapler/stapler-squad/session"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -44,6 +44,9 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 		// Instance type and external metadata
 		InstanceType:     instanceTypeToProto(inst.InstanceType),
 		ExternalMetadata: externalMetadataToProto(inst.ExternalMetadata),
+		// History linkage for cold restore
+		HistoryFilePath:        inst.HistoryFilePath,
+		ClaudeConversationUuid: inst.GetConversationUUID(),
 	}
 
 	// Convert git worktree data if available
@@ -186,13 +189,13 @@ func externalMetadataToProto(metadata *session.ExternalInstanceMetadata) *sessio
 	}
 
 	return &sessionv1.ExternalInstanceMetadata{
-		TmuxSocket:        metadata.TmuxSocket,
-		TmuxSessionName:   metadata.TmuxSessionName,
-		DiscoveredAt:      timestamppb.New(metadata.DiscoveredAt),
-		LastSeen:          timestamppb.New(metadata.LastSeen),
-		OriginalPid:       int32(metadata.OriginalPID),
-		MuxSocketPath:     metadata.MuxSocketPath,
-		MuxEnabled:        metadata.MuxEnabled,
-		SourceTerminal:    metadata.SourceTerminal,
+		TmuxSocket:      metadata.TmuxSocket,
+		TmuxSessionName: metadata.TmuxSessionName,
+		DiscoveredAt:    timestamppb.New(metadata.DiscoveredAt),
+		LastSeen:        timestamppb.New(metadata.LastSeen),
+		OriginalPid:     int32(metadata.OriginalPID),
+		MuxSocketPath:   metadata.MuxSocketPath,
+		MuxEnabled:      metadata.MuxEnabled,
+		SourceTerminal:  metadata.SourceTerminal,
 	}
 }

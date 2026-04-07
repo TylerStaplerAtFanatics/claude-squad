@@ -1,11 +1,13 @@
 package session
 
 import (
-	"github.com/tstapler/stapler-squad/log"
-	"github.com/tstapler/stapler-squad/session/git"
-	"github.com/tstapler/stapler-squad/session/tmux"
+	"bufio"
 	"context"
 	"fmt"
+	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/session/git"
+	"github.com/tstapler/stapler-squad/session/scrollback"
+	"github.com/tstapler/stapler-squad/session/tmux"
 	"os"
 	"os/exec"
 	"os/user"
@@ -124,6 +126,14 @@ type Instance struct {
 	// IsWorktree indicates whether Path is a git worktree (not the main repo)
 	IsWorktree bool `json:"is_worktree,omitempty"`
 
+	// Checkpoint metadata
+	Checkpoints      CheckpointList
+	ActiveCheckpoint string
+	ForkedFromID     string
+
+	// History file path for cold restore
+	HistoryFilePath string
+
 	// Claude Code session information for persistence and re-attachment
 	claudeSession *ClaudeSessionData
 
@@ -206,6 +216,12 @@ func (i *Instance) ToInstanceData() InstanceData {
 		// Worktree detection fields
 		MainRepoPath: i.MainRepoPath,
 		IsWorktree:   i.IsWorktree,
+		// Checkpoint metadata
+		Checkpoints:      i.Checkpoints,
+		ActiveCheckpoint: i.ActiveCheckpoint,
+		ForkedFromID:     i.ForkedFromID,
+		// History file linkage
+		HistoryFilePath: i.HistoryFilePath,
 	}
 
 	// Only include worktree data if gitWorktree is initialized
@@ -276,22 +292,22 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 	}
 
 	instance := &Instance{
-		Title:                data.Title,
-		Path:                 migratedPath, // Use migrated path
-		WorkingDir:           data.WorkingDir,
-		Branch:               data.Branch,
-		Status:               data.Status,
-		Height:               data.Height,
-		Width:                data.Width,
-		CreatedAt:            data.CreatedAt,
-		UpdatedAt:            data.UpdatedAt,
-		Program:              data.Program,
-		Prompt:               data.Prompt,
-		Category:             data.Category,
-		IsExpanded:           data.IsExpanded,
-		Tags:                 tags, // Use migrated tags (includes category if needed)
-		SessionType:          data.SessionType,
-		TmuxPrefix: data.TmuxPrefix,
+		Title:       data.Title,
+		Path:        migratedPath, // Use migrated path
+		WorkingDir:  data.WorkingDir,
+		Branch:      data.Branch,
+		Status:      data.Status,
+		Height:      data.Height,
+		Width:       data.Width,
+		CreatedAt:   data.CreatedAt,
+		UpdatedAt:   data.UpdatedAt,
+		Program:     data.Program,
+		Prompt:      data.Prompt,
+		Category:    data.Category,
+		IsExpanded:  data.IsExpanded,
+		Tags:        tags, // Use migrated tags (includes category if needed)
+		SessionType: data.SessionType,
+		TmuxPrefix:  data.TmuxPrefix,
 		ReviewState: ReviewState{
 			LastTerminalUpdate:   data.LastTerminalUpdate,
 			LastMeaningfulOutput: data.LastMeaningfulOutput,
@@ -304,10 +320,10 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 			LastUserResponse:     data.LastUserResponse,
 			ProcessingGraceUntil: data.ProcessingGraceUntil,
 		},
-		InstanceType: InstanceTypeManaged,     // Restored instances are always managed
-		IsManaged:            true,
-		ExternalMetadata:     nil,                    // External instances are not persisted
-		Permissions:          GetManagedPermissions(), // Full permissions for managed instances
+		InstanceType:     InstanceTypeManaged, // Restored instances are always managed
+		IsManaged:        true,
+		ExternalMetadata: nil,                     // External instances are not persisted
+		Permissions:      GetManagedPermissions(), // Full permissions for managed instances
 		// GitHub integration fields
 		GitHubPRNumber:  data.GitHubPRNumber,
 		GitHubPRURL:     data.GitHubPRURL,
@@ -318,6 +334,12 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		// Worktree detection fields
 		MainRepoPath: data.MainRepoPath,
 		IsWorktree:   data.IsWorktree,
+		// Checkpoint metadata
+		Checkpoints:      data.Checkpoints,
+		ActiveCheckpoint: data.ActiveCheckpoint,
+		ForkedFromID:     data.ForkedFromID,
+		// History file linkage
+		HistoryFilePath: data.HistoryFilePath,
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice
@@ -499,28 +521,28 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 	}
 
 	instance := &Instance{
-		Title:                opts.Title,
-		Status:               Ready,
-		Path:                 absPath,
-		Branch:               opts.Branch,
-		Program:              opts.Program,
-		Height:               0,
-		Width:                0,
-		CreatedAt:            t,
-		UpdatedAt:            t,
-		AutoYes:              opts.AutoYes,
-		Prompt:               opts.Prompt,
-		ExistingWorktree:     opts.ExistingWorktree,
-		Category:             opts.Category,
-		Tags:                 opts.Tags, // Set tags from options
-		SessionType:          sessionType,
-		TmuxPrefix:           opts.TmuxPrefix,
-		TmuxServerSocket:     opts.TmuxServerSocket,
-		IsExpanded:           true, // Default to expanded for newly created instances
-		InstanceType:         InstanceTypeManaged,
-		IsManaged:            true,
-		ExternalMetadata:     nil,                    // Only set for external instances
-		Permissions: GetManagedPermissions(), // Full permissions for managed instances
+		Title:            opts.Title,
+		Status:           Ready,
+		Path:             absPath,
+		Branch:           opts.Branch,
+		Program:          opts.Program,
+		Height:           0,
+		Width:            0,
+		CreatedAt:        t,
+		UpdatedAt:        t,
+		AutoYes:          opts.AutoYes,
+		Prompt:           opts.Prompt,
+		ExistingWorktree: opts.ExistingWorktree,
+		Category:         opts.Category,
+		Tags:             opts.Tags, // Set tags from options
+		SessionType:      sessionType,
+		TmuxPrefix:       opts.TmuxPrefix,
+		TmuxServerSocket: opts.TmuxServerSocket,
+		IsExpanded:       true, // Default to expanded for newly created instances
+		InstanceType:     InstanceTypeManaged,
+		IsManaged:        true,
+		ExternalMetadata: nil,                     // Only set for external instances
+		Permissions:      GetManagedPermissions(), // Full permissions for managed instances
 		ReviewState: ReviewState{
 			LastTerminalUpdate:   t, // Initialize to creation time
 			LastMeaningfulOutput: t, // Initialize to creation time
@@ -693,6 +715,18 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 		workDir := i.Path
 		if i.gitManager.HasWorktree() {
 			workDir = i.gitManager.GetWorktreePath()
+		}
+		// Log cold vs warm restore path for observability.
+		// RestoreWithWorkDir handles both cases internally: it reattaches to a live
+		// tmux session (warm) or starts a fresh one (cold). The command already
+		// includes --resume <uuid> when claudeSession.SessionID is set (via
+		// ClaudeCommandBuilder in initTmuxSession), so cold restore is automatic.
+		if !i.tmuxManager.DoesSessionExist() {
+			if i.claudeSession != nil && i.claudeSession.SessionID != "" {
+				log.InfoLog.Printf("Cold restoring session '%s' with --resume %s", i.Title, i.claudeSession.SessionID)
+			} else {
+				log.InfoLog.Printf("No conversation UUID for cold restore, starting fresh for session '%s'", i.Title)
+			}
 		}
 		log.InfoLog.Printf("Restoring existing tmux session for instance '%s' with workDir '%s'", i.Title, workDir)
 		if err := i.tmuxManager.RestoreWithWorkDir(workDir); err != nil {
@@ -1760,6 +1794,30 @@ func (i *Instance) GetWorkingDirectory() string {
 	return i.Path
 }
 
+// CaptureCurrentState captures live tmux state (e.g. current pane path) and
+// persists it back to the Instance so it survives a process restart.
+// If the tmux session is no longer alive the method returns nil — the caller
+// should treat a dead session as a graceful no-op.
+func (i *Instance) CaptureCurrentState() error {
+	if !i.tmuxManager.DoesSessionExist() {
+		log.InfoLog.Printf("CaptureCurrentState: tmux session for '%s' is not alive, skipping", i.Title)
+		return nil
+	}
+
+	path, err := i.tmuxManager.GetPaneCurrentPath()
+	if err != nil {
+		log.WarningLog.Printf("CaptureCurrentState: failed to get pane current path for '%s': %v", i.Title, err)
+		return err
+	}
+
+	if path != "" {
+		log.InfoLog.Printf("CaptureCurrentState: updating WorkingDir for '%s': '%s' -> '%s'", i.Title, i.WorkingDir, path)
+		i.WorkingDir = path
+	}
+
+	return nil
+}
+
 // GetClaudeSession returns the Claude session data for this instance
 func (i *Instance) GetClaudeSession() *ClaudeSessionData {
 	return i.claudeSession
@@ -1773,6 +1831,182 @@ func (i *Instance) SetClaudeSession(sessionData *ClaudeSessionData) {
 // HasClaudeSession returns true if this instance has Claude session data
 func (i *Instance) HasClaudeSession() bool {
 	return i.claudeSession != nil && i.claudeSession.SessionID != ""
+}
+
+// GetConversationUUID returns the Claude conversation UUID, or "" if not linked.
+func (i *Instance) GetConversationUUID() string {
+	if i.claudeSession == nil {
+		return ""
+	}
+	return i.claudeSession.SessionID
+}
+
+// GetPanePID returns the PID of the foreground process in the tmux pane.
+// Returns 0 and an error if the session is not alive or PID cannot be retrieved.
+func (i *Instance) GetPanePID() (int32, error) {
+	if !i.tmuxManager.DoesSessionExist() {
+		return 0, fmt.Errorf("tmux session not alive for '%s'", i.Title)
+	}
+	return i.tmuxManager.GetPanePID()
+}
+
+// SetHistoryInfo updates the conversation UUID and history file path.
+// Thread-safe: acquires stateMutex write lock.
+// No-op if the UUID is already set to the same value.
+func (i *Instance) SetHistoryInfo(conversationUUID, historyFilePath string) {
+	i.stateMutex.Lock()
+	defer i.stateMutex.Unlock()
+
+	// Only update if something changed.
+	currentUUID := ""
+	if i.claudeSession != nil {
+		currentUUID = i.claudeSession.SessionID
+	}
+	if currentUUID == conversationUUID && i.HistoryFilePath == historyFilePath {
+		return
+	}
+
+	if i.claudeSession == nil {
+		i.claudeSession = &ClaudeSessionData{}
+	}
+	i.claudeSession.SessionID = conversationUUID
+	i.HistoryFilePath = historyFilePath
+}
+
+// CreateCheckpoint captures a named state bookmark for this session.
+// scrollbackSeq should be the current scrollback high-water mark (from ScrollbackManager);
+// pass 0 if the caller does not have access to scrollback state.
+// Thread-safe: acquires stateMutex write lock.
+// Returns an error if the instance is not started.
+func (i *Instance) CreateCheckpoint(label string, scrollbackSeq uint64) (*Checkpoint, error) {
+	if !i.started {
+		return nil, fmt.Errorf("cannot create checkpoint on unstarted instance '%s'", i.Title)
+	}
+
+	i.stateMutex.Lock()
+	defer i.stateMutex.Unlock()
+
+	// Collect git SHA — gracefully empty if no worktree.
+	gitSHA, _ := i.gitManager.GetCurrentCommitSHA()
+
+	// Conversation UUID — empty if not yet linked.
+	convUUID := ""
+	if i.claudeSession != nil {
+		convUUID = i.claudeSession.SessionID
+	}
+
+	// Count lines in history file for accurate fork truncation later.
+	var convLineCount uint64
+	if i.HistoryFilePath != "" {
+		if f, err := os.Open(i.HistoryFilePath); err == nil {
+			defer f.Close()
+			sc := bufio.NewScanner(f)
+			for sc.Scan() {
+				if len(sc.Bytes()) > 0 {
+					convLineCount++
+				}
+			}
+			if scanErr := sc.Err(); scanErr != nil {
+				log.WarningLog.Printf("CreateCheckpoint: error scanning history file: %v", scanErr)
+			}
+		}
+	}
+
+	cp := Checkpoint{
+		ID:             newCheckpointID(),
+		SessionID:      i.Title,
+		Label:          label,
+		ScrollbackSeq:  scrollbackSeq,
+		ClaudeConvUUID: convUUID,
+		ConvLineCount:  convLineCount,
+		GitCommitSHA:   gitSHA,
+		Timestamp:      time.Now().UTC(),
+	}
+
+	i.Checkpoints = append(i.Checkpoints, cp)
+	i.ActiveCheckpoint = cp.ID
+
+	return &cp, nil
+}
+
+// ForkFromCheckpoint creates a new, unstarted Instance that is an independent branch of i,
+// seeded from the state captured at the checkpoint identified by checkpointID.
+//
+// The fork receives:
+//   - A truncated copy of i's scrollback (entries up to cp.ScrollbackSeq)
+//   - A truncated copy of i's Claude conversation (first cp.ConvLineCount lines), if available
+//   - A new git worktree branched from cp.GitCommitSHA, if available
+//
+// The returned instance is unstarted; the caller must call instance.Start(true).
+func (i *Instance) ForkFromCheckpoint(checkpointID, newTitle string, configDir string) (*Instance, error) {
+	cp := i.Checkpoints.FindByID(checkpointID)
+	if cp == nil {
+		return nil, fmt.Errorf("checkpoint %q not found on session %q", checkpointID, i.Title)
+	}
+	if newTitle == "" {
+		return nil, fmt.Errorf("newTitle must not be empty")
+	}
+
+	// Fork Claude conversation if we have the data.
+	newConvUUID := ""
+	if cp.ConvLineCount > 0 && cp.ClaudeConvUUID != "" && i.HistoryFilePath != "" {
+		historyDir := filepath.Dir(i.HistoryFilePath)
+		uuid, err := ForkClaudeConversation(i.HistoryFilePath, cp.ConvLineCount, historyDir)
+		if err != nil {
+			log.WarningLog.Printf("ForkFromCheckpoint: skipping conversation fork: %v", err)
+		} else {
+			newConvUUID = uuid
+		}
+	}
+
+	// Fork scrollback.
+	srcScrollback := filepath.Join(configDir, i.Title, "scrollback.jsonl")
+	dstScrollback := filepath.Join(configDir, newTitle, "scrollback.jsonl")
+	if err := scrollback.ForkScrollback(srcScrollback, cp.ScrollbackSeq, dstScrollback); err != nil {
+		log.WarningLog.Printf("ForkFromCheckpoint: skipping scrollback fork: %v", err)
+	}
+
+	// Build the new instance.
+	opts := InstanceOptions{
+		Title:      newTitle,
+		Path:       i.Path,
+		WorkingDir: i.WorkingDir,
+		Program:    i.Program,
+		AutoYes:    i.AutoYes,
+		Category:   i.Category,
+		Tags:       append([]string(nil), i.Tags...),
+		ResumeId:   newConvUUID,
+	}
+
+	newInst, err := NewInstance(opts)
+	if err != nil {
+		return nil, fmt.Errorf("fork from checkpoint: create instance: %w", err)
+	}
+
+	// Attach a git worktree branched from the checkpoint SHA.
+	if i.gitManager.HasWorktree() && cp.GitCommitSHA != "" {
+		branchName := "fork/" + newTitle
+		wt, _, err := git.NewGitWorktreeFromCommitSHA(i.Path, newTitle, branchName, cp.GitCommitSHA)
+		if err != nil {
+			log.WarningLog.Printf("ForkFromCheckpoint: skipping git worktree: %v", err)
+		} else {
+			newInst.gitManager.SetWorktree(wt)
+		}
+	}
+
+	newInst.ForkedFromID = i.Title
+
+	return newInst, nil
+}
+
+// GetCheckpoints returns a snapshot copy of the checkpoint list, safe for
+// concurrent reads from outside the instance's lock domain.
+func (i *Instance) GetCheckpoints() CheckpointList {
+	i.stateMutex.RLock()
+	defer i.stateMutex.RUnlock()
+	cp := make(CheckpointList, len(i.Checkpoints))
+	copy(cp, i.Checkpoints)
+	return cp
 }
 
 // GetReviewQueue returns the review queue for this instance
@@ -1952,9 +2186,9 @@ func (i *Instance) GetStatusIconForType() string {
 
 // UpdateTerminalTimestamps is a coordinator method that bridges TmuxProcessManager (I/O)
 // with ReviewState (timestamp recording). It:
-//   1. Calls tmuxManager.FilterBanners/HasMeaningfulContent (no lock needed, read-only tmux ops)
-//   2. Acquires stateMutex
-//   3. Delegates to ReviewState.UpdateTimestamps
+//  1. Calls tmuxManager.FilterBanners/HasMeaningfulContent (no lock needed, read-only tmux ops)
+//  2. Acquires stateMutex
+//  3. Delegates to ReviewState.UpdateTimestamps
 //
 // This method intentionally stays on Instance because it coordinates two sub-managers.
 // The forceUpdate parameter bypasses meaningful content checking for user-initiated interactions.

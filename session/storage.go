@@ -1,9 +1,9 @@
 package session
 
 import (
-	"github.com/tstapler/stapler-squad/log"
 	"context"
 	"fmt"
+	"github.com/tstapler/stapler-squad/log"
 	"time"
 )
 
@@ -77,6 +77,14 @@ type InstanceData struct {
 	LastPromptSignature  string    `json:"last_prompt_signature,omitempty"`
 	LastUserResponse     time.Time `json:"last_user_response,omitempty"`
 	ProcessingGraceUntil time.Time `json:"processing_grace_until,omitempty"`
+
+	// Checkpoint metadata for session state bookmarking (session resumption)
+	Checkpoints      CheckpointList `json:"checkpoints,omitempty"`
+	ActiveCheckpoint string         `json:"active_checkpoint,omitempty"`
+	ForkedFromID     string         `json:"forked_from_id,omitempty"`
+
+	// History file linkage for cold restore
+	HistoryFilePath string `json:"history_file_path,omitempty"`
 }
 
 // GitWorktreeData represents the serializable data of a GitWorktree

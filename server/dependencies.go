@@ -1,13 +1,15 @@
 package server
 
 import (
+	"fmt"
+	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/server/services"
 	"github.com/tstapler/stapler-squad/session"
 	"github.com/tstapler/stapler-squad/session/detection"
+	"github.com/tstapler/stapler-squad/session/mux"
 	"github.com/tstapler/stapler-squad/session/scrollback"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -28,6 +30,7 @@ type ServerDependencies struct {
 	TmuxStreamerManager     *session.ExternalTmuxStreamerManager
 	ExternalDiscovery       *session.ExternalSessionDiscovery
 	ExternalApprovalMonitor *session.ExternalApprovalMonitor
+	HistoryLinker           *session.HistoryLinker
 }
 
 // BuildDependencies constructs and wires all server dependencies in the correct order.
@@ -71,6 +74,7 @@ func BuildDependencies() (*ServerDependencies, error) {
 		TmuxStreamerManager:     rt.TmuxStreamerManager,
 		ExternalDiscovery:       rt.ExternalDiscovery,
 		ExternalApprovalMonitor: rt.ExternalApprovalMonitor,
+		HistoryLinker:           rt.HistoryLinker,
 	}, nil
 }
 
@@ -337,6 +341,7 @@ type RuntimeDeps struct {
 	TmuxStreamerManager     *session.ExternalTmuxStreamerManager
 	ExternalDiscovery       *session.ExternalSessionDiscovery
 	ExternalApprovalMonitor *session.ExternalApprovalMonitor
+	HistoryLinker           *session.HistoryLinker
 }
 
 // BuildRuntimeDeps constructs Phase 3 dependencies using Phase 2 outputs.
@@ -440,6 +445,19 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 	// Step 10: TmuxStreamerManager (independent)
 	tmuxStreamerManager := session.NewExternalTmuxStreamerManager()
 
+	// Step 10.5: HistoryLinker — correlates sessions with Claude JSONL history files.
+	// Detector uses native macOS proc_pidinfo; watcher fires on new JSONL creation.
+	// Use a closure so the watcher callback can reference the linker after construction.
+	historyDetector := session.NewHistoryFileDetectorWithRealInspector()
+	var historyLinker *session.HistoryLinker
+	historyWatcher := session.NewHistoryFileWatcher("", func(_ string) {
+		if historyLinker != nil {
+			historyLinker.ScanAll()
+		}
+	})
+	historyLinker = session.NewHistoryLinker(historyDetector, historyWatcher)
+	historyLinker.SetInstances(instances)
+
 	// Step 11: ExternalDiscovery with session-added/removed callbacks
 	externalDiscovery := session.NewExternalSessionDiscovery()
 	externalDiscovery.OnSessionAdded(func(instance *session.Instance) {
@@ -452,10 +470,12 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 		instance.SetReviewQueue(reviewQueue)
 		instance.SetStatusManager(statusManager)
 		reviewQueuePoller.AddInstance(instance)
+		historyLinker.AddInstance(instance)
 		log.InfoLog.Printf("Added external session '%s' to review queue poller", instance.Title)
 	})
 	externalDiscovery.OnSessionRemoved(func(instance *session.Instance) {
 		reviewQueuePoller.RemoveInstance(instance.Title)
+		historyLinker.RemoveInstance(instance.Title)
 		log.InfoLog.Printf("Removed external session '%s' from review queue poller", instance.Title)
 		reviewQueue.Remove(instance.Title)
 		if err := storage.DeleteInstance(instance.Title); err != nil {
@@ -464,6 +484,14 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 			log.InfoLog.Printf("Removed external session '%s' from storage", instance.Title)
 		}
 	})
+
+	// Wire SocketRegistry for fast reconnection after restart.
+	if registryDir, regErr := config.GetConfigDir(); regErr == nil {
+		socketRegistry := mux.NewSocketRegistry(registryDir)
+		externalDiscovery.SetSocketRegistry(socketRegistry)
+	} else {
+		log.WarningLog.Printf("SocketRegistry: could not get config dir: %v", regErr)
+	}
 
 	// Step 12: ExternalApprovalMonitor — wire approval-to-review-queue bridge
 	externalApprovalMonitor := session.NewExternalApprovalMonitor()
@@ -519,5 +547,6 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 		TmuxStreamerManager:     tmuxStreamerManager,
 		ExternalDiscovery:       externalDiscovery,
 		ExternalApprovalMonitor: externalApprovalMonitor,
+		HistoryLinker:           historyLinker,
 	}, nil
 }

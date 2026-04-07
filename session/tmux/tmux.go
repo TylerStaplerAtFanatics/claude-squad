@@ -2,16 +2,17 @@ package tmux
 
 import (
 	"bytes"
-	"github.com/tstapler/stapler-squad/executor"
-	"github.com/tstapler/stapler-squad/log"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/tstapler/stapler-squad/executor"
+	"github.com/tstapler/stapler-squad/log"
 	"io"
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -79,13 +80,13 @@ type TmuxSession struct {
 	existsCacheTTL   time.Duration
 
 	// Control mode streaming infrastructure (replaces pipe-pane + FIFO)
-	controlModeCmd       *exec.Cmd               // tmux -C attach process
-	controlModeStdout    io.ReadCloser           // stdout pipe for control mode notifications
-	controlModeStdin     io.WriteCloser          // stdin pipe for control mode commands
-	controlModeDone      chan struct{}           // Signal channel for control mode termination
+	controlModeCmd         *exec.Cmd              // tmux -C attach process
+	controlModeStdout      io.ReadCloser          // stdout pipe for control mode notifications
+	controlModeStdin       io.WriteCloser         // stdin pipe for control mode commands
+	controlModeDone        chan struct{}          // Signal channel for control mode termination
 	controlModeSubscribers map[string]chan []byte // WebSocket clients subscribed to control mode updates
-	controlModeSubMu     sync.RWMutex            // Protects controlModeSubscribers map and controlModeExited
-	controlModeExited    bool                    // True after readControlModeOutput exits; new subscribers get pre-closed channel
+	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers map and controlModeExited
+	controlModeExited      bool                   // True after readControlModeOutput exits; new subscribers get pre-closed channel
 }
 
 // windowSize represents terminal dimensions from external sources (like BubbleTea)
@@ -198,7 +199,7 @@ func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory
 		serverSocket:     serverSocket,
 		ptyFactory:       ptyFactory,
 		cmdExec:          cmdExec,
-		bannerFilter:     NewBannerFilter(),          // Initialize banner filter for terminal output filtering
+		bannerFilter:     NewBannerFilter(),         // Initialize banner filter for terminal output filtering
 		externalResizeCh: make(chan windowSize, 10), // Buffered channel for resize events
 		existsCacheTTL:   500 * time.Millisecond,    // Cache session existence for 500ms
 	}
@@ -635,7 +636,7 @@ func (t *TmuxSession) detectPromptInContent(content string) bool {
 						trimmed := strings.TrimSpace(lines[j])
 						// Check for numbered options (1., 2., 3., etc.)
 						if len(trimmed) > 0 && (trimmed[0] >= '1' && trimmed[0] <= '9') &&
-						   len(trimmed) > 1 && trimmed[1] == '.' {
+							len(trimmed) > 1 && trimmed[1] == '.' {
 							return true
 						}
 					}
@@ -1280,6 +1281,40 @@ func (t *TmuxSession) GetPaneDimensions() (width, height int, err error) {
 	return paneWidth, paneHeight, nil
 }
 
+// GetPaneCurrentPath returns the current working directory of the pane.
+// This is used by CaptureCurrentState to persist the working directory before shutdown.
+func (t *TmuxSession) GetPaneCurrentPath() (string, error) {
+	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
+		"#{pane_current_path}")
+
+	output, err := t.cmdExec.Output(cmd)
+	if err != nil {
+		return "", fmt.Errorf("failed to get pane current path for session '%s': %w", t.sanitizedName, err)
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+// GetPanePID returns the PID of the foreground process in the pane.
+// This is used by HistoryLinker to correlate open files with session records.
+func (t *TmuxSession) GetPanePID() (int32, error) {
+	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
+		"#{pane_pid}")
+
+	output, err := t.cmdExec.Output(cmd)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get pane PID for session '%s': %w", t.sanitizedName, err)
+	}
+
+	pidStr := strings.TrimSpace(string(output))
+	pid, err := strconv.ParseInt(pidStr, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid pane PID %q for session '%s': %w", pidStr, t.sanitizedName, err)
+	}
+
+	return int32(pid), nil
+}
+
 // CleanupSessions kills all tmux sessions that start with "session-" on the default server
 func CleanupSessions(cmdExec executor.Executor) error {
 	return CleanupSessionsOnServer(cmdExec, "")
@@ -1387,4 +1422,3 @@ func sanitizeUTF8String(rawBytes []byte) string {
 
 	return result.String()
 }
-
