@@ -113,7 +113,7 @@ func NewServer(addr string) *Server {
 				"tmux-server",
 				"System",
 				uuid.New().String(),
-				int32(10), // NotificationType_NOTIFICATION_TYPE_INFO
+				int32(8),  // NotificationType_NOTIFICATION_TYPE_WARNING
 				int32(2),  // NotificationPriority_NOTIFICATION_PRIORITY_MEDIUM
 				"Tmux Server Recovered",
 				"Connection to the tmux server has been restored. Sessions will resume automatically.",
