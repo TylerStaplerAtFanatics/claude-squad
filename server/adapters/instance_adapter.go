@@ -44,6 +44,9 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 		// Instance type and external metadata
 		InstanceType:     instanceTypeToProto(inst.InstanceType),
 		ExternalMetadata: externalMetadataToProto(inst.ExternalMetadata),
+		// History linkage for cold restore
+		HistoryFilePath:        inst.HistoryFilePath,
+		ClaudeConversationUuid: inst.GetConversationUUID(),
 	}
 
 	// Convert rate limit state

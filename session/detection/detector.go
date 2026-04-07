@@ -43,9 +43,9 @@ type StatusPatterns struct {
 	InputRequired []StatusPattern `yaml:"input_required"` // Explicit input prompts
 	Error         []StatusPattern `yaml:"error"`
 	TestsFailing  []StatusPattern `yaml:"tests_failing"` // Tests are failing
-	Idle          []StatusPattern `yaml:"idle"`           // Waiting for user input
-	Active        []StatusPattern `yaml:"active"`         // Actively executing commands
-	Success       []StatusPattern `yaml:"success"`        // Task completed successfully
+	Idle          []StatusPattern `yaml:"idle"`          // Waiting for user input
+	Active        []StatusPattern `yaml:"active"`        // Actively executing commands
+	Success       []StatusPattern `yaml:"success"`       // Task completed successfully
 }
 
 // compiledProgramPatterns holds a StatusPatterns set with pre-compiled regexes
@@ -624,16 +624,10 @@ func claudePatterns() StatusPatterns {
 		},
 		InputRequired: []StatusPattern{
 			{
-				// Claude Code's AskUserQuestion prompts show:
-				//   ❯ 1. Yes
-				//   2. No, and tell Claude what to do differently
-				//
-				// We match ONLY ❯ (U+276F), NOT ASCII >.
-				// The > character is ubiquitous in terminal output: shell prompts,
-				// Gradle output ("> Run gradlew tasks"), markdown blockquotes, heredocs.
-				// Using > caused false positives for any program that outputs numbered lists.
-				Name:        "numbered_option_selector",
-				Pattern:     `❯\s+\d+\.\s+\S`,
+				Name: "numbered_option_selector",
+				// Matches Claude Code's numbered selection format with arrow selector
+				// Example: " ❯ 1. Yes" or "   2. No"
+				Pattern:     `[❯>]\s*\d+\.\s+\w`,
 				Description: "Selection prompt with numbered options",
 				Priority:    16,
 			},

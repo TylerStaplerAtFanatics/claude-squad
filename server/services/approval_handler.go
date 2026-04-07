@@ -142,6 +142,15 @@ func (h *ApprovalHandler) HandlePermissionRequest(w http.ResponseWriter, r *http
 		sessionID = "unknown"
 	}
 
+	// Persist the Claude session_id and transcript_path from the hook payload into the
+	// live instance so that --resume is automatically passed on the next session start
+	// (e.g. after a crash). This is more reliable than waiting for HistoryLinker.
+	if payload.SessionID != "" && sessionID != "unknown" && h.queueChecker != nil {
+		if inst := h.queueChecker.FindInstance(sessionID); inst != nil {
+			inst.SetHistoryInfo(payload.SessionID, payload.TranscriptPath)
+		}
+	}
+
 	// Secret scan: auto-deny any command that appears to contain a plaintext secret.
 	// Runs on the full command text (before any truncation) so it catches long secrets.
 	if cmd, ok := payload.ToolInput["command"].(string); ok && cmd != "" {
@@ -509,6 +518,18 @@ type hookEntry struct {
 type hookMatcherGroup struct {
 	Matcher string      `json:"matcher,omitempty"`
 	Hooks   []hookEntry `json:"hooks"`
+}
+
+// claudeSettingsHooks is the top-level hooks map in settings.local.json.
+type claudeSettingsHooks struct {
+	PermissionRequest []hookMatcherGroup `json:"PermissionRequest,omitempty"`
+}
+
+// claudeSettings is the partial structure of .claude/settings.local.json.
+// Only the "hooks" key is read/written; other fields are preserved via rawOther.
+type claudeSettings struct {
+	Hooks    claudeSettingsHooks        `json:"hooks"`
+	rawOther map[string]json.RawMessage // preserves unknown fields
 }
 
 const (
