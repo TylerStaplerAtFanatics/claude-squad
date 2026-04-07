@@ -188,6 +188,14 @@ jobs:
       - name: Install dependencies
         run: cd web-app && npm ci
 
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.41.0'
+
+      - name: Generate protobuf code
+        run: buf generate proto
+
       - name: Build Next.js app
         run: cd web-app && npm run build
 
@@ -220,6 +228,14 @@ jobs:
 
       - name: Install dependencies
         run: cd web-app && npm ci
+
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.41.0'
+
+      - name: Generate protobuf code
+        run: buf generate proto
 
       - name: Install Playwright browsers
         run: cd web-app && npx playwright install --with-deps chromium
@@ -337,6 +353,14 @@ jobs:
       - name: Install dependencies
         run: cd web-app && npm ci
 
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.41.0'
+
+      - name: Generate protobuf code
+        run: buf generate proto
+
       - name: Build Next.js app
         run: cd web-app && npm run build
 
@@ -387,6 +411,14 @@ jobs:
 
       - name: Install dependencies
         run: cd web-app && npm ci
+
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.41.0'
+
+      - name: Generate protobuf code
+        run: buf generate proto
 
       - name: Install Playwright browsers
         run: cd web-app && npx playwright install --with-deps chromium
