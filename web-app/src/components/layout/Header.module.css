@@ -276,6 +276,50 @@
   display: inline;
 }
 
+/* Light mode: header has a dark background but light mode CSS vars resolve to dark text */
+@media (prefers-color-scheme: light) {
+  .title {
+    color: #e8e8e8;
+  }
+
+  .subtitle {
+    color: #a0a0a0;
+  }
+
+  .navLink {
+    color: #a0a0a0;
+  }
+
+  .navLink:hover {
+    color: #e8e8e8;
+  }
+
+  .navLink.active {
+    color: #e8e8e8;
+  }
+
+  .debugButton,
+  .helpButton,
+  .notificationButton {
+    color: #a0a0a0;
+    border-color: #555;
+  }
+
+  .debugButton:hover,
+  .helpButton:hover,
+  .notificationButton:hover {
+    color: #e8e8e8;
+  }
+
+  .hamburger {
+    border-color: #555;
+  }
+
+  .hamburgerLine {
+    background-color: #a0a0a0;
+  }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .container {
