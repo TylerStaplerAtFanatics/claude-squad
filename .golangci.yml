@@ -1,3 +1,5 @@
+version: "2"
+
 run:
   exclude-dirs:
     - session/tmux/tmux_windows
@@ -9,13 +11,12 @@ linters:
     - nilnil
     - staticcheck
     - govet
-
-linters-settings:
-  forbidigo:
-    forbid:
-      - p: ^fmt\.Print(f|ln)?$
-        msg: "use the log package instead of fmt.Print* in production code"
-    exclude-godoc-examples: true
+  settings:
+    forbidigo:
+      forbid:
+        - p: ^fmt\.Print(f|ln)?$
+          msg: "use the log package instead of fmt.Print* in production code"
+      exclude-godoc-examples: true
 
 issues:
   exclude-rules:
