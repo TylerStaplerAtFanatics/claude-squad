@@ -54,9 +54,11 @@ jobs:
         run: buf generate proto
 
       - name: Build web UI
-        run: |
-          cd web-app && npm run build
-          cp -r web-app/out server/web/dist
+        run: npm run build
+        working-directory: web-app
+
+      - name: Copy web UI to dist
+        run: cp -r web-app/out server/web/dist
 
       - name: Upload generated files
         uses: actions/upload-artifact@v4
