@@ -47,14 +47,14 @@ func benchmarkServiceSetup(b *testing.B) *benchServiceFixture {
 	// Repository → Storage → EventBus → SessionService
 	repo, err := session.NewEntRepository(session.WithDatabasePath(dbPath))
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		b.Fatalf("failed to create repository: %v", err)
 	}
 
 	storage, err := session.NewStorageWithRepository(repo)
 	if err != nil {
-		repo.Close()
-		os.RemoveAll(tmpDir)
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
 		b.Fatalf("failed to create storage: %v", err)
 	}
 
@@ -76,8 +76,8 @@ func benchmarkServiceSetup(b *testing.B) *benchServiceFixture {
 	cleanup := func() {
 		srv.Close()
 		bus.Close()
-		repo.Close()
-		os.RemoveAll(tmpDir)
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	return &benchServiceFixture{
