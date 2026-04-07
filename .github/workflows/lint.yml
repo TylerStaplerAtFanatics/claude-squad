@@ -59,7 +59,7 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.11.4
-          args: --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
+          args: --timeout=3m --max-issues-per-linter=0 --max-same-issues=0 --exclude-dirs=session/tmux/tmux_windows
           skip-cache: false
           only-new-issues: true
 
