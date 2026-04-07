@@ -30,21 +30,21 @@ import (
 )
 
 var (
-	version           = "1.0.12"
-	daemonFlag        bool
-	testModeFlag      bool
-	testDirFlag       string
-	discoveryModeFlag string
-	discoverExtFlag   bool
-	profileFlag       bool
-	profilePortFlag   int
-	traceFlag         bool
-	listenAddrFlag    string
-	remoteAccessFlag  bool
-	remotePortFlag    int
-	rpIDFlag             string
-	tmuxKeepServerFlag   bool
-	rootCmd           = &cobra.Command{
+	version            = "1.0.12"
+	daemonFlag         bool
+	testModeFlag       bool
+	testDirFlag        string
+	discoveryModeFlag  string
+	discoverExtFlag    bool
+	profileFlag        bool
+	profilePortFlag    int
+	traceFlag          bool
+	listenAddrFlag     string
+	remoteAccessFlag   bool
+	remotePortFlag     int
+	rpIDFlag           string
+	tmuxKeepServerFlag bool
+	rootCmd            = &cobra.Command{
 		Use:   "stapler-squad",
 		Short: "Stapler Squad - Manage multiple AI agents like Claude Code, Aider, Codex, and Amp (Web Mode)",
 		RunE: func(cmd *cobra.Command, args []string) error {
