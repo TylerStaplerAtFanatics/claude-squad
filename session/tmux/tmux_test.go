@@ -444,6 +444,42 @@ func TestPrependSocket(t *testing.T) {
 	}
 }
 
+// TestSetServerRecoveryCallback verifies that the callback registered via
+// SetServerRecoveryCallback is called after a successful server recovery.
+func TestSetServerRecoveryCallback(t *testing.T) {
+	// Restore original callback after test.
+	orig := onServerRecovered
+	t.Cleanup(func() { onServerRecovered = orig })
+
+	called := make(chan struct{}, 1)
+	SetServerRecoveryCallback(func() { called <- struct{}{} })
+
+	// Inject a succeeding ensureServerRunning so recoverFromServerFailure
+	// takes the success branch and fires the callback.
+	origEnsure := ensureServerRunning
+	ensureServerRunning = func(_ string) error { return nil }
+	t.Cleanup(func() { ensureServerRunning = origEnsure })
+
+	// Ensure recoveryInFlight is clean before and after.
+	recoveryMu.Lock()
+	require.False(t, recoveryInFlight, "test isolation: recoveryInFlight must be false at start")
+	recoveryMu.Unlock()
+	t.Cleanup(func() {
+		recoveryMu.Lock()
+		recoveryInFlight = false
+		recoveryMu.Unlock()
+	})
+
+	recoverFromServerFailure("", "TestSetServerRecoveryCallback")
+
+	select {
+	case <-called:
+		// callback fired as expected
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("recovery callback was not called after successful recovery")
+	}
+}
+
 // TestRegistryKeyUnregisteredOnClose verifies that Close() unregisters the session's
 // circuit breaker executor from the global registry. This prevents stale entries from
 // accumulating in ResetAll() calls across long-lived processes.

@@ -185,6 +185,16 @@ func EnsureServerRunning(serverSocket string) error {
 // without depending on real tmux socket behavior.
 var ensureServerRunning = EnsureServerRunning
 
+// onServerRecovered is called after a successful tmux server recovery.
+// Wired by the server layer to notify connected clients. Safe to leave nil.
+var onServerRecovered func()
+
+// SetServerRecoveryCallback registers a function called after successful server recovery.
+// Thread-safe: the callback executes outside the recoveryMu lock, in a goroutine.
+func SetServerRecoveryCallback(fn func()) {
+	onServerRecovered = fn
+}
+
 // SetExitEmpty sets the tmux server-level exit-empty option.
 // When enabled=false, the server stays alive even when all sessions are closed.
 // Requires the server to already be running.
@@ -1209,6 +1219,9 @@ func recoverFromServerFailure(serverSocket, caller string) {
 	if restartErr := ensureServerRunning(serverSocket); restartErr == nil {
 		log.InfoLog.Printf("[tmux] server restarted from %s, resetting circuit breakers", caller)
 		executor.GetGlobalRegistry().ResetAll()
+		if onServerRecovered != nil {
+			go onServerRecovered()
+		}
 		if serverSocket == "" {
 			if keepErr := CreateKeepaliveSession(serverSocket); keepErr != nil {
 				log.WarningLog.Printf("[tmux] failed to recreate keepalive session: %v", keepErr)
