@@ -10,6 +10,39 @@
 
 ---
 
+## IN PROGRESS: Permissions Extension (MDD)
+
+**Status**: Sprint 1 ✅ COMPLETE, Sprint 2 🏗️ IN PROGRESS
+**Priority**: P1 - Modularize classification for multi-CLI support
+**Epic ID**: FEATURE-PERMISSIONS-MDD
+**Progress**: 60% (Shared package and CLI foundation complete)
+
+### ✅ Completed Work:
+
+#### Sprint 1: Shared Package (COMPLETE)
+- [x] ✅ Create `pkg/classifier` with core logic and command parsing
+- [x] ✅ 100% test coverage for `pkg/classifier` (tests passing)
+- [x] ✅ Refactor main `stapler-squad` server to use `pkg/classifier`
+- [x] ✅ Remove redundant classification logic from `server/services/`
+
+#### Sprint 2: Standalone CLI (COMPLETE)
+- [x] ✅ Implement `ssq-hooks` CLI with `check`, `serve`, and `proxy` subcommands
+- [x] ✅ Implement rule export mechanism in `RulesStore` to `~/.config/stapler-squad/rules.json`
+- [x] ✅ Fix `proxy` output for shell evaluation (command to stdout, logs to stderr)
+- [x] ✅ Add `install` command to `ssq-hooks` for easy setup
+
+#### Sprint 3: Multi-CLI Integration (COMPLETE)
+- [x] ✅ Create `scripts/hooks/open-code-proxy.sh` wrapper
+- [x] ✅ Create `scripts/hooks/install-gemini-hook.sh` for Gemini CLI
+- [x] ✅ Implement deep security analysis (AST parsing enhancements)
+
+**Strategic Value**:
+- **Interoperability**: One classifier rules them all (Claude, Gemini, Open Code)
+- **Modularity**: Standalone permissions engine usable without the full TUI/Web UI
+- **Security**: Centralized policy enforcement across different AI tools
+
+---
+
 ## ✅ COMPLETE: Web UI Implementation
 
 **Status**: Stories 1-5 complete, all MVP features implemented
@@ -1824,7 +1857,7 @@ Do an end-to-end smoke test. If the UI renders and approve/deny work, the core f
 
 ## Context Notes
 
-**Last Updated**: 2026-03-20
+**Last Updated**: 2026-04-05
 **Current Phase**: Architecture refactoring wave complete; tmux user options metadata implemented (uncommitted); Approval Stories 5-6 pending
 **Next Milestone**: Wire ScanFromUserOptions() into server startup (2h); Approval Story 5 smoke test then Review Queue Integration
 
