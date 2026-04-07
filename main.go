@@ -660,23 +660,45 @@ func resolveLANHostnames(lanIPStr string) []string {
 	return hostnames
 }
 
-// getDNSSearchDomains returns the DNS search domains configured on this system
-// by parsing /etc/resolv.conf.  Returns nil if the file cannot be read or has
-// no search directive.
+// getDNSSearchDomains returns the DNS search domains configured on this system.
+// It checks /etc/resolv.conf first, then falls back to `scutil --dns` on macOS
+// (where /etc/resolv.conf is not the authoritative source).
 func getDNSSearchDomains() []string {
-	data, err := os.ReadFile("/etc/resolv.conf")
-	if err != nil {
-		return nil
-	}
+	seen := make(map[string]bool)
 	var domains []string
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "search ") {
-			for _, d := range strings.Fields(line)[1:] {
-				domains = append(domains, d)
+
+	add := func(d string) {
+		if d != "" && !seen[d] {
+			seen[d] = true
+			domains = append(domains, d)
+		}
+	}
+
+	// /etc/resolv.conf — works reliably on Linux; present but advisory on macOS.
+	if data, err := os.ReadFile("/etc/resolv.conf"); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "search ") {
+				for _, d := range strings.Fields(line)[1:] {
+					add(d)
+				}
 			}
 		}
 	}
+
+	// scutil --dns — macOS authoritative source for search domains.
+	if out, err := exec.Command("scutil", "--dns").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			// Format: "search domain[N] : example.com"
+			if strings.HasPrefix(line, "search domain") {
+				if parts := strings.SplitN(line, ":", 2); len(parts) == 2 {
+					add(strings.TrimSpace(parts[1]))
+				}
+			}
+		}
+	}
+
 	return domains
 }
 
