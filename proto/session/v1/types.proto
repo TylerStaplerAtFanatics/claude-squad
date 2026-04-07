@@ -105,6 +105,10 @@ message Session {
 
   // External instance metadata (only populated for external sessions)
   ExternalInstanceMetadata external_metadata = 32;
+
+  // Rate limit detection state
+  // Indicates if session is experiencing rate limiting from LLM provider
+  RateLimitState rate_limit_state = 33;
 }
 
 // SessionStatus represents the current state of a session.
@@ -141,6 +145,21 @@ enum InstanceType {
   INSTANCE_TYPE_MANAGED = 1;
   // Session discovered externally (e.g., via claude-mux) with limited interaction.
   INSTANCE_TYPE_EXTERNAL = 2;
+}
+
+// RateLimitState indicates whether the session is experiencing rate limiting.
+enum RateLimitState {
+  RATE_LIMIT_STATE_UNSPECIFIED = 0;
+  // No rate limit detected
+  RATE_LIMIT_STATE_NONE = 1;
+  // Rate limit detected, waiting for reset time
+  RATE_LIMIT_STATE_WAITING = 2;
+  // Currently attempting recovery
+  RATE_LIMIT_STATE_RECOVERING = 3;
+  // Successfully recovered from rate limit
+  RATE_LIMIT_STATE_RECOVERED = 4;
+  // Recovery failed
+  RATE_LIMIT_STATE_FAILED = 5;
 }
 
 // ExternalInstanceMetadata contains metadata for externally discovered sessions.
