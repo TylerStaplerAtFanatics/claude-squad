@@ -48,6 +48,9 @@ function HomeContent() {
     resumeSession,
     renameSession,
     restartSession,
+    createCheckpoint,
+    listCheckpoints,
+    forkSession,
     listSessions,
     updateSession,
   } = useSessionService({
@@ -258,6 +261,9 @@ function HomeContent() {
             onRenameSession={renameSession}
             onRestartSession={restartSession}
             onUpdateTags={handleUpdateTags}
+            onCreateCheckpoint={createCheckpoint}
+            onListCheckpoints={listCheckpoints}
+            onForkFromCheckpoint={forkSession}
           />
         )}
       </main>

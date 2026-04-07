@@ -49,6 +49,9 @@ interface UseSessionServiceReturn {
   renameSession: (id: string, newTitle: string) => Promise<boolean>;
   restartSession: (id: string) => Promise<boolean>;
   acknowledgeSession: (id: string) => Promise<boolean>;
+  createCheckpoint: (sessionId: string, label: string) => Promise<boolean>;
+  listCheckpoints: (sessionId: string) => Promise<import("@/gen/session/v1/types_pb").CheckpointProto[]>;
+  forkSession: (sessionId: string, checkpointId: string, newTitle: string) => Promise<Session | null>;
 
   // Real-time updates
   watchSessions: (options?: { categoryFilter?: string; statusFilter?: SessionStatus }) => void;
@@ -287,6 +290,59 @@ export function useSessionService(
     [dispatch]
   );
 
+  // Create checkpoint for a session
+  const createCheckpoint = useCallback(
+    async (sessionId: string, label: string): Promise<boolean> => {
+      if (!clientRef.current) return false;
+
+      dispatch(setError(null));
+
+      try {
+        await clientRef.current.createCheckpoint({ sessionId, label });
+        return true;
+      } catch (err) {
+        dispatch(setError(err instanceof Error ? err.message : "Failed to create checkpoint"));
+        return false;
+      }
+    },
+    [dispatch]
+  );
+
+  // List checkpoints for a session
+  const listCheckpoints = useCallback(
+    async (sessionId: string) => {
+      if (!clientRef.current) return [];
+      try {
+        const response = await clientRef.current.listCheckpoints({ sessionId });
+        return response.checkpoints;
+      } catch {
+        return [];
+      }
+    },
+    []
+  );
+
+  // Fork a session from a checkpoint
+  const forkSession = useCallback(
+    async (sessionId: string, checkpointId: string, newTitle: string): Promise<Session | null> => {
+      if (!clientRef.current) return null;
+
+      dispatch(setError(null));
+
+      try {
+        const response = await clientRef.current.forkSession({ sessionId, checkpointId, newTitle });
+        if (response.session) {
+          dispatch(upsertSession(response.session));
+        }
+        return response.session ?? null;
+      } catch (err) {
+        dispatch(setError(err instanceof Error ? err.message : "Failed to fork session"));
+        return null;
+      }
+    },
+    [dispatch]
+  );
+
   // Acknowledge session (skip from review queue)
   const acknowledgeSession = useCallback(
     async (id: string): Promise<boolean> => {
@@ -424,6 +480,9 @@ export function useSessionService(
     renameSession,
     restartSession,
     acknowledgeSession,
+    createCheckpoint,
+    listCheckpoints,
+    forkSession,
     watchSessions,
     stopWatching,
   };

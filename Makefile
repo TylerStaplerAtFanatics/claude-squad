@@ -38,7 +38,7 @@ endif
 		touch $(ASDF_STAMP); \
 	fi
 
-.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif
+.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace
 
 # Default target
 help: ## Show this help message
@@ -172,8 +172,9 @@ install-tools: ensure-tools ## Install all development and analysis tools
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
-	go install github.com/jtbonhomme/go-nilcheck/cmd/nilcheck@latest
+	go install github.com/jtbonhomme/go-nilcheck@latest
 	go install golang.org/x/tools/cmd/deadcode@latest
+	go install golang.org/x/perf/cmd/benchstat@latest
 	@echo "All tools installed successfully!"
 
 # Code quality and analysis
@@ -202,7 +203,7 @@ nil-safety: ensure-tools ## Run comprehensive nil safety analysis
 	@echo ""
 	@echo "For detailed analysis, run individual tools:"
 	@echo "  make nilaway"
-	@echo "  make staticcheck"
+	@echo "  make staticcheck" 
 
 nilaway: ensure-tools ## Run NilAway nil safety analyzer
 	nilaway -include-pkgs="github.com/tstapler/stapler-squad" ./...
@@ -304,3 +305,56 @@ validate-env: ensure-tools ## Validate development environment setup
 	@which gosec >/dev/null 2>&1 && echo "✅ gosec installed" || echo "❌ gosec missing (run 'make install-tools')"
 	@which deadcode >/dev/null 2>&1 && echo "✅ deadcode installed" || echo "❌ deadcode missing (run 'make install-tools')"
 	@echo "Environment validation complete"
+# Benchmark comparison (local A/B testing with benchstat)
+benchmark-baseline: ensure-tools ## Save current benchmark results as baseline for comparison
+	@echo "Running benchmarks and saving as baseline..."
+	go test -bench=. -benchmem -count=8 -timeout=30m ./... > bench-old.txt 2>&1
+	@echo "✅ Baseline saved to bench-old.txt"
+
+benchmark-compare: ensure-tools ## Run benchmarks and compare against saved baseline
+	@if [ ! -f bench-old.txt ]; then \
+		echo "❌ No baseline found. Run 'make benchmark-baseline' first."; \
+		exit 1; \
+	fi
+	@echo "Running benchmarks..."
+	go test -bench=. -benchmem -count=8 -timeout=30m ./... > bench-new.txt 2>&1
+	@echo "Comparing results (old vs new):"
+	benchstat bench-old.txt bench-new.txt
+	@echo ""
+	@echo "Tip: Run 'make benchmark-baseline' to update the baseline to the current results."
+
+benchmark-tier1: ensure-tools ## Run Tier 1 critical-path benchmarks (fast, ~5 min)
+	@echo "Running Tier 1 benchmarks..."
+	go test \
+		-bench='BenchmarkEventBus|BenchmarkDeltaGenerat|BenchmarkCircularBuffer|BenchmarkSessionService_List|BenchmarkSessionService_Get' \
+		-benchmem \
+		-count=8 \
+		-timeout=10m \
+		./...
+
+# Profiling helpers — capture profiles from a running server (make restart-web-profile first)
+PROFILE_SERVER ?= http://localhost:6060
+
+profile-goroutines: ## Capture goroutine dump from running server (requires --profile flag)
+	@echo "Capturing goroutine dump..."
+	curl -s "$(PROFILE_SERVER)/debug/pprof/goroutine?debug=2" > goroutines.txt
+	@echo "✅ Saved to goroutines.txt"
+	@echo "   Review: cat goroutines.txt | grep -A3 'goroutine [0-9]'"
+
+profile-block: ## Capture block profile from running server (requires --profile flag)
+	@echo "Capturing block profile..."
+	curl -s "$(PROFILE_SERVER)/debug/pprof/block?debug=1" > block.prof
+	@echo "✅ Saved to block.prof"
+	@echo "   Analyze: go tool pprof -http=:8081 block.prof"
+
+profile-mutex: ## Capture mutex profile from running server (requires --profile flag)
+	@echo "Capturing mutex profile..."
+	curl -s "$(PROFILE_SERVER)/debug/pprof/mutex?debug=1" > mutex.prof
+	@echo "✅ Saved to mutex.prof"
+	@echo "   Analyze: go tool pprof -http=:8081 mutex.prof"
+
+profile-trace: ## Capture 30-second execution trace from running server (requires --profile flag)
+	@echo "Capturing 30-second execution trace..."
+	curl -s "$(PROFILE_SERVER)/debug/pprof/trace?seconds=30" > trace.out
+	@echo "✅ Saved to trace.out"
+	@echo "   Analyze: go tool trace trace.out"

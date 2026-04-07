@@ -1,10 +1,10 @@
 package session
 
 import (
-	"github.com/tstapler/stapler-squad/log"
-	"github.com/tstapler/stapler-squad/session/detection"
 	"context"
 	"fmt"
+	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/session/detection"
 	"sync"
 	"time"
 )
@@ -158,7 +158,10 @@ func (ce *CommandExecutor) executionLoop() {
 			if cmd == nil {
 				// No commands available, wait for notification while draining response channel
 				// to prevent "channel full" warnings when output arrives during idle periods
-				ce.waitForCommandOrDrain(responseCh)
+				if !ce.waitForCommandOrDrain(responseCh) {
+					// Response channel closed - session is stopping, exit the loop
+					return
+				}
 				continue
 			}
 
@@ -191,25 +194,32 @@ func (ce *CommandExecutor) executionLoop() {
 
 // waitForCommandOrDrain waits for a new command while draining the response channel
 // to prevent buffer overflow when output arrives during idle periods.
-func (ce *CommandExecutor) waitForCommandOrDrain(responseCh <-chan ResponseChunk) {
+// Returns true if the caller should continue (timer fired or command ready),
+// false if the response channel closed (caller should exit).
+func (ce *CommandExecutor) waitForCommandOrDrain(responseCh <-chan ResponseChunk) bool {
+	// Create the timer once outside the loop. Using time.After() inside the loop
+	// allocates a new channel+timer on every iteration, causing massive GC pressure
+	// when response chunks are flowing (thousands of leaked timers per second).
+	timer := time.NewTimer(1 * time.Second)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ce.ctx.Done():
-			return
+			return false
 		case <-ce.queue.NotifyChannel():
 			// New command available
-			return
+			return true
 		case _, ok := <-responseCh:
 			// Drain response chunks while idle - we don't need the data,
 			// just preventing channel overflow
 			if !ok {
-				// Channel closed
-				return
+				// Response channel closed - session is stopping
+				return false
 			}
 			// Continue draining
-		case <-time.After(1 * time.Second):
+		case <-timer.C:
 			// Periodic check for context cancellation
-			return
+			return true
 		}
 	}
 }

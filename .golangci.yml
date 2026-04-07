@@ -1,25 +1,26 @@
+version: "2"
+
 linters:
+  default: none
   enable:
     - forbidigo
     - ineffassign
     - nilnil
     - staticcheck
     - govet
-
-linters-settings:
-  forbidigo:
-    forbid:
-      - p: ^fmt\.Print(f|ln)?$
-        msg: "use the log package instead of fmt.Print* in production code"
-    exclude-godoc-examples: true
-
-issues:
-  exclude-rules:
-    # Allow fmt.Print* in main.go (CLI output) and test files
-    - path: "main\\.go"
-      linters: [forbidigo]
-    - path: "_test\\.go"
-      linters: [forbidigo]
-    # Allow fmt.Print* in cmd/ subdirectories (CLI output)
-    - path: "^cmd/"
-      linters: [forbidigo]
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: "use the log package instead of fmt.Print* in production code"
+      exclude-godoc-examples: true
+  exclusions:
+    rules:
+      # Allow fmt.Print* in main.go (CLI output) and test files
+      - path: "main\\.go"
+        linters: [forbidigo]
+      - path: "_test\\.go"
+        linters: [forbidigo]
+      # Allow fmt.Print* in cmd/ subdirectories (CLI output)
+      - path: "^cmd/"
+        linters: [forbidigo]

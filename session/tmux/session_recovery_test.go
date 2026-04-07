@@ -105,18 +105,21 @@ func testKilledSessionRestoresInCorrectWorktree(t *testing.T) {
 // testCompareOldVsNewRestoreBehavior demonstrates the difference between
 // the old buggy behavior and the new fixed behavior
 func testCompareOldVsNewRestoreBehavior(t *testing.T) {
-	// Use separate temp dirs so currentDir is not a path prefix of worktreeDir.
-	// Without this, assertions like NotContains(cmd, currentDir) would fail
-	// because worktreeDir = currentDir + "/subdir" contains currentDir as a prefix.
+	// Create test directories - use sibling dirs so worktreeDir is NOT a subdirectory
+	// of currentDirBase. Using filepath.Join(tempDir, "sub") would make tempDir a
+	// substring of worktreeDir, causing the NotContains assertion below to spuriously
+	// fail on Linux CI.
 	tempDir := t.TempDir()
-	worktreeParentDir := t.TempDir() // independent from tempDir
-	worktreeDir := filepath.Join(worktreeParentDir, "session-worktree")
-	err := os.MkdirAll(worktreeDir, 0755)
+	currentDirBase := filepath.Join(tempDir, "current-dir")
+	worktreeDir := filepath.Join(tempDir, "session-worktree")
+	err := os.MkdirAll(currentDirBase, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(worktreeDir, 0755)
 	require.NoError(t, err)
 
 	// Change to a different directory to simulate the bug condition
 	originalDir, _ := os.Getwd()
-	differentDir := tempDir // Different from worktree
+	differentDir := currentDirBase // Separate sibling dir from worktree
 	defer os.Chdir(originalDir)
 	err = os.Chdir(differentDir)
 	require.NoError(t, err)

@@ -1,11 +1,15 @@
 package session
 
 import (
-	"github.com/tstapler/stapler-squad/session/git"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/session/git"
+	tmuxpkg "github.com/tstapler/stapler-squad/session/tmux"
 )
 
 func TestFromInstanceDataWithMissingWorktree(t *testing.T) {
@@ -260,5 +264,97 @@ func TestMigrationOfCorruptedPaths(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ==== CaptureCurrentState tests ====
+
+// captureStateExecutor is a minimal mock executor for CaptureCurrentState tests.
+// It controls DoesSessionExist (via list-sessions) and GetPaneCurrentPath (via display-message).
+type captureStateExecutor struct {
+	sessionExists   bool
+	paneCurrentPath string
+	panePathErr     error
+}
+
+func (m *captureStateExecutor) Run(cmd *exec.Cmd) error {
+	return nil
+}
+
+func (m *captureStateExecutor) Output(cmd *exec.Cmd) ([]byte, error) {
+	for i, arg := range cmd.Args {
+		// DoesSessionExist uses: list-sessions -F #{session_name}
+		if arg == "list-sessions" {
+			if m.sessionExists {
+				return []byte("staplersquad_Test-Session\n"), nil
+			}
+			return nil, fmt.Errorf("no server running")
+		}
+		// GetPaneCurrentPath uses: display-message -p -t <name> #{pane_current_path}
+		if arg == "display-message" {
+			// Scan forward to find the format string argument
+			for j := i + 1; j < len(cmd.Args); j++ {
+				if cmd.Args[j] == "#{pane_current_path}" {
+					if m.panePathErr != nil {
+						return nil, m.panePathErr
+					}
+					return []byte(m.paneCurrentPath + "\n"), nil
+				}
+			}
+		}
+	}
+	return nil, fmt.Errorf("unexpected command: %v", cmd.Args)
+}
+
+func (m *captureStateExecutor) CombinedOutput(cmd *exec.Cmd) ([]byte, error) {
+	return m.Output(cmd)
+}
+
+// newCaptureStateInstance creates a bare Instance (not started) with a mock tmux session
+// controlled by the provided executor.
+func newCaptureStateInstance(title string, exec *captureStateExecutor) *Instance {
+	mockPtyFactory := &mockPtyFactory{} // reuse from comprehensive_session_creation_test.go
+	mockSession := tmuxpkg.NewTmuxSessionWithDeps(title, "claude", mockPtyFactory, exec)
+
+	inst := &Instance{
+		Title:   title,
+		Path:    "/tmp",
+		Program: "claude",
+		started: true,
+		Status:  Running,
+	}
+	inst.tmuxManager.SetSession(mockSession)
+	return inst
+}
+
+func TestInstance_CaptureCurrentState_UpdatesWorkingDir(t *testing.T) {
+	exec := &captureStateExecutor{
+		sessionExists:   true,
+		paneCurrentPath: "/tmp/my-project",
+	}
+	inst := newCaptureStateInstance("Test-Session", exec)
+
+	if err := inst.CaptureCurrentState(); err != nil {
+		t.Fatalf("CaptureCurrentState returned unexpected error: %v", err)
+	}
+
+	if inst.WorkingDir != "/tmp/my-project" {
+		t.Errorf("Expected WorkingDir to be '/tmp/my-project', got '%s'", inst.WorkingDir)
+	}
+}
+
+func TestInstance_CaptureCurrentState_DeadTmux_NoError(t *testing.T) {
+	exec := &captureStateExecutor{
+		sessionExists: false,
+	}
+	inst := newCaptureStateInstance("Dead-Session", exec)
+
+	if err := inst.CaptureCurrentState(); err != nil {
+		t.Fatalf("CaptureCurrentState should return nil for dead tmux session, got: %v", err)
+	}
+
+	// WorkingDir should remain unchanged when session is dead
+	if inst.WorkingDir != "" {
+		t.Errorf("Expected WorkingDir to remain empty, got '%s'", inst.WorkingDir)
 	}
 }
