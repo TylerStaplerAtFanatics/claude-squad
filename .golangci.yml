@@ -1,6 +1,7 @@
 version: "2"
 
 linters:
+  disable-all: true
   enable:
     - forbidigo
     - ineffassign

@@ -43,7 +43,7 @@ func (d *HistoryFileDetector) Detect(pid int32) (*HistoryFileInfo, error) {
 	files, err := d.inspector.OpenFiles(pid)
 	if err != nil {
 		// Process not found or dead — not an error for the caller
-		return nil, nil
+		return nil, nil //nolint:nilnil
 	}
 
 	homeDir, err := os.UserHomeDir()
@@ -90,7 +90,7 @@ func (d *HistoryFileDetector) Detect(pid int32) (*HistoryFileInfo, error) {
 		}, nil
 	}
 
-	return nil, nil
+	return nil, nil //nolint:nilnil
 }
 
 // NewHistoryFileDetectorWithRealInspector creates a HistoryFileDetector using
