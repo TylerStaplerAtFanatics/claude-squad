@@ -243,12 +243,6 @@ jobs:
       - name: Build Next.js app
         run: cd web-app && npm run build
 
-      - name: Start server
-        run: |
-          npx serve out -l 3001 &
-          npx wait-on http://localhost:3001 --timeout 30000
-        working-directory: web-app
-
       - name: Run terminal throughput benchmark
         run: |
           set -o pipefail
@@ -436,8 +430,7 @@ jobs:
       - name: Start backend server
         run: |
           ./stapler-squad &
-          npx wait-on http://localhost:8543 --timeout 30000
-        working-directory: web-app
+          cd web-app && npx wait-on http://localhost:8543 --timeout 30000
 
       - name: Start frontend server
         run: |
