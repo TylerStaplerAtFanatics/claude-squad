@@ -432,13 +432,10 @@ jobs:
           ./stapler-squad &
           cd web-app && npx wait-on http://localhost:8543 --timeout 30000
 
-      - name: Start frontend server
-        run: |
-          npx serve out -l 3001 &
-          npx wait-on http://localhost:3001 --timeout 30000
-        working-directory: web-app
-
       - name: Run E2E latency benchmark
+        env:
+          TEST_PORT: '8543'
+          TEST_REUSE_SERVER: '1'
         run: cd web-app && npx playwright test tests/e2e/benchmarks/rpc-latency.spec.ts
 
       - name: Assert E2E latency data was produced

@@ -32,7 +32,7 @@ import {
 } from '../terminal-stress/helpers';
 import { writeBenchmarkResults, computeStats } from './output-benchmark-results';
 
-const RESULTS_PATH = path.resolve(__dirname, '../../benchmark-results.json');
+const RESULTS_PATH = path.resolve(__dirname, '../../../benchmark-results.json');
 const WARMUP_RUNS = 2;
 const TOTAL_RUNS = 10;
 // 100KB payload: a realistic terminal burst from a Claude Code session

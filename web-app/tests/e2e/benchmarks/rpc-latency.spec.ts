@@ -28,7 +28,7 @@ import { writeBenchmarkResults, computeStats } from './output-benchmark-results'
 
 const E2E_RESULTS_PATH = path.resolve(
   __dirname,
-  '../../e2e-latency-results.json',
+  '../../../e2e-latency-results.json',
 );
 // ConnectRPC endpoint on the Go backend. Override with BACKEND_URL env var in CI.
 const BACKEND_URL = process.env['BACKEND_URL'] ?? 'http://localhost:8543';
