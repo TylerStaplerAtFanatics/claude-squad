@@ -3,8 +3,6 @@ package session
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/tstapler/stapler-squad/session/git"
 )
@@ -197,25 +195,4 @@ func (gm *GitWorktreeManager) SetDiffStats(stats *git.DiffStats) {
 // ClearDiffStats sets diffStats to nil.
 func (gm *GitWorktreeManager) ClearDiffStats() {
 	gm.diffStats = nil
-}
-
-// GetCurrentCommitSHA returns the current HEAD commit SHA for the worktree.
-// Returns an empty string (not an error) if no worktree is set or the repo
-// has no commits yet — this is safe to use in checkpoint creation.
-func (gm *GitWorktreeManager) GetCurrentCommitSHA() (string, error) {
-	dir := gm.GetWorktreePath()
-	if dir == "" {
-		dir = gm.GetRepoPath()
-	}
-	if dir == "" {
-		return "", nil
-	}
-
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "HEAD")
-	output, err := cmd.Output()
-	if err != nil {
-		// Not a fatal error — repo may have no commits yet.
-		return "", nil
-	}
-	return strings.TrimSpace(string(output)), nil
 }

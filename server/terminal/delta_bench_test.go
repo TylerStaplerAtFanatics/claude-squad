@@ -104,9 +104,9 @@ func BenchmarkDeltaGenerator_RapidSequential(b *testing.B) {
 		for line := 0; line < rows; line++ {
 			if line == rows-1 {
 				// Last line changes each update (new output)
-				buf.WriteString(fmt.Sprintf("\033[32mUpdate %04d: new output line\033[0m\n", i))
+				fmt.Fprintf(&buf, "\033[32mUpdate %04d: new output line\033[0m\n", i)
 			} else {
-				buf.WriteString(fmt.Sprintf("Stable line %04d: some content here\n", line))
+				fmt.Fprintf(&buf, "Stable line %04d: some content here\n", line)
 			}
 		}
 		updates[i] = buf.Bytes()

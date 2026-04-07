@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"sync"
+
 	// Note: For full LISTEN/NOTIFY support, you'd use pgx directly.
 	// The database/sql driver has limited support for async notifications.
 	// This is a simplified implementation that uses polling with notifications as a trigger.

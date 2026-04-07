@@ -1,8 +1,8 @@
 package notifications
 
 import (
-	"context"
 	"github.com/tstapler/stapler-squad/server/events"
+	"context"
 	"sync"
 	"testing"
 	"time"

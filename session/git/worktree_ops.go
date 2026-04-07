@@ -1,8 +1,8 @@
 package git
 
 import (
-	"fmt"
 	"github.com/tstapler/stapler-squad/log"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -154,23 +154,17 @@ func (g *GitWorktree) setupNewWorktree() error {
 		return fmt.Errorf("failed to cleanup existing branch: %w", err)
 	}
 
-	var headCommit string
-	if g.baseCommitSHA != "" {
-		// Use the pre-set commit SHA (e.g. from a fork checkpoint) instead of HEAD.
-		headCommit = g.baseCommitSHA
-	} else {
-		output, err := g.runGitCommand(g.repoPath, "rev-parse", "HEAD")
-		if err != nil {
-			if strings.Contains(err.Error(), "fatal: ambiguous argument 'HEAD'") ||
-				strings.Contains(err.Error(), "fatal: not a valid object name") ||
-				strings.Contains(err.Error(), "fatal: HEAD: not a valid object name") {
-				return fmt.Errorf("this appears to be a brand new repository: please create an initial commit before creating an instance")
-			}
-			return fmt.Errorf("failed to get HEAD commit hash: %w", err)
+	output, err := g.runGitCommand(g.repoPath, "rev-parse", "HEAD")
+	if err != nil {
+		if strings.Contains(err.Error(), "fatal: ambiguous argument 'HEAD'") ||
+			strings.Contains(err.Error(), "fatal: not a valid object name") ||
+			strings.Contains(err.Error(), "fatal: HEAD: not a valid object name") {
+			return fmt.Errorf("this appears to be a brand new repository: please create an initial commit before creating an instance")
 		}
-		headCommit = strings.TrimSpace(string(output))
-		g.baseCommitSHA = headCommit
+		return fmt.Errorf("failed to get HEAD commit hash: %w", err)
 	}
+	headCommit := strings.TrimSpace(string(output))
+	g.baseCommitSHA = headCommit
 
 	// Create a new worktree from the HEAD commit
 	// Otherwise, we'll inherit uncommitted changes from the previous worktree.
@@ -208,8 +202,8 @@ func (g *GitWorktree) Cleanup() error {
 			// Check if this is the common "not a working tree" error - treat it as expected
 			errStr := err.Error()
 			isCorruptedWorktree := strings.Contains(errStr, "is not a working tree") ||
-				strings.Contains(errStr, "not a git repository") ||
-				strings.Contains(errStr, "worktree not found")
+								  strings.Contains(errStr, "not a git repository") ||
+								  strings.Contains(errStr, "worktree not found")
 
 			if isCorruptedWorktree {
 				log.InfoLog.Printf("Worktree is corrupted/invalid, cleaning up manually: %s", g.worktreePath)
@@ -296,8 +290,8 @@ func (g *GitWorktree) Remove() error {
 			// Check if this is the common "not a working tree" error - treat it as expected
 			errStr := err.Error()
 			isCorruptedWorktree := strings.Contains(errStr, "is not a working tree") ||
-				strings.Contains(errStr, "not a git repository") ||
-				strings.Contains(errStr, "worktree not found")
+									strings.Contains(errStr, "not a git repository") ||
+									strings.Contains(errStr, "worktree not found")
 
 			if isCorruptedWorktree {
 				log.InfoLog.Printf("Worktree is corrupted/invalid, cleaning up manually: %s", g.worktreePath)

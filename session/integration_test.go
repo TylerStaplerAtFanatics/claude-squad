@@ -1,10 +1,10 @@
 package session
 
 import (
-	"context"
-	"fmt"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/tmux"
+	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"

@@ -47,8 +47,7 @@ var (
 		Use:   "stapler-squad",
 		Short: "Stapler Squad - Manage multiple AI agents like Claude Code, Aider, Codex, and Amp (Web Mode)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-			defer stop()
+			ctx := context.Background()
 
 			// Enable test mode if flag is set
 			if testModeFlag {
@@ -846,6 +845,18 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 }
 
 func main() {
+	// Set up signal handling for SIGTERM only (not SIGINT/Ctrl+C)
+	// We only intercept SIGTERM for forced termination (e.g., systemd, docker)
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGTERM) // Only SIGTERM, not os.Interrupt
+
+	go func() {
+		<-c
+		log.InfoLog.Printf("Received SIGTERM, forcing exit")
+		log.LogSessionPathsToStderr()
+		os.Exit(1)
+	}()
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 	}

@@ -1,4 +1,3 @@
-//go:build ignore
 // +build ignore
 
 package main
@@ -36,7 +35,7 @@ func main() {
 
 	// Parse state.json to extract instances
 	var state struct {
-		HelpScreensSeen uint32                 `json:"help_screens_seen"`
+		HelpScreensSeen uint32                `json:"help_screens_seen"`
 		Instances       []session.InstanceData `json:"instances"`
 	}
 	if err := json.Unmarshal(stateData, &state); err != nil {

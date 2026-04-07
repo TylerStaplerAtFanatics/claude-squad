@@ -1,8 +1,8 @@
 package detection
 
 import (
-	"fmt"
 	"github.com/tstapler/stapler-squad/log"
+	"fmt"
 	"sync"
 	"time"
 )

@@ -1,8 +1,8 @@
 package commands
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tstapler/stapler-squad/cmd/interfaces"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // OrganizationHandlers contains handlers for organization/filtering commands

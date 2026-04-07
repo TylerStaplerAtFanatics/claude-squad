@@ -3,8 +3,8 @@
 package telemetry
 
 import (
-	"context"
 	"github.com/tstapler/stapler-squad/log"
+	"context"
 	"os"
 	"time"
 

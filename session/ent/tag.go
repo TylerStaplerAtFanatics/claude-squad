@@ -3,8 +3,8 @@
 package ent
 
 import (
-	"fmt"
 	"github.com/tstapler/stapler-squad/session/ent/tag"
+	"fmt"
 	"strings"
 
 	"entgo.io/ent"
