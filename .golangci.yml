@@ -1,9 +1,5 @@
 version: "2"
 
-run:
-  exclude-dirs:
-    - session/tmux/tmux_windows
-
 linters:
   enable:
     - forbidigo
@@ -14,17 +10,18 @@ linters:
   settings:
     forbidigo:
       forbid:
-        - p: ^fmt\.Print(f|ln)?$
+        - pattern: ^fmt\.Print(f|ln)?$
           msg: "use the log package instead of fmt.Print* in production code"
       exclude-godoc-examples: true
-
-issues:
-  exclude-rules:
-    # Allow fmt.Print* in main.go (CLI output) and test files
-    - path: "main\\.go"
-      linters: [forbidigo]
-    - path: "_test\\.go"
-      linters: [forbidigo]
-    # Allow fmt.Print* in cmd/ subdirectories (CLI output)
-    - path: "^cmd/"
-      linters: [forbidigo]
+  exclusions:
+    paths:
+      - session/tmux/tmux_windows
+    rules:
+      # Allow fmt.Print* in main.go (CLI output) and test files
+      - path: "main\\.go"
+        linters: [forbidigo]
+      - path: "_test\\.go"
+        linters: [forbidigo]
+      # Allow fmt.Print* in cmd/ subdirectories (CLI output)
+      - path: "^cmd/"
+        linters: [forbidigo]
