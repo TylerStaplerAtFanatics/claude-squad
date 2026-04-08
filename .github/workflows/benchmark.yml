@@ -135,7 +135,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add benchmarks/go/tier1-baseline.txt
           git diff --cached --quiet || git commit -m "chore(bench): update go tier1 baseline [skip ci]"
-          git pull --rebase
+          git pull --rebase --autostash
           git push
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add benchmarks/go/tier2-baseline.txt
           git diff --cached --quiet || git commit -m "chore(bench): update go tier2 baseline [skip ci]"
-          git pull --rebase
+          git pull --rebase --autostash
           git push
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -325,7 +325,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add benchmarks/frontend/throughput-baseline.json
           git diff --cached --quiet || git commit -m "chore(bench): update frontend throughput baseline [skip ci]"
-          git pull --rebase
+          git pull --rebase --autostash
           git push
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -497,5 +497,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add benchmarks/e2e/latency-baseline.json
           git diff --cached --quiet || git commit -m "chore(bench): update e2e latency baseline [skip ci]"
-          git pull --rebase
+          git pull --rebase --autostash
           git push
