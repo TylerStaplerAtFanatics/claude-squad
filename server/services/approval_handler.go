@@ -206,7 +206,7 @@ func (h *ApprovalHandler) HandlePermissionRequest(w http.ResponseWriter, r *http
 			log.InfoLog.Printf("[ApprovalHandler] Auto-denied %s/%s (rule=%s): %s", sessionID, payload.ToolName, result.RuleID, msg)
 			h.writeDecision(w, "deny", msg)
 			return
-		// Escalate: fall through to manual review queue
+			// Escalate: fall through to manual review queue
 		}
 	}
 
@@ -518,8 +518,8 @@ type claudeSettingsHooks struct {
 // claudeSettings is the partial structure of .claude/settings.local.json.
 // Only the "hooks" key is read/written; other fields are preserved via rawOther.
 type claudeSettings struct {
-	Hooks     claudeSettingsHooks        `json:"hooks"`
-	rawOther  map[string]json.RawMessage // preserves unknown fields
+	Hooks    claudeSettingsHooks        `json:"hooks"`
+	rawOther map[string]json.RawMessage // preserves unknown fields
 }
 
 const (

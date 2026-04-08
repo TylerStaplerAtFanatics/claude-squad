@@ -45,6 +45,11 @@ fswatch -o web-app/src | xargs -n1 -I{} make restart-web PROFILE_FLAGS="--profil
 # - Combines full history (capture-pane) + real-time updates (control mode)
 # To disable and use legacy capture-pane polling:
 STAPLER_SQUAD_USE_CONTROL_MODE=false ./stapler-squad
+
+# Keep tmux server alive even when all user sessions close.
+# By default a keepalive session is always created automatically.
+# Use --tmux-keep-server to also set the tmux exit-empty option to off.
+./stapler-squad --tmux-keep-server
 ```
 
 ### Profiling and Debugging Lock-Ups
@@ -802,6 +807,18 @@ Sessions run in isolated tmux sessions for:
 **Session State**: Persisted in JSON format with status tracking (Running, Paused, Stopped).
 
 **UI State**: Navigation indices, filter settings, and view preferences are maintained across operations.
+
+## Pull Request Requirements
+
+All PRs to `main` must have exactly one semver label or the `Label Check` CI job will fail:
+
+| Label | When to use |
+|---|---|
+| `patch` | Bug fixes, dependency updates, documentation |
+| `minor` | New features, non-breaking enhancements |
+| `major` | Breaking changes, major redesigns |
+
+Add via: `gh pr edit <number> --add-label "patch"` (create label first if it doesn't exist: `gh label create "patch" --color "e4e669"`)
 
 ## Adding New Features
 

@@ -81,7 +81,7 @@ export default defineConfig({
   webServer: {
     command: `npx next dev --port ${TEST_PORT}`,
     url: `http://localhost:${TEST_PORT}`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.TEST_REUSE_SERVER === '1' || !process.env.CI,
     timeout: 120 * 1000,
     stdout: 'pipe',
     stderr: 'pipe',

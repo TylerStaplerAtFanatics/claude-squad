@@ -1,10 +1,10 @@
 package git
 
 import (
+	"fmt"
 	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/executor"
 	"github.com/tstapler/stapler-squad/log"
-	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -34,6 +34,44 @@ type GitWorktree struct {
 	baseCommitSHA string
 	// cmdExec is used to execute commands for this worktree.
 	cmdExec executor.Executor
+}
+
+// NewGitWorktreeFromCommitSHA creates a new GitWorktree that will branch from the given
+// commitSHA when Setup() is called, instead of branching from the current HEAD.
+// This is used by ForkFromCheckpoint to recreate the exact git state at checkpoint time.
+func NewGitWorktreeFromCommitSHA(repoPath, sessionName, branchName, commitSHA string) (*GitWorktree, string, error) {
+	if commitSHA == "" {
+		return nil, "", fmt.Errorf("commitSHA must not be empty")
+	}
+
+	absPath, err := filepath.Abs(repoPath)
+	if err != nil {
+		log.ErrorLog.Printf("git worktree path abs error, falling back to repoPath %s: %s", repoPath, err)
+		absPath = repoPath
+	}
+
+	resolvedRepoPath, err := findGitRepoRoot(absPath)
+	if err != nil {
+		return nil, "", err
+	}
+
+	worktreeDir, err := getWorktreeDirectory()
+	if err != nil {
+		return nil, "", err
+	}
+
+	sanitizedName := sanitizeBranchName(sessionName)
+	worktreePath := filepath.Join(worktreeDir, sanitizedName)
+	worktreePath = worktreePath + "_" + fmt.Sprintf("%x", time.Now().UnixNano())
+
+	return &GitWorktree{
+		repoPath:      resolvedRepoPath,
+		sessionName:   sessionName,
+		branchName:    branchName,
+		worktreePath:  worktreePath,
+		baseCommitSHA: commitSHA,
+		cmdExec:       executor.MakeExecutor(),
+	}, branchName, nil
 }
 
 func NewGitWorktreeFromStorage(repoPath string, worktreePath string, sessionName string, branchName string, baseCommitSHA string) *GitWorktree {

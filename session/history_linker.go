@@ -1,0 +1,144 @@
+package session
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/tstapler/stapler-squad/log"
+)
+
+const historyLinkerPollInterval = 5 * time.Second
+
+// HistoryLinker is a background service that correlates running sessions with
+// their Claude JSONL history files. It populates Instance.claudeSession.SessionID
+// and Instance.HistoryFilePath when a conversation file is detected.
+//
+// Detection uses two complementary paths:
+//   - Polling (every 5 s): scans all running sessions via proc_pidinfo open-files
+//   - fsnotify (fast path): watcher callback fires as soon as a new JSONL is created
+//
+// Both paths call the same correlateSession helper, which is idempotent.
+type HistoryLinker struct {
+	detector *HistoryFileDetector
+	watcher  *HistoryFileWatcher
+
+	mu        sync.RWMutex
+	instances []*Instance
+}
+
+// NewHistoryLinker creates a HistoryLinker backed by the given detector and watcher.
+// Call SetInstances (or AddInstance) to register sessions before starting.
+func NewHistoryLinker(detector *HistoryFileDetector, watcher *HistoryFileWatcher) *HistoryLinker {
+	return &HistoryLinker{
+		detector:  detector,
+		watcher:   watcher,
+		instances: make([]*Instance, 0),
+	}
+}
+
+// SetInstances replaces the full instance list.
+func (hl *HistoryLinker) SetInstances(instances []*Instance) {
+	hl.mu.Lock()
+	defer hl.mu.Unlock()
+	hl.instances = instances
+}
+
+// AddInstance adds a single instance for monitoring.
+func (hl *HistoryLinker) AddInstance(instance *Instance) {
+	hl.mu.Lock()
+	defer hl.mu.Unlock()
+	hl.instances = append(hl.instances, instance)
+}
+
+// RemoveInstance stops monitoring the named instance.
+func (hl *HistoryLinker) RemoveInstance(title string) {
+	hl.mu.Lock()
+	defer hl.mu.Unlock()
+	filtered := make([]*Instance, 0, len(hl.instances))
+	for _, inst := range hl.instances {
+		if inst.Title != title {
+			filtered = append(filtered, inst)
+		}
+	}
+	hl.instances = filtered
+}
+
+// Start performs an initial synchronous scan and then runs a background poll
+// loop until ctx is cancelled. The fsnotify watcher is also started here so
+// that new JSONL files trigger instant correlation.
+func (hl *HistoryLinker) Start(ctx context.Context) {
+	// Story 1.2.3: initial scan before first poll interval.
+	hl.scanAllSessions()
+
+	// Register watcher callback for fast-path detection.
+	if hl.watcher != nil {
+		if err := hl.watcher.Start(ctx); err != nil {
+			log.WarningLog.Printf("HistoryLinker: failed to start watcher: %v", err)
+		}
+	}
+
+	go hl.run(ctx)
+}
+
+// run is the polling loop goroutine.
+func (hl *HistoryLinker) run(ctx context.Context) {
+	ticker := time.NewTicker(historyLinkerPollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			hl.scanAllSessions()
+		}
+	}
+}
+
+// ScanAll triggers an immediate correlation pass over all monitored instances.
+// Exported for use by HistoryFileWatcher callbacks.
+func (hl *HistoryLinker) ScanAll() {
+	hl.scanAllSessions()
+}
+
+// scanAllSessions iterates all monitored instances and attempts history correlation
+// for those with a live tmux session.
+func (hl *HistoryLinker) scanAllSessions() {
+	hl.mu.RLock()
+	snapshot := make([]*Instance, len(hl.instances))
+	copy(snapshot, hl.instances)
+	hl.mu.RUnlock()
+
+	for _, inst := range snapshot {
+		hl.correlateSession(inst)
+	}
+}
+
+// correlateSession detects a history file for inst and updates its fields if found.
+// Skips instances that already have a UUID (idempotent).
+func (hl *HistoryLinker) correlateSession(inst *Instance) {
+	// Skip if we already know the UUID — avoid unnecessary proc_pidinfo calls.
+	if inst.HasClaudeSession() {
+		return
+	}
+
+	// Need an alive tmux session to inspect its foreground process.
+	pid, err := inst.GetPanePID()
+	if err != nil {
+		// Session dead or not started yet — normal, not an error.
+		return
+	}
+
+	info, err := hl.detector.Detect(pid)
+	if err != nil {
+		log.WarningLog.Printf("HistoryLinker: detect error for '%s' (pid=%d): %v", inst.Title, pid, err)
+		return
+	}
+	if info == nil {
+		return // No JSONL open yet.
+	}
+
+	log.InfoLog.Printf("HistoryLinker: linked '%s' → conv UUID %s", inst.Title, info.ConversationUUID)
+	inst.SetHistoryInfo(info.ConversationUUID, info.HistoryFilePath)
+}

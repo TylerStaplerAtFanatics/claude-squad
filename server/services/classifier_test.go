@@ -1205,8 +1205,8 @@ func TestClassify_MvnSafe_AutoAllow(t *testing.T) {
 
 func TestCategorizeToolName(t *testing.T) {
 	cases := []struct {
-		name     string
-		wantCat  string
+		name    string
+		wantCat string
 	}{
 		// Built-in file / search tools
 		{"Bash", ToolCategoryBuiltin},
@@ -1222,7 +1222,7 @@ func TestCategorizeToolName(t *testing.T) {
 		// Built-in agent tools
 		{"ExitPlanMode", ToolCategoryBuiltinAgent},
 		{"EnterPlanMode", ToolCategoryBuiltinAgent},
-		{"AskUserQuestion", ToolCategoryBuiltinAgent},
+		{"AskUserQuestion", ToolCategoryBuiltin}, // intentionally not a builtin agent tool — escalates to review queue
 		{"TodoWrite", ToolCategoryBuiltinAgent},
 		{"TaskCreate", ToolCategoryBuiltinAgent},
 		{"TaskUpdate", ToolCategoryBuiltinAgent},

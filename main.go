@@ -30,21 +30,21 @@ import (
 )
 
 var (
-	version           = "1.0.12"
-	daemonFlag        bool
-	testModeFlag      bool
-	testDirFlag       string
-	discoveryModeFlag string
-	discoverExtFlag   bool
-	profileFlag       bool
-	profilePortFlag   int
-	traceFlag         bool
-	listenAddrFlag    string
-	remoteAccessFlag  bool
-	remotePortFlag    int
-	rpIDFlag             string
-	tmuxKeepServerFlag   bool
-	rootCmd           = &cobra.Command{
+	version           = "1.1.0"
+	daemonFlag         bool
+	testModeFlag       bool
+	testDirFlag        string
+	discoveryModeFlag  string
+	discoverExtFlag    bool
+	profileFlag        bool
+	profilePortFlag    int
+	traceFlag          bool
+	listenAddrFlag     string
+	remoteAccessFlag   bool
+	remotePortFlag     int
+	rpIDFlag           string
+	tmuxKeepServerFlag bool
+	rootCmd            = &cobra.Command{
 		Use:   "stapler-squad",
 		Short: "Stapler Squad - Manage multiple AI agents like Claude Code, Aider, Codex, and Amp (Web Mode)",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -199,17 +199,28 @@ var (
 				}
 			}
 
+			strictStartup := os.Getenv("STAPLER_SQUAD_STRICT_STARTUP") == "true"
+
 			// Ensure tmux server is running before sessions are restored.
 			if err := tmux.EnsureServerRunning(""); err != nil {
+				if strictStartup {
+					return fmt.Errorf("tmux server startup failed (unset STAPLER_SQUAD_STRICT_STARTUP to suppress): %w", err)
+				}
 				log.WarningLog.Printf("Failed to ensure tmux server running: %v", err)
 			}
-			// Layer 3: keepalive session prevents server from exiting when all user sessions close.
+			// Create a keepalive session so the tmux server does not exit when all user sessions close.
 			if err := tmux.CreateKeepaliveSession(""); err != nil {
+				if strictStartup {
+					return fmt.Errorf("failed to create tmux keepalive session (unset STAPLER_SQUAD_STRICT_STARTUP to suppress): %w", err)
+				}
 				log.WarningLog.Printf("Failed to create keepalive session: %v", err)
 			}
-			// Layer 1 (opt-in): configure tmux to keep server alive even if keepalive session dies.
+			// --tmux-keep-server: also set exit-empty off so the server survives even if the keepalive dies.
 			if tmuxKeepServerFlag {
 				if err := tmux.SetExitEmpty("", false); err != nil {
+					if strictStartup {
+						return fmt.Errorf("failed to set tmux exit-empty off (unset STAPLER_SQUAD_STRICT_STARTUP to suppress): %w", err)
+					}
 					log.WarningLog.Printf("Failed to set tmux exit-empty off: %v", err)
 				}
 			}
@@ -604,7 +615,8 @@ func init() {
 		"WebAuthn Relying Party ID override (your LAN IP or hostname, e.g. '192.168.1.42'). "+
 			"Defaults to the detected LAN IP.")
 	rootCmd.Flags().BoolVar(&tmuxKeepServerFlag, "tmux-keep-server", false,
-		"Configure tmux to keep the server running even when all sessions exit (sets 'exit-empty off')")
+		"Keep tmux server running even when all user sessions close (sets exit-empty off). "+
+			"Use this if the tmux server frequently stops between sessions.")
 
 	// Hide the daemonFlag as it's only for internal use
 	err := rootCmd.Flags().MarkHidden("daemon")
@@ -678,23 +690,45 @@ func resolveLANHostnames(lanIPStr string) []string {
 	return hostnames
 }
 
-// getDNSSearchDomains returns the DNS search domains configured on this system
-// by parsing /etc/resolv.conf.  Returns nil if the file cannot be read or has
-// no search directive.
+// getDNSSearchDomains returns the DNS search domains configured on this system.
+// It checks /etc/resolv.conf first, then falls back to `scutil --dns` on macOS
+// (where /etc/resolv.conf is not the authoritative source).
 func getDNSSearchDomains() []string {
-	data, err := os.ReadFile("/etc/resolv.conf")
-	if err != nil {
-		return nil
-	}
+	seen := make(map[string]bool)
 	var domains []string
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "search ") {
-			for _, d := range strings.Fields(line)[1:] {
-				domains = append(domains, d)
+
+	add := func(d string) {
+		if d != "" && !seen[d] {
+			seen[d] = true
+			domains = append(domains, d)
+		}
+	}
+
+	// /etc/resolv.conf — works reliably on Linux; present but advisory on macOS.
+	if data, err := os.ReadFile("/etc/resolv.conf"); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "search ") {
+				for _, d := range strings.Fields(line)[1:] {
+					add(d)
+				}
 			}
 		}
 	}
+
+	// scutil --dns — macOS authoritative source for search domains.
+	if out, err := exec.Command("scutil", "--dns").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			// Format: "search domain[N] : example.com"
+			if strings.HasPrefix(line, "search domain") {
+				if parts := strings.SplitN(line, ":", 2); len(parts) == 2 {
+					add(strings.TrimSpace(parts[1]))
+				}
+			}
+		}
+	}
+
 	return domains
 }
 

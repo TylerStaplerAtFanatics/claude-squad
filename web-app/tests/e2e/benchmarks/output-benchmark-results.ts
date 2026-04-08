@@ -1,12 +1,12 @@
 /**
- * Helper for writing benchmark results in the format expected by
- * benchmark-action/github-action-benchmark.
+ * Helper for writing benchmark results as JSON for CI baseline comparison.
  *
  * Supported schemas:
  *   - customBiggerIsBetter: higher value = better (throughput, FPS, etc.)
  *   - customSmallerIsBetter: lower value = better (latency, duration, etc.)
  *
- * @see https://github.com/benchmark-action/github-action-benchmark#examples-for-custom-tools
+ * The CI pipeline (benchmark.yml) commits these JSON files as baselines on main
+ * and uses Node.js comparison scripts to detect regressions on PRs.
  */
 
 import * as fs from 'fs';
@@ -21,36 +21,20 @@ export interface BenchmarkEntry {
 }
 
 /**
- * Write benchmark results as JSON to a file for consumption by
- * benchmark-action/github-action-benchmark.
+ * Write benchmark results as JSON to a file for CI baseline comparison.
  *
  * @param outputPath  Absolute or relative path to write the JSON file.
  * @param entries     Array of benchmark measurements.
- * @param merge       When true, existing entries in the output file are
- *                    preserved and new entries are appended. Useful when
- *                    multiple tests write to the same results file.
  */
 export function writeBenchmarkResults(
   outputPath: string,
   entries: BenchmarkEntry[],
-  merge = false,
 ): void {
   const dir = path.dirname(outputPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  let finalEntries = entries;
-  if (merge && fs.existsSync(outputPath)) {
-    try {
-      const existing = JSON.parse(
-        fs.readFileSync(outputPath, 'utf-8'),
-      ) as BenchmarkEntry[];
-      finalEntries = [...existing, ...entries];
-    } catch {
-      // If the existing file is malformed, fall back to writing only the new entries
-    }
-  }
-  fs.writeFileSync(outputPath, JSON.stringify(finalEntries, null, 2));
+  fs.writeFileSync(outputPath, JSON.stringify(entries, null, 2));
 }
 
 /**
@@ -74,9 +58,7 @@ export function computeStats(
   }
   const sorted = [...data].sort((a, b) => a - b);
   const mean = data.reduce((s, v) => s + v, 0) / data.length;
-  // Use Bessel's correction (n-1) for sample variance
-  const variance =
-    data.reduce((s, v) => s + (v - mean) ** 2, 0) / (data.length - 1);
+  const variance = data.reduce((s, v) => s + (v - mean) ** 2, 0) / data.length;
   const stddev = Math.sqrt(variance);
 
   return {

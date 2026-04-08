@@ -20,10 +20,28 @@ archives:
       - goos: windows
         format: zip
 
+brews:
+  - name: stapler-squad
+    repository:
+      owner: tstapler
+      name: stapler-squad
+      branch: main
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    homepage: "https://github.com/tstapler/stapler-squad"
+    description: "Manage multiple AI terminal agents like Claude Code, Aider, Codex, OpenCode, and Amp."
+    license: "MIT"
+    install: |
+      bin.install "stapler-squad"
+      bin.install_symlink bin/"stapler-squad" => "ssq"
+    test: |
+      system "#{bin}/stapler-squad version"
+
 release:
   prerelease: auto
-  draft: true
-  replace_existing_draft: true
 
 checksum:
   name_template: 'checksums.txt'
@@ -37,4 +55,3 @@ changelog:
       - typo
       - "^refactor"
       - "^chore"
-

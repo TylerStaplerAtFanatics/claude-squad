@@ -1,14 +1,14 @@
 package services
 
 import (
+	"encoding/json"
+	"fmt"
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/server/protocol"
 	"github.com/tstapler/stapler-squad/session"
 	"github.com/tstapler/stapler-squad/session/scrollback"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -321,7 +321,6 @@ func (h *ConnectRPCWebSocketHandler) streamTerminal(stream *connectWebSocketStre
 	return h.streamViaTmuxCapturePane(stream, instance, streamingMode)
 }
 
-
 // streamViaControlMode handles WebSocket streaming using tmux control mode (-C flag).
 // This is the proper way to get real-time terminal output from tmux sessions.
 // Control mode provides structured notifications (%output, %session-changed, etc.) via the tmux protocol.
@@ -346,7 +345,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 		sessionID, tmuxSessionName, streamingMode)
 
 	// Update LastViewed timestamp - user is viewing this session
-	instance.LastViewed = time.Now()
+	instance.MarkViewed()
 
 	// IMPROVED: Parse handshake message for CurrentPaneRequest with dimensions
 	// Client now sends dimensions in the FIRST message (no empty handshake)
@@ -559,7 +558,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 
 					// Update timestamps for user interaction
 					instance.UpdateTerminalTimestamps(string(input.Data), true)
-					instance.LastUserResponse = time.Now()
+					instance.MarkUserResponded()
 
 					// Send input to tmux session using tmux send-keys (hex-encoded)
 					if err := sendInputToTmux(tmuxSessionName, input.Data); err != nil {
@@ -645,7 +644,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 	}
 
 	// Update LastViewed timestamp - user is viewing this session
-	instance.LastViewed = time.Now()
+	instance.MarkViewed()
 	log.InfoLog.Printf("Updated LastViewed timestamp for external session %s", sessionID)
 
 	// For managed sessions: parse handshake dimensions and force a TUI redraw via ±1 nudge

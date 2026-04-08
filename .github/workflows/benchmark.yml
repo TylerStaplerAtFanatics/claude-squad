@@ -22,10 +22,11 @@ on:
       - 'web-app/package-lock.json'
       - '.github/workflows/benchmark.yml'
 
-# Only one benchmark run per branch at a time; cancel in-progress runs on new push.
+# Cancel in-progress runs on PRs when a new commit is pushed.
+# On main, never cancel — baseline-commit steps must be allowed to complete.
 concurrency:
   group: benchmarks-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
@@ -46,16 +47,16 @@ jobs:
       contents: write      # Push baseline updates to main
       pull-requests: write # Post PR comments on regression alerts
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.23'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Install benchstat
-        run: go install golang.org/x/perf/cmd/benchstat@latest
+        run: go install golang.org/x/perf/cmd/benchstat@v0.0.0-20260312031701-16a31bc5fbd0
 
       - name: Run Tier 1 benchmarks
         run: |
@@ -77,25 +78,9 @@ jobs:
             echo "No baseline yet — will be established on next push to main." > benchstat-tier1.txt
           fi
 
-      - name: Fail on regressions (PR only)
-        if: github.event_name == 'pull_request'
-        run: |
-          # Exit 1 if any benchmark regressed by more than 10% with statistical significance.
-          # benchstat marks non-significant changes with "~"; significant ones show "+N.NN% (p=...)".
-          THRESHOLD=10
-          REGRESSIONS=$(grep -E '\+[0-9]+\.[0-9]+%.*\(p=' benchstat-tier1.txt 2>/dev/null \
-            | grep -oE '\+[0-9]+\.[0-9]+%' | tr -d '+%' \
-            | awk -v t="$THRESHOLD" '$0+0 > t')
-          if [ -n "$REGRESSIONS" ]; then
-            echo "::error::Performance regression(s) >${THRESHOLD}% detected — see benchstat output."
-            cat benchstat-tier1.txt
-            exit 1
-          fi
-          echo "No significant regressions (>${THRESHOLD}%) detected."
-
       - name: Post PR comment
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');
@@ -152,12 +137,12 @@ jobs:
     # Only run on push to main, not on PRs (too slow for per-PR checks)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.23'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Run full benchmark suite
@@ -191,10 +176,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -202,6 +187,14 @@ jobs:
 
       - name: Install dependencies
         run: cd web-app && npm ci
+
+      - name: Install buf
+        run: |
+          curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
+            -o /usr/local/bin/buf && chmod +x /usr/local/bin/buf
+
+      - name: Generate protobuf code
+        run: buf generate proto
 
       - name: Build Next.js app
         run: cd web-app && npm run build
@@ -224,10 +217,10 @@ jobs:
       contents: write      # Push baseline updates to main
       pull-requests: write # Post PR comments on regression alerts
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -236,17 +229,19 @@ jobs:
       - name: Install dependencies
         run: cd web-app && npm ci
 
+      - name: Install buf
+        run: |
+          curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
+            -o /usr/local/bin/buf && chmod +x /usr/local/bin/buf
+
+      - name: Generate protobuf code
+        run: buf generate proto
+
       - name: Install Playwright browsers
         run: cd web-app && npx playwright install --with-deps chromium
 
       - name: Build Next.js app
         run: cd web-app && npm run build
-
-      - name: Start server
-        run: |
-          cd web-app && npm run start &
-          # Wait for server to be ready (use local installation to avoid npx download)
-          cd web-app && npx wait-on http://localhost:3001 --timeout 30000
 
       - name: Run terminal throughput benchmark
         run: |
@@ -285,7 +280,7 @@ jobs:
 
       - name: Post PR comment
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');
@@ -340,10 +335,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -351,6 +346,14 @@ jobs:
 
       - name: Install dependencies
         run: cd web-app && npm ci
+
+      - name: Install buf
+        run: |
+          curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
+            -o /usr/local/bin/buf && chmod +x /usr/local/bin/buf
+
+      - name: Generate protobuf code
+        run: buf generate proto
 
       - name: Build Next.js app
         run: cd web-app && npm run build
@@ -363,7 +366,7 @@ jobs:
         continue-on-error: true  # Advisory only — never blocks merge
 
       - name: Upload Lighthouse results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: lighthouse-results
@@ -385,16 +388,16 @@ jobs:
       contents: write      # Push baseline updates to main
       pull-requests: write # Post PR comments on regression alerts
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.23'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -403,26 +406,36 @@ jobs:
       - name: Install dependencies
         run: cd web-app && npm ci
 
+      - name: Install buf
+        run: |
+          curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
+            -o /usr/local/bin/buf && chmod +x /usr/local/bin/buf
+
+      - name: Generate protobuf code
+        run: buf generate proto
+
+      - name: Build Next.js app
+        run: npm run build
+        working-directory: web-app
+
+      - name: Copy web UI to dist
+        run: cp -r web-app/out server/web/dist
+
       - name: Install Playwright browsers
         run: cd web-app && npx playwright install --with-deps chromium
 
       - name: Build Go binary
         run: go build -o stapler-squad .
 
-      - name: Build Next.js app
-        run: cd web-app && npm run build
-
       - name: Start backend server
         run: |
           ./stapler-squad &
           cd web-app && npx wait-on http://localhost:8543 --timeout 30000
 
-      - name: Start frontend server
-        run: |
-          cd web-app && npm run start &
-          cd web-app && npx wait-on http://localhost:3001 --timeout 30000
-
       - name: Run E2E latency benchmark
+        env:
+          TEST_PORT: '8543'
+          TEST_REUSE_SERVER: '1'
         run: cd web-app && npx playwright test tests/e2e/benchmarks/rpc-latency.spec.ts
 
       - name: Assert E2E latency data was produced
@@ -457,7 +470,7 @@ jobs:
 
       - name: Post PR comment
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');

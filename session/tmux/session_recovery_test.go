@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tstapler/stapler-squad/executor"
 )
 
 // TestSessionRecoveryWorkflowEnd2End tests the complete session recovery workflow
@@ -104,14 +105,14 @@ func testKilledSessionRestoresInCorrectWorktree(t *testing.T) {
 // testCompareOldVsNewRestoreBehavior demonstrates the difference between
 // the old buggy behavior and the new fixed behavior
 func testCompareOldVsNewRestoreBehavior(t *testing.T) {
-	tempDir := t.TempDir()
-	worktreeDir := filepath.Join(tempDir, "session-worktree")
+	worktreeBase := t.TempDir()
+	worktreeDir := filepath.Join(worktreeBase, "session-worktree")
 	err := os.MkdirAll(worktreeDir, 0755)
 	require.NoError(t, err)
 
-	// Change to a different directory to simulate the bug condition
+	// Change to a separate directory so currentDir is not a prefix of worktreeDir
 	originalDir, _ := os.Getwd()
-	differentDir := tempDir // Different from worktree
+	differentDir := t.TempDir() // Separate temp dir — no path relationship to worktreeBase
 	defer os.Chdir(originalDir)
 	err = os.Chdir(differentDir)
 	require.NoError(t, err)
@@ -352,6 +353,65 @@ func createMockExecutorForMissingSession() (MockCmdExec, *[]string) {
 			return []byte("output"), nil
 		},
 	}, &commandHistory
+}
+
+// TestRecoverFromServerFailure_EnsureRunningFails verifies that when EnsureServerRunning
+// fails (e.g. tmux binary missing or permission denied), the circuit breakers are NOT
+// reset. Resetting breakers after a failed recovery would allow new calls through to a
+// still-dead server and immediately re-trip them, creating unnecessary noise.
+//
+// This test uses an isolated tmux server socket so EnsureServerRunning is guaranteed to
+// fail quickly (start-server on a non-existent socket name returns an error).
+func TestRecoverFromServerFailure_EnsureRunningFails(t *testing.T) {
+	// Inject a failing ensureServerRunning function so we can test the failure branch
+	// without relying on tmux socket behavior (tmux start-server always exits 0).
+	origEnsureServerRunning := ensureServerRunning
+	ensureServerRunning = func(socket string) error {
+		return fmt.Errorf("injected failure for test")
+	}
+	t.Cleanup(func() { ensureServerRunning = origEnsureServerRunning })
+
+	// Ensure recoveryInFlight is clean before and after the test.
+	recoveryMu.Lock()
+	require.False(t, recoveryInFlight, "test isolation: recoveryInFlight must be false at start")
+	recoveryMu.Unlock()
+	t.Cleanup(func() {
+		recoveryMu.Lock()
+		recoveryInFlight = false
+		recoveryMu.Unlock()
+	})
+
+	// Register a circuit breaker backed by a failing mock (threshold=1), then trip it.
+	// After a failed recovery, it must remain OPEN (ResetAll was NOT called).
+	key := "tmux-failure-test-" + t.Name()
+	failingDelegate := MockCmdExec{
+		RunFunc:    func(cmd *exec.Cmd) error { return fmt.Errorf("simulated failure") },
+		OutputFunc: func(cmd *exec.Cmd) ([]byte, error) { return nil, fmt.Errorf("simulated failure") },
+	}
+	cbExec := executor.NewCircuitBreakerExecutor(failingDelegate, executor.CircuitBreakerConfig{
+		FailureThreshold: 1,
+		RecoveryTimeout:  30 * time.Second,
+	})
+	executor.GetGlobalRegistry().Register(key, cbExec)
+	t.Cleanup(func() { executor.GetGlobalRegistry().Unregister(key) })
+
+	_ = cbExec.Run(exec.Command("tmux", "list-sessions"))
+	snaps := executor.GetGlobalRegistry().AllBreakers()
+	tripKey := key + "/tmux-list-sessions"
+	snap, ok := snaps[tripKey]
+	require.True(t, ok, "circuit breaker should exist for key %q", tripKey)
+	require.Equal(t, executor.CircuitOpen, snap.State,
+		"circuit breaker should be open after 1 failure (threshold=1)")
+
+	// recoverFromServerFailure calls ensureServerRunning (now injected to fail).
+	recoverFromServerFailure("", "TestRecoverFromServerFailure_EnsureRunningFails")
+
+	// Circuit breaker must remain OPEN: ResetAll must NOT have been called.
+	snapsAfter := executor.GetGlobalRegistry().AllBreakers()
+	snapAfter, ok := snapsAfter[tripKey]
+	require.True(t, ok, "circuit breaker should still be registered after failed recovery")
+	require.Equal(t, executor.CircuitOpen, snapAfter.State,
+		"circuit breaker must remain OPEN after failed ensureServerRunning — ResetAll must not be called")
 }
 
 // TestSessionRecoveryCommandSequence verifies the correct command sequence for session recovery

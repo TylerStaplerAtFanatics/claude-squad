@@ -1,12 +1,12 @@
 package server
 
 import (
+	"context"
+	"fmt"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/server/adapters"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/session"
-	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -25,14 +25,14 @@ type ReactiveQueueManager struct {
 	storage       *session.Storage // For persisting timestamps
 
 	// Streaming clients for WatchReviewQueue
-	streamClients     map[string]*reviewQueueStreamClient
-	streamClientsMu   sync.RWMutex
-	nextClientID      int
-	nextClientIDMu    sync.Mutex
+	streamClients   map[string]*reviewQueueStreamClient
+	streamClientsMu sync.RWMutex
+	nextClientID    int
+	nextClientIDMu  sync.Mutex
 
 	// Subscription channels
-	eventCh   <-chan *events.Event
-	subID     string
+	eventCh <-chan *events.Event
+	subID   string
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -41,20 +41,20 @@ type ReactiveQueueManager struct {
 
 // reviewQueueStreamClient represents a client streaming review queue events
 type reviewQueueStreamClient struct {
-	id       string
-	filters  *WatchReviewQueueFilters
-	eventCh  chan *sessionv1.ReviewQueueEvent
-	ctx      context.Context
-	cancel   context.CancelFunc
+	id      string
+	filters *WatchReviewQueueFilters
+	eventCh chan *sessionv1.ReviewQueueEvent
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 // WatchReviewQueueFilters contains filters for review queue event streaming
 type WatchReviewQueueFilters struct {
-	PriorityFilter      []session.Priority
-	ReasonFilter        []session.AttentionReason
-	SessionIDs          []string
-	IncludeStatistics   bool
-	InitialSnapshot     bool
+	PriorityFilter    []session.Priority
+	ReasonFilter      []session.AttentionReason
+	SessionIDs        []string
+	IncludeStatistics bool
+	InitialSnapshot   bool
 }
 
 // NewReactiveQueueManager creates a new reactive queue manager.
@@ -168,13 +168,12 @@ func (rqm *ReactiveQueueManager) handleUserInteraction(event *events.Event) {
 	}
 
 	// Update LastUserResponse timestamp
-	inst.LastUserResponse = time.Now()
-	log.InfoLog.Printf("[ReactiveQueueManager] Updated LastUserResponse for '%s' to %v",
-		sessionID, inst.LastUserResponse)
+	respondedAt := inst.MarkUserResponded()
+	log.InfoLog.Printf("[ReactiveQueueManager] Updated LastUserResponse for '%s'", sessionID)
 
 	// Persist timestamp (critical for restart scenarios)
 	if rqm.storage != nil {
-		if err := rqm.storage.UpdateInstanceLastUserResponse(inst.Title, inst.LastUserResponse); err != nil {
+		if err := rqm.storage.UpdateInstanceLastUserResponse(inst.Title, respondedAt); err != nil {
 			log.ErrorLog.Printf("Failed to persist LastUserResponse for '%s': %v", sessionID, err)
 		}
 	}

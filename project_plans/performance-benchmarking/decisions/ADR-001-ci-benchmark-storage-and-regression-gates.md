@@ -1,7 +1,8 @@
 # ADR-001: CI Benchmark Storage and Regression Gate Strategy
 
-**Status**: Proposed
+**Status**: Superseded
 **Date**: 2026-04-02
+**Superseded by**: File-in-main baseline approach (see Implementation Note below)
 **Context**: Performance Benchmarking feature
 
 ## Context
@@ -57,3 +58,24 @@ Research findings (findings-pitfalls.md) document 10-30% coefficient of variatio
 - The workflow requires `contents: write` permission to push baseline data.
 - PRs from forks cannot push baselines (GitHub Actions security model); fork PRs will compare against the last main baseline only.
 - Bundle size gates require `next build` in CI, adding Node.js setup to the benchmark workflow.
+
+---
+
+## Implementation Note — Deviation from This ADR
+
+During implementation (commit `3211c0f`), `benchmark-action/github-action-benchmark` was replaced with a simpler file-in-main approach:
+
+**What changed:**
+- Baseline files committed directly to `main` under `benchmarks/go/`, `benchmarks/frontend/`, `benchmarks/e2e/` (no separate `benchmarks` branch).
+- Go regression comparison uses `benchstat` inline in the CI shell step (not the action's built-in comparison).
+- Threshold changed from the planned 120%/150% dual thresholds to a 10% `benchstat`-based exit-1 gate. This was increased to match GitHub runner noise more accurately in a follow-up revision.
+- Chart.js visualization page (GitHub Pages) not implemented; comparisons are posted as PR comments in plain text.
+
+**Why:**
+- The `benchmarks` branch approach (gh-pages style) required an additional branch + Pages setup that added repo complexity for minimal gain at this project's scale.
+- `benchstat` is already a required developer tool; using it directly in CI keeps the comparison logic transparent and auditable without a third-party action.
+- File-in-main baselines are simpler to inspect, diff, and recover from (standard `git log` on main).
+
+**Trade-offs accepted:**
+- No time-series visualization (acceptable; regressions visible in PR comments).
+- Slightly more brittle `benchstat` grep in the regression gate (mitigated by pinning benchstat version).
