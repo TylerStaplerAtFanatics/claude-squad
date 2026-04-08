@@ -7,6 +7,7 @@ This file serves as a lightweight index of all feature plans in `docs/tasks/`.
 | Plan | Status | Stories | Priority |
 |------|--------|---------|----------|
 | [Permissions Analysis & Auto-Approvals](permissions-analysis-auto-approvals.md) | Planning | 6 stories, 17 tasks | High |
+| [Rate Limit UX Improvements](rate-limit-ux-improvements.md) | Planning | 10 tasks | High |
 | [Review Queue Navigation](review-queue-navigation.md) | Draft | 3 stories, 11 tasks | High |
 | [Test Coverage: Core Business Logic](test-coverage-core-logic.md) | Draft | 3 stories, 15 tasks | High |
 | [History Page Decomposition](history-page-decomposition.md) | Draft | 5 stories, 20 tasks | Medium |

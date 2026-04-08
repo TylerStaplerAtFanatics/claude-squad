@@ -46,6 +46,9 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 		ExternalMetadata: externalMetadataToProto(inst.ExternalMetadata),
 	}
 
+	// Convert rate limit state
+	protoSession.RateLimitState = rateLimitStateToProto(inst.GetRateLimitState())
+
 	// Convert git worktree data if available
 	wt, err := inst.GetGitWorktree()
 	if err == nil && wt != nil {
@@ -194,5 +197,24 @@ func externalMetadataToProto(metadata *session.ExternalInstanceMetadata) *sessio
 		MuxSocketPath:   metadata.MuxSocketPath,
 		MuxEnabled:      metadata.MuxEnabled,
 		SourceTerminal:  metadata.SourceTerminal,
+	}
+}
+
+// rateLimitStateToProto converts session rate limit state (int) to proto RateLimitState.
+// Session rate limit states: 0=None, 1=Waiting, 2=Recovering, 3=Recovered, 4=Failed
+func rateLimitStateToProto(state int) sessionv1.RateLimitState {
+	switch state {
+	case 0: // StateNone
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_NONE
+	case 1: // StateWaiting
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_WAITING
+	case 2: // StateRecovering
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_RECOVERING
+	case 3: // StateRecovered
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_RECOVERED
+	case 4: // StateFailed
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_FAILED
+	default:
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_UNSPECIFIED
 	}
 }

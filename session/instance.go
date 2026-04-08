@@ -1830,6 +1830,12 @@ func (i *Instance) GetEffectiveStatus() Status {
 	return StatusFromDetected(statusInfo.ClaudeStatus)
 }
 
+// GetStatus returns the current lifecycle status of this instance as an int.
+// This is intentionally returns int to implement the SessionAccessor interface.
+func (i *Instance) GetStatus() int {
+	return int(i.Status)
+}
+
 // StartController creates and starts a ClaudeController for this instance.
 // The controller enables automated idle detection and queue management.
 func (i *Instance) StartController() error {
@@ -1909,6 +1915,32 @@ func (i *Instance) GetController() *ClaudeController {
 	i.stateMutex.RLock()
 	defer i.stateMutex.RUnlock()
 	return i.controllerManager.GetController()
+}
+
+// GetRateLimitState returns the current rate limit detection state.
+func (i *Instance) GetRateLimitState() int {
+	ctrl := i.GetController()
+	if ctrl == nil {
+		return 0
+	}
+	return int(ctrl.GetRateLimitState())
+}
+
+// SetRateLimitEnabled enables or disables rate limit detection.
+func (i *Instance) SetRateLimitEnabled(enabled bool) {
+	ctrl := i.GetController()
+	if ctrl != nil {
+		ctrl.SetRateLimitEnabled(enabled)
+	}
+}
+
+// IsRateLimitEnabled returns whether rate limit detection is enabled.
+func (i *Instance) IsRateLimitEnabled() bool {
+	ctrl := i.GetController()
+	if ctrl == nil {
+		return true // Default to enabled
+	}
+	return ctrl.IsRateLimitEnabled()
 }
 
 // GetPermissions returns the permissions for this instance based on its type

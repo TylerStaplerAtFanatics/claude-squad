@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/detection"
+	"github.com/tstapler/stapler-squad/session/detection/ratelimit"
 	"os"
 	"sync"
 	"time"
@@ -13,18 +14,19 @@ import (
 // ClaudeController provides a high-level API for controlling Claude instances.
 // It orchestrates all the underlying components (queue, executor, history, streams).
 type ClaudeController struct {
-	sessionName    string
-	instance       *Instance
-	ptyAccess      *PTYAccess
-	responseStream *ResponseStream
-	statusDetector *detection.StatusDetector
-	idleDetector   *detection.IdleDetector // NEW: Idle state detection
-	queue          *CommandQueue
-	executor       *CommandExecutor
-	history        *CommandHistory
-	mu             sync.RWMutex
-	ctx            context.Context
-	cancel         context.CancelFunc
+	sessionName      string
+	instance         *Instance
+	ptyAccess        *PTYAccess
+	responseStream   *ResponseStream
+	statusDetector   *detection.StatusDetector
+	idleDetector     *detection.IdleDetector // NEW: Idle state detection
+	rateLimitHandler *ratelimit.PTYConsumer  // Rate limit detection
+	queue            *CommandQueue
+	executor         *CommandExecutor
+	history          *CommandHistory
+	mu               sync.RWMutex
+	ctx              context.Context
+	cancel           context.CancelFunc
 }
 
 // NewClaudeController creates a new controller for the given instance.
@@ -63,6 +65,10 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 	// Create circular buffer for PTY output
 	buffer := NewCircularBuffer(10 * 1024 * 1024) // 10MB buffer
 	cc.ptyAccess = NewPTYAccess(cc.sessionName, ptyReader, buffer)
+
+	// Create rate limit detection handler
+	rateLimitManager := ratelimit.NewManager(cc.sessionName, cc.instance)
+	cc.rateLimitHandler = ratelimit.NewPTYConsumer(cc.ptyAccess, rateLimitManager)
 
 	// Create response stream
 	cc.responseStream = NewResponseStream(cc.sessionName, cc.ptyAccess)
@@ -163,6 +169,11 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start command executor: %w", err)
 	}
 
+	// Start rate limit detection
+	if cc.rateLimitHandler != nil {
+		cc.rateLimitHandler.Start()
+	}
+
 	log.InfoLog.Printf("Claude controller started for session '%s'", cc.sessionName)
 	return nil
 }
@@ -191,6 +202,11 @@ func (cc *ClaudeController) Stop() error {
 	// Stop response stream
 	if err := cc.responseStream.Stop(); err != nil {
 		errs = append(errs, fmt.Errorf("response stream stop error: %w", err))
+	}
+
+	// Stop rate limit detection
+	if cc.rateLimitHandler != nil {
+		cc.rateLimitHandler.Stop()
 	}
 
 	// Save queue state
@@ -652,6 +668,38 @@ func (cc *ClaudeController) GetIdleDuration() time.Duration {
 	}
 
 	return cc.idleDetector.GetIdleDuration()
+}
+
+// GetRateLimitState returns the current rate limit detection state.
+func (cc *ClaudeController) GetRateLimitState() ratelimit.RateLimitState {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	if cc.rateLimitHandler != nil {
+		return cc.rateLimitHandler.GetRateLimitState()
+	}
+	return ratelimit.StateNone
+}
+
+// SetRateLimitEnabled enables or disables rate limit detection.
+func (cc *ClaudeController) SetRateLimitEnabled(enabled bool) {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	if cc.rateLimitHandler != nil {
+		cc.rateLimitHandler.SetEnabled(enabled)
+	}
+}
+
+// IsRateLimitEnabled returns whether rate limit detection is enabled.
+func (cc *ClaudeController) IsRateLimitEnabled() bool {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	if cc.rateLimitHandler != nil {
+		return cc.rateLimitHandler.IsEnabled()
+	}
+	return false
 }
 
 func generateCommandID() string {

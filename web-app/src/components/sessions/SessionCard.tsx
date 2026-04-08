@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Session, SessionStatus, ReviewItem, InstanceType } from "@/gen/session/v1/types_pb";
+import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState } from "@/gen/session/v1/types_pb";
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
 import { GitHubBadge } from "./GitHubBadge";
 import { TagEditor } from "./TagEditor";
@@ -78,6 +78,40 @@ export function SessionCard({
         return "Needs Approval";
       default:
         return "Unknown";
+    }
+  };
+
+  const getRateLimitStateText = (state: RateLimitState): string => {
+    switch (state) {
+      case RateLimitState.NONE:
+        return "";
+      case RateLimitState.WAITING:
+        return "Rate Limited";
+      case RateLimitState.RECOVERING:
+        return "Recovering...";
+      case RateLimitState.RECOVERED:
+        return "Recovered";
+      case RateLimitState.FAILED:
+        return "Recovery Failed";
+      default:
+        return "";
+    }
+  };
+
+  const getRateLimitStateColor = (state: RateLimitState): string => {
+    switch (state) {
+      case RateLimitState.NONE:
+        return "";
+      case RateLimitState.WAITING:
+        return styles.statusNeedsApproval;
+      case RateLimitState.RECOVERING:
+        return styles.statusLoading;
+      case RateLimitState.RECOVERED:
+        return styles.statusReady;
+      case RateLimitState.FAILED:
+        return styles.statusPaused;
+      default:
+        return "";
     }
   };
 
@@ -343,6 +377,15 @@ export function SessionCard({
             >
               {getStatusText(session.status)}
             </span>
+            {session.rateLimitState && session.rateLimitState !== RateLimitState.NONE && (
+              <span
+                className={`${styles.status} ${getRateLimitStateColor(session.rateLimitState)}`}
+                role="status"
+                aria-label={`Rate limit: ${getRateLimitStateText(session.rateLimitState)}`}
+              >
+                {getRateLimitStateText(session.rateLimitState)}
+              </span>
+            )}
           </div>
         </div>
         {session.category && (
