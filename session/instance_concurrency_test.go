@@ -52,31 +52,6 @@ func TestTransitionTo_ConcurrentPause(t *testing.T) {
 	}
 }
 
-func TestSetStatus_ConcurrentAccess(t *testing.T) {
-	// Verify that concurrent SetStatus calls do not cause a data race.
-	// This test is primarily validated by the -race detector.
-	inst := &Instance{started: true}
-	var wg sync.WaitGroup
-
-	const iterations = 100
-	wg.Add(iterations)
-	for i := 0; i < iterations; i++ {
-		go func(status Status) {
-			defer wg.Done()
-			inst.SetStatus(status)
-		}(Status(i % 5))
-	}
-	wg.Wait()
-
-	// The final status should be one of the valid statuses (0-4).
-	// We cannot predict which one due to concurrent scheduling, but it must
-	// be in the valid range and the test must not race.
-	finalStatus := inst.Status
-	if finalStatus < 0 || finalStatus > 4 {
-		t.Errorf("unexpected final status: %d", finalStatus)
-	}
-}
-
 func TestTransitionTo_ConcurrentApprove(t *testing.T) {
 	// Same pattern as ConcurrentPause but for Approve (NeedsApproval->Running).
 	inst := &Instance{

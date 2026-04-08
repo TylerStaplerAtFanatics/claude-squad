@@ -1,9 +1,9 @@
 package session
 
 import (
+	"fmt"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/tmux"
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -265,4 +265,13 @@ func (tm *TmuxProcessManager) SendPromptWithEnter(prompt string) error {
 		return fmt.Errorf("error tapping enter: %w", err)
 	}
 	return nil
+}
+
+// GetPanePID returns the PID of the foreground process in the pane.
+// Returns an error if the session is not initialized or the command fails.
+func (tm *TmuxProcessManager) GetPanePID() (int32, error) {
+	if tm.session == nil {
+		return 0, fmt.Errorf("tmux session not initialized")
+	}
+	return tm.session.GetPanePID()
 }

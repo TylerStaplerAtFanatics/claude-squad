@@ -61,20 +61,27 @@ get_latest_version() {
     # Get latest version from GitHub API, including prereleases
     API_RESPONSE=$(curl -sS "https://api.github.com/repos/tstapler/stapler-squad/releases")
     if [ $? -ne 0 ]; then
-        echo "Failed to connect to GitHub API"
+        echo "Error: Failed to connect to GitHub API" >&2
         exit 1
     fi
-    
+
     if echo "$API_RESPONSE" | grep -q "Not Found"; then
-        echo "No releases found in the repository"
+        echo "Error: Repository not found or no releases published yet." >&2
+        echo "Visit https://github.com/tstapler/stapler-squad/releases to check." >&2
         exit 1
     fi
-    
+
+    # Check for empty releases list
+    if [ "$API_RESPONSE" = "[]" ] || [ -z "$(echo "$API_RESPONSE" | tr -d '[] \n\r')" ]; then
+        echo "Error: No releases have been published yet for stapler-squad." >&2
+        echo "Build from source: https://github.com/tstapler/stapler-squad#installation" >&2
+        exit 1
+    fi
+
     # Get the first release (latest) from the array
     LATEST_VERSION=$(echo "$API_RESPONSE" | grep -m1 '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | sed 's/^v//')
     if [ -z "$LATEST_VERSION" ]; then
-        echo "Failed to parse version from GitHub API response:"
-        echo "$API_RESPONSE" | grep -v "upload_url" # Filter out long upload_url line
+        echo "Error: Could not parse version from GitHub API response." >&2
         exit 1
     fi
     echo "$LATEST_VERSION"

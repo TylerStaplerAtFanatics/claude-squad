@@ -172,7 +172,7 @@ install-tools: ensure-tools ## Install all development and analysis tools
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
-	go install github.com/jtbonhomme/go-nilcheck@latest
+	go install github.com/jtbonhomme/go-nilcheck/cmd/nilcheck@latest
 	go install golang.org/x/tools/cmd/deadcode@latest
 	go install golang.org/x/perf/cmd/benchstat@latest
 	@echo "All tools installed successfully!"
@@ -203,7 +203,7 @@ nil-safety: ensure-tools ## Run comprehensive nil safety analysis
 	@echo ""
 	@echo "For detailed analysis, run individual tools:"
 	@echo "  make nilaway"
-	@echo "  make staticcheck" 
+	@echo "  make staticcheck"
 
 nilaway: ensure-tools ## Run NilAway nil safety analyzer
 	nilaway -include-pkgs="github.com/tstapler/stapler-squad" ./...
@@ -305,6 +305,7 @@ validate-env: ensure-tools ## Validate development environment setup
 	@which gosec >/dev/null 2>&1 && echo "✅ gosec installed" || echo "❌ gosec missing (run 'make install-tools')"
 	@which deadcode >/dev/null 2>&1 && echo "✅ deadcode installed" || echo "❌ deadcode missing (run 'make install-tools')"
 	@echo "Environment validation complete"
+
 # Benchmark comparison (local A/B testing with benchstat)
 benchmark-baseline: ensure-tools ## Save current benchmark results as baseline for comparison
 	@echo "Running benchmarks and saving as baseline..."
@@ -326,7 +327,7 @@ benchmark-compare: ensure-tools ## Run benchmarks and compare against saved base
 benchmark-tier1: ensure-tools ## Run Tier 1 critical-path benchmarks (fast, ~5 min)
 	@echo "Running Tier 1 benchmarks..."
 	go test \
-		-bench='BenchmarkEventBus|BenchmarkDeltaGenerat|BenchmarkCircularBuffer|BenchmarkSessionService_List|BenchmarkSessionService_Get|BenchmarkSessionService_Stream' \
+		-bench='BenchmarkEventBus|BenchmarkDeltaGenerat|BenchmarkCircularBuffer|BenchmarkSessionService_List|BenchmarkSessionService_Get' \
 		-benchmem \
 		-count=8 \
 		-timeout=10m \

@@ -236,12 +236,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     [addNotification]
   );
 
-  // Remove stale toasts (older than 5 minutes) every minute
+  // Remove stale toasts (older than 5 minutes) every minute.
+  // Actionable types that block Claude (approval_needed, question) are exempt —
+  // they must stay visible until the user explicitly responds.
   useEffect(() => {
     const STALE_MS = 5 * 60 * 1000;
     const interval = setInterval(() => {
       const cutoff = Date.now() - STALE_MS;
-      setNotifications((prev) => prev.filter((n) => n.timestamp >= cutoff));
+      setNotifications((prev) =>
+        prev.filter(
+          (n) =>
+            n.timestamp >= cutoff ||
+            n.notificationType === "approval_needed" ||
+            n.notificationType === "question"
+        )
+      );
     }, 60_000);
     return () => clearInterval(interval);
   }, []);

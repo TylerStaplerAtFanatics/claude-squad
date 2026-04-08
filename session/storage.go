@@ -1,9 +1,9 @@
 package session
 
 import (
-	"github.com/tstapler/stapler-squad/log"
 	"context"
 	"fmt"
+	"github.com/tstapler/stapler-squad/log"
 	"time"
 )
 
@@ -79,6 +79,14 @@ type InstanceData struct {
 	LastPromptSignature  string    `json:"last_prompt_signature,omitempty"`
 	LastUserResponse     time.Time `json:"last_user_response,omitempty"`
 	ProcessingGraceUntil time.Time `json:"processing_grace_until,omitempty"`
+
+	// Checkpoint metadata for session state bookmarking (session resumption)
+	Checkpoints      CheckpointList `json:"checkpoints,omitempty"`
+	ActiveCheckpoint string         `json:"active_checkpoint,omitempty"`
+	ForkedFromID     string         `json:"forked_from_id,omitempty"`
+
+	// History file linkage for cold restore
+	HistoryFilePath string `json:"history_file_path,omitempty"`
 }
 
 // GitWorktreeData represents the serializable data of a GitWorktree
@@ -117,6 +125,20 @@ type ClaudeSettings struct {
 	ShowSessionSelector   bool   `json:"show_session_selector"`   // Show session selection menu on resume
 	SessionTimeoutMinutes int    `json:"session_timeout_minutes"` // Consider sessions stale after this time
 }
+
+// InstanceStore is the minimal interface the server layer needs for session persistence.
+// Defining it here (alongside the concrete Storage) allows test fakes to be built without
+// depending on the full Storage implementation.
+type InstanceStore interface {
+	LoadInstances() ([]*Instance, error)
+	SaveInstances([]*Instance) error
+	AddInstance(*Instance) error
+	DeleteInstance(title string) error
+	UpdateInstanceLastUserResponse(title string, t time.Time) error
+}
+
+// Compile-time assertion: *Storage must satisfy InstanceStore.
+var _ InstanceStore = (*Storage)(nil)
 
 // Storage handles saving and loading instances via the repository backend.
 type Storage struct {

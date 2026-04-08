@@ -19,6 +19,7 @@ import (
 	"github.com/tstapler/stapler-squad/session/search"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Compile-time interface check: SessionService must implement the full ConnectRPC handler.
@@ -33,7 +34,7 @@ type ReactiveQueueManager interface {
 
 // SessionService implements the SessionServiceHandler interface for ConnectRPC.
 type SessionService struct {
-	storage           *session.Storage
+	storage           session.InstanceStore
 	eventBus          *events.EventBus
 	statusManager     *session.InstanceStatusManager
 	reviewQueuePoller *session.ReviewQueuePoller
@@ -57,13 +58,30 @@ type SessionService struct {
 
 	// databaseSvc handles workspace/database switcher RPCs.
 	databaseSvc *DatabaseService
+
+	// scrollbackMgr provides access to per-session scrollback sequence numbers
+	// for checkpoint creation. May be nil if not wired (seq defaults to 0).
+	scrollbackMgr scrollbackSequencer
+}
+
+// scrollbackSequencer is the minimal interface SessionService needs from ScrollbackManager.
+type scrollbackSequencer interface {
+	CurrentSequence(sessionID string) uint64
 }
 
 // NewSessionService creates a new SessionService with the given storage and event bus.
 // NOTE: Instances are NOT loaded here to prevent double-loading and initialization timing issues.
 // Instances will be loaded in server.go after dependencies (statusManager, reviewQueue) are wired.
-func NewSessionService(storage *session.Storage, eventBus *events.EventBus) *SessionService {
+func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus) *SessionService {
 	reviewQueue := session.NewReviewQueue()
+
+	// concStorage is the concrete backing store used by sub-services that haven't migrated to
+	// InstanceStore yet (ReviewQueueService, GitHubService, WorkspaceService). In tests using a
+	// fake InstanceStore, concStorage will be nil — those sub-services degrade gracefully to nil storage.
+	var concStorage *session.Storage
+	if cs, ok := storage.(*session.Storage); ok {
+		concStorage = cs
+	}
 
 	// Initialize search engine with disk persistence for incremental index updates.
 	var searchEngine *search.SearchEngine
@@ -91,7 +109,7 @@ func NewSessionService(storage *session.Storage, eventBus *events.EventBus) *Ses
 		log.WarningLog.Printf("Failed to get config dir for approval persistence: %v", configErr)
 	}
 	approvalStore := NewApprovalStore(approvalFilePath)
-	reviewQueueSvc := NewReviewQueueService(reviewQueue, storage, eventBus)
+	reviewQueueSvc := NewReviewQueueService(reviewQueue, concStorage, eventBus)
 	reviewQueueSvc.SetApprovalStore(approvalStore)
 
 	notificationSvc := NewNotificationService(NewNotificationRateLimiter(10, 20), eventBus)
@@ -124,8 +142,8 @@ func NewSessionService(storage *session.Storage, eventBus *events.EventBus) *Ses
 		eventBus:        eventBus,
 		reviewQueueSvc:  reviewQueueSvc,
 		searchSvc:       NewSearchService(searchEngine, search.NewSnippetGenerator(), 5*time.Minute),
-		githubSvc:       NewGitHubService(storage),
-		workspaceSvc:    NewWorkspaceService(storage, eventBus),
+		githubSvc:       NewGitHubService(concStorage),
+		workspaceSvc:    NewWorkspaceService(concStorage, eventBus),
 		configSvc:       NewConfigService(),
 		notificationSvc: notificationSvc,
 		approvalSvc:     approvalSvc,
@@ -187,8 +205,18 @@ func NewSessionServiceFromConfig() (*SessionService, error) {
 	return NewSessionService(storage, eventBus), nil
 }
 
-// GetStorage returns the storage instance for direct access (e.g., WebSocket handlers).
+// GetStorage returns the concrete *session.Storage for components that haven't migrated to InstanceStore yet.
+// Returns nil when SessionService was constructed with a fake InstanceStore (e.g., in unit tests).
+// Prefer using the session.InstanceStore interface via GetInstanceStore() for new code.
 func (s *SessionService) GetStorage() *session.Storage {
+	if cs, ok := s.storage.(*session.Storage); ok {
+		return cs
+	}
+	return nil
+}
+
+// GetInstanceStore returns the InstanceStore interface, suitable for both production and test code.
+func (s *SessionService) GetInstanceStore() session.InstanceStore {
 	return s.storage
 }
 
@@ -882,7 +910,7 @@ func (s *SessionService) StreamTerminal(
 	// Flow control state for backpressure management
 	// Reference: https://xtermjs.org/docs/guides/flowcontrol/
 	pauseCh := make(chan bool, 1) // Buffered channel for pause/resume signals
-	var ptyPaused bool             // Current PTY pause state
+	var ptyPaused bool            // Current PTY pause state
 
 	// Goroutine 1: Read from PTY and send deltas to client (terminal output)
 	go func() {
@@ -1594,4 +1622,181 @@ func (s *SessionService) MergeDatabase(
 	req *connect.Request[sessionv1.MergeDatabaseRequest],
 ) (*connect.Response[sessionv1.MergeDatabaseResponse], error) {
 	return s.databaseSvc.MergeDatabase(ctx, req)
+}
+
+// SetScrollbackManager wires a scrollback sequence provider for checkpoint creation.
+func (s *SessionService) SetScrollbackManager(mgr scrollbackSequencer) {
+	s.scrollbackMgr = mgr
+}
+
+// CreateCheckpoint captures the current state of a session as a named bookmark.
+func (s *SessionService) CreateCheckpoint(
+	ctx context.Context,
+	req *connect.Request[sessionv1.CreateCheckpointRequest],
+) (*connect.Response[sessionv1.CreateCheckpointResponse], error) {
+	if req.Msg.SessionId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session_id is required"))
+	}
+	if req.Msg.Label == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("label is required"))
+	}
+
+	inst := s.findInstance(req.Msg.SessionId)
+	if inst == nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.SessionId))
+	}
+
+	var scrollbackSeq uint64
+	if s.scrollbackMgr != nil {
+		scrollbackSeq = s.scrollbackMgr.CurrentSequence(inst.Title)
+	}
+
+	cp, err := inst.CreateCheckpoint(req.Msg.Label, scrollbackSeq)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+
+	if err := s.storage.SaveInstances(s.allInstances()); err != nil {
+		log.WarningLog.Printf("CreateCheckpoint: failed to persist checkpoint for '%s': %v", inst.Title, err)
+	}
+
+	return connect.NewResponse(&sessionv1.CreateCheckpointResponse{
+		Checkpoint: checkpointToProto(cp),
+	}), nil
+}
+
+// ListCheckpoints returns all checkpoints for the specified session.
+func (s *SessionService) ListCheckpoints(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ListCheckpointsRequest],
+) (*connect.Response[sessionv1.ListCheckpointsResponse], error) {
+	if req.Msg.SessionId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session_id is required"))
+	}
+
+	inst := s.findInstance(req.Msg.SessionId)
+	if inst == nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.SessionId))
+	}
+
+	checkpoints := inst.GetCheckpoints()
+	protos := make([]*sessionv1.CheckpointProto, 0, len(checkpoints))
+	for i := range checkpoints {
+		protos = append(protos, checkpointToProto(&checkpoints[i]))
+	}
+
+	return connect.NewResponse(&sessionv1.ListCheckpointsResponse{
+		Checkpoints: protos,
+	}), nil
+}
+
+// ForkSession creates a new independent session branched from a checkpoint on an existing session.
+func (s *SessionService) ForkSession(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ForkSessionRequest],
+) (*connect.Response[sessionv1.ForkSessionResponse], error) {
+	if req.Msg.SessionId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session_id is required"))
+	}
+	if req.Msg.CheckpointId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("checkpoint_id is required"))
+	}
+	if req.Msg.NewTitle == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("new_title is required"))
+	}
+	if strings.Contains(req.Msg.NewTitle, "..") || strings.ContainsRune(req.Msg.NewTitle, '/') || strings.ContainsRune(req.Msg.NewTitle, os.PathSeparator) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("new_title must not contain path separators or '..'"))
+	}
+
+	src := s.findInstance(req.Msg.SessionId)
+	if src == nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.SessionId))
+	}
+
+	if s.findInstance(req.Msg.NewTitle) != nil {
+		return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("session with title %q already exists", req.Msg.NewTitle))
+	}
+
+	configDir, err := config.GetConfigDir()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get config dir: %w", err))
+	}
+
+	newInst, err := src.ForkFromCheckpoint(req.Msg.CheckpointId, req.Msg.NewTitle, configDir)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+
+	if err := s.storage.AddInstance(newInst); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("persist forked session: %w", err))
+	}
+
+	if s.reviewQueuePoller != nil {
+		updatedInstances := append(s.reviewQueuePoller.GetInstances(), newInst)
+		s.reviewQueuePoller.SetInstances(updatedInstances)
+		log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after ForkSession for '%s'", newInst.Title)
+	}
+
+	respProto := adapters.InstanceToProto(newInst)
+
+	go func() {
+		if startErr := newInst.Start(true); startErr != nil {
+			log.WarningLog.Printf("ForkSession: failed to start forked session '%s': %v", newInst.Title, startErr)
+			newInst.Status = session.Stopped
+			if saveErr := s.storage.SaveInstances(s.allInstances()); saveErr != nil {
+				log.WarningLog.Printf("ForkSession: failed to persist Stopped status for '%s': %v", newInst.Title, saveErr)
+			}
+		}
+	}()
+
+	s.eventBus.Publish(events.NewSessionCreatedEvent(newInst))
+
+	return connect.NewResponse(&sessionv1.ForkSessionResponse{
+		Session: respProto,
+	}), nil
+}
+
+// findInstance finds an instance by title using the live in-memory poller.
+func (s *SessionService) findInstance(id string) *session.Instance {
+	if s.reviewQueuePoller != nil {
+		if inst := s.reviewQueuePoller.FindInstance(id); inst != nil {
+			return inst
+		}
+	}
+	if s.externalDiscovery != nil {
+		if inst := s.externalDiscovery.GetSession(id); inst != nil {
+			return inst
+		}
+	}
+	return nil
+}
+
+// allInstances returns all live instances from both the poller and external discovery.
+func (s *SessionService) allInstances() []*session.Instance {
+	var result []*session.Instance
+	if s.reviewQueuePoller != nil {
+		result = append(result, s.reviewQueuePoller.GetInstances()...)
+	}
+	if s.externalDiscovery != nil {
+		result = append(result, s.externalDiscovery.GetSessions()...)
+	}
+	return result
+}
+
+// checkpointToProto converts a session.Checkpoint to a proto CheckpointProto.
+func checkpointToProto(cp *session.Checkpoint) *sessionv1.CheckpointProto {
+	if cp == nil {
+		return nil
+	}
+	return &sessionv1.CheckpointProto{
+		Id:             cp.ID,
+		SessionId:      cp.SessionID,
+		ParentId:       cp.ParentID,
+		Label:          cp.Label,
+		ScrollbackSeq:  cp.ScrollbackSeq,
+		ScrollbackPath: cp.ScrollbackPath,
+		ClaudeConvUuid: cp.ClaudeConvUUID,
+		GitCommitSha:   cp.GitCommitSHA,
+		Timestamp:      timestamppb.New(cp.Timestamp),
+	}
 }

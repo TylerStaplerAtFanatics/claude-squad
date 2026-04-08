@@ -42,6 +42,26 @@
     "react-redux": "^9.2.0",
     "zod": "^4.1.11"
   },
+  "size-limit": [
+    {
+      "name": "Total JS bundle",
+      "path": "out/_next/static/chunks/**/*.js",
+      "limit": "5 MB",
+      "gzip": false
+    },
+    {
+      "name": "Framework chunk (React)",
+      "path": "out/_next/static/chunks/framework-*.js",
+      "limit": "650 KB",
+      "gzip": false
+    },
+    {
+      "name": "Main app chunk",
+      "path": "out/_next/static/chunks/main-*.js",
+      "limit": "400 KB",
+      "gzip": false
+    }
+  ],
   "devDependencies": {
     "@bufbuild/protoc-gen-es": "^2.11.0",
     "@playwright/test": "^1.57.0",

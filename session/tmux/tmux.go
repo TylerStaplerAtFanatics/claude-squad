@@ -2,16 +2,17 @@ package tmux
 
 import (
 	"bytes"
-	"github.com/tstapler/stapler-squad/executor"
-	"github.com/tstapler/stapler-squad/log"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/tstapler/stapler-squad/executor"
+	"github.com/tstapler/stapler-squad/log"
 	"io"
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -72,6 +73,10 @@ type TmuxSession struct {
 	detachMutex sync.Mutex
 	detaching   bool
 
+	// registryKey is the key used to register this session's circuit breaker executor
+	// in the global registry. Stored here so Close() can unregister it on teardown.
+	registryKey string
+
 	// Session existence caching to avoid repeated list-sessions calls
 	existsCacheMutex sync.RWMutex
 	existsCache      bool
@@ -79,13 +84,13 @@ type TmuxSession struct {
 	existsCacheTTL   time.Duration
 
 	// Control mode streaming infrastructure (replaces pipe-pane + FIFO)
-	controlModeCmd       *exec.Cmd               // tmux -C attach process
-	controlModeStdout    io.ReadCloser           // stdout pipe for control mode notifications
-	controlModeStdin     io.WriteCloser          // stdin pipe for control mode commands
-	controlModeDone      chan struct{}           // Signal channel for control mode termination
+	controlModeCmd         *exec.Cmd              // tmux -C attach process
+	controlModeStdout      io.ReadCloser          // stdout pipe for control mode notifications
+	controlModeStdin       io.WriteCloser         // stdin pipe for control mode commands
+	controlModeDone        chan struct{}          // Signal channel for control mode termination
 	controlModeSubscribers map[string]chan []byte // WebSocket clients subscribed to control mode updates
-	controlModeSubMu     sync.RWMutex            // Protects controlModeSubscribers map and controlModeExited
-	controlModeExited    bool                    // True after readControlModeOutput exits; new subscribers get pre-closed channel
+	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers map and controlModeExited
+	controlModeExited      bool                   // True after readControlModeOutput exits; new subscribers get pre-closed channel
 }
 
 // windowSize represents terminal dimensions from external sources (like BubbleTea)
@@ -97,7 +102,24 @@ type windowSize struct {
 const TmuxPrefix = "staplersquad_"
 const LegacyTmuxPrefix = "claudesquad_"
 
+// Timeout and interval constants for session lifecycle operations.
+const (
+	sessionExistsTimeout        = 3 * time.Second
+	sessionExistsNoCacheTimeout = 5 * time.Second
+	existsCacheDefaultTTL       = 500 * time.Millisecond
+	sessionCreateTimeout        = 10 * time.Second
+	sessionPollInitialDelay     = 5 * time.Millisecond
+)
+
 var whiteSpaceRegex = regexp.MustCompile(`\s+`)
+
+// recoveryMu and recoveryInFlight guard against concurrent tmux server recovery attempts.
+// When the server dies all sessions detect the failure simultaneously; only one should
+// run EnsureServerRunning + ResetAll + CreateKeepaliveSession.
+var (
+	recoveryMu       sync.Mutex
+	recoveryInFlight bool
+)
 
 // ToStaplerSquadTmuxName converts a string to a valid tmux session name with the default prefix
 func ToStaplerSquadTmuxName(str string) string {
@@ -126,13 +148,20 @@ func serverNotRunning(output []byte) bool {
 // checkServerNotRunning runs tmux list-sessions directly (bypassing any circuit breaker)
 // and returns true if the server is not running.
 func checkServerNotRunning(serverSocket string) bool {
-	args := []string{"list-sessions"}
-	if serverSocket != "" {
-		args = append([]string{"-L", serverSocket}, args...)
-	}
+	args := prependSocket(serverSocket, []string{"list-sessions"})
 	cmd := exec.Command("tmux", args...)
 	out, err := cmd.CombinedOutput()
 	return err != nil && serverNotRunning(out)
+}
+
+// prependSocket prepends "-L <socket>" to args when socket is non-empty.
+// This lets package-level tmux functions target an isolated server socket
+// (used in tests) without modifying the args slice in place.
+func prependSocket(socket string, args []string) []string {
+	if socket == "" {
+		return args
+	}
+	return append([]string{"-L", socket}, args...)
 }
 
 // EnsureServerRunning starts the tmux server if it is not already running.
@@ -141,10 +170,7 @@ func EnsureServerRunning(serverSocket string) error {
 	if !checkServerNotRunning(serverSocket) {
 		return nil // server is already running
 	}
-	args := []string{"start-server"}
-	if serverSocket != "" {
-		args = append([]string{"-L", serverSocket}, args...)
-	}
+	args := prependSocket(serverSocket, []string{"start-server"})
 	cmd := exec.Command("tmux", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -152,6 +178,21 @@ func EnsureServerRunning(serverSocket string) error {
 	}
 	log.InfoLog.Printf("[tmux] server started successfully")
 	return nil
+}
+
+// ensureServerRunning is a package-level variable holding the function called by
+// recoverFromServerFailure. Tests can replace it to inject a controlled failure
+// without depending on real tmux socket behavior.
+var ensureServerRunning = EnsureServerRunning
+
+// onServerRecovered is called after a successful tmux server recovery.
+// Wired by the server layer to notify connected clients. Safe to leave nil.
+var onServerRecovered func()
+
+// SetServerRecoveryCallback registers a function called after successful server recovery.
+// Thread-safe: the callback executes outside the recoveryMu lock, in a goroutine.
+func SetServerRecoveryCallback(fn func()) {
+	onServerRecovered = fn
 }
 
 // SetExitEmpty sets the tmux server-level exit-empty option.
@@ -162,10 +203,7 @@ func SetExitEmpty(serverSocket string, enabled bool) error {
 	if enabled {
 		value = "on"
 	}
-	args := []string{"set-option", "-g", "exit-empty", value}
-	if serverSocket != "" {
-		args = append([]string{"-L", serverSocket}, args...)
-	}
+	args := prependSocket(serverSocket, []string{"set-option", "-g", "exit-empty", value})
 	cmd := exec.Command("tmux", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -181,19 +219,13 @@ func CreateKeepaliveSession(serverSocket string) error {
 	keepaliveName := TmuxPrefix + "keepalive"
 
 	// Check if already exists
-	hasArgs := []string{"has-session", "-t", keepaliveName}
-	if serverSocket != "" {
-		hasArgs = append([]string{"-L", serverSocket}, hasArgs...)
-	}
+	hasArgs := prependSocket(serverSocket, []string{"has-session", "-t", keepaliveName})
 	if exec.Command("tmux", hasArgs...).Run() == nil {
 		return nil // already exists
 	}
 
 	// Create a detached session with an idle shell
-	newArgs := []string{"new-session", "-d", "-s", keepaliveName}
-	if serverSocket != "" {
-		newArgs = append([]string{"-L", serverSocket}, newArgs...)
-	}
+	newArgs := prependSocket(serverSocket, []string{"new-session", "-d", "-s", keepaliveName})
 	cmd := exec.Command("tmux", newArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -233,8 +265,11 @@ func tmuxCircuitBreakerConfig() executor.CircuitBreakerConfig {
 func NewTmuxSession(name string, program string) *TmuxSession {
 	baseExec := executor.MakeExecutor()
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
-	executor.GetGlobalRegistry().Register("tmux-"+name, cbExec)
-	return newTmuxSession(name, program, MakePtyFactory(), cbExec, TmuxPrefix)
+	key := "tmux-" + name
+	executor.GetGlobalRegistry().Register(key, cbExec)
+	s := newTmuxSession(name, program, MakePtyFactory(), cbExec, TmuxPrefix)
+	s.registryKey = key
+	return s
 }
 
 // NewTmuxSessionWithPrefix creates a new TmuxSession with a custom prefix for process isolation.
@@ -242,8 +277,11 @@ func NewTmuxSession(name string, program string) *TmuxSession {
 func NewTmuxSessionWithPrefix(name string, program string, prefix string) *TmuxSession {
 	baseExec := executor.MakeExecutor()
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
-	executor.GetGlobalRegistry().Register("tmux-"+name, cbExec)
-	return newTmuxSession(name, program, MakePtyFactory(), cbExec, prefix)
+	key := "tmux-" + name
+	executor.GetGlobalRegistry().Register(key, cbExec)
+	s := newTmuxSession(name, program, MakePtyFactory(), cbExec, prefix)
+	s.registryKey = key
+	return s
 }
 
 // NewTmuxSessionWithCleanup creates a new TmuxSession and returns it along with a cleanup function.
@@ -276,8 +314,11 @@ func NewTmuxSessionWithPrefixAndCleanup(name string, program string, prefix stri
 func NewTmuxSessionWithServerSocket(name string, program string, prefix string, serverSocket string) *TmuxSession {
 	baseExec := executor.MakeExecutor()
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
-	executor.GetGlobalRegistry().Register("tmux-"+name, cbExec)
-	return newTmuxSessionWithSocket(name, program, MakePtyFactory(), cbExec, prefix, serverSocket)
+	key := "tmux-" + name
+	executor.GetGlobalRegistry().Register(key, cbExec)
+	s := newTmuxSessionWithSocket(name, program, MakePtyFactory(), cbExec, prefix, serverSocket)
+	s.registryKey = key
+	return s
 }
 
 // NewTmuxSessionWithServerSocketAndCleanup creates a TmuxSession with server isolation and cleanup.
@@ -307,9 +348,9 @@ func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory
 		serverSocket:     serverSocket,
 		ptyFactory:       ptyFactory,
 		cmdExec:          cmdExec,
-		bannerFilter:     NewBannerFilter(),          // Initialize banner filter for terminal output filtering
+		bannerFilter:     NewBannerFilter(),         // Initialize banner filter for terminal output filtering
 		externalResizeCh: make(chan windowSize, 10), // Buffered channel for resize events
-		existsCacheTTL:   500 * time.Millisecond,    // Cache session existence for 500ms
+		existsCacheTTL:   existsCacheDefaultTTL,
 	}
 }
 
@@ -321,16 +362,18 @@ func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory
 func NewTmuxSessionFromExisting(exactSessionName string) *TmuxSession {
 	baseExec := executor.MakeExecutor()
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
-	executor.GetGlobalRegistry().Register("tmux-ext-"+exactSessionName, cbExec)
+	key := "tmux-ext-" + exactSessionName
+	executor.GetGlobalRegistry().Register(key, cbExec)
 	return &TmuxSession{
 		sanitizedName:    exactSessionName, // Use exact name - no prefix transformation
 		program:          "",               // Unknown - external session
 		serverSocket:     "",               // Use default server
 		ptyFactory:       MakePtyFactory(),
 		cmdExec:          cbExec,
+		registryKey:      key,
 		bannerFilter:     NewBannerFilter(),
 		externalResizeCh: make(chan windowSize, 10),
-		existsCacheTTL:   500 * time.Millisecond,
+		existsCacheTTL:   existsCacheDefaultTTL,
 	}
 }
 
@@ -448,10 +491,10 @@ func (t *TmuxSession) start(workDir string, setupCleanup bool, cleanup *CleanupF
 	t.invalidateExistsCache()
 
 	// Poll for session existence with exponential backoff.
-	// 10 seconds gives enough headroom when the tmux server is under load from
-	// multiple active sessions (ReviewQueuePoller, control-mode streaming, etc.).
-	timeout := time.After(10 * time.Second)
-	sleepDuration := 5 * time.Millisecond
+	// sessionCreateTimeout gives enough headroom when the tmux server is under load
+	// from multiple active sessions (ReviewQueuePoller, control-mode streaming, etc.).
+	timeout := time.After(sessionCreateTimeout)
+	sleepDuration := sessionPollInitialDelay
 	for !t.DoesSessionExist() {
 		select {
 		case <-timeout:
@@ -575,16 +618,28 @@ func (t *TmuxSession) RestoreWithWorkDir(workDir string) error {
 	// This is needed for SetDetachedSize(), SendKeys(), and the Direct Claude Command Interface
 	// We use tmux attach-session to get a PTY handle without actually attaching interactively
 	if t.ptmx == nil {
-		ptmx, _, err := t.ptyFactory.Start(t.buildAttachCommand())
-		if err != nil {
-			// Graceful degradation - log warning but allow session to continue
-			// Session can still be viewed via tmux capture-pane, just won't support
-			// PTY-based operations like resizing or command sending
-			log.WarningLog.Printf("PTY initialization failed for session '%s': %v (session will work with limited functionality)", t.sanitizedName, err)
-			// Continue without PTY - operations that require it will fail gracefully
-		} else {
+		const ptyMaxRetries = 3
+		var lastPTYErr error
+		for attempt := 0; attempt < ptyMaxRetries; attempt++ {
+			if attempt > 0 {
+				delay := time.Duration(100*(1<<uint(attempt-1))) * time.Millisecond
+				log.InfoLog.Printf("Retrying PTY attach for session '%s' (attempt %d/%d, waiting %v)", t.sanitizedName, attempt+1, ptyMaxRetries, delay)
+				time.Sleep(delay)
+			}
+			ptmx, _, err := t.ptyFactory.Start(t.buildAttachCommand())
+			if err != nil {
+				lastPTYErr = err
+				continue
+			}
 			t.ptmx = ptmx
 			log.InfoLog.Printf("Successfully restored PTY connection for tmux session '%s'", t.sanitizedName)
+			lastPTYErr = nil
+			break
+		}
+		if lastPTYErr != nil {
+			// Graceful degradation - session can still be viewed via tmux capture-pane,
+			// but PTY-based operations (resizing, SendKeys, controller) will be unavailable.
+			log.WarningLog.Printf("PTY initialization failed for session '%s' after %d attempts: %v", t.sanitizedName, ptyMaxRetries, lastPTYErr)
 		}
 	}
 
@@ -753,7 +808,7 @@ func (t *TmuxSession) detectPromptInContent(content string) bool {
 						trimmed := strings.TrimSpace(lines[j])
 						// Check for numbered options (1., 2., 3., etc.)
 						if len(trimmed) > 0 && (trimmed[0] >= '1' && trimmed[0] <= '9') &&
-						   len(trimmed) > 1 && trimmed[1] == '.' {
+							len(trimmed) > 1 && trimmed[1] == '.' {
 							return true
 						}
 					}
@@ -1051,6 +1106,12 @@ func (t *TmuxSession) Close() error {
 		log.InfoLog.Printf("Tmux session '%s' doesn't exist, no need to kill", t.sanitizedName)
 	}
 
+	// Unregister circuit breaker from global registry to prevent stale entries
+	// accumulating in ResetAll() iteration across long-lived processes.
+	if t.registryKey != "" {
+		executor.GetGlobalRegistry().Unregister(t.registryKey)
+	}
+
 	if len(errs) == 0 {
 		return nil
 	}
@@ -1149,17 +1210,41 @@ func (t *TmuxSession) SetWindowSize(cols, rows int) error {
 // It also recreates the keepalive session to prevent the server from dying again.
 // For isolated servers (serverSocket != ""), no keepalive is created — the caller
 // manages the server's lifecycle directly (e.g., test harnesses).
-func (t *TmuxSession) recoverFromServerFailure(caller string) {
-	if restartErr := EnsureServerRunning(t.serverSocket); restartErr == nil {
+//
+// Only one recovery attempt runs at a time across all sessions. Concurrent callers
+// return immediately if a recovery is already in progress (the first caller handles it).
+func recoverFromServerFailure(serverSocket, caller string) {
+	recoveryMu.Lock()
+	if recoveryInFlight {
+		recoveryMu.Unlock()
+		log.InfoLog.Printf("[tmux] server recovery already in progress, skipping from %s", caller)
+		return
+	}
+	recoveryInFlight = true
+	recoveryMu.Unlock()
+	defer func() {
+		recoveryMu.Lock()
+		recoveryInFlight = false
+		recoveryMu.Unlock()
+	}()
+
+	if restartErr := ensureServerRunning(serverSocket); restartErr == nil {
 		log.InfoLog.Printf("[tmux] server restarted from %s, resetting circuit breakers", caller)
 		executor.GetGlobalRegistry().ResetAll()
-		if t.serverSocket == "" {
-			if keepErr := CreateKeepaliveSession(t.serverSocket); keepErr != nil {
+		if onServerRecovered != nil {
+			go onServerRecovered()
+		}
+		if serverSocket == "" {
+			if keepErr := CreateKeepaliveSession(serverSocket); keepErr != nil {
 				log.WarningLog.Printf("[tmux] failed to recreate keepalive session: %v", keepErr)
 			}
 		}
 	} else {
-		log.WarningLog.Printf("[tmux] failed to restart tmux server from %s: %v", caller, restartErr)
+		// Log at ERROR level: if the server cannot be restarted, all session operations
+		// will continue to fail until the user manually intervenes.
+		// Note: individual user sessions are NOT automatically re-created after recovery;
+		// they will be restarted on the next user interaction (e.g., Resume() call).
+		log.ErrorLog.Printf("[tmux] failed to restart tmux server from %s: %v", caller, restartErr)
 	}
 }
 
@@ -1200,18 +1285,22 @@ func (t *TmuxSession) DoesSessionExist() bool {
 	}
 	t.existsCacheMutex.RUnlock()
 
-	// Cache expired or not set, get fresh data (write lock)
+	// Cache expired or not set, get fresh data (write lock).
+	// IMPORTANT: do NOT call recoverFromServerFailure while this lock is held —
+	// recovery runs subprocess calls that can take seconds and would stall all
+	// concurrent callers of DoesSessionExist on the same session.
 	t.existsCacheMutex.Lock()
-	defer t.existsCacheMutex.Unlock()
 
 	// Double-check cache hasn't been updated by another goroutine
 	if time.Since(t.existsCacheTime) < t.existsCacheTTL {
-		return t.existsCache
+		result := t.existsCache
+		t.existsCacheMutex.Unlock()
+		return result
 	}
 
 	// Use list-sessions to get actual running sessions for reliable checking.
-	// Use a 3 second timeout to be more resilient under high system load.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	// sessionExistsTimeout is sized to be more resilient under high system load.
+	ctx, cancel := context.WithTimeout(context.Background(), sessionExistsTimeout)
 	defer cancel()
 
 	output, err := t.listSessionsRaw(ctx)
@@ -1221,18 +1310,20 @@ func (t *TmuxSession) DoesSessionExist() bool {
 		log.WarningLog.Printf("Timeout checking if tmux session exists: %s", t.sanitizedName)
 		t.existsCache = false
 		t.existsCacheTime = time.Now()
+		t.existsCacheMutex.Unlock()
 		return false
 	}
 
 	if err != nil {
-		// Attempt auto-recovery only for the default server (serverSocket == "").
-		// Isolated servers (serverSocket != "") are managed by the caller (e.g., test harnesses).
-		if t.serverSocket == "" && serverNotRunning(output) {
-			t.recoverFromServerFailure("DoesSessionExist")
-		}
-		// If tmux list-sessions fails, there are no sessions
+		// Detect server failure before releasing the lock so we can record the cache state,
+		// then release and call recovery outside the lock (recovery is slow — subprocess calls).
+		needsRecovery := t.serverSocket == "" && serverNotRunning(output)
 		t.existsCache = false
 		t.existsCacheTime = time.Now()
+		t.existsCacheMutex.Unlock()
+		if needsRecovery {
+			recoverFromServerFailure(t.serverSocket, "DoesSessionExist")
+		}
 		return false
 	}
 
@@ -1246,9 +1337,10 @@ func (t *TmuxSession) DoesSessionExist() bool {
 		}
 	}
 
-	// Update cache
+	// Update cache and release lock
 	t.existsCache = exists
 	t.existsCacheTime = time.Now()
+	t.existsCacheMutex.Unlock()
 	return exists
 }
 
@@ -1268,7 +1360,7 @@ func (t *TmuxSession) DoesSessionExistNoCache() bool {
 	}
 
 	// Direct check without cache — use a longer timeout for critical validation.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), sessionExistsNoCacheTimeout)
 	defer cancel()
 
 	output, err := t.listSessionsRaw(ctx)
@@ -1276,7 +1368,7 @@ func (t *TmuxSession) DoesSessionExistNoCache() bool {
 		log.WarningLog.Printf("DoesSessionExistNoCache: tmux list-sessions failed: %v", err)
 		// Only attempt auto-recovery for the default server (not isolated test servers).
 		if t.serverSocket == "" && serverNotRunning(output) {
-			t.recoverFromServerFailure("DoesSessionExistNoCache")
+			recoverFromServerFailure(t.serverSocket, "DoesSessionExistNoCache")
 		}
 		return false
 	}
@@ -1541,3 +1633,22 @@ func sanitizeUTF8String(rawBytes []byte) string {
 	return result.String()
 }
 
+// GetPanePID returns the PID of the foreground process in the pane.
+// This is used by HistoryLinker to correlate open files with session records.
+func (t *TmuxSession) GetPanePID() (int32, error) {
+	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
+		"#{pane_pid}")
+
+	output, err := t.cmdExec.Output(cmd)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get pane PID for session '%s': %w", t.sanitizedName, err)
+	}
+
+	pidStr := strings.TrimSpace(string(output))
+	pid, err := strconv.ParseInt(pidStr, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid pane PID %q for session '%s': %w", pidStr, t.sanitizedName, err)
+	}
+
+	return int32(pid), nil
+}

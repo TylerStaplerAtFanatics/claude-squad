@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -135,15 +136,15 @@ func (e *ExternalSessionDiscovery) handleNewSession(discovered *mux.DiscoveredSe
 	// Create Instance wrapper
 	now := time.Now()
 	instance := &Instance{
-		Title:                title,
-		Path:                 discovered.Metadata.Cwd,
-		Program:              discovered.Metadata.Command,
-		Status:               Running,
-		InstanceType:         InstanceTypeExternal,
-		Category:             "External",
-		Tags:                 []string{"external", "mux"},
-		CreatedAt: now, // Initialize timestamps to avoid stale notifications
-		UpdatedAt: now,
+		Title:        title,
+		Path:         discovered.Metadata.Cwd,
+		Program:      discovered.Metadata.Command,
+		Status:       Running,
+		InstanceType: InstanceTypeExternal,
+		Category:     "External",
+		Tags:         []string{"external", "mux"},
+		CreatedAt:    now, // Initialize timestamps to avoid stale notifications
+		UpdatedAt:    now,
 		ReviewState: ReviewState{
 			LastTerminalUpdate:   now,
 			LastMeaningfulOutput: now, // Initialize to now - external sessions have output when discovered
@@ -267,4 +268,39 @@ func guessSourceTerminal(meta *mux.SessionMetadata) string {
 func isClaudeCommand(cmd string) bool {
 	base := filepath.Base(cmd)
 	return base == "claude" || base == "claude-code"
+}
+
+// retryWithDelay calls fn up to maxAttempts times with a fixed delay between attempts.
+// If fn returns a "connection refused" error on the first attempt, it returns
+// immediately without retrying (stale socket — no point retrying).
+func retryWithDelay(maxAttempts int, delay time.Duration, fn func() error) error {
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		lastErr = fn()
+		if lastErr == nil {
+			return nil
+		}
+		// Stale socket (ECONNREFUSED): skip retries immediately.
+		if isConnectionRefused(lastErr) {
+			return lastErr
+		}
+		if attempt < maxAttempts-1 {
+			log.InfoLog.Printf("retryWithDelay: attempt %d/%d failed: %v — retrying in %v",
+				attempt+1, maxAttempts, lastErr, delay)
+			time.Sleep(delay)
+		}
+	}
+	return lastErr
+}
+
+// isConnectionRefused returns true if err indicates a refused or non-existent socket.
+// These errors are permanent (stale socket) and should not be retried.
+func isConnectionRefused(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "no such file or directory") ||
+		strings.Contains(msg, "no such socket")
 }
