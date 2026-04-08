@@ -5,9 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/tstapler/stapler-squad/log"
 
@@ -138,29 +136,6 @@ func (m *Manager) HasSizeChanged() bool {
 func (m *Manager) CreateWindowSizeMsg() tea.WindowSizeMsg {
 	width, height, _ := m.GetReliableSize()
 	return tea.WindowSizeMsg{Width: width, Height: height}
-}
-
-// getTerminalSizeIOCTL uses direct ioctl syscall to get terminal size
-func getTerminalSizeIOCTL() (int, int) {
-	type winsize struct {
-		Row    uint16
-		Col    uint16
-		Xpixel uint16
-		Ypixel uint16
-	}
-
-	ws := &winsize{}
-	retCode, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(syscall.Stdin),
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(ws)))
-
-	if int(retCode) == -1 {
-		log.WarningLog.Printf("IOCTL terminal size detection failed: %v", errno)
-		return 0, 0
-	}
-
-	return int(ws.Col), int(ws.Row)
 }
 
 // queryTerminalSizeEscape queries the terminal directly using escape sequences
