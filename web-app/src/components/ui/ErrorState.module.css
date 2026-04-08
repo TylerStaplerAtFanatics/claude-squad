@@ -27,7 +27,7 @@
 }
 
 .message {
-  color: var(--gray-600, #6b7280);
+  color: var(--text-secondary);
   margin: 0 0 2rem 0;
   font-size: 1rem;
   line-height: 1.5;
@@ -56,7 +56,7 @@
 .details {
   margin: 2rem 0;
   text-align: left;
-  background: var(--gray-50, #f9fafb);
+  background: var(--surface-subtle);
   border: 1px solid var(--border-color, #e5e7eb);
   border-radius: 8px;
   overflow: hidden;
@@ -71,7 +71,7 @@
 }
 
 .detailsSummary:hover {
-  background: var(--gray-100, #f3f4f6);
+  background: var(--surface-muted);
 }
 
 .detailsContent {
@@ -95,8 +95,8 @@
 
 .errorText,
 .stackTrace {
-  background: var(--gray-900, #111827);
-  color: var(--gray-100, #f3f4f6);
+  background: var(--terminal-background);
+  color: var(--surface-muted);
   padding: 1rem;
   border-radius: 4px;
   overflow-x: auto;
@@ -134,15 +134,15 @@
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
   .details {
-    background: var(--gray-800, #1f2937);
-    border-color: var(--gray-700, #374151);
+    background: var(--surface-subtle);
+    border-color: var(--border-subtle);
   }
 
   .detailsSummary:hover {
-    background: var(--gray-700, #374151);
+    background: var(--border-subtle);
   }
 
   .detailsContent {
-    border-top-color: var(--gray-700, #374151);
+    border-top-color: var(--border-subtle);
   }
 }

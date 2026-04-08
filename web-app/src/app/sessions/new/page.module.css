@@ -23,7 +23,7 @@
 
 .header p {
   margin: 0;
-  color: var(--gray-600, #4b5563);
+  color: var(--text-secondary);
   font-size: 1.125rem;
 }
 

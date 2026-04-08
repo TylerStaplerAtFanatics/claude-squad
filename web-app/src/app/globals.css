@@ -59,6 +59,51 @@
 
   /* Touch target sizes (WCAG 2.1 AA) */
   --min-touch-target: 44px;
+
+  /* Typography */
+  --font-mono: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+
+  /* Surface tokens — subtle/muted backgrounds for cards, forms, skeletons */
+  --surface-subtle: #f9fafb;
+  --surface-muted: #f3f4f6;
+
+  /* Extended border tokens */
+  --border-subtle: #e5e7eb;
+  --border-muted: #d1d5db;
+  --border-strong: #9ca3af;
+
+  /* Tertiary text — below --text-muted, for de-emphasised metadata */
+  --text-tertiary: #9ca3af;
+
+  /* Accent — tinted background for selected/highlighted items */
+  --accent-bg: rgba(0, 112, 243, 0.08);
+  --accent-hover: rgba(0, 112, 243, 0.16);
+
+  /* Extended status variants */
+  --error-dark: #b91c1c;
+  --error-rgb: 239, 68, 68;
+  --success-rgb: 16, 185, 129;
+  --warning-text: #92400e;
+  --priority-color: #f59e0b;
+
+  /* Primary dark variant — for pressed/active states deeper than --primary-active */
+  --primary-dark: #003d99;
+
+  /* Border hover state */
+  --border-hover: #9ca3af;
+
+  /* Panel / card secondary surface */
+  --panel-bg-secondary: #f3f4f6;
+
+  /* Code block backgrounds */
+  --code-hover-bg: #e5e7eb;
+
+  /* Placeholder text */
+  --placeholder-color: #9ca3af;
+  --placeholder-color-dark: #6b7280;
+
+  /* Animation stagger index — set via inline style; default 0 */
+  --card-index: 0;
 }
 
 /* Mobile header height override */
@@ -108,6 +153,38 @@
     --input-border: #404040;
     --input-focus-border: #2d9cdb;
     --input-text: #ededed;
+
+    /* Tertiary text */
+    --text-tertiary: #6b7280;
+
+    /* Accent tinted backgrounds */
+    --accent-bg: rgba(45, 156, 219, 0.1);
+    --accent-hover: rgba(45, 156, 219, 0.2);
+
+    /* Extended status variants */
+    --error-dark: #ef4444;
+    --warning-text: #fbbf24;
+    --primary-dark: #1a7fc1;
+    --border-hover: #6b7280;
+
+    /* Surface tokens */
+    --surface-subtle: #1f2937;
+    --surface-muted: #374151;
+
+    /* Extended border tokens */
+    --border-subtle: #374151;
+    --border-muted: #4b5563;
+    --border-strong: #6b7280;
+
+    /* Panel secondary surface */
+    --panel-bg-secondary: #2a2a2a;
+
+    /* Code block backgrounds */
+    --code-hover-bg: #374151;
+
+    /* Placeholder text */
+    --placeholder-color: #6b7280;
+    --placeholder-color-dark: #4b5563;
   }
 }
 

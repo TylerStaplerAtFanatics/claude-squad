@@ -31,7 +31,7 @@
 .container input:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  background: var(--gray-100, #f3f4f6);
+  background: var(--surface-muted);
 }
 
 .suggestions {
@@ -62,13 +62,13 @@
 
 .suggestion:hover,
 .suggestion.highlighted {
-  background: var(--gray-100, #f3f4f6);
+  background: var(--surface-muted);
 }
 
 @media (prefers-color-scheme: dark) {
   .suggestion:hover,
   .suggestion.highlighted {
-    background: var(--gray-800, #1f2937);
+    background: var(--text-primary);
   }
 }
 
@@ -82,7 +82,7 @@
   border: 1px solid var(--border-color, #d1d5db);
   border-radius: 6px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  color: var(--gray-600, #4b5563);
+  color: var(--text-secondary);
   font-size: 0.875rem;
   text-align: center;
   z-index: 1000;
@@ -94,15 +94,15 @@
 }
 
 .suggestions::-webkit-scrollbar-track {
-  background: var(--gray-100, #f3f4f6);
+  background: var(--surface-muted);
   border-radius: 4px;
 }
 
 .suggestions::-webkit-scrollbar-thumb {
-  background: var(--gray-400, #9ca3af);
+  background: var(--border-strong);
   border-radius: 4px;
 }
 
 .suggestions::-webkit-scrollbar-thumb:hover {
-  background: var(--gray-500, #6b7280);
+  background: var(--text-muted);
 }
