@@ -18,9 +18,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # RELEASE_TOKEN (a PAT) is required if branch protection blocks direct pushes.
-          # Create one at Settings → Developer settings → Personal access tokens with
-          # repo scope, then add it as a repository secret named RELEASE_TOKEN.
+          # RELEASE_TOKEN (a PAT) is REQUIRED for the tag push to trigger release.yml.
+          # GITHUB_TOKEN pushes are blocked from triggering other workflows (GitHub security restriction).
+          # Create a PAT at Settings → Developer settings → Personal access tokens with
+          # repo + workflow scopes, then add it as a repository secret named RELEASE_TOKEN.
           token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Determine bump type from PR labels
@@ -79,8 +80,7 @@ jobs:
           git tag "v${{ steps.next.outputs.version }}"
           git push origin "v${{ steps.next.outputs.version }}"
 
-      - name: Trigger release workflow
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run release.yml --ref "refs/tags/v${{ steps.next.outputs.version }}"
+      # release.yml is triggered automatically by the tag push above.
+      # This works when RELEASE_TOKEN (a PAT) is used for checkout — PAT-authenticated
+      # pushes trigger other workflows. GITHUB_TOKEN pushes do not (GitHub restriction).
+      # If release.yml did not fire, ensure RELEASE_TOKEN is set with repo+workflow scopes.
