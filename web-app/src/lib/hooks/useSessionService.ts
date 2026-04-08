@@ -45,7 +45,7 @@ interface UseSessionServiceReturn {
   updateSession: (id: string, updates: Partial<UpdateSessionRequest>) => Promise<Session | null>;
   deleteSession: (id: string, force?: boolean) => Promise<boolean>;
   pauseSession: (id: string) => Promise<Session | null>;
-  resumeSession: (id: string) => Promise<Session | null>;
+  resumeSession: (id: string, updates?: { title?: string; tags?: string[] }) => Promise<Session | null>;
   renameSession: (id: string, newTitle: string) => Promise<boolean>;
   restartSession: (id: string) => Promise<boolean>;
   acknowledgeSession: (id: string) => Promise<boolean>;
@@ -176,6 +176,7 @@ export function useSessionService(
           category: updates.category,
           title: updates.title,
           program: updates.program,
+          tags: updates.tags ?? [],
         });
 
         // Update in store
@@ -226,11 +227,13 @@ export function useSessionService(
     [updateSession]
   );
 
-  // Resume session
+  // Resume session with optional metadata updates (title, tags)
   const resumeSession = useCallback(
-    async (id: string): Promise<Session | null> => {
+    async (id: string, updates?: { title?: string; tags?: string[] }): Promise<Session | null> => {
       return updateSession(id, {
         status: SessionStatus.RUNNING,
+        ...(updates?.title ? { title: updates.title } : {}),
+        ...(updates?.tags && updates.tags.length > 0 ? { tags: updates.tags } : {}),
       });
     },
     [updateSession]

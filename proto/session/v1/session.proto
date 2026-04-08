@@ -274,6 +274,9 @@ message UpdateSessionRequest {
 
   // Update program command.
   optional string program = 5;
+
+  // Update session tags. If non-empty, replaces all existing tags.
+  repeated string tags = 6;
 }
 
 message UpdateSessionResponse {

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/log"
@@ -23,6 +24,9 @@ import (
 type WorkspaceService struct {
 	storage  *session.Storage
 	eventBus *events.EventBus
+	// switchingMu tracks session IDs with a workspace switch in progress.
+	// Prevents concurrent switch RPCs on the same session from corrupting state.
+	switchingMu sync.Map
 }
 
 // NewWorkspaceService creates a WorkspaceService with the given dependencies.
@@ -215,6 +219,13 @@ func (ws *WorkspaceService) SwitchWorkspace(
 	if req.Msg.Target == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("target is required"))
 	}
+
+	// Guard against concurrent switches on the same session.
+	if _, loaded := ws.switchingMu.LoadOrStore(req.Msg.Id, true); loaded {
+		return nil, connect.NewError(connect.CodeUnavailable,
+			fmt.Errorf("workspace switch already in progress for session '%s'", req.Msg.Id))
+	}
+	defer ws.switchingMu.Delete(req.Msg.Id)
 
 	instances, instance, err := ws.findInstance(req.Msg.Id)
 	if err != nil {

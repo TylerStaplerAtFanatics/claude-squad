@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { AppLink } from "@/components/ui/AppLink";
 import { Session, SessionStatus } from "@/gen/session/v1/types_pb";
 import { SessionCard } from "./SessionCard";
 import { BulkActions } from "./BulkActions";
@@ -13,11 +12,12 @@ interface SessionListProps {
   onSessionClick?: (session: Session) => void;
   onDeleteSession?: (sessionId: string) => Promise<void> | void;
   onPauseSession?: (sessionId: string) => void;
-  onResumeSession?: (sessionId: string) => void;
+  onResumeSession?: (session: Session) => void;
   onDuplicateSession?: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, newTitle: string) => Promise<boolean>;
   onRestartSession?: (sessionId: string) => Promise<boolean>;
   onUpdateTags?: (sessionId: string, tags: string[]) => void;
+  onNewSession?: () => void;
 }
 
 type SortField = 'lastActivity' | 'name' | 'createdAt' | 'updatedAt';
@@ -71,6 +71,7 @@ export function SessionList({
   onRenameSession,
   onRestartSession,
   onUpdateTags,
+  onNewSession,
 }: SessionListProps) {
   // Initialize state from local storage
   const [searchQuery, setSearchQuery] = useState(() => loadFromStorage(STORAGE_KEYS.SEARCH_QUERY, ""));
@@ -278,7 +279,11 @@ export function SessionList({
 
   const handleResumeSelected = () => {
     if (!onResumeSession) return;
-    selectedSessions.forEach(id => onResumeSession(id));
+    // For bulk resume, find each session object and pass it through
+    selectedSessions.forEach(id => {
+      const session = sessions.find(s => s.id === id);
+      if (session) onResumeSession(session);
+    });
     setSelectedSessions(new Set());
     setSelectMode(false);
   };
@@ -483,10 +488,13 @@ export function SessionList({
               <p className={styles.emptyHint}>
                 Get started by creating your first AI coding session
               </p>
-              <AppLink href="/sessions/new" className={styles.newSessionButtonLarge}>
+              <button
+                className={styles.newSessionButtonLarge}
+                onClick={() => onNewSession?.()}
+              >
                 <span className={styles.newSessionIcon}>+</span>
                 Create Your First Session
-              </AppLink>
+              </button>
             </div>
           )}
         </div>
@@ -505,7 +513,7 @@ export function SessionList({
                       onClick={() => onSessionClick?.(session)}
                       onDelete={() => onDeleteSession?.(session.id)}
                       onPause={() => onPauseSession?.(session.id)}
-                      onResume={() => onResumeSession?.(session.id)}
+                      onResume={() => onResumeSession?.(session)}
                       onDuplicate={() => onDuplicateSession?.(session.id)}
                       onRename={onRenameSession}
                       onRestart={onRestartSession}
