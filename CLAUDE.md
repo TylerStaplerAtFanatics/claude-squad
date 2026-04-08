@@ -128,18 +128,22 @@ otlp_config:
 
 ### Testing
 ```bash
-# Run all tests
-go test ./...
+# Build first (generates proto files) then run all tests
+make build && make test
 
-# Run tests for specific packages
+# Quick development validation (build + tests + lint)
+make quick-check
+
+# Run tests for specific packages (requires proto files generated via make build first)
+go test ./server/services
 go test ./ui
 go test ./app
 go test ./session
 
 # Run with coverage
-go test -cover ./...
+make test-coverage
 
-# Run specific test
+# Run specific test (requires make build first)
 go test ./ui -run TestSpecificFunction
 
 # Run benchmarks (performance tests)

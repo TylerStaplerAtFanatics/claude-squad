@@ -8,6 +8,18 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
+// expandArgs returns a copy of args with ExpandPath applied to each element.
+func expandArgs(args []string) []string {
+	if len(args) == 0 {
+		return nil
+	}
+	out := make([]string, len(args))
+	for i, a := range args {
+		out[i] = ExpandPath(a)
+	}
+	return out
+}
+
 // CommandInfo contains parsed information extracted from a Bash command string.
 type CommandInfo struct {
 	// Program is the primary executable being invoked (first non-env-var, non-wrapper token).
@@ -26,8 +38,11 @@ type CommandInfo struct {
 type ParsedCommand struct {
 	// Program is the primary executable (path-stripped).
 	Program string
-	// Args is the list of remaining tokens.
+	// Args is the list of remaining tokens as they appear in the source command.
 	Args []string
+	// ExpandedArgs mirrors Args with tilde and environment variable expansion applied.
+	// Use ExpandedArgs for path-semantic checks; use Args or Raw for pattern matching.
+	ExpandedArgs []string
 	// Raw is the reconstructed "program arg1 arg2 …" string for pattern matching.
 	Raw string
 }
@@ -44,7 +59,14 @@ func ExtractAllCommands(cmd string) []ParsedCommand {
 		result := make([]ParsedCommand, 0, len(parts))
 		for _, p := range parts {
 			prog, _ := extractProgramAndSubcommand(p)
-			result = append(result, ParsedCommand{Program: prog, Raw: p})
+			args := strings.Fields(p)
+			if len(args) > 1 {
+				args = args[1:]
+			} else {
+				args = nil
+			}
+			expanded := expandArgs(args)
+			result = append(result, ParsedCommand{Program: prog, Args: args, ExpandedArgs: expanded, Raw: p})
 		}
 		return result
 	}
@@ -79,23 +101,25 @@ func ExtractAllCommands(cmd string) []ParsedCommand {
 			prog = prog[idx+1:]
 		}
 
+		args := tokens[1:]
 		raw := fmt.Sprintf("%s", strings.Join(tokens, " "))
 		cmds = append(cmds, ParsedCommand{
-			Program: prog,
-			Args:    tokens[1:],
-			Raw:     raw,
+			Program:      prog,
+			Args:         args,
+			ExpandedArgs: expandArgs(args),
+			Raw:          raw,
 		})
 		return true
 	})
 
-	if len(cmds) == 0 {
-		// Command had no callable expressions (e.g. pure redirections).
-		parts := splitCommandParts(cmd)
-		for _, p := range parts {
-			prog, _ := extractProgramAndSubcommand(p)
-			cmds = append(cmds, ParsedCommand{Program: prog, Raw: p})
-		}
-	}
+	// If the AST parsed successfully but produced no callable expressions (e.g. a
+	// pure variable assignment like FOO=bar, or a pure redirection), return an
+	// empty slice.  The statement contains no executable command, so no pattern
+	// should fire against it.  We intentionally do NOT fall back to the raw-split
+	// path here — that path is only for when the parser itself fails (handled
+	// above), and applying it to successfully-parsed-but-non-executable statements
+	// would cause false positives when dangerous-looking text appears in string
+	// literals or heredoc bodies.
 	return cmds
 }
 
