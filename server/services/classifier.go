@@ -497,7 +497,16 @@ func (c *RuleBasedClassifier) matchesRule(rule Rule, payload PermissionRequestPa
 	}
 
 	cmd, _ := payload.ToolInput["command"].(string)
+
+	// Parse once; reuse for Criteria and PathMatcher checks.
+	var parsedCmds []ParsedCommand // populated lazily on first use below
+
 	if rule.CommandPattern != nil {
+		// CommandPattern matches against the full raw command string so that redirect
+		// operators (e.g. ">> .env") and other shell syntax outside of CallExpr nodes
+		// are included in the match.  Rules that also set PathMatcher rely on the
+		// PathMatcher stage to reject false positives where the pattern text appears
+		// inside heredoc bodies, echo arguments, or other non-executed contexts.
 		if !rule.CommandPattern.MatchString(cmd) {
 			return false
 		}
@@ -505,11 +514,13 @@ func (c *RuleBasedClassifier) matchesRule(rule Rule, payload PermissionRequestPa
 
 	// Structured criteria matching: parse the command and evaluate against Criteria.
 	if rule.Criteria != nil {
-		cmds := ExtractAllCommands(cmd)
-		if len(cmds) == 0 {
+		if parsedCmds == nil {
+			parsedCmds = ExtractAllCommands(cmd)
+		}
+		if len(parsedCmds) == 0 {
 			return false
 		}
-		if !rule.Criteria.Matches(cmds[0]) {
+		if !rule.Criteria.Matches(parsedCmds[0]) {
 			return false
 		}
 	}
@@ -523,7 +534,9 @@ func (c *RuleBasedClassifier) matchesRule(rule Rule, payload PermissionRequestPa
 
 	// Structured path matching: expand arguments and classify paths semantically.
 	if rule.PathMatcher != nil {
-		parsedCmds := ExtractAllCommands(cmd)
+		if parsedCmds == nil {
+			parsedCmds = ExtractAllCommands(cmd)
+		}
 		if len(parsedCmds) == 0 {
 			return false
 		}

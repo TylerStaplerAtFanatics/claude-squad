@@ -112,21 +112,14 @@ func ExtractAllCommands(cmd string) []ParsedCommand {
 		return true
 	})
 
-	if len(cmds) == 0 {
-		// Command had no callable expressions (e.g. pure redirections).
-		parts := splitCommandParts(cmd)
-		for _, p := range parts {
-			prog, _ := extractProgramAndSubcommand(p)
-			args := strings.Fields(p)
-			if len(args) > 1 {
-				args = args[1:]
-			} else {
-				args = nil
-			}
-			expanded := expandArgs(args)
-			cmds = append(cmds, ParsedCommand{Program: prog, Args: args, ExpandedArgs: expanded, Raw: p})
-		}
-	}
+	// If the AST parsed successfully but produced no callable expressions (e.g. a
+	// pure variable assignment like FOO=bar, or a pure redirection), return an
+	// empty slice.  The statement contains no executable command, so no pattern
+	// should fire against it.  We intentionally do NOT fall back to the raw-split
+	// path here — that path is only for when the parser itself fails (handled
+	// above), and applying it to successfully-parsed-but-non-executable statements
+	// would cause false positives when dangerous-looking text appears in string
+	// literals or heredoc bodies.
 	return cmds
 }
 
