@@ -1,0 +1,241 @@
+name: Auto Semver Label
+
+# Classifies PRs as major/minor/patch using a 3-layer approach:
+#   1. Deterministic: breaking change markers (!, BREAKING CHANGE, buf breaking)
+#   2. Deterministic: conventional commit prefix in PR title
+#   3. Fallback: Claude API analyzes title + description + changed files
+#
+# Override: add <!-- semver-override: major --> to the PR description body.
+# The bot will respect it and stop re-classifying on subsequent pushes.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [main]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  classify:
+    name: Classify Semver Bump
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check proto breaking changes
+        id: proto
+        run: |
+          # Only run buf breaking if proto files actually changed in this PR
+          PROTO_CHANGED=$(git diff origin/main...HEAD --name-only -- 'proto/**/*.proto' 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$PROTO_CHANGED" -gt "0" ]; then
+            echo "Proto files changed ($PROTO_CHANGED files) — running buf breaking..."
+            # Install buf (lightweight, no npm/node needed)
+            curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
+              -o /usr/local/bin/buf && chmod +x /usr/local/bin/buf
+            if buf breaking --against ".git#branch=origin/main" 2>&1; then
+              echo "breaking=false" >> "$GITHUB_OUTPUT"
+              echo "✅ No proto breaking changes"
+            else
+              echo "breaking=true" >> "$GITHUB_OUTPUT"
+              echo "⚠️ Proto breaking changes detected"
+            fi
+          else
+            echo "No proto files changed — skipping buf check"
+            echo "breaking=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Classify and apply semver label
+        uses: actions/github-script@v7
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PROTO_BREAKING: ${{ steps.proto.outputs.breaking }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title;
+            const body = pr.body || '';
+            const prNumber = pr.number;
+            const semverLabels = ['major', 'minor', 'patch'];
+
+            async function classify() {
+              // ── Override: <!-- semver-override: X --> in PR description ──────────
+              const overrideMatch = body.match(/<!--\s*semver-override:\s*(major|minor|patch)\s*-->/i);
+              if (overrideMatch) {
+                return {
+                  bump: overrideMatch[1].toLowerCase(),
+                  reason: 'Manual override in PR description (`<!-- semver-override: ... -->`)'
+                };
+              }
+
+              // ── Layer 1: Deterministic breaking change signals ─────────────────
+              // PR title uses breaking change `!` marker (e.g. feat!: or fix!:)
+              if (/^[a-z]+(\([^)]+\))?!:/i.test(title)) {
+                return { bump: 'major', reason: 'PR title uses `!` breaking change marker' };
+              }
+              // BREAKING CHANGE keyword in title or body
+              if (/\bBREAKING[\s_-]CHANGE\b/i.test(title) || /\bBREAKING[\s_-]CHANGE\b/i.test(body)) {
+                return { bump: 'major', reason: 'Contains `BREAKING CHANGE` keyword' };
+              }
+              // buf detected proto breaking changes
+              if (process.env.PROTO_BREAKING === 'true') {
+                return { bump: 'major', reason: '`buf breaking` detected protobuf breaking changes' };
+              }
+
+              // ── Layer 2: Conventional commit prefix in PR title ────────────────
+              if (/^feat(\([^)]+\))?:/i.test(title)) {
+                return { bump: 'minor', reason: 'PR title uses `feat:` conventional commit type' };
+              }
+              const patchTypeMatch = title.match(/^(fix|ci|docs|chore|refactor|test|perf|build|revert|style)(\([^)]+\))?:/i);
+              if (patchTypeMatch) {
+                return { bump: 'patch', reason: `PR title uses \`${patchTypeMatch[1]}:\` conventional commit type` };
+              }
+
+              // ── Layer 3: Claude API fallback ───────────────────────────────────
+              if (process.env.ANTHROPIC_API_KEY) {
+                try {
+                  const filesResp = await github.rest.pulls.listFiles({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: prNumber,
+                    per_page: 100
+                  });
+                  const changedFiles = filesResp.data
+                    .slice(0, 60)
+                    .map(f => `${f.status} ${f.filename} (+${f.additions}/-${f.deletions})`)
+                    .join('\n');
+
+                  const prompt = `Classify this GitHub pull request as major, minor, or patch using semantic versioning.
+
+This is an APPLICATION (not a library). Semver rules:
+- major: breaking changes that affect existing users — removed/renamed CLI flags or commands, changed config file format (existing configs break), changed database schema incompatibly, removed user-facing features, changed required environment variables
+- minor: new user-facing functionality — new commands, new config options, new UI features, new API endpoints, new capabilities
+- patch: everything else — bug fixes, internal refactoring, CI/CD changes, dependency updates, documentation, tests, performance improvements that don't change behaviour
+
+PR Title: ${title}
+PR Description (first 800 chars):
+${body.slice(0, 800)}
+
+Changed files:
+${changedFiles}
+
+Respond with EXACTLY two lines:
+Line 1: one word — major, minor, or patch
+Line 2: one sentence explaining the classification`;
+
+                  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                      'x-api-key': process.env.ANTHROPIC_API_KEY,
+                      'anthropic-version': '2023-06-01',
+                      'content-type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      model: 'claude-haiku-4-5-20251001',
+                      max_tokens: 120,
+                      messages: [{ role: 'user', content: prompt }]
+                    })
+                  });
+                  const data = await resp.json();
+                  if (data.content?.[0]?.text) {
+                    const lines = data.content[0].text.trim().split('\n');
+                    const predicted = lines[0].trim().toLowerCase();
+                    if (semverLabels.includes(predicted)) {
+                      const explanation = lines.slice(1).join(' ').trim();
+                      return {
+                        bump: predicted,
+                        reason: `Claude: ${explanation || '(no explanation provided)'}`
+                      };
+                    }
+                  }
+                } catch (err) {
+                  core.warning(`Claude API call failed: ${err.message} — falling back to patch`);
+                }
+              } else {
+                core.warning('ANTHROPIC_API_KEY not set — skipping Claude classification');
+              }
+
+              // ── Default ────────────────────────────────────────────────────────
+              return {
+                bump: 'patch',
+                reason: 'No conventional commit prefix detected and no API key available; defaulted to patch'
+              };
+            }
+
+            // ── Apply classification ─────────────────────────────────────────────
+            const { bump, reason } = await classify();
+            core.info(`Classification: ${bump} — ${reason}`);
+
+            // Remove conflicting semver labels
+            const currentLabels = pr.labels.map(l => l.name);
+            for (const label of semverLabels) {
+              if (currentLabels.includes(label) && label !== bump) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    name: label
+                  });
+                } catch (_) { /* label may not exist */ }
+              }
+            }
+
+            // Apply the classified label
+            if (!currentLabels.includes(bump)) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels: [bump]
+              });
+            }
+
+            // ── Post or update bot comment ───────────────────────────────────────
+            const bumpEmoji = { major: '🔴', minor: '🟡', patch: '🟢' }[bump];
+            const commentBody = [
+              `<!-- semver-bot -->`,
+              `### ${bumpEmoji} Semver: \`${bump}\``,
+              ``,
+              `**Why:** ${reason}`,
+              ``,
+              `<details><summary>Override</summary>`,
+              ``,
+              `Add this to your PR description to override (the bot will respect it on the next push):`,
+              ``,
+              `\`\`\`html`,
+              `<!-- semver-override: patch -->`,
+              `\`\`\``,
+              `</details>`
+            ].join('\n');
+
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+            const existing = comments.data.find(
+              c => c.user.type === 'Bot' && c.body.includes('<!-- semver-bot -->')
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: commentBody
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: commentBody
+              });
+            }
+
+            core.info(`✅ Label applied: ${bump}`);
