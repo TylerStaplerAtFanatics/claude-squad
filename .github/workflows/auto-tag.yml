@@ -78,3 +78,9 @@ jobs:
           git push
           git tag "v${{ steps.next.outputs.version }}"
           git push origin "v${{ steps.next.outputs.version }}"
+
+      - name: Trigger release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run release.yml --ref "refs/tags/v${{ steps.next.outputs.version }}"
