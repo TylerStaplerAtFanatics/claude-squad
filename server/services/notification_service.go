@@ -259,6 +259,16 @@ func (ns *NotificationService) ClearNotificationHistory(
 
 // recordToProto converts a NotificationRecord to a protobuf NotificationHistoryRecord.
 func recordToProto(r *notifications.NotificationRecord) *sessionv1.NotificationHistoryRecord {
+	// Copy metadata to avoid sharing the map reference with the store's internal record.
+	// SetMetadata() can write to r.Metadata concurrently while protojson iterates it.
+	var metadata map[string]string
+	if len(r.Metadata) > 0 {
+		metadata = make(map[string]string, len(r.Metadata))
+		for k, v := range r.Metadata {
+			metadata[k] = v
+		}
+	}
+
 	record := &sessionv1.NotificationHistoryRecord{
 		Id:               r.ID,
 		SessionId:        r.SessionID,
@@ -267,7 +277,7 @@ func recordToProto(r *notifications.NotificationRecord) *sessionv1.NotificationH
 		Priority:         sessionv1.NotificationPriority(r.Priority),
 		Title:            r.Title,
 		Message:          r.Message,
-		Metadata:         r.Metadata,
+		Metadata:         metadata,
 		CreatedAt:        timestamppb.New(r.CreatedAt),
 		IsRead:           r.IsRead,
 		OccurrenceCount:  int32(r.OccurrenceCount),
