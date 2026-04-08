@@ -787,6 +787,14 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance) {
 		inst.Title, shouldAdd, reason.String(), priority.String(), context)
 
 	if shouldAdd {
+		// Late guard: re-check Started() in case Destroy() ran concurrently while we
+		// were evaluating this session.  If the instance is now dead, remove it from
+		// the queue (don't re-add it) and bail out.
+		if !inst.Started() {
+			rqp.queue.Remove(inst.Title)
+			return
+		}
+
 		// Check if item already exists and preserve DetectedAt if status hasn't changed
 		detectedAt := time.Now()
 		isUpdate := false

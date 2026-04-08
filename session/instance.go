@@ -848,6 +848,12 @@ func (i *Instance) initTmuxSession() {
 	}
 	commandBuilder := NewClaudeCommandBuilder(i.Program, i.claudeSession)
 	enrichedProgram := commandBuilder.Build()
+
+	// Add initial prompt if provided and not resuming an existing session
+	if i.Prompt != "" && i.claudeSession == nil {
+		enrichedProgram = fmt.Sprintf("%s %q", enrichedProgram, i.Prompt)
+	}
+
 	log.InfoLog.Printf("Creating tmux session for instance '%s' with program '%s'", i.Title, enrichedProgram)
 
 	tmuxPrefix := i.TmuxPrefix
@@ -942,6 +948,10 @@ func (i *Instance) Destroy() error {
 
 	// Stop the controller first
 	i.StopController()
+
+	// Mark as not started immediately so any concurrent ReviewQueuePoller cycle
+	// sees this instance as dead and removes it from the queue rather than re-adding it.
+	i.started = false
 
 	var errs []error
 

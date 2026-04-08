@@ -125,6 +125,8 @@ func (rqm *ReactiveQueueManager) handleEvent(event *events.Event) {
 		rqm.handleSessionAcknowledged(event)
 	case events.EventApprovalResponse:
 		rqm.handleApprovalResponse(event)
+	case events.EventSessionDeleted:
+		rqm.handleSessionDeleted(event)
 	}
 }
 
@@ -218,6 +220,16 @@ func (rqm *ReactiveQueueManager) handleApprovalResponse(event *events.Event) {
 	}
 
 	// Immediate removal from queue
+	rqm.queue.Remove(sessionID)
+}
+
+// handleSessionDeleted removes a deleted session from the review queue.
+func (rqm *ReactiveQueueManager) handleSessionDeleted(event *events.Event) {
+	sessionID := event.SessionID
+	if sessionID == "" {
+		return
+	}
+	log.InfoLog.Printf("[ReactiveQueueManager] Session '%s' deleted - removing from queue", sessionID)
 	rqm.queue.Remove(sessionID)
 }
 
