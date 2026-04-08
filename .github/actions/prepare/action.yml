@@ -15,15 +15,14 @@ runs:
       shell: bash
       run: cd web-app && npm ci
 
-    - name: Install buf
-      shell: bash
-      run: |
-        curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
-          -o /usr/local/bin/buf && chmod +x /usr/local/bin/buf
+    - name: Set up buf
+      uses: bufbuild/buf-setup-action@v1
+      with:
+        version: '1.41.0'
 
     - name: Generate protobuf code
       shell: bash
-      run: buf generate proto
+      run: buf generate
 
     - name: Build web UI
       shell: bash

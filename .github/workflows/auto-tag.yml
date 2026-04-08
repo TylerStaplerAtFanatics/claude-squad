@@ -18,9 +18,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # RELEASE_TOKEN (a PAT) is required if branch protection blocks direct pushes.
-          # Create one at Settings → Developer settings → Personal access tokens with
-          # repo scope, then add it as a repository secret named RELEASE_TOKEN.
+          # RELEASE_TOKEN (a PAT) is REQUIRED for the tag push to trigger release.yml.
+          # GITHUB_TOKEN pushes are blocked from triggering other workflows (GitHub security restriction).
+          # Create a PAT at Settings → Developer settings → Personal access tokens with
+          # repo + workflow scopes, then add it as a repository secret named RELEASE_TOKEN.
           token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Determine bump type from PR labels
@@ -40,10 +41,10 @@ jobs:
             core.setOutput('type', found[0]);
             core.info(`Bump type: ${found[0]}`);
 
-      - name: Read current version from main.go
+      - name: Read current version from latest git tag
         id: current
         run: |
-          VERSION=$(grep -E '^\s*version\s*=' main.go | sed -E 's/.*"([^"]+)".*/\1/')
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Current version: $VERSION"
 
@@ -62,19 +63,14 @@ jobs:
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
           echo "Next version: $NEXT"
 
-      - name: Update version in main.go
-        run: |
-          NEW_VERSION="${{ steps.next.outputs.version }}"
-          sed -Ei "s/version[[:space:]]*=[[:space:]]*\"[0-9]+\.[0-9]+\.[0-9]+\"/version           = \"${NEW_VERSION}\"/" main.go
-          echo "Updated main.go:"
-          grep 'version' main.go | grep -v '//' | head -3
-
-      - name: Commit, push, and tag
+      - name: Tag and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add main.go
-          git commit -m "chore: bump version to ${{ steps.next.outputs.version }} [skip ci]"
-          git push
           git tag "v${{ steps.next.outputs.version }}"
           git push origin "v${{ steps.next.outputs.version }}"
+
+      # release.yml is triggered automatically by the tag push above.
+      # This works when RELEASE_TOKEN (a PAT) is used for checkout — PAT-authenticated
+      # pushes trigger other workflows. GITHUB_TOKEN pushes do not (GitHub restriction).
+      # If release.yml did not fire, ensure RELEASE_TOKEN is set with repo+workflow scopes.
