@@ -113,7 +113,8 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             BINARY_NAME=$BINARY_NAME.exe
           fi
-          go build -v -o build/${{ matrix.goos }}_${{ matrix.goarch }}/$BINARY_NAME
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' || git rev-parse --short HEAD)
+          go build -v -ldflags "-X main.version=${VERSION}" -o build/${{ matrix.goos }}_${{ matrix.goarch }}/$BINARY_NAME
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
