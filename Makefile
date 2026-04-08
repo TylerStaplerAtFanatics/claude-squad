@@ -62,7 +62,7 @@ stapler-squad: ensure-tools proto-gen server/web/dist lint $(GO_FILES) ## Build 
 	@echo "✅ stapler-squad built successfully"
 
 # Build Next.js app to web-app/out
-web-app/out: ensure-tools web-app/package.json $(WEB_FILES) web-app/next.config.ts
+web-app/out: ensure-tools proto-gen web-app/package.json $(WEB_FILES) web-app/next.config.ts
 	@echo "Building Next.js web UI (development mode for better error messages)..."
 	@cd web-app && ([ -d node_modules ] || npm install) && NEXT_BUILD_MODE=development npm run build
 	@touch web-app/out # Update timestamp to mark completion
