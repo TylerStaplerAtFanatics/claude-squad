@@ -1315,7 +1315,7 @@ func TestCategorizeToolName(t *testing.T) {
 		// Built-in agent tools
 		{"ExitPlanMode", ToolCategoryBuiltinAgent},
 		{"EnterPlanMode", ToolCategoryBuiltinAgent},
-		{"AskUserQuestion", ToolCategoryBuiltinAgent},
+		{"AskUserQuestion", ToolCategoryBuiltin}, // intentionally not a builtin-agent — must escalate to user
 		{"TodoWrite", ToolCategoryBuiltinAgent},
 		{"TaskCreate", ToolCategoryBuiltinAgent},
 		{"TaskUpdate", ToolCategoryBuiltinAgent},
@@ -1423,14 +1423,14 @@ func TestClassify_AgentTools_AutoAllow(t *testing.T) {
 	}
 }
 
-func TestClassify_AskUserQuestion_AutoAllows(t *testing.T) {
+func TestClassify_AskUserQuestion_Escalates(t *testing.T) {
 	c := NewRuleBasedClassifier()
 	ctx := ClassificationContext{}
 
 	payload := PermissionRequestPayload{ToolName: "AskUserQuestion", ToolInput: map[string]interface{}{}}
 	result := c.Classify(payload, ctx)
-	if result.Decision != AutoAllow {
-		t.Errorf("AskUserQuestion: expected AutoAllow, got %v (rule=%s, reason=%s)", result.Decision, result.RuleID, result.Reason)
+	if result.Decision != Escalate {
+		t.Errorf("AskUserQuestion: expected Escalate so user can respond, got %v (rule=%s, reason=%s)", result.Decision, result.RuleID, result.Reason)
 	}
 }
 
