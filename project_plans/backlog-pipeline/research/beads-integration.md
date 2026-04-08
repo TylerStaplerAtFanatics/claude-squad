@@ -42,6 +42,40 @@ License: MIT.
 
 ---
 
+## Advertised Features vs. Implementation Depth
+
+**Total codebase:** ~303K LOC. Breakdown:
+- **~12% Dolt plumbing** — server lifecycle, SQL marshaling, remote sync (`internal/storage/dolt/`, `embeddeddolt/`, `doltserver/`)
+- **~38% Novel algorithms** — dependency graphs, molecule orchestration, compaction, ready-work semantics
+- **~45% CLI scaffolding** — thin command handlers over business logic (`cmd/bd/`, ~189 files)
+- **~5% Supporting infrastructure** — types, UI rendering, config
+
+| Feature | Advertised Claim | File(s) | LOC est. | Type |
+|---|---|---|---|---|
+| Hash-based IDs | Conflict-free merge via `bd-a1b2` hashes | `internal/idgen/hash.go` | 85 | Novel |
+| Ready work detection | Blocker-aware transitive filtering | `issueops/ready_work.go` + cmd | ~1,200 | Novel |
+| Cycle detection | DFS cycle guard | `issueops/cycles.go` | ~400 | Novel |
+| Dependency tree | Recursive fetch + box-drawing render | `cmd/bd/dep.go`, `issueops/dependency_queries.go` | ~600 | Novel |
+| Molecule orchestration | Parallel DAG analysis, step sequencing | `internal/molecules/molecules.go` + cmds | ~800 | Novel |
+| Compaction | "Memory decay" — summarize old closed tasks | `internal/compact/compactor.go` | ~400 | Novel |
+| Hierarchical IDs | `bd-abc.1.2` parent-child parsing | `internal/types/` ID parsing | ~300 | Novel |
+| Cross-project deps | `external:<project>:<capability>` refs | `cmd/bd/dep.go` routing layer | ~400 | Novel |
+| Messaging/Wisps | Ephemeral issue type with TTL | `cmd/bd/mail.go` + schema | ~600 | Novel |
+| Contributor mode | Fork routing to separate planning DB | `init_contributor.go`, `routing_read.go` | ~200 | Novel |
+| Dolt remotes/sync | Git hook + branch-aware routing | `cmd/bd/sync_git.go`, `versioncontrolops/` | ~1,200 | Dolt wrapper |
+| Multi-backend | Embedded vs. server mode factory | `embeddeddolt/`, `doltserver/`, factory | ~1,200 | Dolt wrapper |
+
+**Key finding:** The genuinely novel algorithms (dep graph, ready-work, cycle detection, molecules) total ~3,500–4,000 LOC and have **low coupling to Dolt** — they operate on graph data that comes from SQL queries regardless of backend. The patterns worth lifting are even smaller than the full feature LOC suggests:
+
+| Pattern to lift | LOC to extract | Notes |
+|---|---|---|
+| Conditional UPDATE claim | ~50 LOC SQL | The core `WHERE assignee = ''` idiom |
+| Blocked-ID exclusion (`GetReadyWork`) | ~100 LOC | Compute blocked set, then `NOT IN (...)` |
+| DFS cycle detection | ~150 LOC | Pure Go, no Dolt dependency at all |
+| Hash ID generation | 85 LOC | FNV-1a → 4-char base36; optional |
+
+---
+
 ## What We Would Gain vs. Lose vs. Still Need to Build
 
 ### Gain
