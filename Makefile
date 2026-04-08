@@ -172,7 +172,7 @@ install-tools: ensure-tools ## Install all development and analysis tools
 	@echo "All tools installed successfully!"
 
 # Code quality and analysis
-lint: ensure-tools ## Run golangci-lint with stable checks
+lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with stable checks
 	@if ! which golangci-lint >/dev/null 2>&1; then \
 		echo "Installing golangci-lint..."; \
 		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
