@@ -116,6 +116,7 @@ func TestClassify_RmRfRoot_AutoDeny(t *testing.T) {
 		"rm -rf $HOME",
 		"rm -fr /",
 		"rm -fr ~/",
+		"rm -rf $HOME/",
 	}
 	for _, cmd := range cmds {
 		payload := PermissionRequestPayload{
@@ -125,6 +126,98 @@ func TestClassify_RmRfRoot_AutoDeny(t *testing.T) {
 		result := c.Classify(payload, ctx)
 		if result.Decision != AutoDeny {
 			t.Errorf("cmd %q: expected AutoDeny, got %v (rule=%s)", cmd, result.Decision, result.RuleID)
+		}
+	}
+}
+
+func TestClassify_RmRfSubdir_NotDenied(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	// Precise subdirectories must NOT be blocked — only root/home themselves.
+	cmds := []string{
+		"rm -rf /tmp/ai-setup-test",
+		"rm -rf /tmp/somedir",
+		"rm -rf ~/subdir",
+		"rm -rf $HOME/subdir",
+		"rm -rf $HOME/projects/foo",
+		// Expansion-dependent: $HOME must be expanded to see these are subdirs.
+		"rm -rf $HOME/work",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision == AutoDeny && result.RuleID == "seed-deny-rm-rf-root" {
+			t.Errorf("cmd %q: should not be blocked by rm-rf-root rule, got AutoDeny (rule=%s)", cmd, result.RuleID)
+		}
+	}
+}
+
+// TestClassify_RmRf_StringData_NotDenied verifies that rm-like text appearing as
+// data (not executable code) does not trigger the rm-rf-root deny rule.
+// These are regression tests for the false-positive where CommandPattern was
+// applied to the raw command string, causing it to match text inside heredocs,
+// echo arguments, comments, and string literals.
+func TestClassify_RmRf_StringData_NotDenied(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cases := []struct {
+		name string
+		cmd  string
+	}{
+		// Single-quoted heredoc: content is literal, not executable.
+		{
+			name: "single-quoted heredoc body",
+			cmd:  "cat <<'EOF'\nrm -rf /\nEOF",
+		},
+		// PR body passed via heredoc — the exact scenario that triggered the original bug.
+		{
+			name: "gh pr create with heredoc body containing rm -rf /",
+			cmd:  "gh pr create --title \"fix\" --body \"$(cat <<'EOF'\n## Testing\n| rm -rf / | blocked |\nEOF\n)\"",
+		},
+		// echo: the string is an argument, not a command being executed.
+		{
+			name: "echo rm -rf /",
+			cmd:  "echo \"rm -rf / is dangerous\"",
+		},
+		{
+			name: "echo rm -rf / single-quoted",
+			cmd:  "echo 'rm -rf / is dangerous'",
+		},
+		// printf: same — the format string is data.
+		{
+			name: "printf rm -rf /",
+			cmd:  "printf '%s\\n' 'rm -rf /'",
+		},
+		// Shell comment: not executed.
+		{
+			name: "comment containing rm -rf /",
+			cmd:  "git status # rm -rf / would be bad here",
+		},
+		// Writing dangerous text to a file via heredoc.
+		{
+			name: "write rm -rf / to file via heredoc",
+			cmd:  "cat > /tmp/safety-notes.txt <<'EOF'\ndo not run: rm -rf /\nEOF",
+		},
+		// Variable assignment: RHS is data, not executed.
+		{
+			name: "variable assignment containing rm -rf /",
+			cmd:  "WARNING=\"rm -rf / is dangerous\"",
+		},
+	}
+
+	for _, tc := range cases {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": tc.cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision == AutoDeny && result.RuleID == "seed-deny-rm-rf-root" {
+			t.Errorf("case %q: cmd %q should not be blocked by rm-rf-root rule (CommandPattern must not match string data)", tc.name, tc.cmd)
 		}
 	}
 }
@@ -1222,7 +1315,7 @@ func TestCategorizeToolName(t *testing.T) {
 		// Built-in agent tools
 		{"ExitPlanMode", ToolCategoryBuiltinAgent},
 		{"EnterPlanMode", ToolCategoryBuiltinAgent},
-		{"AskUserQuestion", ToolCategoryBuiltin}, // intentionally not a builtin agent tool — escalates to review queue
+		{"AskUserQuestion", ToolCategoryBuiltinAgent},
 		{"TodoWrite", ToolCategoryBuiltinAgent},
 		{"TaskCreate", ToolCategoryBuiltinAgent},
 		{"TaskUpdate", ToolCategoryBuiltinAgent},

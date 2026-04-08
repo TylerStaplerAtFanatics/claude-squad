@@ -272,6 +272,10 @@ type Rule struct {
 	CommandPattern *regexp.Regexp
 	// FilePattern matches against tool_input["file_path"]. nil means any file path matches.
 	FilePattern *regexp.Regexp
+	// PathMatcher applies structured path-semantic checks to Bash command arguments.
+	// Arguments are expanded (tilde, env vars) before matching.
+	// When set alongside CommandPattern/Criteria, all must match (AND semantics).
+	PathMatcher *PathMatcher
 	Decision    ClassificationDecision
 	RiskLevel   RiskLevel
 	Reason      string
@@ -336,21 +340,21 @@ func (c *RuleBasedClassifier) Classify(payload PermissionRequestPayload, ctx Cla
 		if cmd != "" {
 			cmds := ExtractAllCommands(cmd)
 			if len(cmds) > 1 {
-				return c.classifyCompound(payload, cmds)
+				return c.classifyCompound(payload, cmds, ctx)
 			}
 		}
 	}
 
-	return c.classifySingle(payload)
+	return c.classifySingle(payload, ctx)
 }
 
 // classifySingle evaluates rules against a single (non-compound) payload.
-func (c *RuleBasedClassifier) classifySingle(payload PermissionRequestPayload) ClassificationResult {
+func (c *RuleBasedClassifier) classifySingle(payload PermissionRequestPayload, ctx ClassificationContext) ClassificationResult {
 	for _, rule := range c.rules {
 		if !rule.Enabled {
 			continue
 		}
-		if c.matchesRule(rule, payload) {
+		if c.matchesRule(rule, payload, ctx) {
 			return ClassificationResult{
 				Decision:    rule.Decision,
 				RiskLevel:   rule.RiskLevel,
@@ -371,7 +375,7 @@ func (c *RuleBasedClassifier) classifySingle(payload PermissionRequestPayload) C
 // classifyCompound evaluates each sub-command extracted from a compound Bash command.
 // Pass 1: any deny/escalate decision on any sub-command wins immediately.
 // Pass 2: every sub-command must be matched by an allow rule; otherwise escalate.
-func (c *RuleBasedClassifier) classifyCompound(payload PermissionRequestPayload, cmds []ParsedCommand) ClassificationResult {
+func (c *RuleBasedClassifier) classifyCompound(payload PermissionRequestPayload, cmds []ParsedCommand, ctx ClassificationContext) ClassificationResult {
 	// Pass 1: deny/escalate takes priority.
 	for _, sub := range cmds {
 		subPayload := payloadWithCommand(payload, sub.Raw)
@@ -379,7 +383,7 @@ func (c *RuleBasedClassifier) classifyCompound(payload PermissionRequestPayload,
 			if !rule.Enabled {
 				continue
 			}
-			if c.matchesRule(rule, subPayload) {
+			if c.matchesRule(rule, subPayload, ctx) {
 				if rule.Decision == AutoDeny || rule.Decision == Escalate {
 					return ClassificationResult{
 						Decision:    rule.Decision,
@@ -405,7 +409,7 @@ func (c *RuleBasedClassifier) classifyCompound(payload PermissionRequestPayload,
 			if !rule.Enabled {
 				continue
 			}
-			if rule.Decision == AutoAllow && c.matchesRule(rule, subPayload) {
+			if rule.Decision == AutoAllow && c.matchesRule(rule, subPayload, ctx) {
 				covered = true
 				if firstAllowRule == nil {
 					firstAllowRule = &c.rules[i]
@@ -471,7 +475,7 @@ func (c *RuleBasedClassifier) BuildContext(cwd string) ClassificationContext {
 }
 
 // matchesRule returns true if all non-nil criteria in rule match the payload.
-func (c *RuleBasedClassifier) matchesRule(rule Rule, payload PermissionRequestPayload) bool {
+func (c *RuleBasedClassifier) matchesRule(rule Rule, payload PermissionRequestPayload, ctx ClassificationContext) bool {
 	// Tool name / pattern / category match.
 	if rule.ToolName != "" {
 		if !strings.EqualFold(payload.ToolName, rule.ToolName) {
@@ -493,7 +497,16 @@ func (c *RuleBasedClassifier) matchesRule(rule Rule, payload PermissionRequestPa
 	}
 
 	cmd, _ := payload.ToolInput["command"].(string)
+
+	// Parse once; reuse for Criteria and PathMatcher checks.
+	var parsedCmds []ParsedCommand // populated lazily on first use below
+
 	if rule.CommandPattern != nil {
+		// CommandPattern matches against the full raw command string so that redirect
+		// operators (e.g. ">> .env") and other shell syntax outside of CallExpr nodes
+		// are included in the match.  Rules that also set PathMatcher rely on the
+		// PathMatcher stage to reject false positives where the pattern text appears
+		// inside heredoc bodies, echo arguments, or other non-executed contexts.
 		if !rule.CommandPattern.MatchString(cmd) {
 			return false
 		}
@@ -501,11 +514,13 @@ func (c *RuleBasedClassifier) matchesRule(rule Rule, payload PermissionRequestPa
 
 	// Structured criteria matching: parse the command and evaluate against Criteria.
 	if rule.Criteria != nil {
-		cmds := ExtractAllCommands(cmd)
-		if len(cmds) == 0 {
+		if parsedCmds == nil {
+			parsedCmds = ExtractAllCommands(cmd)
+		}
+		if len(parsedCmds) == 0 {
 			return false
 		}
-		if !rule.Criteria.Matches(cmds[0]) {
+		if !rule.Criteria.Matches(parsedCmds[0]) {
 			return false
 		}
 	}
@@ -513,6 +528,19 @@ func (c *RuleBasedClassifier) matchesRule(rule Rule, payload PermissionRequestPa
 	filePath, _ := payload.ToolInput["file_path"].(string)
 	if rule.FilePattern != nil {
 		if !rule.FilePattern.MatchString(filePath) {
+			return false
+		}
+	}
+
+	// Structured path matching: expand arguments and classify paths semantically.
+	if rule.PathMatcher != nil {
+		if parsedCmds == nil {
+			parsedCmds = ExtractAllCommands(cmd)
+		}
+		if len(parsedCmds) == 0 {
+			return false
+		}
+		if !rule.PathMatcher.Matches(parsedCmds[0].ExpandedArgs, ctx) {
 			return false
 		}
 	}
@@ -564,10 +592,13 @@ func SeedRules() []Rule {
 			Source:      "seed",
 		},
 		{
-			ID:             "seed-deny-rm-rf-root",
-			Name:           "Block rm -rf on root or home paths",
+			ID:   "seed-deny-rm-rf-root",
+			Name: "Block rm -rf on root or home directory",
+			// CommandPattern checks for the recursive+force flag combination.
+			// PathMatcher checks that the target resolves to root or home (after tilde/$HOME expansion).
 			ToolName:       "Bash",
-			CommandPattern: regexp.MustCompile(`rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\s+(/|~|\$HOME)`),
+			CommandPattern: regexp.MustCompile(`rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)`),
+			PathMatcher:    &PathMatcher{ArgIndex: -1, MatchIf: PathRoot | PathHome},
 			Decision:       AutoDeny,
 			RiskLevel:      RiskCritical,
 			Reason:         "Deleting the root or home directory would cause irreversible data loss.",
