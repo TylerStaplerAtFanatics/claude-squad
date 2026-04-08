@@ -1,51 +1,51 @@
-# ADR-003: position:sticky Flex Layout vs position:fixed + CSS Var for Toolbar Keyboard Avoidance
+# ADR-003: Sticky Flex Layout for Toolbar Keyboard Avoidance
 
 **Status:** Accepted
 **Date:** 2026-04-08
-**Context:** Mobile UX Improvements — toolbar positioning when virtual keyboard opens
+**Context:** Mobile UX Improvements — terminal toolbar visibility when virtual keyboard opens
 
 ## Context
 
-The terminal toolbar (`.toolbar` in `TerminalOutput.module.css`) and mobile keyboard overlay (`.mobileKeyboard`) sit above and below the terminal canvas. When the iOS virtual keyboard opens, `position: fixed; bottom: 0` elements anchor to the **layout viewport** (which does NOT shrink), placing them behind the keyboard.
+When the iOS virtual keyboard opens, `position: fixed` elements are anchored to the **layout viewport** (which does not shrink), causing them to be hidden behind the keyboard. This bug persists on iOS 17 and is architectural to Apple's viewport model — not a fixable browser bug.
 
-Two approaches were evaluated:
+Three approaches were evaluated for keeping the terminal toolbar visible when the keyboard is open:
 
-1. **`position: fixed` + `--keyboard-height` CSS var** — Keep toolbar/overlay fixed, use `bottom: var(--keyboard-height, 0px)` to push them above the keyboard. Requires `transform: translateY(-)` or `bottom` offset. Works but fights iOS's viewport model; worse in PWA mode.
+1. **`position: fixed` + `--keyboard-height` CSS var transform** — Move the fixed toolbar up by `--keyboard-height` using `transform: translateY(-var(--keyboard-height))`. Functional but requires JS-driven CSS var AND a transition. Double-listener pattern (resize + scroll) required. Can still lag on iOS 15.
 
-2. **Sticky flex layout with `--viewport-height`** — The terminal container already uses `display: flex; flex-direction: column`. Set the outer container's height to `var(--viewport-height, 100dvh)` minus header. The toolbar and mobile keyboard are flex children with `flex-shrink: 0`; the terminal canvas is `flex: 1; min-height: 0`. When `--viewport-height` shrinks (keyboard opens), the flex column shrinks, and the toolbar/keyboard overlay naturally stay within the visible area.
+2. **Sticky flex layout with `--viewport-height`** — Make the terminal container a `display: flex; flex-direction: column; height: var(--viewport-height, 100dvh)` shell. The toolbar is `flex-shrink: 0` at the bottom of the flex column. When `--viewport-height` shrinks (written by ViewportProvider on keyboard open), the entire shell shrinks and the flex layout pushes the toolbar up automatically — no separate keyboard-height offset needed.
+
+3. **`position: sticky` within scrollable panel** — Less control than flex layout.
 
 ## Decision
 
-Use **sticky flex layout** (Option 2). The TerminalOutput component's `.container` already has `display: flex; flex-direction: column`. The parent modal content already constrains height. The change is:
+Use **sticky flex layout (Option 2)** for the terminal container.
 
-- Modal content container on mobile: `height: calc(var(--viewport-height, 100dvh) - var(--header-height))`
-- Terminal `.container`: `height: 100%` (already set)
-- Toolbar: `flex-shrink: 0` (already set)
-- Terminal canvas: `flex: 1; min-height: 0` (already set)
-- Mobile keyboard overlay: `flex-shrink: 0` (already set)
+The `TerminalOutput` component renders a flex column with `height: var(--viewport-height, 100dvh)`. Children:
+1. `.toolbar` — `flex-shrink: 0`
+2. `.terminalContainer` — `flex: 1; min-height: 0; overflow: hidden`
+3. `.mobileKeyboard` — `flex-shrink: 0` (toggleable)
 
-No `position: fixed` is needed. The flex column handles everything.
+When `--viewport-height` decreases on keyboard open, the flex container shrinks, xterm canvas gets smaller (triggering ResizeObserver → `fitAddon.fit()`), and the toolbar remains visible. `position: fixed` is not used for keyboard-interactive elements.
 
 ## Consequences
 
 **Positive:**
-- Sidesteps the iOS `position: fixed` keyboard bug entirely (findings-pitfalls.md Section 5)
-- No `transform` hacks or JavaScript repositioning
-- Works identically in PWA mode (where `position: fixed` is worse)
-- Toolbar and mobile keyboard overlay stay visible without any explicit keyboard detection in CSS
-- XtermTerminal's ResizeObserver fires naturally when the flex child shrinks
+- Completely avoids the iOS `position: fixed` + virtual keyboard bug
+- Toolbar stays visible without any transform or per-element keyboard offset CSS
+- xterm canvas resize is self-healing via ResizeObserver (ADR-002)
+- Works correctly in iOS PWA mode
+- No transition timing to manage for toolbar repositioning
 
 **Negative:**
-- Depends on ViewportProvider (ADR-001) updating `--viewport-height` promptly
-- The parent chain (page.module.css modal, globals.css modal) must all use `var(--viewport-height, 100dvh)` consistently — a single `100vh` in the chain breaks the cascade
-- If any ancestor has `overflow: hidden` without `height` constraints, content may clip rather than shrink
+- Terminal container must be a flex column — descendants needing `height: 100%` need `min-height: 0`
+- Modal height calculations using `calc(100vh - ...)` need updating to `var(--viewport-height, 100dvh)`
 
 **Risks:**
-- Safari flex + `height: 100%` bug: must use `flex: 1` + `min-height: 0` instead (already the case in `.container`)
-- Transition on height during keyboard animation may cause jank — use `will-change: height` sparingly or skip transition entirely (let it snap)
+- `height: 100%` in Safari flex sometimes resolves incorrectly — mitigated by `flex: 1; min-height: 0` instead
+- If `--viewport-height` is unset (SSR, non-iOS), `100dvh` fallback ensures no regression
 
 ## References
 
-- findings-pitfalls.md Section 5 (position:fixed + keyboard bug, sticky flex workaround)
-- findings-architecture.md Section 5 Option 2 (sticky flex pattern)
-- TerminalOutput.module.css lines 1-10 (existing flex column structure)
+- findings-pitfalls.md Section 5 (position:fixed + keyboard bug, iOS 17)
+- findings-architecture.md Recommendation Matrix
+- findings-stack.md Section 1 (dvh fallback)

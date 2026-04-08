@@ -1,61 +1,73 @@
-# ADR-004: Mobile Keyboard Toggle — localStorage State vs Session-Only State
+# ADR-004: Mobile Keyboard Toggle — localStorage State
 
 **Status:** Accepted
 **Date:** 2026-04-08
-**Context:** Mobile UX Improvements — mobile supplemental keyboard toggle persistence
+**Context:** Mobile UX Improvements — mobile supplemental keyboard visibility toggle
 
 ## Context
 
-The mobile supplemental keyboard (Esc, Tab, Ctrl+C, Ctrl+D, arrow keys) is currently always visible on screens <= 768px via a CSS media query. A toggle button is needed to show/hide it. The question is where to persist the toggle state:
+The mobile supplemental keyboard overlay (Esc, Tab, Ctrl+C, arrows) is currently always-visible on ≤768px via a CSS media query. The requirement is to add a show/hide toggle that persists across sessions.
 
-1. **Session-only state (`useState` only)** — State resets on every page navigation or refresh. User must re-enable the keyboard overlay every time they open a terminal session.
+Three persistence approaches were evaluated:
 
-2. **`localStorage` persistence** — State survives across sessions, page refreshes, and browser restarts. User sets preference once.
-
-3. **Server-side preference (API call)** — Persisted in the backend session/user config. Overkill for a single boolean UI preference.
+1. **Session-only state (`useState` only)** — Resets to visible on every page load. Not acceptable for a daily-driver tool.
+2. **localStorage** — Persists across browser sessions on the same device. Simple, no server dependency.
+3. **Server-side session state** — New RPC endpoint + Go backend storage. Massively over-engineered for a single UI preference. Out of scope.
 
 ## Decision
 
-Use **`localStorage`** with key `stapler-squad-mobile-keyboard-visible`. Default value: `true` (keyboard visible, matching current always-on behavior).
+Use **localStorage** with key `stapler-squad-mobile-keyboard-visible`.
 
-Implementation:
-```typescript
-const [isKeyboardVisible, setIsKeyboardVisible] = useState(() => {
-  if (typeof window === 'undefined') return true;
-  const stored = localStorage.getItem('stapler-squad-mobile-keyboard-visible');
-  return stored === null ? true : stored === 'true';
-});
-```
+- Default: `true` (visible) — backward compatible
+- Read on component mount via `useEffect` (avoids SSR hydration mismatch)
+- Write on toggle
+- Value: `"true"` | `"false"` (string)
 
-On toggle, write to localStorage:
 ```typescript
+const [isKeyboardVisible, setIsKeyboardVisible] = useState(true)
+
+useEffect(() => {
+  const stored = localStorage.getItem('stapler-squad-mobile-keyboard-visible')
+  if (stored !== null) setIsKeyboardVisible(stored === 'true')
+}, [])
+
 const toggleKeyboard = () => {
-  setIsKeyboardVisible(prev => {
-    const next = !prev;
-    localStorage.setItem('stapler-squad-mobile-keyboard-visible', String(next));
-    return next;
-  });
-};
+  const next = !isKeyboardVisible
+  setIsKeyboardVisible(next)
+  localStorage.setItem('stapler-squad-mobile-keyboard-visible', String(next))
+}
 ```
+
+Toggle button follows the hamburger menu pattern: `aria-expanded`, descriptive `aria-label`, `min-height: 44px`.
 
 ## Consequences
 
 **Positive:**
-- User sets preference once; it persists across all terminal sessions
-- Default `true` maintains backward compatibility (keyboard was always visible)
-- No server round-trip or API changes needed
-- Pattern is simple and well-understood
+- Preference persists across page loads on the same device
+- No server changes required
+- Default `true` is backward compatible
+- Simple to test (mock localStorage)
 
 **Negative:**
-- localStorage is per-origin, per-browser — preference doesn't sync across devices
-- SSR mismatch: `useState` initializer reads localStorage on client but returns `true` on server. Mitigated because the mobile keyboard is inside a `@media (max-width: 768px)` block that is `display: none` on desktop (server render), so the hydration mismatch is invisible.
-- If localStorage is full or disabled (rare on modern iOS), the `setItem` call will throw. Wrap in try/catch.
+- Device-specific — won't sync across devices
+- SSR hydration mismatch if server renders keyboard visible but localStorage says hidden
+  - Mitigated: read in `useEffect` (client-only); tolerable one-frame flash
 
 **Risks:**
-- Hydration mismatch warning in development if server and client disagree on initial state. Mitigated by always defaulting to `true` on server and using CSS to hide on desktop.
-- User clears browser data and loses preference — acceptable for a non-critical UI toggle.
+- localStorage unavailable in some private browsing modes — wrap in try/catch:
+
+```typescript
+function readKeyboardVisible(): boolean {
+  try {
+    const val = localStorage.getItem('stapler-squad-mobile-keyboard-visible')
+    return val === null ? true : val === 'true'
+  } catch {
+    return true
+  }
+}
+```
 
 ## References
 
-- findings-features.md Section 3 (hamburger menu pattern with useState + toggle)
-- requirements.md (toggle button for .mobileKeyboard, state in localStorage)
+- requirements.md — "Toggle button for .mobileKeyboard in TerminalOutput.tsx (show/hide, state in localStorage)"
+- findings-features.md Section 3 — Hamburger menu toggle pattern
