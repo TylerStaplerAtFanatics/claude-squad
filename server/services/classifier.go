@@ -1306,11 +1306,24 @@ func SeedRules() []Rule {
 		},
 
 		{
+			// AskUserQuestion surfaces Claude's questions directly to the user via the standard
+			// permission prompt. It is intentionally NOT classified as builtin-agent (it is a
+			// plain builtin) so the web UI can route it appropriately, but it must still be
+			// auto-allowed rather than escalated to the manual review queue.
+			ID:        "seed-allow-askuserquestion",
+			Name:      "Allow AskUserQuestion",
+			ToolName:  "AskUserQuestion",
+			Decision:  AutoAllow,
+			RiskLevel: RiskLow,
+			Reason:    "AskUserQuestion surfaces Claude's questions directly to the user.",
+			Priority:  100,
+			Enabled:   true,
+			Source:    "seed",
+		},
+		{
 			// Core Claude Code agent interaction and task management tools.
-			// These tools pose no risk (they ask questions, manage task lists, or signal
-			// plan approval) and should never require manual review.
-			// AskUserQuestion is included — it surfaces Claude's questions directly to the user
-			// via the standard permission prompt rather than blocking in the review queue.
+			// These tools pose no risk (they manage task lists or signal plan approval)
+			// and should never require manual review.
 			// Uses ToolCategory so new agent tools are auto-matched without rule updates.
 			ID:           "seed-allow-agent-tools",
 			Name:         "Allow Claude Code agent and planning tools",
