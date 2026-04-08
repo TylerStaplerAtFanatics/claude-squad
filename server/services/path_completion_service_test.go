@@ -24,7 +24,7 @@ func makeFile(t *testing.T, path string) {
 	t.Helper()
 	f, err := os.Create(path)
 	require.NoError(t, err)
-	f.Close()
+	require.NoError(t, f.Close())
 }
 
 // newReq wraps a proto request message in a ConnectRPC Request.
