@@ -59,6 +59,9 @@ type SessionService struct {
 	// databaseSvc handles workspace/database switcher RPCs.
 	databaseSvc *DatabaseService
 
+	// pathCompletionSvc handles filesystem path completion RPCs.
+	pathCompletionSvc *PathCompletionService
+
 	// scrollbackMgr provides access to per-session scrollback sequence numbers
 	// for checkpoint creation. May be nil if not wired (seq defaults to 0).
 	scrollbackMgr scrollbackSequencer
@@ -150,7 +153,8 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 		utilitySvc:      utilitySvc,
 		rulesSvc:        rulesSvc,
 		approvalStore:   approvalStore,
-		databaseSvc:     NewDatabaseService(),
+		databaseSvc:          NewDatabaseService(),
+		pathCompletionSvc:    NewPathCompletionService(),
 	}
 }
 
@@ -1754,6 +1758,14 @@ func (s *SessionService) ForkSession(
 	return connect.NewResponse(&sessionv1.ForkSessionResponse{
 		Session: respProto,
 	}), nil
+}
+
+// ListPathCompletions returns filesystem entries matching the given path prefix.
+func (s *SessionService) ListPathCompletions(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ListPathCompletionsRequest],
+) (*connect.Response[sessionv1.ListPathCompletionsResponse], error) {
+	return s.pathCompletionSvc.ListPathCompletions(ctx, req)
 }
 
 // findInstance finds an instance by title using the live in-memory poller.

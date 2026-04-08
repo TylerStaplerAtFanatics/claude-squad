@@ -192,6 +192,12 @@ service SessionService {
   // The fork receives truncated scrollback, conversation history, and a git worktree
   // based on the checkpoint's recorded state.
   rpc ForkSession(ForkSessionRequest) returns (ForkSessionResponse) {}
+
+  // Path Completion RPCs
+
+  // ListPathCompletions returns filesystem directory entries matching a path prefix.
+  // Used by the Omnibar for real-time path completion and inline path validation.
+  rpc ListPathCompletions(ListPathCompletionsRequest) returns (ListPathCompletionsResponse) {}
 }
 
 // ListSessionsRequest allows filtering sessions by various criteria.
@@ -1138,4 +1144,50 @@ message ForkSessionRequest {
 message ForkSessionResponse {
   // The newly created forked session.
   Session session = 1;
+}
+
+// ============================================================================
+// Path Completion Messages
+// ============================================================================
+
+message ListPathCompletionsRequest {
+  // Path prefix to complete. The server splits at the last '/' to determine
+  // the base directory and filter prefix. Supports ~ expansion.
+  // Examples: "/home/", "/home/ty", "~/projects/my"
+  string path_prefix = 1;
+
+  // Maximum entries to return. Default: 50, server cap: 500.
+  // Use 0 for server default.
+  int32 max_results = 2;
+
+  // If true, only return directory entries (not regular files).
+  bool directories_only = 3;
+}
+
+message ListPathCompletionsResponse {
+  // Matching filesystem entries, sorted alphabetically.
+  repeated PathEntry entries = 1;
+
+  // The resolved base directory that was listed (after ~ expansion, filepath.Clean).
+  string base_dir = 2;
+
+  // True if results were capped at max_results.
+  bool truncated = 3;
+
+  // True if base_dir exists and is a readable directory.
+  bool base_dir_exists = 4;
+
+  // True if the full path_prefix (including partial filename) exists on disk.
+  bool path_exists = 5;
+}
+
+message PathEntry {
+  // Full absolute path to the entry.
+  string path = 1;
+
+  // Filename component only.
+  string name = 2;
+
+  // True if this entry is a directory (symlinks resolved).
+  bool is_directory = 3;
 }
