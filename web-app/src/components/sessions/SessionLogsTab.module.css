@@ -99,7 +99,7 @@
 .colTimestamp { width: 130px; }
 .colLevel { width: 80px; }
 .colSource { width: 160px; }
-.colMessage { }
+.colMessage { flex: 1; }
 
 .row {
   border-bottom: 1px solid #111;
