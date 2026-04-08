@@ -30,20 +30,21 @@ import (
 )
 
 var (
-	version           = "1.0.12"
-	daemonFlag        bool
-	testModeFlag      bool
-	testDirFlag       string
-	discoveryModeFlag string
-	discoverExtFlag   bool
-	profileFlag       bool
-	profilePortFlag   int
-	traceFlag         bool
-	listenAddrFlag    string
-	remoteAccessFlag  bool
-	remotePortFlag    int
-	rpIDFlag          string
-	rootCmd           = &cobra.Command{
+	version            = "1.0.12"
+	daemonFlag         bool
+	testModeFlag       bool
+	testDirFlag        string
+	discoveryModeFlag  string
+	discoverExtFlag    bool
+	profileFlag        bool
+	profilePortFlag    int
+	traceFlag          bool
+	listenAddrFlag     string
+	remoteAccessFlag   bool
+	remotePortFlag     int
+	rpIDFlag           string
+	tmuxKeepServerFlag bool
+	rootCmd            = &cobra.Command{
 		Use:   "stapler-squad",
 		Short: "Stapler Squad - Manage multiple AI agents like Claude Code, Aider, Codex, and Amp (Web Mode)",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -195,6 +196,32 @@ var (
 			if remoteAccessFlag || cfg.PasskeyEnabled {
 				if err := startRemoteAccess(ctx, srv, address, cfg, remotePortFlag); err != nil {
 					return fmt.Errorf("start remote access: %w", err)
+				}
+			}
+
+			strictStartup := os.Getenv("STAPLER_SQUAD_STRICT_STARTUP") == "true"
+
+			// Ensure tmux server is running before sessions are restored.
+			if err := tmux.EnsureServerRunning(""); err != nil {
+				if strictStartup {
+					return fmt.Errorf("tmux server startup failed (unset STAPLER_SQUAD_STRICT_STARTUP to suppress): %w", err)
+				}
+				log.WarningLog.Printf("Failed to ensure tmux server running: %v", err)
+			}
+			// Create a keepalive session so the tmux server does not exit when all user sessions close.
+			if err := tmux.CreateKeepaliveSession(""); err != nil {
+				if strictStartup {
+					return fmt.Errorf("failed to create tmux keepalive session (unset STAPLER_SQUAD_STRICT_STARTUP to suppress): %w", err)
+				}
+				log.WarningLog.Printf("Failed to create keepalive session: %v", err)
+			}
+			// --tmux-keep-server: also set exit-empty off so the server survives even if the keepalive dies.
+			if tmuxKeepServerFlag {
+				if err := tmux.SetExitEmpty("", false); err != nil {
+					if strictStartup {
+						return fmt.Errorf("failed to set tmux exit-empty off (unset STAPLER_SQUAD_STRICT_STARTUP to suppress): %w", err)
+					}
+					log.WarningLog.Printf("Failed to set tmux exit-empty off: %v", err)
 				}
 			}
 
@@ -587,6 +614,9 @@ func init() {
 	rootCmd.Flags().StringVar(&rpIDFlag, "rp-id", "",
 		"WebAuthn Relying Party ID override (your LAN IP or hostname, e.g. '192.168.1.42'). "+
 			"Defaults to the detected LAN IP.")
+	rootCmd.Flags().BoolVar(&tmuxKeepServerFlag, "tmux-keep-server", false,
+		"Keep tmux server running even when all user sessions close (sets exit-empty off). "+
+			"Use this if the tmux server frequently stops between sessions.")
 
 	// Hide the daemonFlag as it's only for internal use
 	err := rootCmd.Flags().MarkHidden("daemon")

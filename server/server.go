@@ -9,10 +9,14 @@ import (
 	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/server/middleware"
 	"github.com/tstapler/stapler-squad/server/notifications"
 	"github.com/tstapler/stapler-squad/server/services"
 	"github.com/tstapler/stapler-squad/server/web"
+	"github.com/tstapler/stapler-squad/session/tmux"
+
+	"github.com/google/uuid"
 	"net"
 	"net/http"
 	"os"
@@ -102,6 +106,22 @@ func NewServer(addr string) *Server {
 				deps.SessionService.SetNotificationStore(notifStore)
 			}
 		}
+
+		// Wire tmux server recovery → web UI toast notification.
+		tmux.SetServerRecoveryCallback(func() {
+			event := events.NewNotificationEvent(
+				"tmux-server",
+				"System",
+				uuid.New().String(),
+				int32(8), // NotificationType_NOTIFICATION_TYPE_WARNING
+				int32(2), // NotificationPriority_NOTIFICATION_PRIORITY_MEDIUM
+				"Tmux Server Recovered",
+				"Connection to the tmux server has been restored. Sessions will resume automatically.",
+				nil,
+			)
+			deps.EventBus.Publish(event)
+			log.InfoLog.Printf("[tmux] recovery notification sent to connected clients")
+		})
 
 		// Note: SetExternalDiscovery is now called inside BuildRuntimeDeps.
 
