@@ -11,7 +11,7 @@ GO_FILES := $(shell find . -maxdepth 3 -name "*.go" -not -path "./vendor/*" -not
 WEB_FILES := $(shell find web-app/src -type f 2>/dev/null)
 PROTO_FILES := $(shell find proto -name "*.proto" 2>/dev/null)
 PROTO_STAMP := .proto-gen.stamp
-PROTO_OUT_DIRS := gen/proto/go web/src/gen
+PROTO_OUT_DIRS := gen/proto/go web-app/src/gen
 ASDF_STAMP := .asdf-install.stamp
 
 .PHONY: ensure-tools
@@ -148,19 +148,19 @@ proto-clean: ## Clean generated protocol buffer code
 	rm -rf web/src/gen
 
 # Testing targets
-test: ensure-tools ## Run all tests
+test: ensure-tools proto-gen ## Run all tests
 	go test ./...
 
-test-verbose: ensure-tools ## Run tests with verbose output
+test-verbose: ensure-tools proto-gen ## Run tests with verbose output
 	go test -v ./...
 
-test-coverage: ensure-tools ## Run tests with coverage report
+test-coverage: ensure-tools proto-gen ## Run tests with coverage report
 	go test -cover ./... -coverprofile=coverage.out
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
 # Performance benchmarks
-benchmark: ensure-tools ## Run all benchmarks
+benchmark: ensure-tools proto-gen ## Run all benchmarks
 	@echo "Running comprehensive benchmarks..."
 	go test -bench=. -benchmem -timeout=10m ./... > benchmark_results.txt 2>&1 &
 	@echo "Benchmarks running in background. Results will be saved to benchmark_results.txt"
@@ -178,13 +178,13 @@ install-tools: ensure-tools ## Install all development and analysis tools
 	@echo "All tools installed successfully!"
 
 # Code quality and analysis
-lint: ensure-tools ## Run golangci-lint with comprehensive checks
+lint: ensure-tools proto-gen ## Run golangci-lint with comprehensive checks
 	golangci-lint run --enable=nilnil,staticcheck,ineffassign,govet
 
 format: ensure-tools ## Format code with gofmt
 	go fmt ./...
 
-vet: ensure-tools ## Run go vet with all analyzers
+vet: ensure-tools proto-gen ## Run go vet with all analyzers
 	go vet ./...
 	go vet -nilness ./...
 
@@ -307,12 +307,12 @@ validate-env: ensure-tools ## Validate development environment setup
 	@echo "Environment validation complete"
 
 # Benchmark comparison (local A/B testing with benchstat)
-benchmark-baseline: ensure-tools ## Save current benchmark results as baseline for comparison
+benchmark-baseline: ensure-tools proto-gen ## Save current benchmark results as baseline for comparison
 	@echo "Running benchmarks and saving as baseline..."
 	go test -bench=. -benchmem -count=8 -timeout=30m ./... > bench-old.txt 2>&1
 	@echo "✅ Baseline saved to bench-old.txt"
 
-benchmark-compare: ensure-tools ## Run benchmarks and compare against saved baseline
+benchmark-compare: ensure-tools proto-gen ## Run benchmarks and compare against saved baseline
 	@if [ ! -f bench-old.txt ]; then \
 		echo "❌ No baseline found. Run 'make benchmark-baseline' first."; \
 		exit 1; \
@@ -324,7 +324,7 @@ benchmark-compare: ensure-tools ## Run benchmarks and compare against saved base
 	@echo ""
 	@echo "Tip: Run 'make benchmark-baseline' to update the baseline to the current results."
 
-benchmark-tier1: ensure-tools ## Run Tier 1 critical-path benchmarks (fast, ~5 min)
+benchmark-tier1: ensure-tools proto-gen ## Run Tier 1 critical-path benchmarks (fast, ~5 min)
 	@echo "Running Tier 1 benchmarks..."
 	go test \
 		-bench='BenchmarkEventBus|BenchmarkDeltaGenerat|BenchmarkCircularBuffer|BenchmarkSessionService_List|BenchmarkSessionService_Get' \

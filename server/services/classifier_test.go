@@ -116,6 +116,7 @@ func TestClassify_RmRfRoot_AutoDeny(t *testing.T) {
 		"rm -rf $HOME",
 		"rm -fr /",
 		"rm -fr ~/",
+		"rm -rf $HOME/",
 	}
 	for _, cmd := range cmds {
 		payload := PermissionRequestPayload{
@@ -125,6 +126,32 @@ func TestClassify_RmRfRoot_AutoDeny(t *testing.T) {
 		result := c.Classify(payload, ctx)
 		if result.Decision != AutoDeny {
 			t.Errorf("cmd %q: expected AutoDeny, got %v (rule=%s)", cmd, result.Decision, result.RuleID)
+		}
+	}
+}
+
+func TestClassify_RmRfSubdir_NotDenied(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	// Precise subdirectories must NOT be blocked — only root/home themselves.
+	cmds := []string{
+		"rm -rf /tmp/ai-setup-test",
+		"rm -rf /tmp/somedir",
+		"rm -rf ~/subdir",
+		"rm -rf $HOME/subdir",
+		"rm -rf $HOME/projects/foo",
+		// Expansion-dependent: $HOME must be expanded to see these are subdirs.
+		"rm -rf $HOME/work",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision == AutoDeny && result.RuleID == "seed-deny-rm-rf-root" {
+			t.Errorf("cmd %q: should not be blocked by rm-rf-root rule, got AutoDeny (rule=%s)", cmd, result.RuleID)
 		}
 	}
 }
