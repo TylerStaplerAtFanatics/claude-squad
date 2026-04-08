@@ -307,16 +307,3 @@ type ScrollbackStats struct {
 	OldestSequence uint64
 	NewestSequence uint64
 }
-
-// CurrentSequence returns the highest sequence number written for sessionID.
-// Returns 0 if the session has no buffered data yet.
-func (m *ScrollbackManager) CurrentSequence(sessionID string) uint64 {
-	m.mutex.RLock()
-	buffer, exists := m.buffers[sessionID]
-	m.mutex.RUnlock()
-
-	if !exists {
-		return 0
-	}
-	return buffer.GetNewestSequence()
-}

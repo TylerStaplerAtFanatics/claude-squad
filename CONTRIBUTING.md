@@ -1,29 +1,57 @@
 # Contributing
 
-Thank you for considering contributing to our project! This document outlines the process for contributing.
+Thank you for contributing to Stapler Squad!
 
 ## Development Setup
 
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR-USERNAME/stapler-squad.git`
-3. Add the upstream repository: `git remote add upstream https://github.com/tstapler/stapler-squad.git`
-4. Install dependencies: `go mod download`
+**1. Install Homebrew prerequisites**
+
+```bash
+brew install tmux gh
+```
+
+> `go`, `buf`, and `node` are installed automatically by the Makefile via Homebrew (or [asdf](https://asdf-vm.com) if you have it).
+
+**2. Clone and build**
+
+```bash
+git clone https://github.com/tstapler/stapler-squad.git
+cd stapler-squad
+
+# Build (auto-installs go, buf, node via Homebrew if missing)
+make build
+
+# Install analysis and dev tools (nilaway, staticcheck, golangci-lint, etc.)
+make dev-setup
+
+# Run the server
+./stapler-squad
+```
+
+**3. Rebuild after changes**
+
+```bash
+make restart-web   # Rebuild web UI + restart server
+```
+
+> **Note:** Never pipe or redirect `make restart-web` output — it will block forever. Run it plain.
 
 ## Code Standards
 
-### Lint
-
-You can run the following command to lint the code:
-
 ```bash
-gofmt -w .
+make pre-commit    # Format + vet + test + lint before committing
+make quick-check   # Build + test + lint (faster)
 ```
 
-### Testing
+## Testing
 
-Please include tests for new features or bug fixes.
+```bash
+make test          # Run all tests
+make test-coverage # Coverage report (coverage.html)
+```
+
+Please include tests for new features and bug fixes.
 
 ## Questions?
 
-Feel free to open an issue for any questions about contributing.
-
+Open an issue at https://github.com/tstapler/stapler-squad/issues.

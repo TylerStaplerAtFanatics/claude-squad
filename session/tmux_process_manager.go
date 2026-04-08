@@ -267,15 +267,6 @@ func (tm *TmuxProcessManager) SendPromptWithEnter(prompt string) error {
 	return nil
 }
 
-// GetPaneCurrentPath returns the current working directory of the tmux pane.
-// Returns an error if the session is not initialized or the command fails.
-func (tm *TmuxProcessManager) GetPaneCurrentPath() (string, error) {
-	if tm.session == nil {
-		return "", fmt.Errorf("tmux session not initialized")
-	}
-	return tm.session.GetPaneCurrentPath()
-}
-
 // GetPanePID returns the PID of the foreground process in the pane.
 // Returns an error if the session is not initialized or the command fails.
 func (tm *TmuxProcessManager) GetPanePID() (int32, error) {

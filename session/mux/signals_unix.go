@@ -10,11 +10,16 @@ import (
 	"github.com/creack/pty"
 )
 
+// notifyWinch registers ch to receive SIGWINCH (terminal resize) signals.
+func notifyWinch(ch chan os.Signal) {
+	signal.Notify(ch, syscall.SIGWINCH)
+}
+
 // handleSignals sets up signal handlers for terminal resize and termination.
 func (m *Multiplexer) handleSignals(done chan struct{}) {
 	// Handle terminal resize (SIGWINCH)
 	sigwinch := make(chan os.Signal, 1)
-	signal.Notify(sigwinch, syscall.SIGWINCH)
+	notifyWinch(sigwinch)
 
 	// Handle termination signals
 	sigterm := make(chan os.Signal, 1)

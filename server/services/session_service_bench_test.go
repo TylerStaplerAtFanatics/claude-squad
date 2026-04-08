@@ -16,10 +16,13 @@ import (
 	"github.com/tstapler/stapler-squad/session"
 )
 
+<<<<<<< HEAD
 // benchEventBusBufferSize is the channel capacity for the EventBus used in benchmarks.
 // Matches the capacity used in production to keep benchmark conditions realistic.
 const benchEventBusBufferSize = 64
 
+=======
+>>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 // benchServiceFixture holds the live server, client, and cleanup function for
 // a single benchmark setup. The server is started once and reused across all
 // iterations to measure pure RPC overhead rather than startup cost.
@@ -51,18 +54,31 @@ func benchmarkServiceSetup(b *testing.B) *benchServiceFixture {
 	// Repository → Storage → EventBus → SessionService
 	repo, err := session.NewEntRepository(session.WithDatabasePath(dbPath))
 	if err != nil {
+<<<<<<< HEAD
 		os.RemoveAll(tmpDir)
+=======
+		_ = os.RemoveAll(tmpDir)
+>>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 		b.Fatalf("failed to create repository: %v", err)
 	}
 
 	storage, err := session.NewStorageWithRepository(repo)
 	if err != nil {
+<<<<<<< HEAD
 		repo.Close()
 		os.RemoveAll(tmpDir)
 		b.Fatalf("failed to create storage: %v", err)
 	}
 
 	bus := events.NewEventBus(benchEventBusBufferSize)
+=======
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		b.Fatalf("failed to create storage: %v", err)
+	}
+
+	bus := events.NewEventBus(64)
+>>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 	svc := NewSessionService(storage, bus)
 
 	// Register handler on an HTTP mux.
@@ -80,8 +96,13 @@ func benchmarkServiceSetup(b *testing.B) *benchServiceFixture {
 	cleanup := func() {
 		srv.Close()
 		bus.Close()
+<<<<<<< HEAD
 		repo.Close()
 		os.RemoveAll(tmpDir)
+=======
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
+>>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 	}
 
 	return &benchServiceFixture{
@@ -206,6 +227,7 @@ func BenchmarkSessionService_GetSession(b *testing.B) {
 		b.ReportMetric(float64(runtime.NumGoroutine()), "goroutines")
 	})
 }
+<<<<<<< HEAD
 
 // BenchmarkSessionService_StreamTerminal_NotFound measures the round-trip
 // overhead of the StreamTerminal bidi-streaming RPC when the requested session
@@ -282,3 +304,5 @@ func BenchmarkSessionService_StreamTerminal_NotStarted(b *testing.B) {
 		b.ReportMetric(float64(runtime.NumGoroutine()), "goroutines")
 	})
 }
+=======
+>>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))

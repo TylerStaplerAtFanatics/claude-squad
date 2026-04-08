@@ -29,9 +29,6 @@ type ExternalSessionDiscovery struct {
 	// Context for lifecycle management
 	ctx    context.Context
 	cancel context.CancelFunc
-
-	// registry persists socket ↔ session mappings for fast reconnection after restart.
-	registry *mux.SocketRegistry
 }
 
 // NewExternalSessionDiscovery creates a new external session discovery service.
@@ -40,52 +37,6 @@ func NewExternalSessionDiscovery() *ExternalSessionDiscovery {
 		discovery: mux.NewDiscovery(),
 		sessions:  make(map[string]*Instance),
 	}
-}
-
-// SetSocketRegistry attaches a persistent registry to this discovery service.
-// The registry is used to store socket → session mappings for fast reconnection
-// after a process restart. Call this before Start().
-func (e *ExternalSessionDiscovery) SetSocketRegistry(r *mux.SocketRegistry) {
-	e.registry = r
-}
-
-// registryStaleThreshold is the maximum age of a socket registry entry before it
-// is considered stale and eligible for pruning.
-const registryStaleThreshold = 24 * time.Hour
-
-// retryWithDelay calls fn up to maxAttempts times with a fixed delay between attempts.
-// If fn returns a "connection refused" error on the first attempt, it returns
-// immediately without retrying (stale socket — no point retrying).
-func retryWithDelay(maxAttempts int, delay time.Duration, fn func() error) error {
-	var lastErr error
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		lastErr = fn()
-		if lastErr == nil {
-			return nil
-		}
-		// Stale socket (ECONNREFUSED): skip retries immediately.
-		if isConnectionRefused(lastErr) {
-			return lastErr
-		}
-		if attempt < maxAttempts-1 {
-			log.InfoLog.Printf("retryWithDelay: attempt %d/%d failed: %v — retrying in %v",
-				attempt+1, maxAttempts, lastErr, delay)
-			time.Sleep(delay)
-		}
-	}
-	return lastErr
-}
-
-// isConnectionRefused returns true if err indicates a refused or non-existent socket.
-// These errors are permanent (stale socket) and should not be retried.
-func isConnectionRefused(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "connection refused") ||
-		strings.Contains(msg, "no such file or directory") ||
-		strings.Contains(msg, "no such socket")
 }
 
 // OnSessionAdded registers a callback for when a new external session is discovered.
@@ -103,16 +54,6 @@ func (e *ExternalSessionDiscovery) OnSessionRemoved(callback func(*Instance)) {
 // Start begins periodic discovery of external sessions.
 func (e *ExternalSessionDiscovery) Start(interval time.Duration) {
 	e.ctx, e.cancel = context.WithCancel(context.Background())
-
-	// Load persistent registry and prune entries whose sockets no longer exist.
-	// This enables fast-path logging of previously-known sessions on restart.
-	if e.registry != nil {
-		if err := e.registry.Load(); err != nil {
-			log.WarningLog.Printf("ExternalSessionDiscovery: registry load: %v", err)
-		} else {
-			e.registry.PruneStale(registryStaleThreshold)
-		}
-	}
 
 	// Register for discovery events
 	e.discovery.OnSessionChange(func(discovered *mux.DiscoveredSession, isNew bool) {
@@ -224,11 +165,8 @@ func (e *ExternalSessionDiscovery) handleNewSession(discovered *mux.DiscoveredSe
 	// UNIFIED ARCHITECTURE: Attach to the existing tmux session so external sessions
 	// use the same streaming/resize infrastructure as regular sessions.
 	// This enables GetPTYReader() to work, which is required for WebSocket streaming.
-	// Retry up to 3 times with 500 ms backoff; skip retries on stale socket errors.
 	tmuxSession := tmux.NewTmuxSessionFromExisting(discovered.Metadata.TmuxSession)
-	if err := retryWithDelay(3, 500*time.Millisecond, func() error {
-		return tmuxSession.AttachToExisting()
-	}); err != nil {
+	if err := tmuxSession.AttachToExisting(); err != nil {
 		log.ErrorLog.Printf("Failed to attach to tmux session '%s' for external session '%s': %v",
 			discovered.Metadata.TmuxSession, title, err)
 		// Continue without PTY attachment - session will still be visible but streaming won't work
@@ -245,15 +183,6 @@ func (e *ExternalSessionDiscovery) handleNewSession(discovered *mux.DiscoveredSe
 	e.sessionsMu.Lock()
 	e.sessions[discovered.SocketPath] = instance
 	e.sessionsMu.Unlock()
-
-	// Persist socket → session mapping for fast reconnection after restart.
-	if e.registry != nil {
-		e.registry.Set(title, mux.RegistryEntry{
-			SocketPath:  discovered.SocketPath,
-			SessionName: discovered.Metadata.TmuxSession,
-			LastSeen:    now,
-		})
-	}
 
 	log.InfoLog.Printf("Discovered external Claude session: %s (socket: %s, cwd: %s, tmux: %s)",
 		title, discovered.SocketPath, discovered.Metadata.Cwd, discovered.Metadata.TmuxSession)
@@ -275,12 +204,6 @@ func (e *ExternalSessionDiscovery) handleRemovedSession(discovered *mux.Discover
 
 	if exists {
 		log.InfoLog.Printf("External session disconnected: %s", instance.Title)
-
-		// Remove from persistent registry and prune any other stale entries.
-		if e.registry != nil {
-			e.registry.Delete(instance.Title)
-			e.registry.PruneStale(registryStaleThreshold)
-		}
 
 		// Notify all registered callbacks
 		for _, callback := range e.onSessionRemovedCallbacks {
@@ -345,4 +268,39 @@ func guessSourceTerminal(meta *mux.SessionMetadata) string {
 func isClaudeCommand(cmd string) bool {
 	base := filepath.Base(cmd)
 	return base == "claude" || base == "claude-code"
+}
+
+// retryWithDelay calls fn up to maxAttempts times with a fixed delay between attempts.
+// If fn returns a "connection refused" error on the first attempt, it returns
+// immediately without retrying (stale socket — no point retrying).
+func retryWithDelay(maxAttempts int, delay time.Duration, fn func() error) error {
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		lastErr = fn()
+		if lastErr == nil {
+			return nil
+		}
+		// Stale socket (ECONNREFUSED): skip retries immediately.
+		if isConnectionRefused(lastErr) {
+			return lastErr
+		}
+		if attempt < maxAttempts-1 {
+			log.InfoLog.Printf("retryWithDelay: attempt %d/%d failed: %v — retrying in %v",
+				attempt+1, maxAttempts, lastErr, delay)
+			time.Sleep(delay)
+		}
+	}
+	return lastErr
+}
+
+// isConnectionRefused returns true if err indicates a refused or non-existent socket.
+// These errors are permanent (stale socket) and should not be retried.
+func isConnectionRefused(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "no such file or directory") ||
+		strings.Contains(msg, "no such socket")
 }

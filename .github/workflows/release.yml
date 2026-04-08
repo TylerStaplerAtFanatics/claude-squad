@@ -64,6 +64,9 @@ jobs:
       - name: Build Web UI
         run: make web-build
 
+      - name: Generate protos and build web UI
+        uses: ./.github/actions/prepare
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -71,4 +74,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_REPO_TOKEN: ${{ secrets.BREW_TOKEN }}

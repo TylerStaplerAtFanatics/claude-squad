@@ -806,6 +806,18 @@ Sessions run in isolated tmux sessions for:
 
 **UI State**: Navigation indices, filter settings, and view preferences are maintained across operations.
 
+## Pull Request Requirements
+
+All PRs to `main` must have exactly one semver label or the `Label Check` CI job will fail:
+
+| Label | When to use |
+|---|---|
+| `patch` | Bug fixes, dependency updates, documentation |
+| `minor` | New features, non-breaking enhancements |
+| `major` | Breaking changes, major redesigns |
+
+Add via: `gh pr edit <number> --add-label "patch"` (create label first if it doesn't exist: `gh label create "patch" --color "e4e669"`)
+
 ## Adding New Features
 
 ### New Web UI Features

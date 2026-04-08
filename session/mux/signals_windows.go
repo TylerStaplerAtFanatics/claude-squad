@@ -11,6 +11,9 @@ import (
 	"github.com/creack/pty"
 )
 
+// notifyWinch is a no-op on Windows where SIGWINCH does not exist.
+func notifyWinch(_ chan os.Signal) {}
+
 // handleSignals sets up signal handlers for terminal resize and termination.
 func (m *Multiplexer) handleSignals(done chan struct{}) {
 	// Handle termination signals (SIGWINCH not available on Windows)

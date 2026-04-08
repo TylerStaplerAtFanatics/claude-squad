@@ -34,7 +34,7 @@ type ReactiveQueueManager interface {
 
 // SessionService implements the SessionServiceHandler interface for ConnectRPC.
 type SessionService struct {
-	storage           *session.Storage
+	storage           session.InstanceStore
 	eventBus          *events.EventBus
 	statusManager     *session.InstanceStatusManager
 	reviewQueuePoller *session.ReviewQueuePoller
@@ -72,8 +72,16 @@ type scrollbackSequencer interface {
 // NewSessionService creates a new SessionService with the given storage and event bus.
 // NOTE: Instances are NOT loaded here to prevent double-loading and initialization timing issues.
 // Instances will be loaded in server.go after dependencies (statusManager, reviewQueue) are wired.
-func NewSessionService(storage *session.Storage, eventBus *events.EventBus) *SessionService {
+func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus) *SessionService {
 	reviewQueue := session.NewReviewQueue()
+
+	// concStorage is the concrete backing store used by sub-services that haven't migrated to
+	// InstanceStore yet (ReviewQueueService, GitHubService, WorkspaceService). In tests using a
+	// fake InstanceStore, concStorage will be nil — those sub-services degrade gracefully to nil storage.
+	var concStorage *session.Storage
+	if cs, ok := storage.(*session.Storage); ok {
+		concStorage = cs
+	}
 
 	// Initialize search engine with disk persistence for incremental index updates.
 	var searchEngine *search.SearchEngine
@@ -101,7 +109,7 @@ func NewSessionService(storage *session.Storage, eventBus *events.EventBus) *Ses
 		log.WarningLog.Printf("Failed to get config dir for approval persistence: %v", configErr)
 	}
 	approvalStore := NewApprovalStore(approvalFilePath)
-	reviewQueueSvc := NewReviewQueueService(reviewQueue, storage, eventBus)
+	reviewQueueSvc := NewReviewQueueService(reviewQueue, concStorage, eventBus)
 	reviewQueueSvc.SetApprovalStore(approvalStore)
 
 	notificationSvc := NewNotificationService(NewNotificationRateLimiter(10, 20), eventBus)
@@ -134,8 +142,8 @@ func NewSessionService(storage *session.Storage, eventBus *events.EventBus) *Ses
 		eventBus:        eventBus,
 		reviewQueueSvc:  reviewQueueSvc,
 		searchSvc:       NewSearchService(searchEngine, search.NewSnippetGenerator(), 5*time.Minute),
-		githubSvc:       NewGitHubService(storage),
-		workspaceSvc:    NewWorkspaceService(storage, eventBus),
+		githubSvc:       NewGitHubService(concStorage),
+		workspaceSvc:    NewWorkspaceService(concStorage, eventBus),
 		configSvc:       NewConfigService(),
 		notificationSvc: notificationSvc,
 		approvalSvc:     approvalSvc,
@@ -197,8 +205,18 @@ func NewSessionServiceFromConfig() (*SessionService, error) {
 	return NewSessionService(storage, eventBus), nil
 }
 
-// GetStorage returns the storage instance for direct access (e.g., WebSocket handlers).
+// GetStorage returns the concrete *session.Storage for components that haven't migrated to InstanceStore yet.
+// Returns nil when SessionService was constructed with a fake InstanceStore (e.g., in unit tests).
+// Prefer using the session.InstanceStore interface via GetInstanceStore() for new code.
 func (s *SessionService) GetStorage() *session.Storage {
+	if cs, ok := s.storage.(*session.Storage); ok {
+		return cs
+	}
+	return nil
+}
+
+// GetInstanceStore returns the InstanceStore interface, suitable for both production and test code.
+func (s *SessionService) GetInstanceStore() session.InstanceStore {
 	return s.storage
 }
 
@@ -1619,7 +1637,7 @@ func (s *SessionService) MergeDatabase(
 	return s.databaseSvc.MergeDatabase(ctx, req)
 }
 
-// SetScrollbackManager wires in the scrollback manager for seq-number lookups during checkpoint creation.
+// SetScrollbackManager wires a scrollback sequence provider for checkpoint creation.
 func (s *SessionService) SetScrollbackManager(mgr scrollbackSequencer) {
 	s.scrollbackMgr = mgr
 }
@@ -1651,7 +1669,6 @@ func (s *SessionService) CreateCheckpoint(
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
 
-	// Persist the updated instance state (checkpoints are stored on the instance).
 	if err := s.storage.SaveInstances(s.allInstances()); err != nil {
 		log.WarningLog.Printf("CreateCheckpoint: failed to persist checkpoint for '%s': %v", inst.Title, err)
 	}
@@ -1709,7 +1726,6 @@ func (s *SessionService) ForkSession(
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.SessionId))
 	}
 
-	// Verify new_title is unique.
 	if s.findInstance(req.Msg.NewTitle) != nil {
 		return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("session with title %q already exists", req.Msg.NewTitle))
 	}
@@ -1728,25 +1744,19 @@ func (s *SessionService) ForkSession(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("persist forked session: %w", err))
 	}
 
-	// CRITICAL: Update the ReviewQueuePoller's instance references so the forked
-	// session is immediately findable by findInstance() and StreamTerminal.
 	if s.reviewQueuePoller != nil {
 		updatedInstances := append(s.reviewQueuePoller.GetInstances(), newInst)
 		s.reviewQueuePoller.SetInstances(updatedInstances)
 		log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after ForkSession for '%s'", newInst.Title)
 	}
 
-	// Capture response proto BEFORE launching goroutine to avoid a data race:
-	// the goroutine writes instance fields (Status, started) while Start() runs;
-	// InstanceToProto reads those same fields.
 	respProto := adapters.InstanceToProto(newInst)
 
 	go func() {
 		if startErr := newInst.Start(true); startErr != nil {
 			log.WarningLog.Printf("ForkSession: failed to start forked session '%s': %v", newInst.Title, startErr)
-			// Mark the session as Stopped so it is not permanently stuck in Loading state.
 			newInst.Status = session.Stopped
-			if saveErr := s.storage.UpdateInstance(newInst); saveErr != nil {
+			if saveErr := s.storage.SaveInstances(s.allInstances()); saveErr != nil {
 				log.WarningLog.Printf("ForkSession: failed to persist Stopped status for '%s': %v", newInst.Title, saveErr)
 			}
 		}

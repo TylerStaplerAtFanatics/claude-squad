@@ -168,13 +168,12 @@ func (rqm *ReactiveQueueManager) handleUserInteraction(event *events.Event) {
 	}
 
 	// Update LastUserResponse timestamp
-	inst.LastUserResponse = time.Now()
-	log.InfoLog.Printf("[ReactiveQueueManager] Updated LastUserResponse for '%s' to %v",
-		sessionID, inst.LastUserResponse)
+	respondedAt := inst.MarkUserResponded()
+	log.InfoLog.Printf("[ReactiveQueueManager] Updated LastUserResponse for '%s'", sessionID)
 
 	// Persist timestamp (critical for restart scenarios)
 	if rqm.storage != nil {
-		if err := rqm.storage.UpdateInstanceLastUserResponse(inst.Title, inst.LastUserResponse); err != nil {
+		if err := rqm.storage.UpdateInstanceLastUserResponse(inst.Title, respondedAt); err != nil {
 			log.ErrorLog.Printf("Failed to persist LastUserResponse for '%s': %v", sessionID, err)
 		}
 	}

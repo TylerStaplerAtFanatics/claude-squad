@@ -104,31 +104,19 @@ func testKilledSessionRestoresInCorrectWorktree(t *testing.T) {
 // testCompareOldVsNewRestoreBehavior demonstrates the difference between
 // the old buggy behavior and the new fixed behavior
 func testCompareOldVsNewRestoreBehavior(t *testing.T) {
-<<<<<<< HEAD
-	// Create test directories
-=======
 	// Create test directories - use sibling dirs so worktreeDir is NOT a subdirectory
 	// of currentDirBase. Using filepath.Join(tempDir, "sub") would make tempDir a
 	// substring of worktreeDir, causing the NotContains assertion below to spuriously
 	// fail on Linux CI.
->>>>>>> 38d40fd (feat: checkpoint system with fork, history detection, and socket registry (#18))
-	tempDir := t.TempDir()
-	currentDirBase := filepath.Join(tempDir, "current-dir")
-	worktreeDir := filepath.Join(tempDir, "session-worktree")
-	err := os.MkdirAll(currentDirBase, 0755)
-	require.NoError(t, err)
-	err = os.MkdirAll(worktreeDir, 0755)
+	worktreeBase := t.TempDir()
+	worktreeDir := filepath.Join(worktreeBase, "session-worktree")
+	err := os.MkdirAll(worktreeDir, 0755)
 	require.NoError(t, err)
 
-	// Change to a different directory to simulate the bug condition
+	// Change to a separate directory so currentDir is not a prefix of worktreeDir
 	originalDir, _ := os.Getwd()
-<<<<<<< HEAD
-	differentDir := currentDirBase // Separate from worktree
-	defer func() { _ = os.Chdir(originalDir) }()
-=======
-	differentDir := currentDirBase // Separate sibling dir from worktree
+	differentDir := t.TempDir() // Separate temp dir — no path relationship to worktreeBase
 	defer os.Chdir(originalDir)
->>>>>>> 38d40fd (feat: checkpoint system with fork, history detection, and socket registry (#18))
 	err = os.Chdir(differentDir)
 	require.NoError(t, err)
 

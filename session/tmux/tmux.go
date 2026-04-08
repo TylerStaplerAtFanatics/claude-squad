@@ -573,16 +573,28 @@ func (t *TmuxSession) RestoreWithWorkDir(workDir string) error {
 	// This is needed for SetDetachedSize(), SendKeys(), and the Direct Claude Command Interface
 	// We use tmux attach-session to get a PTY handle without actually attaching interactively
 	if t.ptmx == nil {
-		ptmx, _, err := t.ptyFactory.Start(t.buildAttachCommand())
-		if err != nil {
-			// Graceful degradation - log warning but allow session to continue
-			// Session can still be viewed via tmux capture-pane, just won't support
-			// PTY-based operations like resizing or command sending
-			log.WarningLog.Printf("PTY initialization failed for session '%s': %v (session will work with limited functionality)", t.sanitizedName, err)
-			// Continue without PTY - operations that require it will fail gracefully
-		} else {
+		const ptyMaxRetries = 3
+		var lastPTYErr error
+		for attempt := 0; attempt < ptyMaxRetries; attempt++ {
+			if attempt > 0 {
+				delay := time.Duration(100*(1<<uint(attempt-1))) * time.Millisecond
+				log.InfoLog.Printf("Retrying PTY attach for session '%s' (attempt %d/%d, waiting %v)", t.sanitizedName, attempt+1, ptyMaxRetries, delay)
+				time.Sleep(delay)
+			}
+			ptmx, _, err := t.ptyFactory.Start(t.buildAttachCommand())
+			if err != nil {
+				lastPTYErr = err
+				continue
+			}
 			t.ptmx = ptmx
 			log.InfoLog.Printf("Successfully restored PTY connection for tmux session '%s'", t.sanitizedName)
+			lastPTYErr = nil
+			break
+		}
+		if lastPTYErr != nil {
+			// Graceful degradation - session can still be viewed via tmux capture-pane,
+			// but PTY-based operations (resizing, SendKeys, controller) will be unavailable.
+			log.WarningLog.Printf("PTY initialization failed for session '%s' after %d attempts: %v", t.sanitizedName, ptyMaxRetries, lastPTYErr)
 		}
 	}
 
@@ -1431,40 +1443,6 @@ func (t *TmuxSession) GetPaneDimensions() (width, height int, err error) {
 	return paneWidth, paneHeight, nil
 }
 
-// GetPaneCurrentPath returns the current working directory of the pane.
-// This is used by CaptureCurrentState to persist the working directory before shutdown.
-func (t *TmuxSession) GetPaneCurrentPath() (string, error) {
-	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
-		"#{pane_current_path}")
-
-	output, err := t.cmdExec.Output(cmd)
-	if err != nil {
-		return "", fmt.Errorf("failed to get pane current path for session '%s': %w", t.sanitizedName, err)
-	}
-
-	return strings.TrimSpace(string(output)), nil
-}
-
-// GetPanePID returns the PID of the foreground process in the pane.
-// This is used by HistoryLinker to correlate open files with session records.
-func (t *TmuxSession) GetPanePID() (int32, error) {
-	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
-		"#{pane_pid}")
-
-	output, err := t.cmdExec.Output(cmd)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get pane PID for session '%s': %w", t.sanitizedName, err)
-	}
-
-	pidStr := strings.TrimSpace(string(output))
-	pid, err := strconv.ParseInt(pidStr, 10, 32)
-	if err != nil {
-		return 0, fmt.Errorf("invalid pane PID %q for session '%s': %w", pidStr, t.sanitizedName, err)
-	}
-
-	return int32(pid), nil
-}
-
 // CleanupSessions kills all tmux sessions that start with "session-" on the default server
 func CleanupSessions(cmdExec executor.Executor) error {
 	return CleanupSessionsOnServer(cmdExec, "")
@@ -1573,6 +1551,9 @@ func sanitizeUTF8String(rawBytes []byte) string {
 	return result.String()
 }
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 
 // GetPanePID returns the PID of the foreground process in the pane.
 // This is used by HistoryLinker to correlate open files with session records.
@@ -1593,5 +1574,8 @@ func (t *TmuxSession) GetPanePID() (int32, error) {
 
 	return int32(pid), nil
 }
+<<<<<<< HEAD
 =======
 >>>>>>> 38d40fd (feat: checkpoint system with fork, history detection, and socket registry (#18))
+=======
+>>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))

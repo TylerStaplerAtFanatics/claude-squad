@@ -168,7 +168,7 @@ func (rqs *ReviewQueueService) AcknowledgeSession(
 		}), nil
 	}
 
-	instance.LastAcknowledged = time.Now()
+	instance.MarkAcknowledged()
 	instances[instanceIndex] = instance
 
 	if err := rqs.storage.SaveInstances(instances); err != nil {

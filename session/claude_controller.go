@@ -11,9 +11,21 @@ import (
 	"time"
 )
 
+// InstanceContext is the narrow interface ClaudeController needs from its owning Instance.
+// Using an interface breaks the bidirectional Instance ↔ ClaudeController dependency.
+type InstanceContext interface {
+	GetTitle() string
+	GetPTYReader() (*os.File, error)
+	Preview() (string, error)
+	LastMeaningfulOutputTime() time.Time
+	GetCreatedAt() time.Time
+	SetLastMeaningfulOutput(t time.Time)
+}
+
 // ClaudeController provides a high-level API for controlling Claude instances.
 // It orchestrates all the underlying components (queue, executor, history, streams).
 type ClaudeController struct {
+<<<<<<< HEAD
 	sessionName      string
 	instance         *Instance
 	ptyAccess        *PTYAccess
@@ -27,15 +39,29 @@ type ClaudeController struct {
 	mu               sync.RWMutex
 	ctx              context.Context
 	cancel           context.CancelFunc
+=======
+	sessionName    string
+	instance       InstanceContext
+	ptyAccess      *PTYAccess
+	responseStream *ResponseStream
+	statusDetector *detection.StatusDetector
+	idleDetector   *detection.IdleDetector // NEW: Idle state detection
+	queue          *CommandQueue
+	executor       *CommandExecutor
+	history        *CommandHistory
+	mu             sync.RWMutex
+	ctx            context.Context
+	cancel         context.CancelFunc
+>>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 }
 
 // NewClaudeController creates a new controller for the given instance.
-func NewClaudeController(instance *Instance) (*ClaudeController, error) {
+func NewClaudeController(instance InstanceContext) (*ClaudeController, error) {
 	if instance == nil {
 		return nil, fmt.Errorf("instance cannot be nil")
 	}
 
-	sessionName := instance.Title
+	sessionName := instance.GetTitle()
 	if sessionName == "" {
 		return nil, fmt.Errorf("instance title cannot be empty")
 	}
@@ -90,8 +116,8 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 	//
 	// This restoration happens BEFORE the detector starts analyzing PTY output,
 	// so the first DetectState() call will have accurate historical context.
-	if cc.instance != nil && !cc.instance.LastMeaningfulOutput.IsZero() {
-		cc.idleDetector.InitializeFromTimestamp(cc.instance.LastMeaningfulOutput)
+	if cc.instance != nil && !cc.instance.LastMeaningfulOutputTime().IsZero() {
+		cc.idleDetector.InitializeFromTimestamp(cc.instance.LastMeaningfulOutputTime())
 	}
 
 	// MIGRATION: Handle old sessions without LastMeaningfulOutput timestamp.
@@ -104,13 +130,13 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 	//
 	// This timestamp will be persisted the next time the session state is saved,
 	// completing the migration.
-	if cc.instance != nil && cc.instance.LastMeaningfulOutput.IsZero() {
+	if cc.instance != nil && cc.instance.LastMeaningfulOutputTime().IsZero() {
 		var migrationTime time.Time
 		var migrationSource string
 
-		if !cc.instance.CreatedAt.IsZero() {
+		if !cc.instance.GetCreatedAt().IsZero() {
 			// Prefer CreatedAt: gives accurate age for persistent sessions
-			migrationTime = cc.instance.CreatedAt
+			migrationTime = cc.instance.GetCreatedAt()
 			migrationSource = "CreatedAt"
 		} else {
 			// Fallback for transient sessions: use current time
@@ -121,7 +147,7 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 
 		log.InfoLog.Printf("[ClaudeController] Migrating old session '%s': initializing LastMeaningfulOutput from %s (%v)",
 			cc.sessionName, migrationSource, migrationTime)
-		cc.instance.LastMeaningfulOutput = migrationTime
+		cc.instance.SetLastMeaningfulOutput(migrationTime)
 		cc.idleDetector.InitializeFromTimestamp(migrationTime)
 	}
 
@@ -528,8 +554,8 @@ func (cc *ClaudeController) GetSessionName() string {
 	return cc.sessionName
 }
 
-// GetInstance returns the underlying Instance.
-func (cc *ClaudeController) GetInstance() *Instance {
+// GetInstance returns the InstanceContext backing this controller.
+func (cc *ClaudeController) GetInstance() InstanceContext {
 	return cc.instance
 }
 

@@ -1,7 +1,6 @@
 version: "2"
 
 linters:
-  default: none
   enable:
     - forbidigo
     - ineffassign
@@ -42,6 +41,8 @@ issues:
           msg: "use the log package instead of fmt.Print* in production code"
       exclude-godoc-examples: true
   exclusions:
+    paths:
+      - session/tmux/tmux_windows
     rules:
       # Allow fmt.Print* in main.go (CLI output) and test files
       - path: "main\\.go"

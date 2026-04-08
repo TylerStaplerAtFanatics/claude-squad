@@ -263,7 +263,7 @@ func TestCreateKeepaliveSession(t *testing.T) {
 
 	// Calling it again should be idempotent (no error).
 	err = CreateKeepaliveSession(socketName)
-	require.NoError(t, err, "CreateKeepaliveSession should be idempotent")
+	require.NoError(t, err, "CreateKeepaliveSession should idempotent")
 }
 
 // TestSetExitEmpty verifies that SetExitEmpty sets the tmux server option correctly.
@@ -301,5 +301,5 @@ func TestSetExitEmpty(t *testing.T) {
 	out, err = exec.Command("tmux", "-L", socketName, "show-options", "-g", "exit-empty").CombinedOutput()
 	require.NoError(t, err)
 	require.Contains(t, strings.ToLower(string(out)), "on",
-		"exit-empty should be on after SetExitEmpty(true)")
+		"exit-empty should be on after SetSetExitEmpty(true)")
 }

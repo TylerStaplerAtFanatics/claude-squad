@@ -8,6 +8,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Makefile'
+      - 'proto/**'
       - '.github/workflows/lint.yml'
   pull_request:
     branches: [ main ]
@@ -16,6 +17,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Makefile'
+      - 'proto/**'
       - '.github/workflows/lint.yml'
 
 jobs:
@@ -29,7 +31,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25.0'
-<<<<<<< HEAD
           cache: true
 
       - name: Set up Node.js
@@ -44,32 +45,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Web UI
-        run: make web-build
-=======
-          cache: false
->>>>>>> 38d40fd (feat: checkpoint system with fork, history detection, and socket registry (#18))
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-<<<<<<< HEAD
-          version: latest
-          args: --no-config --disable-all --enable=nilnil,ineffassign,govet
-=======
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: web-app/package-lock.json
-
-      - name: Install buf
-        run: |
-          curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
-            -o /usr/local/bin/buf && chmod +x /usr/local/bin/buf
-
-      - name: Install web-app dependencies
-        working-directory: web-app
-        run: npm ci
-
       - name: Generate protobuf code
         run: buf generate proto
 
@@ -79,13 +54,10 @@ jobs:
           printf '<!DOCTYPE html><html><body></body></html>' > server/web/dist/index.html
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v2.11.4
-          args: --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
-          skip-cache: false
-          only-new-issues: true
->>>>>>> 38d40fd (feat: checkpoint system with fork, history detection, and socket registry (#18))
+          version: latest
+          args: --no-config --disable-all --enable=nilnil,ineffassign,govet
 
       - name: Check formatting
         run: |

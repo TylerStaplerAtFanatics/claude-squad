@@ -126,6 +126,20 @@ type ClaudeSettings struct {
 	SessionTimeoutMinutes int    `json:"session_timeout_minutes"` // Consider sessions stale after this time
 }
 
+// InstanceStore is the minimal interface the server layer needs for session persistence.
+// Defining it here (alongside the concrete Storage) allows test fakes to be built without
+// depending on the full Storage implementation.
+type InstanceStore interface {
+	LoadInstances() ([]*Instance, error)
+	SaveInstances([]*Instance) error
+	AddInstance(*Instance) error
+	DeleteInstance(title string) error
+	UpdateInstanceLastUserResponse(title string, t time.Time) error
+}
+
+// Compile-time assertion: *Storage must satisfy InstanceStore.
+var _ InstanceStore = (*Storage)(nil)
+
 // Storage handles saving and loading instances via the repository backend.
 type Storage struct {
 	repo Repository

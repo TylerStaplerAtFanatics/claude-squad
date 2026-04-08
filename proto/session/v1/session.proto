@@ -179,9 +179,7 @@ service SessionService {
   // No server restart required — changes are immediately visible.
   rpc MergeDatabase(MergeDatabaseRequest) returns (MergeDatabaseResponse) {}
 
-  // ============================================================================
   // Checkpoint RPCs
-  // ============================================================================
 
   // CreateCheckpoint captures the current state of a session as a named bookmark.
   // Records scrollback position, git HEAD SHA, and conversation UUID.

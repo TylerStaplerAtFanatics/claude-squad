@@ -1,5 +1,3 @@
-//go:build !windows
-
 package mux
 
 import (
@@ -695,7 +693,7 @@ func RunWithName(command string, args []string, sessionName string) (int, error)
 
 	// Handle terminal resize (SIGWINCH)
 	sigwinch := make(chan os.Signal, 1)
-	signal.Notify(sigwinch, syscall.SIGWINCH)
+	notifyWinch(sigwinch)
 
 	// Handle termination signals
 	sigterm := make(chan os.Signal, 1)
@@ -742,7 +740,7 @@ func RunAttach(tmuxSession string) (int, error) {
 
 	// Handle terminal resize (SIGWINCH)
 	sigwinch := make(chan os.Signal, 1)
-	signal.Notify(sigwinch, syscall.SIGWINCH)
+	notifyWinch(sigwinch)
 
 	// Handle termination signals
 	sigterm := make(chan os.Signal, 1)
