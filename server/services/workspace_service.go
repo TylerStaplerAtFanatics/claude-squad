@@ -253,6 +253,14 @@ func (ws *WorkspaceService) SwitchWorkspace(
 		BaseRevision:    req.Msg.BaseRevision,
 	}
 
+	// Create a named checkpoint before switching so the state is recoverable.
+	if instance.Started() && !instance.Paused() {
+		label := "pre-switch: " + req.Msg.Target
+		if _, cpErr := instance.CreateCheckpoint(label, 0); cpErr != nil {
+			log.WarningLog.Printf("SwitchWorkspace: pre-switch checkpoint for '%s' failed (non-fatal): %v", instance.Title, cpErr)
+		}
+	}
+
 	result, err := instance.SwitchWorkspace(switchReq)
 	if err != nil {
 		return connect.NewResponse(&sessionv1.SwitchWorkspaceResponse{

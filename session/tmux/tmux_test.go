@@ -540,3 +540,42 @@ func TestRegistryKeyUnregisteredOnClose(t *testing.T) {
 			"registry should not contain executor key %q after Close()", key)
 	}
 }
+
+// --- GetPaneCurrentPath tests ---
+
+func TestGetPaneCurrentPath_ReturnsTrimmedPath(t *testing.T) {
+	cmdExec := MockCmdExec{
+		OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+			if strings.Contains(cmd.String(), "pane_current_path") {
+				return []byte("/home/user/project\n"), nil
+			}
+			return []byte(""), nil
+		},
+		RunFunc:            func(cmd *exec.Cmd) error { return nil },
+		CombinedOutputFunc: func(cmd *exec.Cmd) ([]byte, error) { return []byte(""), nil },
+	}
+	session := newTmuxSession("capture-test", "echo", NewMockPtyFactory(t), cmdExec, TmuxPrefix)
+
+	path, err := session.GetPaneCurrentPath()
+
+	require.NoError(t, err)
+	// Trailing newline is trimmed.
+	require.Equal(t, "/home/user/project", path)
+}
+
+func TestGetPaneCurrentPath_ReturnsError(t *testing.T) {
+	cmdExec := MockCmdExec{
+		OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+			return nil, fmt.Errorf("tmux server not running")
+		},
+		RunFunc:            func(cmd *exec.Cmd) error { return nil },
+		CombinedOutputFunc: func(cmd *exec.Cmd) ([]byte, error) { return []byte(""), nil },
+	}
+	session := newTmuxSession("capture-err-test", "echo", NewMockPtyFactory(t), cmdExec, TmuxPrefix)
+
+	path, err := session.GetPaneCurrentPath()
+
+	require.Error(t, err)
+	require.Empty(t, path)
+	require.Contains(t, err.Error(), "failed to get pane path")
+}

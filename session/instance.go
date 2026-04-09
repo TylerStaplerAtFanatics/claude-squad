@@ -1894,6 +1894,33 @@ func (i *Instance) SetHistoryInfo(conversationUUID, historyFilePath string) {
 	i.HistoryFilePath = historyFilePath
 }
 
+// CaptureCurrentState records the pane's current working directory into WorkingDir.
+// Called during graceful shutdown so cold restore can restart in the right directory.
+// No-op if the session is not started, paused, or the tmux session is dead.
+func (i *Instance) CaptureCurrentState() error {
+	if !i.started || i.Paused() {
+		return nil
+	}
+	if !i.tmuxManager.DoesSessionExist() {
+		return nil
+	}
+	tmuxSession := i.tmuxManager.Session()
+	if tmuxSession == nil {
+		return nil
+	}
+	path, err := tmuxSession.GetPaneCurrentPath()
+	if err != nil {
+		return fmt.Errorf("CaptureCurrentState '%s': %w", i.Title, err)
+	}
+	if path == "" {
+		return nil
+	}
+	i.stateMutex.Lock()
+	defer i.stateMutex.Unlock()
+	i.WorkingDir = path
+	return nil
+}
+
 // CreateCheckpoint captures a named state bookmark for this session.
 // scrollbackSeq should be the current scrollback high-water mark (from ScrollbackManager);
 // pass 0 if the caller does not have access to scrollback state.
