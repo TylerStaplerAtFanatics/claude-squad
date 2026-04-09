@@ -286,7 +286,7 @@
 .completionError {
   padding: 4px 16px;
   font-size: 12px;
-  color: var(--error-color, #ef4444);
+  color: var(--error);
 }
 
 /* Path existence indicator */
