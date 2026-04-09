@@ -1,14 +1,67 @@
 "use client";
 
-import type { PathEntry } from "@/gen/session/v1/session_pb";
 import styles from "./PathCompletionDropdown.module.css";
 
+/** A single item shown in the path completion dropdown. */
+export interface CompletionEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  /** True for entries sourced from local history (not the live filesystem). */
+  isHistory?: boolean;
+}
+
 interface PathCompletionDropdownProps {
-  entries: PathEntry[];
+  entries: CompletionEntry[];
   selectedIndex: number;
-  onSelect: (entry: PathEntry) => void;
+  onSelect: (entry: CompletionEntry) => void;
   isLoading: boolean;
+  /** How many leading entries are history entries (renders a divider after them). */
+  historyCount?: number;
   id?: string;
+}
+
+function EntryItem({
+  entry,
+  index,
+  selectedIndex,
+  onSelect,
+  id,
+}: {
+  entry: CompletionEntry;
+  index: number;
+  selectedIndex: number;
+  onSelect: (entry: CompletionEntry) => void;
+  id: string;
+}) {
+  return (
+    <li
+      id={`${id}-option-${index}`}
+      className={[
+        styles.item,
+        index === selectedIndex ? styles.itemSelected : "",
+        entry.isHistory ? styles.itemHistory : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      role="option"
+      aria-selected={index === selectedIndex}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        onSelect(entry);
+      }}
+    >
+      <span className={styles.icon} aria-hidden="true">
+        {entry.isHistory ? "🕒" : entry.isDirectory ? "📁" : "📄"}
+      </span>
+      <span className={styles.name}>{entry.name}</span>
+      {entry.isDirectory && !entry.isHistory && (
+        <span className={styles.suffix} aria-hidden="true">
+          /
+        </span>
+      )}
+    </li>
+  );
 }
 
 export function PathCompletionDropdown({
@@ -16,12 +69,15 @@ export function PathCompletionDropdown({
   selectedIndex,
   onSelect,
   isLoading,
+  historyCount = 0,
   id = "path-completion-listbox",
 }: PathCompletionDropdownProps) {
   if (isLoading && entries.length === 0) {
     return <div className={styles.loading}>Loading completions…</div>;
   }
   if (entries.length === 0) return null;
+
+  const showDivider = historyCount > 0 && historyCount < entries.length;
 
   return (
     <ul
@@ -30,31 +86,28 @@ export function PathCompletionDropdown({
       role="listbox"
       aria-label="Path completions"
     >
-      {entries.map((entry, i) => (
-        <li
+      {entries.slice(0, historyCount).map((entry, i) => (
+        <EntryItem
           key={entry.path}
-          id={`${id}-option-${i}`}
-          className={`${styles.item} ${
-            i === selectedIndex ? styles.itemSelected : ""
-          }`}
-          role="option"
-          aria-selected={i === selectedIndex}
-          onMouseDown={(e) => {
-            // Prevent input from losing focus.
-            e.preventDefault();
-            onSelect(entry);
-          }}
-        >
-          <span className={styles.icon} aria-hidden="true">
-            {entry.isDirectory ? "📁" : "📄"}
-          </span>
-          <span className={styles.name}>{entry.name}</span>
-          {entry.isDirectory && (
-            <span className={styles.suffix} aria-hidden="true">
-              /
-            </span>
-          )}
-        </li>
+          entry={entry}
+          index={i}
+          selectedIndex={selectedIndex}
+          onSelect={onSelect}
+          id={id}
+        />
+      ))}
+      {showDivider && (
+        <li className={styles.divider} role="presentation" aria-hidden="true" />
+      )}
+      {entries.slice(historyCount).map((entry, i) => (
+        <EntryItem
+          key={entry.path}
+          entry={entry}
+          index={historyCount + i}
+          selectedIndex={selectedIndex}
+          onSelect={onSelect}
+          id={id}
+        />
       ))}
     </ul>
   );

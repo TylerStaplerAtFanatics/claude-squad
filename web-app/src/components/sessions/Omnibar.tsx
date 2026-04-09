@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { detect, InputType, INPUT_TYPE_INFO, DetectionResult } from "@/lib/omnibar";
 import { PROGRAMS } from "@/lib/constants/programs";
 import { usePathCompletions } from "@/lib/hooks/usePathCompletions";
-import type { PathEntry } from "@/gen/session/v1/session_pb";
-import { PathCompletionDropdown } from "./PathCompletionDropdown";
+import { usePathHistory } from "@/lib/hooks/usePathHistory";
+import { PathCompletionDropdown, type CompletionEntry } from "./PathCompletionDropdown";
 import styles from "./Omnibar.module.css";
 
 interface OmnibarProps {
@@ -83,12 +83,49 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
     directoriesOnly: true,
   });
 
+  const { getMatching: getHistoryMatching, save: saveHistory } = usePathHistory();
+
+  // Convert live OS entries to CompletionEntry for type-safe downstream use.
+  const liveEntries = useMemo<CompletionEntry[]>(
+    () =>
+      completionEntries.map((e) => ({
+        name: e.name,
+        path: e.path,
+        isDirectory: e.isDirectory,
+      })),
+    [completionEntries]
+  );
+
+  // History entries matching the current prefix.
+  const historyMatches = useMemo<CompletionEntry[]>(
+    () =>
+      isPathInput
+        ? getHistoryMatching(completionPrefix).map((h) => ({
+            name: h.path,
+            path: h.path,
+            isDirectory: true,
+            isHistory: true,
+          }))
+        : [],
+    [isPathInput, completionPrefix, getHistoryMatching]
+  );
+
+  // Merged entries: history first, then live (deduped against history).
+  const mergedEntries = useMemo<CompletionEntry[]>(() => {
+    const liveDeduped = liveEntries.filter(
+      (e) => !historyMatches.some((h) => h.path === e.path)
+    );
+    return [...historyMatches, ...liveDeduped];
+  }, [historyMatches, liveEntries]);
+
+  const historyCount = historyMatches.length;
+
   const isDropdownVisible =
-    isPathInput && completionEntries.length > 0 && !dropdownDismissed;
+    isPathInput && mergedEntries.length > 0 && !dropdownDismissed;
 
   // Accept a completion entry: fill the input and continue for further completion.
   const handleCompletionSelect = useCallback(
-    (entry: PathEntry) => {
+    (entry: CompletionEntry) => {
       const newInput = entry.isDirectory ? entry.path + "/" : entry.path;
       setInput(newInput);
       setDropdownIndex(-1);
@@ -171,7 +208,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
       if (isDropdownVisible) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
-          setDropdownIndex((i) => Math.min(i + 1, completionEntries.length - 1));
+          setDropdownIndex((i) => Math.min(i + 1, mergedEntries.length - 1));
           return;
         }
         if (e.key === "ArrowUp") {
@@ -181,15 +218,18 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
         }
         if (e.key === "Tab") {
           e.preventDefault();
-          if (completionEntries.length === 1) {
-            handleCompletionSelect(completionEntries[0]);
-          } else {
-            // Extend input to longest common prefix of all entry names.
-            const lcp = completionEntries.reduce((acc, entry) => {
+          if (dropdownIndex >= 0) {
+            // Explicit selection (including history entries) → accept it.
+            handleCompletionSelect(mergedEntries[dropdownIndex]);
+          } else if (liveEntries.length === 1) {
+            handleCompletionSelect(liveEntries[0]);
+          } else if (liveEntries.length > 1) {
+            // Extend input to longest common prefix of live entry names only.
+            const lcp = liveEntries.reduce((acc, entry) => {
               let i = 0;
               while (i < acc.length && i < entry.name.length && acc[i] === entry.name[i]) i++;
               return acc.slice(0, i);
-            }, completionEntries[0]?.name ?? "");
+            }, liveEntries[0].name);
             if (lcp) {
               const sep = completionBaseDir.endsWith("/") ? "" : "/";
               setInput(completionBaseDir + sep + lcp);
@@ -200,7 +240,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
         }
         if (e.key === "Enter" && !e.metaKey && dropdownIndex >= 0) {
           e.preventDefault();
-          handleCompletionSelect(completionEntries[dropdownIndex]);
+          handleCompletionSelect(mergedEntries[dropdownIndex]);
           return;
         }
         if (e.key === "Escape") {
@@ -224,7 +264,8 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
     },
     [
       isDropdownVisible,
-      completionEntries,
+      mergedEntries,
+      liveEntries,
       completionBaseDir,
       dropdownIndex,
       handleCompletionSelect,
@@ -308,6 +349,10 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
       }
 
       await onCreateSession(sessionData);
+      // Persist the chosen path to history for future completions.
+      if (isPathInput && detection?.localPath) {
+        saveHistory(detection.localPath);
+      }
       onClose();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create session";
@@ -390,7 +435,8 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
         {isDropdownVisible && (
           <PathCompletionDropdown
             id="path-completion-listbox"
-            entries={completionEntries}
+            entries={mergedEntries}
+            historyCount={historyCount}
             selectedIndex={dropdownIndex}
             onSelect={handleCompletionSelect}
             isLoading={isCompletionLoading}

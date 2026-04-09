@@ -6,19 +6,26 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, within, fireEvent, act } from "@testing-library/react";
 import { Omnibar } from "../Omnibar";
 import type { PathEntry } from "@/gen/session/v1/session_pb";
+import type { PathHistoryEntry } from "@/lib/hooks/usePathHistory";
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
 const mockUsePathCompletions = jest.fn();
+const mockUsePathHistory = jest.fn();
 
 jest.mock("@/lib/hooks/usePathCompletions", () => ({
   usePathCompletions: (...args: unknown[]) => mockUsePathCompletions(...args),
   clearCompletionCache: jest.fn(),
+}));
+
+jest.mock("@/lib/hooks/usePathHistory", () => ({
+  usePathHistory: (...args: unknown[]) => mockUsePathHistory(...args),
+  clearPathHistory: jest.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -32,6 +39,11 @@ const defaultCompletions = {
   pathExists: false,
   isLoading: false,
   error: null,
+};
+
+const defaultHistory = {
+  getMatching: jest.fn((): PathHistoryEntry[] => []),
+  save: jest.fn(),
 };
 
 const dir = (name: string, base = "/home/user"): PathEntry => ({
@@ -68,6 +80,7 @@ describe("Omnibar path completion", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockUsePathCompletions.mockReturnValue(defaultCompletions);
+    mockUsePathHistory.mockReturnValue({ ...defaultHistory, getMatching: jest.fn(() => []), save: jest.fn() });
   });
 
   afterEach(() => {
@@ -278,6 +291,78 @@ describe("Omnibar path completion", () => {
       fireEvent.change(input, { target: { value: "/home/user/pr" } });
       // dropdownDismissed is reset by onChange.
       // The dropdown should reappear since entries are still present and dismissed=false.
+      expect(screen.getByRole("listbox")).toBeInTheDocument();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // History entries
+  // -------------------------------------------------------------------------
+
+  describe("path history", () => {
+    it("history entries appear above live entries in the dropdown", async () => {
+      const historyPath = "/home/user/projects";
+      mockUsePathHistory.mockReturnValue({
+        getMatching: jest.fn(() => [
+          { path: historyPath, count: 3, lastUsed: Date.now() },
+        ]),
+        save: jest.fn(),
+      });
+      mockUsePathCompletions.mockReturnValue({
+        ...defaultCompletions,
+        entries: [dir("profile")],
+        baseDirExists: true,
+      });
+      const { input } = renderOmnibar();
+      await typeAndDetect(input, "/home/user/p");
+
+      const options = screen.getAllByRole("option");
+      // First option is the history entry (full path).
+      expect(options[0].textContent).toContain(historyPath);
+      // Second option is the live entry (name only).
+      expect(options[1].textContent).toContain("profile");
+    });
+
+    it("live entry deduped when path matches a history entry", async () => {
+      const sharedPath = "/home/user/projects";
+      mockUsePathHistory.mockReturnValue({
+        getMatching: jest.fn(() => [
+          { path: sharedPath, count: 1, lastUsed: Date.now() },
+        ]),
+        save: jest.fn(),
+      });
+      mockUsePathCompletions.mockReturnValue({
+        ...defaultCompletions,
+        entries: [
+          // Same path returned by both history and live OS scan.
+          { name: "projects", path: sharedPath, isDirectory: true },
+          { name: "profile", path: "/home/user/profile", isDirectory: true },
+        ],
+        baseDirExists: true,
+      });
+      const { input } = renderOmnibar();
+      await typeAndDetect(input, "/home/user/p");
+
+      const listbox = screen.getByRole("listbox");
+      const options = within(listbox).getAllByRole("option");
+      // Only 2 total (history + profile), not 3 (no duplicate projects).
+      expect(options).toHaveLength(2);
+    });
+
+    it("history entry with no live entries shows dropdown", async () => {
+      mockUsePathHistory.mockReturnValue({
+        getMatching: jest.fn(() => [
+          { path: "/home/user/projects", count: 1, lastUsed: Date.now() },
+        ]),
+        save: jest.fn(),
+      });
+      mockUsePathCompletions.mockReturnValue({
+        ...defaultCompletions,
+        entries: [],
+        baseDirExists: true,
+      });
+      const { input } = renderOmnibar();
+      await typeAndDetect(input, "/home/user/p");
       expect(screen.getByRole("listbox")).toBeInTheDocument();
     });
   });

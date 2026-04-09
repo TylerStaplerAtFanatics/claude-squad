@@ -6,20 +6,19 @@
 
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { PathCompletionDropdown } from "../PathCompletionDropdown";
-import type { PathEntry } from "@/gen/session/v1/session_pb";
+import { PathCompletionDropdown, type CompletionEntry } from "../PathCompletionDropdown";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const dir = (name: string, path = `/${name}`): PathEntry => ({
+const dir = (name: string, path = `/${name}`): CompletionEntry => ({
   name,
   path,
   isDirectory: true,
 });
 
-const file = (name: string, path = `/${name}`): PathEntry => ({
+const file = (name: string, path = `/${name}`): CompletionEntry => ({
   name,
   path,
   isDirectory: false,
