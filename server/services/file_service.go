@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	gitignore "github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"connectrpc.com/connect"
+	gitignore "github.com/go-git/go-git/v5/plumbing/format/gitignore"
 
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/session"
@@ -31,15 +31,15 @@ const (
 
 // hardSkipDirs are always excluded from directory listings regardless of gitignore settings.
 var hardSkipDirs = map[string]bool{
-	".git":        true,
+	".git":         true,
 	"node_modules": true,
-	"vendor":      true,
-	".tox":        true,
-	"__pycache__": true,
-	"target":      true,
-	".gradle":     true,
-	"dist":        true,
-	"build":       true,
+	"vendor":       true,
+	".tox":         true,
+	"__pycache__":  true,
+	"target":       true,
+	".gradle":      true,
+	"dist":         true,
+	"build":        true,
 }
 
 // knownTextExtensions is the allowlist for extensions we know are always text.
