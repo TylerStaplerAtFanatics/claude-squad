@@ -144,6 +144,74 @@ func TestReactiveQueueManagerIntegration(t *testing.T) {
 	reactiveQueueMgr.Stop()
 }
 
+// TestOnItemAdded_EventBusBehavior_BUG001 verifies the BUG-001 fix:
+// OnItemAdded must NOT publish to the EventBus for ReasonApprovalPending because
+// the ApprovalHandler already broadcasts a richer notification via broadcastApprovalNotification.
+// Publishing a second event here creates duplicate notification cards in the UI.
+// All other reasons SHOULD publish to the EventBus for history/toast routing.
+func TestOnItemAdded_EventBusBehavior_BUG001(t *testing.T) {
+	queue := session.NewReviewQueue()
+	statusManager := session.NewInstanceStatusManager()
+	poller := session.NewReviewQueuePoller(queue, statusManager, nil)
+	eventBus := events.NewEventBus(10)
+
+	mgr := NewReactiveQueueManager(queue, poller, eventBus, statusManager, nil)
+
+	// Subscribe to the EventBus to capture any notifications published by OnItemAdded.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	eventCh, _ := eventBus.Subscribe(ctx)
+
+	// ── Case 1: ReasonApprovalPending → NO EventBus event ──────────────────
+	mgr.OnItemAdded(&session.ReviewItem{
+		SessionID:  "session-approval",
+		Reason:     session.ReasonApprovalPending,
+		Priority:   session.PriorityHigh,
+		DetectedAt: time.Now(),
+	})
+
+	select {
+	case ev := <-eventCh:
+		t.Errorf("BUG-001 regression: expected NO EventBus event for ReasonApprovalPending, got type=%s", ev.Type)
+	case <-time.After(100 * time.Millisecond):
+		// Correct — no event emitted
+	}
+
+	// ── Case 2: ReasonInputRequired → EventBus notification SHOULD fire ────
+	mgr.OnItemAdded(&session.ReviewItem{
+		SessionID:  "session-input",
+		Reason:     session.ReasonInputRequired,
+		Priority:   session.PriorityHigh,
+		DetectedAt: time.Now(),
+	})
+
+	select {
+	case ev := <-eventCh:
+		if ev.Type != events.EventNotification {
+			t.Errorf("expected EventNotification for ReasonInputRequired, got %s", ev.Type)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Error("expected EventBus event for ReasonInputRequired, got none (timeout)")
+	}
+
+	// ── Case 3: ReasonErrorState → EventBus notification SHOULD fire ────────
+	mgr.OnItemAdded(&session.ReviewItem{
+		SessionID:  "session-error",
+		Reason:     session.ReasonErrorState,
+		Priority:   session.PriorityMedium,
+		DetectedAt: time.Now(),
+	})
+
+	select {
+	case ev := <-eventCh:
+		if ev.Type != events.EventNotification {
+			t.Errorf("expected EventNotification for ReasonErrorState, got %s", ev.Type)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Error("expected EventBus event for ReasonErrorState, got none (timeout)")
+	}
+}
+
 // drainEvents drains all events from channel within timeout
 func drainEvents(ch <-chan *sessionv1.ReviewQueueEvent, timeout time.Duration) {
 	deadline := time.After(timeout)

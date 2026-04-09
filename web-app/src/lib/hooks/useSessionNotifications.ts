@@ -4,6 +4,11 @@ import { useCallback, useEffect, useRef } from "react";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { useNotifications } from "@/lib/contexts/NotificationContext";
+import { NotificationEvent } from "@/gen/session/v1/events_pb";
+import { NotificationPriority, NotificationType } from "@/gen/session/v1/types_pb";
+import { SessionService } from "@/gen/session/v1/session_pb";
+import { NotificationData } from "@/components/ui/NotificationToast";
+import { getApiBaseUrl } from "@/lib/config";
 
 /**
  * Notification types that should only appear in history — no toast, no sound.
@@ -17,11 +22,6 @@ const HISTORY_ONLY_TYPES = new Set([
   NotificationType.INFO,
   NotificationType.DEBUG,
 ]);
-import { NotificationEvent } from "@/gen/session/v1/events_pb";
-import { NotificationPriority, NotificationType } from "@/gen/session/v1/types_pb";
-import { SessionService } from "@/gen/session/v1/session_pb";
-import { NotificationData } from "@/components/ui/NotificationToast";
-import { getApiBaseUrl } from "@/lib/config";
 
 /**
  * Calls resolveApproval RPC to allow or deny a pending tool use.

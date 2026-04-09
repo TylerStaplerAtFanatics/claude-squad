@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { ReviewItem, AttentionReason } from "@/gen/session/v1/types_pb";
 import {
   playNotificationSound,
@@ -132,12 +132,24 @@ export function useReviewQueueNotifications(
 
   const { showSessionNotification, addToHistoryOnly, markAsReadBySessionId } = useNotifications();
 
-  // Track previous items to detect new additions (in-memory for fast access)
+  // Track previous items to detect removals (used only for markAsReadBySessionId)
   const previousItemsRef = useRef<Set<string>>(new Set());
   const isInitialLoadRef = useRef(true);
 
   // Dwell-time tracking: maps sessionId -> timestamp when item first appeared
   const itemFirstSeenRef = useRef<Map<string, number>>(new Map());
+
+  // Which items have already fired a notification this queue-lifetime (in-memory dedup).
+  // Separate from previousItemsRef so dwell-expired items can be re-evaluated across renders.
+  const notifiedItemsRef = useRef<Set<string>>(new Set());
+
+  // Pending dwell timers: maps sessionId -> setTimeout handle.
+  // Each new item schedules a timer so the effect re-runs after DWELL_TIME_MS
+  // without waiting for the next 30-second REST poll.
+  const pendingDwellRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Incremented by dwell timers to trigger an effect re-run at the right moment.
+  const [dwellTick, setDwellTick] = useState(0);
 
   // Acknowledge handler that updates localStorage and calls backend
   const handleAcknowledge = useCallback(
@@ -166,11 +178,12 @@ export function useReviewQueueNotifications(
       }
     }
 
-    // On initial load, mark all current items as seen to prevent duplicate alerts
+    // On initial load, mark all current items as already notified to prevent duplicate alerts
     if (isInitialLoadRef.current) {
       isInitialLoadRef.current = false;
       markNotifiedBatch(Array.from(currentItemIds));
       previousItemsRef.current = currentItemIds;
+      notifiedItemsRef.current = new Set(currentItemIds);
       // Seed dwell-time map so existing items don't fire on first render
       for (const id of currentItemIds) {
         itemFirstSeenRef.current.set(id, 0); // 0 = already present before we started watching
@@ -178,19 +191,29 @@ export function useReviewQueueNotifications(
       return;
     }
 
-    // Record first-seen timestamp for any new item entering the queue
+    // Record first-seen timestamp and schedule a dwell timer for genuinely new items.
+    // The timer fires setDwellTick after DWELL_TIME_MS, triggering a re-run of this effect
+    // so we don't have to wait for the next 30-second REST poll to evaluate dwell expiry.
     for (const id of currentItemIds) {
       if (!itemFirstSeenRef.current.has(id)) {
         itemFirstSeenRef.current.set(id, now);
+        // Only schedule a dwell timer if not already notified (e.g. after a reset)
+        if (!notifiedItemsRef.current.has(id)) {
+          const timer = setTimeout(() => {
+            pendingDwellRef.current.delete(id);
+            setDwellTick((n) => n + 1);
+          }, DWELL_TIME_MS);
+          pendingDwellRef.current.set(id, timer);
+        }
       }
     }
 
-    // Find items that:
-    // 1. Weren't in the previous in-memory set
+    // Find items ready to notify:
+    // 1. Not yet notified this queue-lifetime (notifiedItemsRef, not previousItemsRef)
     // 2. Should be notified (not in localStorage grace period)
     // 3. Have dwelled in the queue long enough (dwell-time filter for auto-approve)
     const newItemIds = Array.from(currentItemIds).filter((id) => {
-      if (previousItemsRef.current.has(id)) return false;
+      if (notifiedItemsRef.current.has(id)) return false; // Already notified — skip
       if (!shouldNotify(id)) return false;
       const firstSeen = itemFirstSeenRef.current.get(id) ?? now;
       if (firstSeen === 0) return false; // Was already present at initial load
@@ -203,6 +226,7 @@ export function useReviewQueueNotifications(
         .filter((item): item is ReviewItem => item !== undefined);
 
       markNotifiedBatch(newItemIds);
+      newItemIds.forEach((id) => notifiedItemsRef.current.add(id));
 
       // Split by tier
       const tier1Items = newItems.filter((item) => getTier(item.reason) === 1);
@@ -285,18 +309,29 @@ export function useReviewQueueNotifications(
       }
     }
 
-    // Items that left the queue — mark their notifications as read
+    // Items that left the queue — mark their notifications as read and reset local state
+    // so that if they re-enter the queue (e.g. another approval) they can notify again.
     const removedIds = Array.from(previousItemsRef.current).filter(
       (id) => !currentItemIds.has(id)
     );
     if (removedIds.length > 0) {
       markAsReadBySessionId(removedIds);
+      removedIds.forEach((id) => {
+        notifiedItemsRef.current.delete(id);
+        // Cancel any pending dwell timer for items that left before dwell expired
+        const timer = pendingDwellRef.current.get(id);
+        if (timer !== undefined) {
+          clearTimeout(timer);
+          pendingDwellRef.current.delete(id);
+        }
+      });
     }
 
     previousItemsRef.current = currentItemIds;
   }, [
     items,
     enabled,
+    dwellTick, // Re-run when a dwell timer fires so we can evaluate items without waiting for next poll
     soundType,
     showBrowser,
     showToast,
@@ -311,8 +346,14 @@ export function useReviewQueueNotifications(
 
   return {
     reset: () => {
+      // Cancel all pending dwell timers before resetting state
+      for (const timer of pendingDwellRef.current.values()) {
+        clearTimeout(timer);
+      }
+      pendingDwellRef.current.clear();
       previousItemsRef.current = new Set();
       itemFirstSeenRef.current = new Map();
+      notifiedItemsRef.current = new Set();
       isInitialLoadRef.current = true;
     },
     acknowledge: handleAcknowledge,
