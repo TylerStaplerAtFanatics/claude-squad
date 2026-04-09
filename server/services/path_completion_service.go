@@ -1,3 +1,4 @@
+// Package services provides the server-side service implementations.
 package services
 
 import (
