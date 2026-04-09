@@ -186,7 +186,7 @@ func (t *testFileService) getFileContent(ctx context.Context, req *connect.Reque
 		}
 		return nil, connect.NewError(connect.CodeInternal, openErr)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	sniffBuf := make([]byte, 512)
 	sniffN, _ := f.Read(sniffBuf)
@@ -210,7 +210,7 @@ func (t *testFileService) getFileContent(ctx context.Context, req *connect.Reque
 		}), nil
 	}
 
-	f.Seek(0, 0)
+	_, _ = f.Seek(0, 0)
 	buf := make([]byte, readLimit)
 	n, _ := readFull(f, buf)
 	buf = buf[:n]
@@ -265,10 +265,16 @@ func TestListFiles_HardSkipDirs(t *testing.T) {
 	root := t.TempDir()
 
 	for _, dir := range []string{"node_modules", "vendor", ".git", "__pycache__"} {
-		os.MkdirAll(filepath.Join(root, dir), 0755)
+		if err := os.MkdirAll(filepath.Join(root, dir), 0755); err != nil {
+			t.Fatal(err)
+		}
 	}
-	os.MkdirAll(filepath.Join(root, "src"), 0755)
-	os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0644)
+	if err := os.MkdirAll(filepath.Join(root, "src"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	svc := newTestFileService(root)
 	resp, err := svc.listFiles(context.Background(), connect.NewRequest(&sessionv1.ListFilesRequest{
@@ -300,9 +306,15 @@ func TestListFiles_HardSkipDirs(t *testing.T) {
 func TestListFiles_GitignoreFiltering(t *testing.T) {
 	root := t.TempDir()
 
-	os.WriteFile(filepath.Join(root, ".gitignore"), []byte("*.tmp\n"), 0644)
-	os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0644)
-	os.WriteFile(filepath.Join(root, "temp.tmp"), []byte("ignored"), 0644)
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("*.tmp\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "temp.tmp"), []byte("ignored"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	svc := newTestFileService(root)
 
@@ -344,10 +356,18 @@ func TestListFiles_GitignoreFiltering(t *testing.T) {
 func TestListFiles_DirectoriesFirst(t *testing.T) {
 	root := t.TempDir()
 
-	os.MkdirAll(filepath.Join(root, "zdir"), 0755)
-	os.MkdirAll(filepath.Join(root, "adir"), 0755)
-	os.WriteFile(filepath.Join(root, "afile.go"), []byte(""), 0644)
-	os.WriteFile(filepath.Join(root, "zfile.go"), []byte(""), 0644)
+	if err := os.MkdirAll(filepath.Join(root, "zdir"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "adir"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "afile.go"), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "zfile.go"), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	svc := newTestFileService(root)
 	resp, err := svc.listFiles(context.Background(), connect.NewRequest(&sessionv1.ListFilesRequest{

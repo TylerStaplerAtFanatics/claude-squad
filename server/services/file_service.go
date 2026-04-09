@@ -330,7 +330,7 @@ func (fs *FileService) GetFileContent(
 		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to open file"))
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Read up to 512 bytes for content-type detection.
 	sniffBuf := make([]byte, 512)
@@ -350,7 +350,7 @@ func (fs *FileService) GetFileContent(
 			scanBuf := sniffBuf
 			if len(sniffBuf) < 8000 {
 				// Need to read more for the null scan (reopen from start).
-				f.Seek(0, 0)
+				_, _ = f.Seek(0, 0)
 				scanBuf = make([]byte, 8000)
 				n, _ := f.Read(scanBuf)
 				scanBuf = scanBuf[:n]
@@ -458,7 +458,7 @@ func loadGitignorePatterns(rootPath, targetDir string) []gitignore.Pattern {
 			}
 			patterns = append(patterns, gitignore.ParsePattern(line, domain))
 		}
-		f.Close()
+		_ = f.Close()
 	}
 
 	return patterns
