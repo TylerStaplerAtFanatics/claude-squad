@@ -107,7 +107,7 @@ func TestWorkspaceService_SwitchWorkspace_MissingTarget(t *testing.T) {
 // in progress returns CodeUnavailable.
 //
 // The test simulates an in-progress switch by pre-loading the session ID into
-// switchingMu before issuing the RPC call, mirroring exactly what the handler
+// inFlightSwitches before issuing the RPC call, mirroring exactly what the handler
 // does at the top of SwitchWorkspace.
 func TestWorkspaceService_ConcurrentSwitchReturnsUnavailable(t *testing.T) {
 	fix := setupWorkspaceTestFixture(t)
@@ -118,7 +118,7 @@ func TestWorkspaceService_ConcurrentSwitchReturnsUnavailable(t *testing.T) {
 
 	// Simulate an in-progress switch by pre-storing the session ID in the guard
 	// map, exactly as the handler does with LoadOrStore.
-	fix.svc.switchingMu.Store(sessionID, true)
+	fix.svc.inFlightSwitches.Store(sessionID, true)
 
 	_, err := fix.svc.SwitchWorkspace(context.Background(), connect.NewRequest(&sessionv1.SwitchWorkspaceRequest{
 		Id:     sessionID,
@@ -136,13 +136,13 @@ func TestWorkspaceService_ConcurrentSwitchReturnsUnavailable(t *testing.T) {
 }
 
 // TestWorkspaceService_SwitchGuardCleansUpOnCompletion verifies that the
-// concurrent switch guard key is removed from switchingMu after SwitchWorkspace
+// concurrent switch guard key is removed from inFlightSwitches after SwitchWorkspace
 // returns, regardless of whether the call succeeds or fails. The test exercises
 // the failure path (session not found) because spinning up a real VCS workspace
 // is not required to verify the guard lifecycle.
 //
 // After the call completes, a second call must NOT receive CodeUnavailable —
-// demonstrating that the defer ws.switchingMu.Delete(req.Msg.Id) fired.
+// demonstrating that the defer ws.inFlightSwitches.Delete(req.Msg.Id) fired.
 func TestWorkspaceService_SwitchGuardCleansUpOnCompletion(t *testing.T) {
 	fix := setupWorkspaceTestFixture(t)
 	t.Cleanup(fix.cleanup)
@@ -164,9 +164,9 @@ func TestWorkspaceService_SwitchGuardCleansUpOnCompletion(t *testing.T) {
 		"first call should fail with CodeNotFound (session not in storage), not CodeUnavailable")
 
 	// Verify the guard key is gone after the call returned.
-	_, stillLocked := fix.svc.switchingMu.Load(sessionID)
+	_, stillLocked := fix.svc.inFlightSwitches.Load(sessionID)
 	assert.False(t, stillLocked,
-		"switchingMu entry must be deleted after SwitchWorkspace returns")
+		"inFlightSwitches entry must be deleted after SwitchWorkspace returns")
 
 	// Second call must also fail with CodeNotFound — NOT CodeUnavailable — which
 	// proves the guard was cleaned up and does not block subsequent requests.
@@ -199,7 +199,7 @@ func TestWorkspaceService_SwitchGuardIsPerSession(t *testing.T) {
 	seedInstance(t, fix.storage, sessionB)
 
 	// Simulate an in-progress switch for session A.
-	fix.svc.switchingMu.Store(sessionA, true)
+	fix.svc.inFlightSwitches.Store(sessionA, true)
 
 	// A call for session B must NOT be blocked by session A's lock.
 	// The call may succeed (nil error with response body) or fail with a

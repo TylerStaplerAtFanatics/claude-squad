@@ -186,8 +186,12 @@ function HomeContent() {
       setWizardInitialData(undefined);
       setShowWizard(true);
       openedViaQueryParam.current = true;
+      // Clean the URL immediately so refresh doesn't re-open the wizard
+      router.replace("/", { scroll: false });
     } else if (duplicateId) {
       openedViaQueryParam.current = true;
+      // Clean the URL immediately before async session load
+      router.replace("/", { scroll: false });
       // Load session data for duplication
       getSession(duplicateId).then((session) => {
         if (session) {
@@ -319,6 +323,11 @@ function HomeContent() {
     setResumeTarget(session);
   }, []);
 
+  // Handle direct resume (bulk mode) - resume immediately without showing the modal
+  const handleDirectResume = useCallback((session: Session) => {
+    resumeSession(session.id, { title: session.title, tags: [...(session.tags || [])] });
+  }, [resumeSession]);
+
   // Handle resume confirm - apply updates and resume session
   // Only close the modal on success; keep it open on error so the user can retry
   const handleResumeConfirm = useCallback(async (updates: { title: string; tags: string[] }) => {
@@ -387,6 +396,7 @@ function HomeContent() {
             onDeleteSession={handleDeleteSession}
             onPauseSession={pauseSession}
             onResumeSession={handleResumeRequest}
+            onDirectResumeSession={handleDirectResume}
             onDuplicateSession={handleDuplicateSession}
             onRenameSession={renameSession}
             onRestartSession={restartSession}

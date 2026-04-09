@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
@@ -83,6 +83,7 @@ export function WorkspaceSwitchModal({
   );
   const [isSwitching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const [switchSuccess, setSwitchSuccess] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
   useFocusTrap(modalRef, true);
@@ -192,9 +193,12 @@ export function WorkspaceSwitchModal({
         return;
       }
 
-      // Success!
-      onSwitched?.();
-      onClose();
+      // Show success message briefly before closing
+      setSwitchSuccess(true);
+      setTimeout(() => {
+        onSwitched?.();
+        onClose();
+      }, 1500);
     } catch (err) {
       setSwitchError(err instanceof Error ? err.message : "Failed to switch workspace");
       console.error("Error switching workspace:", err);
@@ -203,15 +207,11 @@ export function WorkspaceSwitchModal({
     }
   };
 
-  // Handle escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+  // Handle escape key via React synthetic event on the overlay instead of raw DOM listener
+  const handleOverlayKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      onClose();
+    }
   }, [onClose]);
 
   const renderContent = () => {
@@ -444,8 +444,15 @@ export function WorkspaceSwitchModal({
           </div>
         )}
 
+        {/* Switch success */}
+        {switchSuccess && (
+          <div className={styles.successBanner}>
+            <span>✓ Workspace switched — conversation context preserved.</span>
+          </div>
+        )}
+
         {/* Switch error */}
-        {switchError && (
+        {!switchSuccess && switchError && (
           <div className={styles.error}>
             <span className={styles.errorIcon}>❌</span>
             <span className={styles.errorMessage}>{switchError}</span>
@@ -456,7 +463,7 @@ export function WorkspaceSwitchModal({
   };
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
+    <div className={styles.modalOverlay} onClick={onClose} onKeyDown={handleOverlayKeyDown}>
       <div
         className={styles.modal}
         onClick={(e) => e.stopPropagation()}

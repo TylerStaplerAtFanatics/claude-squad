@@ -103,7 +103,7 @@ describe("ResumeSessionModal", () => {
         />
       );
 
-      expect(screen.getByText(/name conflict detected/i)).toBeInTheDocument();
+      expect(screen.getByText(/is already in use/i)).toBeInTheDocument();
     });
 
     it("does not show conflict hint when session title is unique", () => {
@@ -119,7 +119,7 @@ describe("ResumeSessionModal", () => {
         />
       );
 
-      expect(screen.queryByText(/name conflict detected/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/is already in use/i)).not.toBeInTheDocument();
     });
   });
 

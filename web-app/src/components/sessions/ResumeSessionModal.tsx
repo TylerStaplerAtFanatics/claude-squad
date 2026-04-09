@@ -9,7 +9,7 @@ import styles from "./ResumeSessionModal.module.css";
 interface ResumeSessionModalProps {
   session: Session;
   sessions: Session[];
-  onConfirm: (updates: { title: string; tags: string[] }) => void;
+  onConfirm: (updates: { title: string; tags: string[] }) => Promise<void> | void;
   onCancel: () => void;
 }
 
@@ -32,7 +32,7 @@ export function ResumeSessionModal({
     const suggestedTitle = hasConflict
       ? generateUniqueName(session.title, otherNames)
       : session.title;
-    return { hasConflict, suggestedTitle };
+    return { hasConflict, originalTitle: session.title, suggestedTitle };
   });
 
   const [title, setTitle] = useState(initialState.suggestedTitle);
@@ -91,7 +91,7 @@ export function ResumeSessionModal({
     if (!title.trim() || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      onConfirm({ title: title.trim(), tags });
+      await onConfirm({ title: title.trim(), tags });
     } catch {
       setIsSubmitting(false);
     }
@@ -134,7 +134,8 @@ export function ResumeSessionModal({
             />
             {initialState.hasConflict && (
               <span className={styles.conflictHint}>
-                Name conflict detected - suggested unique name applied
+                &ldquo;{initialState.originalTitle}&rdquo; is already in use.
+                Suggested: &ldquo;{initialState.suggestedTitle}&rdquo;
               </span>
             )}
           </div>

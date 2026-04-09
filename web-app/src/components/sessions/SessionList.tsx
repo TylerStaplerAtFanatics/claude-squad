@@ -13,6 +13,8 @@ interface SessionListProps {
   onDeleteSession?: (sessionId: string) => Promise<void> | void;
   onPauseSession?: (sessionId: string) => void;
   onResumeSession?: (session: Session) => void;
+  /** Called for bulk resume to skip the confirmation modal and resume immediately. */
+  onDirectResumeSession?: (session: Session) => void;
   onDuplicateSession?: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, newTitle: string) => Promise<boolean>;
   onRestartSession?: (sessionId: string) => Promise<boolean>;
@@ -67,6 +69,7 @@ export function SessionList({
   onDeleteSession,
   onPauseSession,
   onResumeSession,
+  onDirectResumeSession,
   onDuplicateSession,
   onRenameSession,
   onRestartSession,
@@ -278,11 +281,17 @@ export function SessionList({
   };
 
   const handleResumeSelected = () => {
-    if (!onResumeSession) return;
-    // For bulk resume, find each session object and pass it through
+    if (!onDirectResumeSession && !onResumeSession) return;
+    // Bulk resume bypasses the confirmation modal to avoid opening N modals
     selectedSessions.forEach(id => {
       const session = sessions.find(s => s.id === id);
-      if (session) onResumeSession(session);
+      if (session) {
+        if (onDirectResumeSession) {
+          onDirectResumeSession(session);
+        } else {
+          onResumeSession?.(session);
+        }
+      }
     });
     setSelectedSessions(new Set());
     setSelectMode(false);
