@@ -6,6 +6,29 @@ import { StateApplicator } from './StateApplicator';
 import { TerminalState, TerminalStateSchema, TerminalLine, TerminalLineSchema, CursorPosition, CursorPositionSchema, TerminalDimensions, TerminalDimensionsSchema, LineAttributes, LineAttributesSchema } from '@/gen/session/v1/events_pb';
 import { create } from "@bufbuild/protobuf";
 
+// Mock requestAnimationFrame to queue callbacks and flush them on demand in tests.
+// Synchronous inline execution breaks the rafId assignment (id is set AFTER callback returns),
+// so we queue and flush explicitly after each applyState call.
+let rafCallbacks: Array<FrameRequestCallback> = [];
+let rafIdCounter = 0;
+
+global.requestAnimationFrame = (callback: FrameRequestCallback): number => {
+  rafIdCounter++;
+  rafCallbacks.push(callback);
+  return rafIdCounter;
+};
+global.cancelAnimationFrame = (id: number): void => {
+  rafCallbacks = rafCallbacks.filter((_cb, _idx) => false); // clear all on cancel
+};
+
+function flushAnimationFrames(): void {
+  while (rafCallbacks.length > 0) {
+    const cbs = [...rafCallbacks];
+    rafCallbacks = [];
+    cbs.forEach(cb => cb(0));
+  }
+}
+
 // Mock xterm Terminal
 class MockTerminal {
   public rows = 24;
@@ -40,15 +63,24 @@ describe('StateApplicator', () => {
   let stateApplicator: StateApplicator;
 
   beforeEach(() => {
+    rafCallbacks = [];
+    rafIdCounter = 0;
     mockTerminal = new MockTerminal();
     stateApplicator = new StateApplicator(mockTerminal as any);
   });
+
+  // Helper to flush pending RAF callbacks after each applyState call
+  const applyAndFlush = (state: TerminalState): boolean => {
+    const result = stateApplicator.applyState(state);
+    flushAnimationFrames();
+    return result;
+  };
 
   describe('sequence handling', () => {
     it('should apply state with sequence 1', () => {
       const state = createTestState(BigInt(1), ['Hello World']);
 
-      const result = stateApplicator.applyState(state);
+      const result = applyAndFlush(state);
 
       expect(result).toBe(true);
       expect(stateApplicator.getCurrentSequence()).toBe(BigInt(1));
@@ -57,11 +89,11 @@ describe('StateApplicator', () => {
     it('should ignore old sequence numbers', () => {
       // Apply sequence 5
       const state1 = createTestState(BigInt(5), ['First state']);
-      stateApplicator.applyState(state1);
+      applyAndFlush(state1);
 
       // Try to apply sequence 3 (older)
       const state2 = createTestState(BigInt(3), ['Old state']);
-      const result = stateApplicator.applyState(state2);
+      const result = applyAndFlush(state2);
 
       expect(result).toBe(false);
       expect(stateApplicator.getCurrentSequence()).toBe(BigInt(5));
@@ -70,11 +102,11 @@ describe('StateApplicator', () => {
     it('should ignore duplicate sequence numbers', () => {
       // Apply sequence 3
       const state1 = createTestState(BigInt(3), ['First']);
-      stateApplicator.applyState(state1);
+      applyAndFlush(state1);
 
       // Try to apply sequence 3 again (duplicate)
       const state2 = createTestState(BigInt(3), ['Duplicate']);
-      const result = stateApplicator.applyState(state2);
+      const result = applyAndFlush(state2);
 
       expect(result).toBe(false);
       expect(stateApplicator.getCurrentSequence()).toBe(BigInt(3));
@@ -83,11 +115,11 @@ describe('StateApplicator', () => {
     it('should accept future sequences', () => {
       // Apply sequence 1
       const state1 = createTestState(BigInt(1), ['First']);
-      stateApplicator.applyState(state1);
+      applyAndFlush(state1);
 
       // Apply sequence 10 (big jump)
       const state2 = createTestState(BigInt(10), ['Future']);
-      const result = stateApplicator.applyState(state2);
+      const result = applyAndFlush(state2);
 
       expect(result).toBe(true);
       expect(stateApplicator.getCurrentSequence()).toBe(BigInt(10));
@@ -95,40 +127,45 @@ describe('StateApplicator', () => {
   });
 
   describe('terminal content application', () => {
+    // Helper: join all written data into one string for substring checking
+    const allWritten = () => mockTerminal.getWrittenData().join('');
+
     it('should clear terminal and write lines', () => {
       const lines = ['Line 1', 'Line 2 with ANSI \\x1b[31mred\\x1b[0m'];
       const state = createTestState(BigInt(1), lines);
 
-      stateApplicator.applyState(state);
+      applyAndFlush(state);
 
-      const written = mockTerminal.getWrittenData();
-      expect(written).toContain('CLEAR');
-      expect(written).toContain('\x1b[1;1HLine 1');
-      expect(written).toContain('\x1b[2;1HLine 2 with ANSI \\x1b[31mred\\x1b[0m');
+      expect(mockTerminal.getWrittenData()).toContain('CLEAR');
+      expect(allWritten()).toContain('\x1b[1;1H');
+      expect(allWritten()).toContain('Line 1');
+      expect(allWritten()).toContain('\x1b[2;1H');
+      expect(allWritten()).toContain('Line 2 with ANSI \\x1b[31mred\\x1b[0m');
     });
 
     it('should handle empty lines', () => {
       const state = createTestState(BigInt(1), ['First line', '', 'Third line']);
 
-      stateApplicator.applyState(state);
+      applyAndFlush(state);
 
-      const written = mockTerminal.getWrittenData();
-      expect(written).toContain('\x1b[1;1HFirst line');
-      expect(written).toContain('\x1b[2;1H'); // Empty line
-      expect(written).toContain('\x1b[3;1HThird line');
+      expect(allWritten()).toContain('\x1b[1;1H');
+      expect(allWritten()).toContain('First line');
+      expect(allWritten()).toContain('\x1b[2;1H'); // Empty line position
+      expect(allWritten()).toContain('\x1b[3;1H');
+      expect(allWritten()).toContain('Third line');
     });
 
     it('should stop writing when terminal rows exceeded', () => {
-      mockTerminal.rows = 2; // Small terminal
+      // Create state with 2-row dimensions so terminal won't be resized back to 24
       const lines = ['Line 1', 'Line 2', 'Line 3', 'Line 4']; // More lines than terminal
       const state = createTestState(BigInt(1), lines);
+      state.dimensions = create(TerminalDimensionsSchema, { rows: 2, cols: 80 });
 
-      stateApplicator.applyState(state);
+      applyAndFlush(state);
 
-      const written = mockTerminal.getWrittenData();
-      expect(written).toContain('\x1b[1;1HLine 1');
-      expect(written).toContain('\x1b[2;1HLine 2');
-      expect(written).not.toContain('\x1b[3;1HLine 3'); // Should be dropped
+      expect(allWritten()).toContain('Line 1');
+      expect(allWritten()).toContain('Line 2');
+      expect(allWritten()).not.toContain('Line 3'); // Should be dropped
     });
   });
 
@@ -137,7 +174,7 @@ describe('StateApplicator', () => {
       const state = createTestState(BigInt(1), ['Test']);
       state.dimensions = create(TerminalDimensionsSchema, { rows: 30, cols: 100 });
 
-      stateApplicator.applyState(state);
+      applyAndFlush(state);
 
       const written = mockTerminal.getWrittenData();
       expect(written).toContain('RESIZE:100x30');
@@ -150,7 +187,7 @@ describe('StateApplicator', () => {
       state.dimensions = create(TerminalDimensionsSchema, { rows: 24, cols: 80 }); // Same as mock default
 
       mockTerminal.clearWrittenData();
-      stateApplicator.applyState(state);
+      applyAndFlush(state);
 
       const written = mockTerminal.getWrittenData();
       expect(written).not.toContain('RESIZE:80x24');
@@ -158,44 +195,44 @@ describe('StateApplicator', () => {
   });
 
   describe('cursor handling', () => {
+    // Helper: join all written data into one string for substring checking
+    const allWritten = () => mockTerminal.getWrittenData().join('');
+
     it('should position cursor correctly', () => {
       const state = createTestState(BigInt(1), ['Test line']);
       state.cursor = create(CursorPositionSchema, { row: 5, col: 10, visible: true });
 
-      stateApplicator.applyState(state);
+      applyAndFlush(state);
 
-      const written = mockTerminal.getWrittenData();
-      expect(written).toContain('\x1b[6;11H'); // 1-indexed in ANSI codes
-      expect(written).toContain('\x1b[?25h'); // Show cursor
+      expect(allWritten()).toContain('\x1b[6;11H'); // 1-indexed in ANSI codes
+      expect(allWritten()).toContain('\x1b[?25h'); // Show cursor
     });
 
     it('should hide cursor when not visible', () => {
       const state = createTestState(BigInt(1), ['Test line']);
       state.cursor = create(CursorPositionSchema, { row: 0, col: 0, visible: false });
 
-      stateApplicator.applyState(state);
+      applyAndFlush(state);
 
-      const written = mockTerminal.getWrittenData();
-      expect(written).toContain('\x1b[?25l'); // Hide cursor
+      expect(allWritten()).toContain('\x1b[?25l'); // Hide cursor
     });
 
     it('should clamp out-of-bounds cursor position', () => {
-      mockTerminal.rows = 5;
-      mockTerminal.cols = 10;
+      // Use state dimensions matching the small terminal to prevent auto-resize to 80x24
       const state = createTestState(BigInt(1), ['Test']);
+      state.dimensions = create(TerminalDimensionsSchema, { rows: 5, cols: 10 });
       state.cursor = create(CursorPositionSchema, { row: 100, col: 200, visible: true }); // Way out of bounds
 
-      stateApplicator.applyState(state);
+      applyAndFlush(state);
 
-      const written = mockTerminal.getWrittenData();
-      expect(written).toContain('\x1b[5;10H'); // Clamped to max (1-indexed: 5x10)
+      expect(allWritten()).toContain('\x1b[5;10H'); // Clamped to max (1-indexed: 5x10)
     });
   });
 
   describe('reset functionality', () => {
     it('should reset sequence to 0', () => {
       // Apply some states
-      stateApplicator.applyState(createTestState(BigInt(5), ['Test']));
+      applyAndFlush(createTestState(BigInt(5), ['Test']));
       expect(stateApplicator.getCurrentSequence()).toBe(BigInt(5));
 
       // Reset
@@ -204,7 +241,7 @@ describe('StateApplicator', () => {
     });
 
     it('should clear last state info on reset', () => {
-      stateApplicator.applyState(createTestState(BigInt(3), ['Test']));
+      applyAndFlush(createTestState(BigInt(3), ['Test']));
       expect(stateApplicator.getLastStateInfo()).not.toBeNull();
 
       stateApplicator.resetSequence();
@@ -215,7 +252,7 @@ describe('StateApplicator', () => {
   describe('state info tracking', () => {
     it('should track last applied state info', () => {
       const state = createTestState(BigInt(7), ['Line 1', 'Line 2']);
-      stateApplicator.applyState(state);
+      applyAndFlush(state);
 
       const info = stateApplicator.getLastStateInfo();
       expect(info).toEqual({
@@ -226,7 +263,7 @@ describe('StateApplicator', () => {
     });
 
     it('should check if sequence has been applied', () => {
-      stateApplicator.applyState(createTestState(BigInt(5), ['Test']));
+      applyAndFlush(createTestState(BigInt(5), ['Test']));
 
       expect(stateApplicator.hasAppliedSequence(BigInt(3))).toBe(true); // Older
       expect(stateApplicator.hasAppliedSequence(BigInt(5))).toBe(true); // Current
