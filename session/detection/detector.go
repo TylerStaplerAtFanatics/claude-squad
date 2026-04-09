@@ -487,6 +487,12 @@ func getDefaultPatterns() StatusPatterns {
 		},
 		Success: []StatusPattern{
 			{
+				Name:        "verb_duration_completion",
+				Pattern:     `✻\s+\w+\s+for\s+\d+[hms]`,
+				Description: "Claude completed task (verb + duration format)",
+				Priority:    21,
+			},
+			{
 				Name:        "task_complete",
 				Pattern:     `(?i)(✓ Successfully completed|Task (completed|finished)|I've completed|All done)`,
 				Description: "Task completed successfully",

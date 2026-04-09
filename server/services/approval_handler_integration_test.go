@@ -201,12 +201,15 @@ func TestApprovalFlow_SessionIDFromHeader(t *testing.T) {
 	postPermissionRequest(t, h, "my-session", "Read")
 }
 
-// TestApprovalFlow_AskUserQuestion_ImmediateAllow verifies that AskUserQuestion:
-//  1. Returns "allow" immediately without blocking.
-//  2. Does NOT create a PendingApproval in the store.
+// TestApprovalFlow_AskUserQuestion_DeferToNativeDialog verifies that AskUserQuestion:
+//  1. Returns immediately without blocking (no PendingApproval created).
+//  2. Returns an empty HTTP 200 body — the hook defers to Claude Code's native terminal dialog.
 //  3. Is case-insensitive ("askuserquestion" also fast-paths).
-func TestApprovalFlow_AskUserQuestion_ImmediateAllow(t *testing.T) {
-	t.Run("ImmediateAllow", func(t *testing.T) {
+//
+// AskUserQuestion is not a permission gate; Claude is asking the user a question.
+// The empty body signals to the hook script that Claude Code should handle it natively.
+func TestApprovalFlow_AskUserQuestion_DeferToNativeDialog(t *testing.T) {
+	t.Run("DeferToNativeDialog", func(t *testing.T) {
 		h, store := newTestHandler(5 * time.Second)
 
 		payload := map[string]interface{}{
@@ -228,12 +231,9 @@ func TestApprovalFlow_AskUserQuestion_ImmediateAllow(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", rr.Code)
 		}
-		var resp hookDecisionResponse
-		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
-			t.Fatalf("failed to decode response: %v (body=%q)", err, rr.Body.String())
-		}
-		if resp.HookSpecificOutput.Decision.Behavior != "allow" {
-			t.Errorf("expected behavior=allow, got %q", resp.HookSpecificOutput.Decision.Behavior)
+		// AskUserQuestion defers to Claude Code's native dialog — empty body signals no hook decision.
+		if rr.Body.Len() != 0 {
+			t.Errorf("expected empty body (native dialog defer), got %q", rr.Body.String())
 		}
 		// No approval record must be created — this is not a gated action.
 		if got := store.ListAll(); len(got) != 0 {
@@ -258,12 +258,12 @@ func TestApprovalFlow_AskUserQuestion_ImmediateAllow(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.HandlePermissionRequest(rr, req)
 
-		var resp hookDecisionResponse
-		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rr.Code)
 		}
-		if resp.HookSpecificOutput.Decision.Behavior != "allow" {
-			t.Errorf("expected behavior=allow for lowercase tool name, got %q", resp.HookSpecificOutput.Decision.Behavior)
+		// Empty body for both case variants.
+		if rr.Body.Len() != 0 {
+			t.Errorf("expected empty body for lowercase tool name (native dialog defer), got %q", rr.Body.String())
 		}
 		if got := store.ListAll(); len(got) != 0 {
 			t.Errorf("expected empty approval store, got %d entries", len(got))

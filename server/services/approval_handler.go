@@ -173,8 +173,9 @@ func (h *ApprovalHandler) HandlePermissionRequest(w http.ResponseWriter, r *http
 	}
 
 	// AskUserQuestion: fire an informational notification so the user knows to check the
-	// terminal, then immediately allow. No approval_id is included in the notification
-	// metadata so the UI renders a plain ❓ toast with no Approve/Deny buttons.
+	// terminal, then defer to the native terminal dialog (empty body). No approval_id
+	// is included in the notification metadata so the UI renders a plain ❓ toast with
+	// no Approve/Deny buttons.
 	if strings.EqualFold(payload.ToolName, "AskUserQuestion") {
 		log.InfoLog.Printf("[ApprovalHandler] AskUserQuestion from session %s — notifying and deferring to native dialog", sessionID)
 		h.broadcastQuestionNotification(sessionID, payload)

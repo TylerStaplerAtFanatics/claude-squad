@@ -375,6 +375,17 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     }
   }, [connectionAttempts]);
 
+  // Scroll to bottom whenever loading finishes (session open or switch)
+  useEffect(() => {
+    if (!isLoadingInitialContent && xtermRef.current?.terminal) {
+      const terminal = xtermRef.current.terminal;
+      requestAnimationFrame(() => {
+        terminal.scrollToBottom();
+        setTimeout(() => terminal.scrollToBottom(), 100);
+      });
+    }
+  }, [isLoadingInitialContent]);
+
   // Auto-reconnect with exponential backoff
   useEffect(() => {
     if (!isConnected && error && connectionAttempts > 0 && connectionAttempts < 5) {

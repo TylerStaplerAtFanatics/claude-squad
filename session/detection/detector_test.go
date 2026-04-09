@@ -543,6 +543,68 @@ func TestStatusDetector_CaseInsensitivity(t *testing.T) {
 	}
 }
 
+// TestStatusDetector_VerbDurationCompletion verifies the ✻ <verb> for <duration> pattern.
+// These are real output lines from Claude's task-completion summary.
+func TestStatusDetector_VerbDurationCompletion(t *testing.T) {
+	sd := NewStatusDetector()
+
+	tests := []struct {
+		name   string
+		output string
+	}{
+		{name: "cooked_minutes_seconds", output: "✻ Cooked for 1m 5s"},
+		{name: "crunched_minutes_seconds", output: "✻ Crunched for 1m 14s"},
+		{name: "baked_seconds", output: "✻ Baked for 30s"},
+		{name: "thinking_hours", output: "✻ Thinking for 2h"},
+		{name: "embedded_in_multiline", output: "⏺ Agent \"Security review\" completed\n✻ Cooked for 1m 5s\n● How is Claude doing this session?"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := sd.Detect([]byte(tt.output))
+			if status != StatusSuccess {
+				t.Errorf("Detect(%q) = %v, want StatusSuccess", tt.output, status)
+			}
+		})
+	}
+}
+
+// TestStatusDetector_VerbDurationNoFalsePositives ensures we don't match similar-looking text.
+func TestStatusDetector_VerbDurationNoFalsePositives(t *testing.T) {
+	sd := NewStatusDetector()
+
+	tests := []struct {
+		name   string
+		output string
+	}{
+		{name: "waiting_for_no_unit", output: "✻ waiting for something"},
+		{name: "no_sparkle", output: "Cooked for 1m 5s"},
+		{name: "thinking_no_duration", output: "∴ Thinking..."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := sd.Detect([]byte(tt.output))
+			if status == StatusSuccess {
+				t.Errorf("False positive: Detect(%q) = StatusSuccess, want non-Success", tt.output)
+			}
+		})
+	}
+}
+
+// TestStatusDetector_VerbDurationPriorityOverActive verifies success wins over active patterns
+// when both appear in the same content (old scrollback with Thinking... + final completion line).
+func TestStatusDetector_VerbDurationPriorityOverActive(t *testing.T) {
+	sd := NewStatusDetector()
+
+	// Simulates real terminal: old "Thinking..." in scrollback + completion line at bottom
+	output := "∴ Thinking...\nRunning... (esc to interrupt)\n✻ Cooked for 1m 5s"
+	status := sd.Detect([]byte(output))
+	if status != StatusSuccess {
+		t.Errorf("Detect() = %v, want StatusSuccess (success should beat active in priority order)", status)
+	}
+}
+
 func Benchmark_StatusDetector_Detect(b *testing.B) {
 	sd := NewStatusDetector()
 	output := []byte("Processing your request... thinking about the best approach")

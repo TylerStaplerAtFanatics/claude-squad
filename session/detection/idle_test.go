@@ -545,6 +545,31 @@ func TestIdleDetector_InitializeFromTimestamp_Idempotent(t *testing.T) {
 	}
 }
 
+// TestIdleDetector_RecordActivity tests the event-driven activity recording.
+func TestIdleDetector_RecordActivity(t *testing.T) {
+	buffer := &mockPTYReader{}
+	detector := NewIdleDetector("test", buffer)
+
+	// First call should update lastActivity
+	before := detector.GetLastActivity()
+	time.Sleep(600 * time.Millisecond) // Exceed minActivityInterval
+	detector.RecordActivity()
+	after := detector.GetLastActivity()
+
+	if !after.After(before) {
+		t.Error("RecordActivity() should update lastActivity after minActivityInterval elapsed")
+	}
+
+	// Immediate second call should be debounced (no update)
+	second := detector.GetLastActivity()
+	detector.RecordActivity()
+	third := detector.GetLastActivity()
+
+	if !third.Equal(second) {
+		t.Error("RecordActivity() within minActivityInterval should be a no-op (debounced)")
+	}
+}
+
 // TestIdleDetector_InitializeFromTimestamp_ThreadSafety tests concurrent initialization.
 func TestIdleDetector_InitializeFromTimestamp_ThreadSafety(t *testing.T) {
 	buffer := &mockPTYReader{}
