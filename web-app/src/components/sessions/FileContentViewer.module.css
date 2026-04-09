@@ -64,12 +64,6 @@
 
 .breadcrumbSegment {
   color: var(--text-muted, #888);
-  cursor: pointer;
-}
-
-.breadcrumbSegment:hover {
-  color: var(--text-default, #d4d4d4);
-  text-decoration: underline;
 }
 
 .breadcrumbCurrent {
