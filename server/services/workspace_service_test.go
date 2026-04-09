@@ -1,3 +1,4 @@
+// Package services contains integration tests for the workspace service.
 package services
 
 import (
