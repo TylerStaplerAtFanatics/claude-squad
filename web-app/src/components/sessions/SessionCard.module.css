@@ -493,6 +493,57 @@
   cursor: not-allowed;
 }
 
+/* Fork-from-checkpoint dialog */
+.forkEmptyMessage {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  text-align: center;
+  padding: 12px 0;
+}
+
+.forkCheckpointList {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+}
+
+.forkCheckpointItem {
+  padding: 0;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.forkCheckpointItem:last-child {
+  border-bottom: none;
+}
+
+.forkCheckpointLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background 0.15s ease;
+}
+
+.forkCheckpointLabel:hover {
+  background: var(--button-bg-hover);
+}
+
+.forkGitSha {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--button-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--card-border);
+}
+
 /* Actions toggle button — hidden on desktop, shown on mobile */
 .actionsToggle {
   display: none;
