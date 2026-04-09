@@ -41,10 +41,10 @@ jobs:
             core.setOutput('type', found[0]);
             core.info(`Bump type: ${found[0]}`);
 
-      - name: Read current version from main.go
+      - name: Read current version from latest git tag
         id: current
         run: |
-          VERSION=$(grep -E '^\s*version\s*=' main.go | sed -E 's/.*"([^"]+)".*/\1/')
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Current version: $VERSION"
 
@@ -63,20 +63,10 @@ jobs:
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
           echo "Next version: $NEXT"
 
-      - name: Update version in main.go
-        run: |
-          NEW_VERSION="${{ steps.next.outputs.version }}"
-          sed -Ei "s/version[[:space:]]*=[[:space:]]*\"[0-9]+\.[0-9]+\.[0-9]+\"/version           = \"${NEW_VERSION}\"/" main.go
-          echo "Updated main.go:"
-          grep 'version' main.go | grep -v '//' | head -3
-
-      - name: Commit, push, and tag
+      - name: Tag and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add main.go
-          git commit -m "chore: bump version to ${{ steps.next.outputs.version }} [skip ci]"
-          git push
           git tag "v${{ steps.next.outputs.version }}"
           git push origin "v${{ steps.next.outputs.version }}"
 

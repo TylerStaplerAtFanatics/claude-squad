@@ -7,6 +7,11 @@
 import { renderHook, act } from '@testing-library/react';
 import { useRef } from 'react';
 
+// Mock @bufbuild/protobuf so create() returns a plain object mirroring the init fields
+jest.mock('@bufbuild/protobuf', () => ({
+  create: (_schema: unknown, init: Record<string, unknown> = {}) => ({ ...init }),
+}));
+
 // Mock protobuf modules
 jest.mock('@/gen/session/v1/events_pb', () => {
   class MockTerminalData {

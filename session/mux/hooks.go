@@ -187,49 +187,63 @@ func CleanupStaleHooksFiles() error {
 	return nil
 }
 
-// findHooksHandler locates the cs-hook-handler script.
+// findHooksHandler locates the ssq-hook-handler script.
 // Search order:
-// 1. Same directory as the current executable
-// 2. ~/.local/bin/cs-hook-handler
-// 3. PATH lookup
+// 1. Same directory as the current executable (ssq-hook-handler, then cs-hook-handler for compat)
+// 2. scripts/ subdirectory relative to the executable's parent (project root, for dev)
+// 3. scripts/ subdirectory relative to the current working directory (running from project root)
+// 4. ~/.local/bin/ssq-hook-handler
+// 5. ~/.stapler-squad/scripts/ssq-hook-handler
 func findHooksHandler() (string, error) {
+	names := []string{"ssq-hook-handler", "cs-hook-handler"}
+
 	// Try same directory as executable
 	execPath, err := os.Executable()
 	if err == nil {
 		execDir := filepath.Dir(execPath)
-		handlerPath := filepath.Join(execDir, "cs-hook-handler")
-		if fileExists(handlerPath) {
-			return handlerPath, nil
+		for _, name := range names {
+			if p := filepath.Join(execDir, name); fileExists(p) {
+				return p, nil
+			}
 		}
-		// Also check scripts subdirectory (for development)
-		scriptsPath := filepath.Join(filepath.Dir(execDir), "scripts", "cs-hook-handler")
-		if fileExists(scriptsPath) {
-			return scriptsPath, nil
+		// scripts/ sibling of executable's parent (e.g. project root when built to ./claude-mux)
+		for _, name := range names {
+			if p := filepath.Join(filepath.Dir(execDir), "scripts", name); fileExists(p) {
+				return p, nil
+			}
 		}
 	}
+
+	// Try scripts/ relative to cwd (useful when running from the project root)
+	if cwd, err := os.Getwd(); err == nil {
+		for _, name := range names {
+			if p := filepath.Join(cwd, "scripts", name); fileExists(p) {
+				return p, nil
+			}
+		}
+	}
+
+	homeDir, _ := os.UserHomeDir()
 
 	// Try ~/.local/bin
-	homeDir, err := os.UserHomeDir()
-	if err == nil {
-		localBinPath := filepath.Join(homeDir, ".local", "bin", "cs-hook-handler")
-		if fileExists(localBinPath) {
-			return localBinPath, nil
-		}
-	}
-
-	// Try stapler-squad directory
 	if homeDir != "" {
-		csPath := filepath.Join(homeDir, ".stapler-squad", "scripts", "ssq-hook-handler")
-		if fileExists(csPath) {
-			return csPath, nil
+		for _, name := range names {
+			if p := filepath.Join(homeDir, ".local", "bin", name); fileExists(p) {
+				return p, nil
+			}
 		}
 	}
 
-	// PATH lookup using which
-	// Note: We don't use exec.LookPath here to avoid import cycle issues
-	// The cs-hook-handler should be installed in a standard location
+	// Try ~/.stapler-squad/scripts
+	if homeDir != "" {
+		for _, name := range names {
+			if p := filepath.Join(homeDir, ".stapler-squad", "scripts", name); fileExists(p) {
+				return p, nil
+			}
+		}
+	}
 
-	return "", fmt.Errorf("cs-hook-handler not found in standard locations")
+	return "", fmt.Errorf("ssq-hook-handler not found in standard locations")
 }
 
 // buildEnvPrefix creates environment variable exports for the hook command.

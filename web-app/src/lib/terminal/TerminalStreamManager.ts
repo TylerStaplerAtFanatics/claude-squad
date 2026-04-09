@@ -235,9 +235,11 @@ export class TerminalStreamManager {
     await this.enqueueWrite(content);
     this.terminal.scrollToBottom();
 
-    // Delayed scrolls in case content is still rendering
+    // Delayed scrolls in case content is still rendering.
+    // Large scrollback can take >100ms to fully render on slower machines.
     setTimeout(() => this.terminal.scrollToBottom(), 10);
     setTimeout(() => this.terminal.scrollToBottom(), 100);
+    setTimeout(() => this.terminal.scrollToBottom(), 500);
   }
 
   /**

@@ -6,9 +6,20 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '\\.module\\.css$': 'identity-obj-proxy',
-  },
-  transform: {
-    '^.+\\.tsx?$': ['ts-jest', { tsconfig: { jsx: 'react-jsx' } }],
+    '\\.css$': '<rootDir>/src/__mocks__/styleMock.js',
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  transform: {
+    '^.+\\.[tj]sx?$': [
+      'ts-jest',
+      {
+        tsconfig: {
+          jsx: 'react-jsx',
+          module: 'commonjs',
+          moduleResolution: 'node',
+          esModuleInterop: true,
+        },
+      },
+    ],
+  },
 };

@@ -40,7 +40,7 @@
 }
 
 .button:hover {
-  background: var(--hover-bg, #333);
+  background: var(--hover-background);
 }
 
 .buttonActive {
@@ -157,7 +157,7 @@
 }
 
 .table tbody tr:hover {
-  background: var(--hover-bg, rgba(255, 255, 255, 0.02));
+  background: var(--hover-background));
 }
 
 .hexCode {

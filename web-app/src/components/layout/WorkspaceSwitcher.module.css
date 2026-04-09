@@ -23,7 +23,7 @@
 
 .trigger:hover {
   color: var(--text-primary, #ffffff);
-  background: var(--background-hover, rgba(255, 255, 255, 0.05));
+  background: var(--hover-background));
   border-color: var(--border-hover, #555);
 }
 
@@ -65,7 +65,7 @@
   right: 0;
   min-width: 220px;
   max-width: 320px;
-  background: var(--background-secondary, #1a1a1a);
+  background: var(--card-background);
   border: 1px solid var(--border-color, #333);
   border-radius: 0.5rem;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -100,7 +100,7 @@
 }
 
 .workspaceItem:hover:not(.workspaceItemCurrent):not(.workspaceItemLoading) {
-  background: var(--background-hover, rgba(255, 255, 255, 0.05));
+  background: var(--hover-background));
 }
 
 .workspaceItem:hover:not(.workspaceItemCurrent):not(.workspaceItemLoading) .mergeButton {
@@ -108,7 +108,7 @@
 }
 
 .workspaceItemCurrent {
-  background: var(--background-active, rgba(255, 255, 255, 0.07));
+  background: var(--primary-active));
 }
 
 .workspaceItemLoading {
@@ -157,7 +157,7 @@
 .mergeButton:hover:not(:disabled) {
   color: var(--text-primary, #ffffff);
   border-color: var(--border-hover, #555);
-  background: var(--background-hover, rgba(255, 255, 255, 0.08));
+  background: var(--hover-background));
 }
 
 .mergeButton:disabled {
@@ -176,7 +176,7 @@
 }
 
 .workspaceIconCurrent {
-  color: var(--primary-color, #0066cc);
+  color: var(--primary);
 }
 
 .workspaceInfo {
@@ -194,7 +194,7 @@
 }
 
 .workspaceNameCurrent {
-  color: var(--primary-color, #0066cc);
+  color: var(--primary);
 }
 
 .workspacePath {
@@ -217,7 +217,7 @@
   width: 0.875rem;
   height: 0.875rem;
   border: 2px solid var(--border-color, #333);
-  border-top-color: var(--primary-color, #0066cc);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -230,7 +230,7 @@
 .errorBanner {
   padding: 0.5rem 0.75rem;
   font-size: 0.75rem;
-  color: var(--color-error, #f44336);
+  color: var(--error);
   border-top: 1px solid var(--border-color, #333);
 }
 
@@ -241,9 +241,9 @@
   right: 1rem;
   z-index: 2000;
   padding: 0.5rem 0.875rem;
-  background: var(--background-secondary, #1a1a1a);
+  background: var(--card-background);
   border: 1px solid var(--border-color, #333);
-  border-left: 3px solid var(--primary-color, #0066cc);
+  border-left: 3px solid var(--primary);
   border-radius: 0.375rem;
   color: var(--text-primary, #ffffff);
   font-size: 0.8125rem;

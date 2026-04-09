@@ -352,6 +352,11 @@ export class StateApplicator {
       // Apply incremental state update (only changed lines)
       this.applyIncrementalState(state);
 
+      // Apply cursor position after lines are rendered
+      if (state.cursor) {
+        this.applyCursorPosition(state.cursor);
+      }
+
       // Update sequence tracking
       this.currentSequence = state.sequence;
       this.lastAppliedState = state;

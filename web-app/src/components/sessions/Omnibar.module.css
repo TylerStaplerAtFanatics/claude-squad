@@ -23,7 +23,7 @@
 }
 
 .modal {
-  background: var(--bg-secondary, #1a1a1a);
+  background: var(--card-background);
   border-radius: 12px;
   width: 100%;
   max-width: 600px;
@@ -77,7 +77,7 @@
 
 .detectionInfo {
   padding: 12px 16px;
-  background: var(--bg-tertiary, #252525);
+  background: var(--hover-background);
   border-bottom: 1px solid var(--border-color, #333);
 }
 
@@ -87,7 +87,7 @@
   gap: 6px;
   padding: 4px 10px;
   background: var(--accent-bg, rgba(59, 130, 246, 0.2));
-  color: var(--accent-color, #60a5fa);
+  color: var(--primary);
   border-radius: 4px;
   font-size: 13px;
   font-weight: 500;
@@ -95,7 +95,7 @@
 
 .detectionBadge.unknown {
   background: var(--warning-bg, rgba(234, 179, 8, 0.2));
-  color: var(--warning-color, #fbbf24);
+  color: var(--warning);
 }
 
 .body {
@@ -118,7 +118,7 @@
 }
 
 .fieldInput {
-  background: var(--bg-tertiary, #252525);
+  background: var(--hover-background);
   border: 1px solid var(--border-color, #333);
   border-radius: 6px;
   padding: 10px 12px;
@@ -129,7 +129,7 @@
 }
 
 .fieldInput:focus {
-  border-color: var(--accent-color, #3b82f6);
+  border-color: var(--primary);
 }
 
 .fieldInput::placeholder {
@@ -142,7 +142,7 @@
 }
 
 .select {
-  background: var(--bg-tertiary, #252525);
+  background: var(--hover-background);
   border: 1px solid var(--border-color, #333);
   border-radius: 6px;
   padding: 10px 12px;
@@ -153,7 +153,7 @@
 }
 
 .select:focus {
-  border-color: var(--accent-color, #3b82f6);
+  border-color: var(--primary);
 }
 
 .checkbox {
@@ -213,7 +213,7 @@
   gap: 8px;
   padding: 16px;
   border-top: 1px solid var(--border-color, #333);
-  background: var(--bg-tertiary, #252525);
+  background: var(--hover-background);
 }
 
 .button {
@@ -233,12 +233,12 @@
 }
 
 .buttonSecondary:hover {
-  background: var(--bg-tertiary, #252525);
+  background: var(--hover-background);
   color: var(--text-primary, #fff);
 }
 
 .buttonPrimary {
-  background: var(--accent-color, #3b82f6);
+  background: var(--primary);
   color: white;
 }
 
@@ -252,7 +252,7 @@
 }
 
 .error {
-  color: var(--error-color, #ef4444);
+  color: var(--error);
   font-size: 13px;
   padding: 8px 12px;
   background: var(--error-bg, rgba(239, 68, 68, 0.1));
@@ -264,7 +264,7 @@
   display: flex;
   gap: 16px;
   padding: 8px 16px;
-  background: var(--bg-tertiary, #252525);
+  background: var(--hover-background);
   font-size: 12px;
   color: var(--text-muted, #666);
 }
@@ -276,7 +276,7 @@
 }
 
 .shortcutKey {
-  background: var(--bg-secondary, #1a1a1a);
+  background: var(--card-background);
   padding: 2px 6px;
   border-radius: 4px;
   font-family: monospace;
