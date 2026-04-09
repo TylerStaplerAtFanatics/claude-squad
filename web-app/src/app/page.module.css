@@ -17,7 +17,7 @@
 .loading {
   padding: 2rem;
   text-align: center;
-  color: var(--gray-500, #6b7280);
+  color: var(--text-muted);
 }
 
 .error {
@@ -90,7 +90,7 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: var(--gray-500, #6b7280);
+  color: var(--text-muted);
   padding: 0.5rem;
   line-height: 1;
   transition: color 0.2s;
@@ -109,7 +109,7 @@
   margin-top: 2rem;
   padding: 2rem;
   text-align: center;
-  color: var(--gray-500, #6b7280);
+  color: var(--text-muted);
   font-style: italic;
 }
 

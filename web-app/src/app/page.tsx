@@ -61,6 +61,9 @@ function HomeContent() {
     resumeSession,
     renameSession,
     restartSession,
+    createCheckpoint,
+    listCheckpoints,
+    forkSession,
     listSessions,
     updateSession,
     getSession,
@@ -402,6 +405,9 @@ function HomeContent() {
             onRestartSession={restartSession}
             onUpdateTags={handleUpdateTags}
             onNewSession={handleNewSession}
+            onCreateCheckpoint={createCheckpoint}
+            onListCheckpoints={listCheckpoints}
+            onForkFromCheckpoint={forkSession}
           />
         )}
       </main>

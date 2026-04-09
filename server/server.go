@@ -38,6 +38,7 @@ type Server struct {
 	httpsURL       string                          // set when remote access is enabled
 	hostnames      []string                        // detected LAN hostnames
 	origins        []string                        // allowed CORS origins
+	shutdownHooks  []func()                        // called before HTTP server stops
 }
 
 // NewServer creates a new HTTP server instance with SessionService registered.
@@ -84,6 +85,39 @@ func NewServer(addr string) *Server {
 		serverCtx := context.Background()
 		go deps.ReactiveQueueMgr.Start(serverCtx)
 		log.InfoLog.Printf("ReactiveQueueManager started")
+
+		// Start HistoryLinker: detects Claude JSONL files and links conversation
+		// UUIDs to sessions so cold restore can use --resume on restart.
+		go deps.HistoryLinker.Start(serverCtx)
+		log.InfoLog.Printf("HistoryLinker started")
+
+		// Register shutdown hook: capture pane working dirs and persist instance
+		// state so cold restore can find the right directory on next start.
+		// Uses HistoryLinker.Instances() (not the startup snapshot) so externally
+		// discovered sessions added after startup are also captured.
+		historyLinker := deps.HistoryLinker
+		storage := deps.Storage
+		srv.shutdownHooks = append(srv.shutdownHooks, func() {
+			instances := historyLinker.Instances()
+			deadline := time.Now().Add(4 * time.Second) // leave headroom for HTTP graceful shutdown
+			captured := 0
+			for _, inst := range instances {
+				if time.Now().After(deadline) {
+					log.WarningLog.Printf("[shutdown] Capture deadline exceeded; skipped %d of %d instances",
+						len(instances)-captured, len(instances))
+					break
+				}
+				if err := inst.CaptureCurrentState(); err != nil {
+					log.WarningLog.Printf("[shutdown] CaptureCurrentState '%s': %v", inst.Title, err)
+				}
+				captured++
+			}
+			if err := storage.SaveInstances(instances); err != nil {
+				log.WarningLog.Printf("[shutdown] SaveInstances: %v", err)
+			} else {
+				log.InfoLog.Printf("[shutdown] Persisted working dirs for %d instances", captured)
+			}
+		})
 
 		// Initialize notification history store and EventBus subscriber.
 		// notifStore is declared here so it can be wired into the approval handler below.
@@ -293,6 +327,12 @@ func (s *Server) Start(ctx context.Context) error {
 
 // Shutdown gracefully shuts down the HTTP server.
 func (s *Server) Shutdown() error {
+	// Run registered hooks (e.g. capture pane paths, persist instance state) before
+	// stopping the HTTP server so in-flight requests complete first.
+	for _, hook := range s.shutdownHooks {
+		hook()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

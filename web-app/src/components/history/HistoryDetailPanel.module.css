@@ -144,7 +144,7 @@
   background: transparent;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  color: var(--accent-color);
+  color: var(--primary);
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
@@ -152,9 +152,9 @@
 }
 
 .viewMoreButton:hover {
-  background: var(--accent-color);
+  background: var(--primary);
   color: white;
-  border-color: var(--accent-color);
+  border-color: var(--primary);
 }
 
 /* Responsive Design */

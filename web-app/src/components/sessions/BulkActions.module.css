@@ -28,7 +28,7 @@
   border: 1px solid var(--border-color, #d1d5db);
   border-radius: 6px;
   background: transparent;
-  color: var(--gray-700, #374151);
+  color: var(--text-secondary);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -37,8 +37,8 @@
 
 .selectAllButton:hover,
 .clearButton:hover {
-  background: var(--gray-50, #f9fafb);
-  border-color: var(--gray-400, #9ca3af);
+  background: var(--surface-subtle);
+  border-color: var(--border-strong);
 }
 
 .actions {

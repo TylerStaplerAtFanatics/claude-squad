@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+import { createVanillaExtractPlugin } from "@vanilla-extract/next-plugin";
+
+const withVanillaExtract = createVanillaExtractPlugin();
 
 const isDevelopmentBuild = process.env.NEXT_BUILD_MODE === 'development';
 
@@ -74,4 +77,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withVanillaExtract(nextConfig);

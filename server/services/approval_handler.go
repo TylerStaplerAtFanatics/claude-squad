@@ -176,9 +176,9 @@ func (h *ApprovalHandler) HandlePermissionRequest(w http.ResponseWriter, r *http
 	// terminal, then immediately allow. No approval_id is included in the notification
 	// metadata so the UI renders a plain ❓ toast with no Approve/Deny buttons.
 	if strings.EqualFold(payload.ToolName, "AskUserQuestion") {
-		log.InfoLog.Printf("[ApprovalHandler] AskUserQuestion from session %s — notifying and allowing", sessionID)
+		log.InfoLog.Printf("[ApprovalHandler] AskUserQuestion from session %s — notifying and deferring to native dialog", sessionID)
 		h.broadcastQuestionNotification(sessionID, payload)
-		h.writeDecision(w, "allow", "")
+		h.writeDeferDecision(w)
 		return
 	}
 

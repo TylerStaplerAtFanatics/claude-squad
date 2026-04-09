@@ -1,5 +1,5 @@
 .header {
-  background: var(--background-secondary, #1a1a1a);
+  background: var(--card-background);
   border-bottom: 1px solid var(--border-color, #333);
   padding: 0 1rem;
   position: sticky;
@@ -63,12 +63,12 @@
 
 .navLink:hover {
   color: var(--text-primary, #ffffff);
-  background: var(--background-hover, rgba(255, 255, 255, 0.05));
+  background: var(--hover-background));
 }
 
 .navLink.active {
   color: var(--text-primary, #ffffff);
-  background: var(--background-active, rgba(255, 255, 255, 0.1));
+  background: var(--primary-active));
 }
 
 .navLink.active::after {
@@ -78,7 +78,7 @@
   left: 0.5rem;
   right: 0.5rem;
   height: 2px;
-  background: var(--primary-color, #0066cc);
+  background: var(--primary);
   border-radius: 2px 2px 0 0;
 }
 
@@ -101,7 +101,7 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: white;
-  background: var(--primary-color, #0066cc);
+  background: var(--primary);
   text-decoration: none;
   transition: all 0.2s ease;
   border: none;
@@ -141,7 +141,7 @@
 
 .debugButton:hover {
   color: var(--text-primary, #ffffff);
-  background: var(--background-hover, rgba(255, 255, 255, 0.05));
+  background: var(--hover-background));
   border-color: var(--border-hover, #555);
   transform: scale(1.05);
 }
@@ -168,7 +168,7 @@
 
 .helpButton:hover {
   color: var(--text-primary, #ffffff);
-  background: var(--background-hover, rgba(255, 255, 255, 0.05));
+  background: var(--hover-background));
   border-color: var(--border-hover, #555);
 }
 
@@ -194,7 +194,7 @@
 
 .notificationButton:hover {
   color: var(--text-primary, #ffffff);
-  background: var(--background-hover, rgba(255, 255, 255, 0.05));
+  background: var(--hover-background));
   border-color: var(--border-hover, #555);
   transform: scale(1.05);
 }
@@ -210,7 +210,7 @@
   min-width: 1.25rem;
   height: 1.25rem;
   padding: 0 0.25rem;
-  background: var(--color-error, #f44336);
+  background: var(--error);
   color: white;
   font-size: 0.625rem;
   font-weight: 600;
@@ -218,7 +218,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid var(--background-secondary, #1a1a1a);
+  border: 2px solid var(--card-background);
   animation: pulse 2s ease-in-out infinite;
 }
 

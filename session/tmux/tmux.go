@@ -1633,6 +1633,20 @@ func sanitizeUTF8String(rawBytes []byte) string {
 	return result.String()
 }
 
+// GetPaneCurrentPath returns the current working directory of the tmux pane.
+// This is used by CaptureCurrentState to persist cwd before shutdown for cold restore.
+func (t *TmuxSession) GetPaneCurrentPath() (string, error) {
+	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
+		"#{pane_current_path}")
+
+	output, err := t.cmdExec.Output(cmd)
+	if err != nil {
+		return "", fmt.Errorf("failed to get pane path for session '%s': %w", t.sanitizedName, err)
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
 // GetPanePID returns the PID of the foreground process in the pane.
 // This is used by HistoryLinker to correlate open files with session records.
 func (t *TmuxSession) GetPanePID() (int32, error) {

@@ -28,6 +28,8 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
   const sizeStabilityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasInitiatedConnectionRef = useRef(false);
   const hasCachedDimensionsRef = useRef(false);
+  // Set to true when we switch sessions while connected; triggers connect() once disconnect completes
+  const pendingConnectAfterDisconnectRef = useRef(false);
 
   // TerminalStreamManager ref -- lazily initialized when terminal is available
   const streamManagerRef = useRef<TerminalStreamManager | null>(null);
@@ -398,12 +400,21 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     }
   }, [sessionId]);
 
-  // Reset loading state when switching sessions
+  // Reset loading state when switching sessions and trigger reconnect
   useEffect(() => {
     setIsLoadingInitialContent(true);
     hasInitiatedConnectionRef.current = false;
     metricsRef.current.mountTime = performance.now();
     metricsRef.current.firstOutputTime = null;
+
+    // Reset connection tracking so the new session doesn't inherit stale state
+    previousConnectionStateRef.current = false;
+    setConnectionAttempts(0);
+    setShowReconnectButton(false);
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
 
     // Reset stream manager for new session
     if (streamManagerRef.current) {
@@ -411,10 +422,43 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       streamManagerRef.current = null;
     }
 
+    // Connect immediately if already disconnected (e.g. first load, or was already disconnected)
+    // Otherwise set the pending flag so we connect once the in-progress disconnect resolves
+    if (!isConnected) {
+      const dims = lastResizeRef.current;
+      if (dims && isMountedRef.current) {
+        hasInitiatedConnectionRef.current = true;
+        setIsWaitingForStableSize(false);
+        connect(dims.cols, dims.rows);
+      }
+      // If no dims yet, resize handler will fire and trigger connect normally
+    } else {
+      // Was connected to previous session — disconnect() is in-flight (async).
+      // Mark pending so the isConnected→false transition triggers connect below.
+      pendingConnectAfterDisconnectRef.current = true;
+    }
+
     return () => {
       setIsLoadingInitialContent(false);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  // When a session switch happened while connected, the previous disconnect() is async (up to 1s).
+  // This effect fires once isConnected transitions to false, completing the switch.
+  useEffect(() => {
+    if (!isConnected && pendingConnectAfterDisconnectRef.current && !hasInitiatedConnectionRef.current && isMountedRef.current) {
+      pendingConnectAfterDisconnectRef.current = false;
+      const dims = lastResizeRef.current;
+      if (dims) {
+        console.log(`[TerminalOutput] Post-disconnect connect for new session: ${dims.cols}x${dims.rows}`);
+        hasInitiatedConnectionRef.current = true;
+        setIsWaitingForStableSize(false);
+        connect(dims.cols, dims.rows);
+      }
+      // If no dims, the resize handler will fire and connect normally
+    }
+  }, [isConnected, connect]);
 
   const handleManualReconnect = useCallback(() => {
     console.log("[TerminalOutput] Manual reconnect requested");
