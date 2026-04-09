@@ -141,20 +141,20 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifier)
 
 	return &SessionService{
-		storage:         storage,
-		eventBus:        eventBus,
-		reviewQueueSvc:  reviewQueueSvc,
-		searchSvc:       NewSearchService(searchEngine, search.NewSnippetGenerator(), 5*time.Minute),
-		githubSvc:       NewGitHubService(concStorage),
-		workspaceSvc:    NewWorkspaceService(concStorage, eventBus),
-		configSvc:       NewConfigService(),
-		notificationSvc: notificationSvc,
-		approvalSvc:     approvalSvc,
-		utilitySvc:      utilitySvc,
-		rulesSvc:        rulesSvc,
-		approvalStore:   approvalStore,
-		databaseSvc:          NewDatabaseService(),
-		pathCompletionSvc:    NewPathCompletionService(),
+		storage:           storage,
+		eventBus:          eventBus,
+		reviewQueueSvc:    reviewQueueSvc,
+		searchSvc:         NewSearchService(searchEngine, search.NewSnippetGenerator(), 5*time.Minute),
+		githubSvc:         NewGitHubService(concStorage),
+		workspaceSvc:      NewWorkspaceService(concStorage, eventBus),
+		configSvc:         NewConfigService(),
+		notificationSvc:   notificationSvc,
+		approvalSvc:       approvalSvc,
+		utilitySvc:        utilitySvc,
+		rulesSvc:          rulesSvc,
+		approvalStore:     approvalStore,
+		databaseSvc:       NewDatabaseService(),
+		pathCompletionSvc: NewPathCompletionService(),
 	}
 }
 
