@@ -425,7 +425,9 @@ func TestListFiles_NodeCap(t *testing.T) {
 	// Create more than maxDirEntries files.
 	for i := 0; i <= maxDirEntries; i++ {
 		name := filepath.Join(root, fmt.Sprintf("f%07d.txt", i))
-		os.WriteFile(name, []byte("x"), 0644)
+		if err := os.WriteFile(name, []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	svc := newTestFileService(root)
@@ -446,7 +448,9 @@ func TestListFiles_NodeCap(t *testing.T) {
 func TestGetFileContent_TextFile(t *testing.T) {
 	root := t.TempDir()
 	content := "package main\n\nfunc main() {}\n"
-	os.WriteFile(filepath.Join(root, "main.go"), []byte(content), 0644)
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	svc := newTestFileService(root)
 	resp, err := svc.getFileContent(context.Background(), connect.NewRequest(&sessionv1.GetFileContentRequest{
@@ -466,7 +470,9 @@ func TestGetFileContent_TextFile(t *testing.T) {
 
 func TestGetFileContent_BinaryFile(t *testing.T) {
 	root := t.TempDir()
-	os.WriteFile(filepath.Join(root, "data.bin"), []byte{0x00, 0x01, 0x02, 0x00}, 0644)
+	if err := os.WriteFile(filepath.Join(root, "data.bin"), []byte{0x00, 0x01, 0x02, 0x00}, 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	svc := newTestFileService(root)
 	resp, err := svc.getFileContent(context.Background(), connect.NewRequest(&sessionv1.GetFileContentRequest{
@@ -487,7 +493,9 @@ func TestGetFileContent_BinaryFile(t *testing.T) {
 func TestGetFileContent_FileTooLarge(t *testing.T) {
 	root := t.TempDir()
 	bigContent := strings.Repeat("a", maxFileSize+1)
-	os.WriteFile(filepath.Join(root, "huge.txt"), []byte(bigContent), 0644)
+	if err := os.WriteFile(filepath.Join(root, "huge.txt"), []byte(bigContent), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	svc := newTestFileService(root)
 	_, err := svc.getFileContent(context.Background(), connect.NewRequest(&sessionv1.GetFileContentRequest{
@@ -528,7 +536,9 @@ func TestGetFileContent_PathTraversal(t *testing.T) {
 func TestGetFileContent_Truncation(t *testing.T) {
 	root := t.TempDir()
 	content := strings.Repeat("x", truncateSize+1)
-	os.WriteFile(filepath.Join(root, "big.txt"), []byte(content), 0644)
+	if err := os.WriteFile(filepath.Join(root, "big.txt"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	svc := newTestFileService(root)
 	resp, err := svc.getFileContent(context.Background(), connect.NewRequest(&sessionv1.GetFileContentRequest{
