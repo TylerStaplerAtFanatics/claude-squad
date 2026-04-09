@@ -41,8 +41,12 @@ func setupWorkspaceTestFixture(t *testing.T) *workspaceTestFixture {
 
 	cleanup := func() {
 		bus.Close()
-		repo.Close()
-		os.RemoveAll(tmpDir)
+		if err := repo.Close(); err != nil {
+			t.Logf("cleanup: repo.Close: %v", err)
+		}
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("cleanup: os.RemoveAll: %v", err)
+		}
 	}
 
 	return &workspaceTestFixture{
