@@ -325,3 +325,14 @@
   color: #f97583;
   font-weight: bold;
 }
+
+.filePathClickable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+.filePathClickable:hover {
+  text-decoration-style: solid;
+  opacity: 0.85;
+}

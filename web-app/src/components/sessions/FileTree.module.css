@@ -1,0 +1,206 @@
+.container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--surface-bg, #1e1e1e);
+  font-family: var(--font-mono, 'Menlo', 'Consolas', monospace);
+  font-size: 13px;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  color: var(--text-muted, #888);
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  color: var(--error-color, #f85149);
+}
+
+.retryButton {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--surface-bg, #2d2d2d);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  color: var(--text-default, #d4d4d4);
+  cursor: pointer;
+}
+
+.retryButton:hover {
+  background: var(--surface-hover, #3a3a3a);
+}
+
+.empty {
+  padding: 16px;
+  color: var(--text-muted, #888);
+  font-style: italic;
+}
+
+/* Tree node row */
+.node {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 3px;
+}
+
+.node:hover {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+}
+
+.selected {
+  background: var(--selection-bg, rgba(40, 100, 255, 0.25)) !important;
+}
+
+.nodeInner {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding-right: 8px;
+  overflow: hidden;
+}
+
+.icon {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--icon-color, #888);
+}
+
+.name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-default, #d4d4d4);
+}
+
+.ignored .name {
+  opacity: 0.45;
+  font-style: italic;
+}
+
+.symlinkBadge {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-muted, #666);
+  background: var(--surface-bg, #2d2d2d);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.statusBadge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: auto;
+  padding: 0 3px;
+}
+
+.spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--border-color, #555);
+  border-top-color: var(--accent-color, #4d8bf7);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.inlineError {
+  flex-shrink: 0;
+  color: var(--error-color, #f85149);
+  font-size: 12px;
+}
+
+/* Search input */
+.searchContainer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.searchInput {
+  flex: 1;
+  background: var(--input-bg, #2d2d2d);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  color: var(--text-default, #d4d4d4);
+  font-size: 12px;
+  padding: 3px 8px;
+  outline: none;
+}
+
+.searchInput:focus {
+  border-color: var(--accent-color, #4d8bf7);
+}
+
+.searchInput::placeholder {
+  color: var(--text-muted, #666);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.toolbarButton {
+  padding: 3px 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 3px;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+}
+
+.toolbarButton:hover {
+  background: var(--surface-hover, #3a3a3a);
+  color: var(--text-default, #d4d4d4);
+}
+
+.toolbarLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+}
+
+.toolbarLabel input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.treeWrapper {
+  flex: 1;
+  overflow: hidden;
+}
+
+.mark {
+  background: rgba(255, 200, 0, 0.25);
+  border-radius: 2px;
+}
