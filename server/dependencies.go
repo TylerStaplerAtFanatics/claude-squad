@@ -23,6 +23,7 @@ type ServerDependencies struct {
 	StatusManager           *session.InstanceStatusManager
 	ReviewQueue             *session.ReviewQueue
 	ReviewQueuePoller       *session.ReviewQueuePoller
+	PRStatusPoller          *session.PRStatusPoller
 	ReactiveQueueMgr        *ReactiveQueueManager
 	ScrollbackManager       *scrollback.ScrollbackManager
 	TmuxStreamerManager     *session.ExternalTmuxStreamerManager
@@ -66,6 +67,7 @@ func BuildDependencies() (*ServerDependencies, error) {
 		StatusManager:           rt.StatusManager,
 		ReviewQueue:             rt.ReviewQueue,
 		ReviewQueuePoller:       rt.ReviewQueuePoller,
+		PRStatusPoller:          rt.PRStatusPoller,
 		ReactiveQueueMgr:        rt.ReactiveQueueMgr,
 		ScrollbackManager:       rt.ScrollbackManager,
 		TmuxStreamerManager:     rt.TmuxStreamerManager,
@@ -299,6 +301,7 @@ type ServiceDeps struct {
 	*CoreDeps
 	StatusManager     *session.InstanceStatusManager
 	ReviewQueuePoller *session.ReviewQueuePoller
+	PRStatusPoller    *session.PRStatusPoller
 }
 
 // BuildServiceDeps constructs Phase 2 dependencies using Phase 1 outputs.
@@ -316,6 +319,7 @@ func BuildServiceDeps(core *CoreDeps) (*ServiceDeps, error) {
 		core.ReviewQueue, statusManager, core.Storage,
 	)
 	reviewQueuePoller.SetApprovalProvider(core.ApprovalStore)
+	prStatusPoller := session.NewPRStatusPoller(core.Storage)
 
 	core.SessionService.SetStatusManager(statusManager)
 	core.SessionService.SetReviewQueuePoller(reviewQueuePoller)
@@ -324,6 +328,7 @@ func BuildServiceDeps(core *CoreDeps) (*ServiceDeps, error) {
 		CoreDeps:          core,
 		StatusManager:     statusManager,
 		ReviewQueuePoller: reviewQueuePoller,
+		PRStatusPoller:    prStatusPoller,
 	}, nil
 }
 
@@ -337,6 +342,7 @@ type RuntimeDeps struct {
 	TmuxStreamerManager     *session.ExternalTmuxStreamerManager
 	ExternalDiscovery       *session.ExternalSessionDiscovery
 	ExternalApprovalMonitor *session.ExternalApprovalMonitor
+	PRStatusPoller          *session.PRStatusPoller
 }
 
 // BuildRuntimeDeps constructs Phase 3 dependencies using Phase 2 outputs.
@@ -377,6 +383,10 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 		inst.SetStatusManager(statusManager)
 	}
 	reviewQueuePoller.SetInstances(instances)
+	svc.PRStatusPoller.SetInstances(instances)
+	svc.PRStatusPoller.SetOnUpdated(func(inst *session.Instance) {
+		eventBus.Publish(events.NewSessionUpdatedEvent(inst, []string{"github_pr_priority", "github_pr_state"}))
+	})
 
 	// Step 6: start tmux sessions for loaded instances (non-fatal failures)
 	for _, inst := range instances {
@@ -452,10 +462,12 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 		instance.SetReviewQueue(reviewQueue)
 		instance.SetStatusManager(statusManager)
 		reviewQueuePoller.AddInstance(instance)
+		svc.PRStatusPoller.AddInstance(instance)
 		log.InfoLog.Printf("Added external session '%s' to review queue poller", instance.Title)
 	})
 	externalDiscovery.OnSessionRemoved(func(instance *session.Instance) {
 		reviewQueuePoller.RemoveInstance(instance.Title)
+		svc.PRStatusPoller.RemoveInstance(instance.Title)
 		log.InfoLog.Printf("Removed external session '%s' from review queue poller", instance.Title)
 		reviewQueue.Remove(instance.Title)
 		if err := storage.DeleteInstance(instance.Title); err != nil {
@@ -519,5 +531,6 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 		TmuxStreamerManager:     tmuxStreamerManager,
 		ExternalDiscovery:       externalDiscovery,
 		ExternalApprovalMonitor: externalApprovalMonitor,
+		PRStatusPoller:          svc.PRStatusPoller,
 	}, nil
 }

@@ -85,6 +85,9 @@ func NewServer(addr string) *Server {
 		go deps.ReactiveQueueMgr.Start(serverCtx)
 		log.InfoLog.Printf("ReactiveQueueManager started")
 
+		deps.PRStatusPoller.Start(serverCtx)
+		log.InfoLog.Printf("PRStatusPoller started")
+
 		// Initialize notification history store and EventBus subscriber.
 		// notifStore is declared here so it can be wired into the approval handler below.
 		var notifStore *notifications.NotificationHistoryStore

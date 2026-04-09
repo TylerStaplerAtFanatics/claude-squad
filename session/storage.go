@@ -44,6 +44,16 @@ type InstanceData struct {
 	// Worktree detection fields
 	MainRepoPath string `json:"main_repo_path,omitempty"` // Path to main repo when this is a worktree
 	IsWorktree   bool   `json:"is_worktree,omitempty"`    // True if path is a git worktree
+	GitHubIsFork bool   `json:"github_is_fork,omitempty"` // True when remote repo is a fork
+	// PR status fields — populated by PRStatusPoller
+	GitHubPRState          string    `json:"github_pr_state,omitempty"`
+	GitHubPRIsDraft        bool      `json:"github_pr_is_draft,omitempty"`
+	GitHubPRPriority       string    `json:"github_pr_priority,omitempty"`
+	GitHubApprovedCount    int       `json:"github_approved_count,omitempty"`
+	GitHubChangesReqCount  int       `json:"github_changes_req_count,omitempty"`
+	GitHubCheckConclusion  string    `json:"github_check_conclusion,omitempty"`
+	GitHubPRStatusTerminal bool      `json:"github_pr_status_terminal,omitempty"`
+	LastPRStatusCheck      time.Time `json:"last_pr_status_check,omitempty"`
 	// Crew autonomy mode — when true, the Fixer injects correction prompts without user confirmation.
 	AutonomousMode bool `json:"autonomous_mode,omitempty"`
 
@@ -280,6 +290,31 @@ func (s *Storage) UpdateInstanceLastUserResponse(title string, lastUserResponse 
 // UpdateInstanceProcessingGrace updates just the ProcessingGraceUntil timestamp for a specific instance.
 func (s *Storage) UpdateInstanceProcessingGrace(title string, processingGraceUntil time.Time) error {
 	return s.updateFieldInRepo(title, func(d *InstanceData) { d.ProcessingGraceUntil = processingGraceUntil })
+}
+
+// UpdateInstancePRStatus updates the PR status fields for a specific instance.
+// Called by PRStatusPoller after a successful PR info fetch.
+func (s *Storage) UpdateInstancePRStatus(title, state, priority, checkConclusion string, approvedCount, changesReqCount int, isDraft, terminal bool) error {
+	return s.updateFieldInRepo(title, func(d *InstanceData) {
+		d.GitHubPRState = state
+		d.GitHubPRPriority = priority
+		d.GitHubPRIsDraft = isDraft
+		d.GitHubApprovedCount = approvedCount
+		d.GitHubChangesReqCount = changesReqCount
+		d.GitHubCheckConclusion = checkConclusion
+		d.GitHubPRStatusTerminal = terminal
+		d.LastPRStatusCheck = time.Now()
+	})
+}
+
+// UpdateInstancePRNumber updates the GitHubPRNumber when discovered by auto-discovery.
+func (s *Storage) UpdateInstancePRNumber(title string, prNumber int) error {
+	return s.updateFieldInRepo(title, func(d *InstanceData) { d.GitHubPRNumber = prNumber })
+}
+
+// UpdateInstanceForkFlag records whether the repo for a session is a fork.
+func (s *Storage) UpdateInstanceForkFlag(title string, isFork bool) error {
+	return s.updateFieldInRepo(title, func(d *InstanceData) { d.GitHubIsFork = isFork })
 }
 
 // --- Session-first convenience methods (Task 2.5) ---

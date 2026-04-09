@@ -105,6 +105,29 @@ message Session {
 
   // External instance metadata (only populated for external sessions)
   ExternalInstanceMetadata external_metadata = 32;
+
+  // PR status fields — populated by PRStatusPoller; empty when no PR exists.
+
+  // PR lifecycle state: "open", "closed", "merged"
+  string github_pr_state = 33;
+
+  // Whether the PR is in draft mode
+  bool github_pr_is_draft = 34;
+
+  // Derived priority: blocking/ready/pending/draft/complete/no_pr/auth_error
+  string github_pr_priority = 35;
+
+  // Count of current non-dismissed APPROVED reviews
+  int32 github_approved_count = 36;
+
+  // Count of current non-dismissed CHANGES_REQUESTED reviews
+  int32 github_changes_req_count = 37;
+
+  // CI rollup conclusion: success/failure/pending/action_required/neutral/""
+  string github_check_conclusion = 38;
+
+  // When PR status was last successfully fetched
+  google.protobuf.Timestamp last_pr_status_check = 39;
 }
 
 // SessionStatus represents the current state of a session.

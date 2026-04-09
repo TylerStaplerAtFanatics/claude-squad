@@ -129,6 +129,26 @@ type Instance struct {
 	MainRepoPath string `json:"main_repo_path,omitempty"`
 	// IsWorktree indicates whether Path is a git worktree (not the main repo)
 	IsWorktree bool `json:"is_worktree,omitempty"`
+	// GitHubIsFork is true when the remote repo is a fork (PR lookup uses upstream)
+	GitHubIsFork bool `json:"github_is_fork,omitempty"`
+
+	// PR status fields — populated by PRStatusPoller; not set on session creation
+	// GitHubPRState is the PR lifecycle state: "open", "closed", "merged"
+	GitHubPRState string `json:"github_pr_state,omitempty"`
+	// GitHubPRIsDraft is true when the PR is in draft mode
+	GitHubPRIsDraft bool `json:"github_pr_is_draft,omitempty"`
+	// GitHubPRPriority is the derived priority: blocking/ready/pending/draft/complete/no_pr
+	GitHubPRPriority string `json:"github_pr_priority,omitempty"`
+	// GitHubApprovedCount is the count of current non-dismissed APPROVED reviews
+	GitHubApprovedCount int `json:"github_approved_count,omitempty"`
+	// GitHubChangesReqCount is the count of current non-dismissed CHANGES_REQUESTED reviews
+	GitHubChangesReqCount int `json:"github_changes_req_count,omitempty"`
+	// GitHubCheckConclusion is the CI rollup: success/failure/pending/action_required/neutral/""
+	GitHubCheckConclusion string `json:"github_check_conclusion,omitempty"`
+	// GitHubPRStatusTerminal is true when the PR is merged/closed and polling should stop
+	GitHubPRStatusTerminal bool `json:"github_pr_status_terminal,omitempty"`
+	// LastPRStatusCheck is when the PR status was last successfully fetched
+	LastPRStatusCheck time.Time `json:"last_pr_status_check,omitempty"`
 
 	Checkpoints      CheckpointList
 	ActiveCheckpoint string
@@ -220,6 +240,16 @@ func (i *Instance) ToInstanceData() InstanceData {
 		// Worktree detection fields
 		MainRepoPath: i.MainRepoPath,
 		IsWorktree:   i.IsWorktree,
+		GitHubIsFork: i.GitHubIsFork,
+		// PR status fields (populated by PRStatusPoller)
+		GitHubPRState:          i.GitHubPRState,
+		GitHubPRIsDraft:        i.GitHubPRIsDraft,
+		GitHubPRPriority:       i.GitHubPRPriority,
+		GitHubApprovedCount:    i.GitHubApprovedCount,
+		GitHubChangesReqCount:  i.GitHubChangesReqCount,
+		GitHubCheckConclusion:  i.GitHubCheckConclusion,
+		GitHubPRStatusTerminal: i.GitHubPRStatusTerminal,
+		LastPRStatusCheck:      i.LastPRStatusCheck,
 		// Crew autonomy mode
 		AutonomousMode: i.AutonomousMode,
 	}
@@ -334,6 +364,16 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		// Worktree detection fields
 		MainRepoPath: data.MainRepoPath,
 		IsWorktree:   data.IsWorktree,
+		GitHubIsFork: data.GitHubIsFork,
+		// PR status fields (populated by PRStatusPoller)
+		GitHubPRState:          data.GitHubPRState,
+		GitHubPRIsDraft:        data.GitHubPRIsDraft,
+		GitHubPRPriority:       data.GitHubPRPriority,
+		GitHubApprovedCount:    data.GitHubApprovedCount,
+		GitHubChangesReqCount:  data.GitHubChangesReqCount,
+		GitHubCheckConclusion:  data.GitHubCheckConclusion,
+		GitHubPRStatusTerminal: data.GitHubPRStatusTerminal,
+		LastPRStatusCheck:      data.LastPRStatusCheck,
 		// Crew autonomy mode
 		AutonomousMode: data.AutonomousMode,
 	}
@@ -2367,6 +2407,21 @@ func (i *Instance) GetPRDisplayInfo() string { return i.GitHub().PRDisplayInfo()
 // IsGitHubSession returns true if this session has GitHub owner and repo set.
 // Delegates to GitHubMetadataView.IsGitHubSession.
 func (i *Instance) IsGitHubSession() bool { return i.GitHub().IsGitHubSession() }
+
+// UpdatePRStatus atomically updates the PR status fields on this instance.
+// Called by PRStatusPoller on each successful fetch.
+func (i *Instance) UpdatePRStatus(state, priority, checkConclusion string, approvedCount, changesReqCount int, isDraft, terminal bool) {
+	i.stateMutex.Lock()
+	defer i.stateMutex.Unlock()
+	i.GitHubPRState = state
+	i.GitHubPRPriority = priority
+	i.GitHubPRIsDraft = isDraft
+	i.GitHubApprovedCount = approvedCount
+	i.GitHubChangesReqCount = changesReqCount
+	i.GitHubCheckConclusion = checkConclusion
+	i.GitHubPRStatusTerminal = terminal
+	i.LastPRStatusCheck = time.Now()
+}
 
 // DetectAndPopulateWorktreeInfo detects if the instance path is a worktree
 // and populates the IsWorktree, MainRepoPath, GitHubOwner, and GitHubRepo fields.
