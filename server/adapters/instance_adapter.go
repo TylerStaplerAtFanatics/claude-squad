@@ -45,13 +45,13 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 		InstanceType:     instanceTypeToProto(inst.InstanceType),
 		ExternalMetadata: externalMetadataToProto(inst.ExternalMetadata),
 		// PR status fields (populated by PRStatusPoller)
-		GithubPrState:        inst.GitHubPRState,
-		GithubPrIsDraft:      inst.GitHubPRIsDraft,
-		GithubPrPriority:     inst.GitHubPRPriority,
-		GithubApprovedCount:  int32(inst.GitHubApprovedCount),
+		GithubPrState:         inst.GitHubPRState,
+		GithubPrIsDraft:       inst.GitHubPRIsDraft,
+		GithubPrPriority:      inst.GitHubPRPriority,
+		GithubApprovedCount:   int32(inst.GitHubApprovedCount),
 		GithubChangesReqCount: int32(inst.GitHubChangesReqCount),
 		GithubCheckConclusion: inst.GitHubCheckConclusion,
-		LastPrStatusCheck:    timestamppb.New(inst.LastPRStatusCheck),
+		LastPrStatusCheck:     timestamppb.New(inst.LastPRStatusCheck),
 	}
 
 	// Convert git worktree data if available

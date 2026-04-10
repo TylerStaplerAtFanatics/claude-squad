@@ -7,13 +7,13 @@ type PRPriority string
 
 const (
 	PRPriorityBlocking  PRPriority = "blocking"   // changes requested or CI failing
-	PRPriorityReady     PRPriority = "ready"       // approved + CI passing
-	PRPriorityPending   PRPriority = "pending"     // awaiting review or checks running
-	PRPriorityDraft     PRPriority = "draft"       // PR is a draft
-	PRPriorityComplete  PRPriority = "complete"    // PR is merged or closed
-	PRPriorityNoPR      PRPriority = "no_pr"       // no PR found for branch
-	PRPriorityAuthError PRPriority = "auth_error"  // gh CLI not authenticated
-	PRPriorityError     PRPriority = "error"       // transient error fetching status
+	PRPriorityReady     PRPriority = "ready"      // approved + CI passing
+	PRPriorityPending   PRPriority = "pending"    // awaiting review or checks running
+	PRPriorityDraft     PRPriority = "draft"      // PR is a draft
+	PRPriorityComplete  PRPriority = "complete"   // PR is merged or closed
+	PRPriorityNoPR      PRPriority = "no_pr"      // no PR found for branch
+	PRPriorityAuthError PRPriority = "auth_error" // gh CLI not authenticated
+	PRPriorityError     PRPriority = "error"      // transient error fetching status
 )
 
 // DerivePRPriority computes a single priority enum from compound PR state.
