@@ -329,6 +329,8 @@ export function FileTree({
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track whether we were in search mode to trigger closeAll on exit.
   const wasInSearchModeRef = useRef(false);
+  // Snapshot of open node IDs taken just before entering search mode.
+  const savedOpenStateRef = useRef<Record<string, boolean>>({});
 
   const treeRef = useRef<TreeApi<TreeNode> | undefined>(undefined);
 
@@ -461,10 +463,14 @@ export function FileTree({
     };
   }, [searchTerm, sessionId, includeIgnored, baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Open all tree nodes when entering search mode; close all when leaving.
+  // Open all tree nodes when entering search mode; restore prior state when leaving.
   useEffect(() => {
     if (searchResults !== null) {
-      wasInSearchModeRef.current = true;
+      if (!wasInSearchModeRef.current) {
+        // Snapshot expanded state before entering search for restoration on exit.
+        savedOpenStateRef.current = { ...(treeRef.current?.openState ?? {}) };
+        wasInSearchModeRef.current = true;
+      }
       // Delay to allow react-arborist to render the new data before calling openAll.
       const timer = setTimeout(() => {
         treeRef.current?.openAll();
@@ -472,7 +478,13 @@ export function FileTree({
       return () => clearTimeout(timer);
     } else if (wasInSearchModeRef.current) {
       wasInSearchModeRef.current = false;
+      // Restore the browse-mode open state instead of collapsing everything.
+      const saved = savedOpenStateRef.current;
       treeRef.current?.closeAll();
+      for (const [id, isOpen] of Object.entries(saved)) {
+        if (isOpen) treeRef.current?.open(id);
+      }
+      savedOpenStateRef.current = {};
     }
   }, [searchResults]);
 

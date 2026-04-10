@@ -423,7 +423,7 @@ func (fs *FileService) SearchFiles(
 		maxResults = maxSearchResults
 	}
 
-	files, truncated, totalMatches, walkErr := searchFilesInWorktree(basePath, req.Msg.Query, req.Msg.IncludeIgnored, maxResults)
+	files, truncated, totalMatches, walkErr := searchFilesInWorktree(ctx, basePath, req.Msg.Query, req.Msg.IncludeIgnored, maxResults)
 	if walkErr != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("search failed: %w", walkErr))
 	}
@@ -437,7 +437,7 @@ func (fs *FileService) SearchFiles(
 
 // searchFilesInWorktree walks basePath recursively and returns files whose name or
 // relative path contains query (case-insensitive substring match).
-func searchFilesInWorktree(basePath, query string, includeIgnored bool, maxResults int) ([]*sessionv1.FileNode, bool, int32, error) {
+func searchFilesInWorktree(ctx context.Context, basePath, query string, includeIgnored bool, maxResults int) ([]*sessionv1.FileNode, bool, int32, error) {
 	queryLower := strings.ToLower(query)
 	basePath = filepath.Clean(basePath)
 
@@ -454,6 +454,11 @@ func searchFilesInWorktree(basePath, query string, includeIgnored bool, maxResul
 	totalMatches := int32(0)
 
 	walkErr := filepath.WalkDir(basePath, func(path string, d fs.DirEntry, err error) error {
+		// Respect context cancellation (e.g. client disconnect).
+		if ctx.Err() != nil {
+			return filepath.SkipAll
+		}
+
 		if err != nil {
 			// Skip unreadable paths without aborting the walk.
 			return nil
