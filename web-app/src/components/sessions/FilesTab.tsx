@@ -1,0 +1,190 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import { createClient } from "@connectrpc/connect";
+import { createConnectTransport } from "@connectrpc/connect-web";
+import { SessionService } from "@/gen/session/v1/session_pb";
+import { FileStatus, FileChange } from "@/gen/session/v1/types_pb";
+import { FileTree } from "./FileTree";
+import { FileContentViewer } from "./FileContentViewer";
+import styles from "./FilesTab.module.css";
+
+// ---- Git status helpers ----
+
+function fileChangeToStatusLetter(status: FileStatus): string {
+  switch (status) {
+    case FileStatus.MODIFIED:    return "M";
+    case FileStatus.ADDED:       return "A";
+    case FileStatus.DELETED:     return "D";
+    case FileStatus.RENAMED:     return "R";
+    case FileStatus.UNTRACKED:   return "?";
+    case FileStatus.CONFLICT:    return "U";
+    default:                     return "";
+  }
+}
+
+function buildGitStatusMap(files: FileChange[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const f of files) {
+    const letter = fileChangeToStatusLetter(f.status);
+    if (letter && f.path) {
+      map.set(f.path, letter);
+    }
+  }
+  return map;
+}
+
+// ---- Props ----
+
+interface FilesTabProps {
+  sessionId: string;
+  baseUrl: string;
+  /** Path to pre-select when the tab opens (e.g. from VCS panel cross-link). */
+  initialSelectedPath?: string | null;
+  onSelectedPathChange?: (path: string | null) => void;
+}
+
+// ---- Component ----
+
+const VCS_CACHE_TTL_MS = 5000;
+
+export function FilesTab({
+  sessionId,
+  baseUrl,
+  initialSelectedPath,
+  onSelectedPathChange,
+}: FilesTabProps) {
+  const [selectedPath, setSelectedPath] = useState<string | null>(initialSelectedPath ?? null);
+  const [includeIgnored, setIncludeIgnored] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [gitStatusMap, setGitStatusMap] = useState<Map<string, string>>(new Map());
+  const [vcsLoading, setVcsLoading] = useState(false);
+  const lastVcsFetchRef = useRef<number>(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const fileTreeCollapseRef = useRef<(() => void) | null>(null);
+
+  // Notify parent when selection changes.
+  const handleFileSelect = useCallback(
+    (path: string) => {
+      setSelectedPath(path);
+      onSelectedPathChange?.(path);
+    },
+    [onSelectedPathChange]
+  );
+
+  // Apply initialSelectedPath changes from parent (VCS cross-link).
+  useEffect(() => {
+    if (initialSelectedPath !== undefined && initialSelectedPath !== selectedPath) {
+      setSelectedPath(initialSelectedPath);
+    }
+  }, [initialSelectedPath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch VCS status.
+  const fetchVcsStatus = useCallback(
+    async (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastVcsFetchRef.current < VCS_CACHE_TTL_MS) return;
+      lastVcsFetchRef.current = now;
+
+      setVcsLoading(true);
+      try {
+        const client = createClient(
+          SessionService,
+          createConnectTransport({ baseUrl })
+        );
+        const response = await client.getVCSStatus({ id: sessionId });
+        if (response.vcsStatus) {
+          const { stagedFiles, unstagedFiles, untrackedFiles } = response.vcsStatus;
+          const allFiles = [...stagedFiles, ...unstagedFiles, ...untrackedFiles];
+          setGitStatusMap(buildGitStatusMap(allFiles));
+        }
+      } catch (err) {
+        console.error("Failed to fetch VCS status for file tree:", err);
+      } finally {
+        setVcsLoading(false);
+      }
+    },
+    [sessionId, baseUrl]
+  );
+
+  // Fetch VCS status on mount.
+  useEffect(() => {
+    fetchVcsStatus(true);
+  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cmd+F / Ctrl+F focuses the search input.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+        // Only intercept if this tab is active (we're rendered).
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  return (
+    <div className={styles.container}>
+      {/* Left pane: file tree */}
+      <div className={styles.treePane}>
+        <div className={styles.toolbar}>
+          <input
+            ref={searchInputRef}
+            type="search"
+            className={styles.searchInput}
+            placeholder="Filter files… (⌘F)"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            aria-label="Filter files"
+          />
+          <label className={styles.toolbarLabel} title="Show gitignored files">
+            <input
+              type="checkbox"
+              checked={includeIgnored}
+              onChange={(e) => setIncludeIgnored(e.target.checked)}
+            />
+            Ignored
+          </label>
+          <button
+            className={styles.toolbarButton}
+            onClick={() => fileTreeCollapseRef.current?.()}
+            title="Collapse all directories"
+          >
+            ⊟
+          </button>
+          <button
+            className={styles.toolbarButton}
+            onClick={() => fetchVcsStatus(true)}
+            title="Refresh git status"
+            disabled={vcsLoading}
+          >
+            {vcsLoading ? "⟳" : "↺"}
+          </button>
+        </div>
+        <div className={styles.treeWrapper}>
+          <FileTree
+            sessionId={sessionId}
+            baseUrl={baseUrl}
+            onFileSelect={handleFileSelect}
+            gitStatusMap={gitStatusMap}
+            selectedPath={selectedPath}
+            includeIgnored={includeIgnored}
+            searchTerm={searchTerm}
+            onCollapseAllRef={(fn) => { fileTreeCollapseRef.current = fn; }}
+          />
+        </div>
+      </div>
+
+      {/* Right pane: file content */}
+      <div className={styles.contentPane}>
+        <FileContentViewer
+          sessionId={sessionId}
+          filePath={selectedPath}
+          baseUrl={baseUrl}
+        />
+      </div>
+    </div>
+  );
+}

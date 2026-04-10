@@ -13,11 +13,14 @@ interface SessionListProps {
   onSessionClick?: (session: Session) => void;
   onDeleteSession?: (sessionId: string) => Promise<void> | void;
   onPauseSession?: (sessionId: string) => void;
-  onResumeSession?: (sessionId: string) => void;
+  onResumeSession?: (session: Session) => void;
+  /** Called for bulk resume to skip the confirmation modal and resume immediately. */
+  onDirectResumeSession?: (session: Session) => void;
   onDuplicateSession?: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, newTitle: string) => Promise<boolean>;
   onRestartSession?: (sessionId: string) => Promise<boolean>;
   onUpdateTags?: (sessionId: string, tags: string[]) => void;
+  onNewSession?: () => void;
   onCreateCheckpoint?: (sessionId: string, label: string) => Promise<boolean>;
   onListCheckpoints?: (sessionId: string) => Promise<CheckpointProto[]>;
   onForkFromCheckpoint?: (sessionId: string, checkpointId: string, newTitle: string) => Promise<Session | null>;
@@ -70,10 +73,12 @@ export function SessionList({
   onDeleteSession,
   onPauseSession,
   onResumeSession,
+  onDirectResumeSession,
   onDuplicateSession,
   onRenameSession,
   onRestartSession,
   onUpdateTags,
+  onNewSession,
   onCreateCheckpoint,
   onListCheckpoints,
   onForkFromCheckpoint,
@@ -283,8 +288,18 @@ export function SessionList({
   };
 
   const handleResumeSelected = () => {
-    if (!onResumeSession) return;
-    selectedSessions.forEach(id => onResumeSession(id));
+    if (!onDirectResumeSession && !onResumeSession) return;
+    // Bulk resume bypasses the confirmation modal to avoid opening N modals
+    selectedSessions.forEach(id => {
+      const session = sessions.find(s => s.id === id);
+      if (session) {
+        if (onDirectResumeSession) {
+          onDirectResumeSession(session);
+        } else {
+          onResumeSession?.(session);
+        }
+      }
+    });
     setSelectedSessions(new Set());
     setSelectMode(false);
   };
@@ -489,10 +504,13 @@ export function SessionList({
               <p className={styles.emptyHint}>
                 Get started by creating your first AI coding session
               </p>
-              <AppLink href="/sessions/new" className={styles.newSessionButtonLarge}>
+              <button
+                className={styles.newSessionButtonLarge}
+                onClick={() => onNewSession?.()}
+              >
                 <span className={styles.newSessionIcon}>+</span>
                 Create Your First Session
-              </AppLink>
+              </button>
             </div>
           )}
         </div>
@@ -511,7 +529,7 @@ export function SessionList({
                       onClick={() => onSessionClick?.(session)}
                       onDelete={() => onDeleteSession?.(session.id)}
                       onPause={() => onPauseSession?.(session.id)}
-                      onResume={() => onResumeSession?.(session.id)}
+                      onResume={() => onResumeSession?.(session)}
                       onDuplicate={() => onDuplicateSession?.(session.id)}
                       onRename={onRenameSession}
                       onRestart={onRestartSession}

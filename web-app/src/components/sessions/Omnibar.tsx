@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { detect, InputType, INPUT_TYPE_INFO, DetectionResult } from "@/lib/omnibar";
 import { PROGRAMS } from "@/lib/constants/programs";
+import { usePathCompletions } from "@/lib/hooks/usePathCompletions";
+import { usePathHistory } from "@/lib/hooks/usePathHistory";
+import { PathCompletionDropdown, type CompletionEntry } from "./PathCompletionDropdown";
 import styles from "./Omnibar.module.css";
 
 interface OmnibarProps {
@@ -52,10 +55,85 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Path completion dropdown state
+  const [dropdownIndex, setDropdownIndex] = useState(-1);
+  const [dropdownDismissed, setDropdownDismissed] = useState(false);
+
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const lastSuggestedNameRef = useRef<string>("");
+
+  // Determine whether completions should be active.
+  const isPathInput =
+    detection?.type === InputType.LocalPath ||
+    detection?.type === InputType.PathWithBranch;
+
+  // Use the detected local path (strips branch suffix for PathWithBranch).
+  const completionPrefix = isPathInput ? detection?.localPath ?? input : "";
+
+  const {
+    entries: completionEntries,
+    baseDir: completionBaseDir,
+    pathExists,
+    isLoading: isCompletionLoading,
+    error: completionError,
+  } = usePathCompletions(completionPrefix, {
+    enabled: isPathInput,
+    directoriesOnly: true,
+  });
+
+  const { getMatching: getHistoryMatching, save: saveHistory } = usePathHistory();
+
+  // Convert live OS entries to CompletionEntry for type-safe downstream use.
+  const liveEntries = useMemo<CompletionEntry[]>(
+    () =>
+      completionEntries.map((e) => ({
+        name: e.name,
+        path: e.path,
+        isDirectory: e.isDirectory,
+      })),
+    [completionEntries]
+  );
+
+  // History entries matching the current prefix.
+  const historyMatches = useMemo<CompletionEntry[]>(
+    () =>
+      isPathInput
+        ? getHistoryMatching(completionPrefix).map((h) => ({
+            name: h.path,
+            path: h.path,
+            isDirectory: true,
+            isHistory: true,
+          }))
+        : [],
+    [isPathInput, completionPrefix, getHistoryMatching]
+  );
+
+  // Merged entries: history first, then live (deduped against history).
+  const mergedEntries = useMemo<CompletionEntry[]>(() => {
+    const liveDeduped = liveEntries.filter(
+      (e) => !historyMatches.some((h) => h.path === e.path)
+    );
+    return [...historyMatches, ...liveDeduped];
+  }, [historyMatches, liveEntries]);
+
+  const historyCount = historyMatches.length;
+
+  const isDropdownVisible =
+    isPathInput && mergedEntries.length > 0 && !dropdownDismissed;
+
+  // Accept a completion entry: fill the input and continue for further completion.
+  const handleCompletionSelect = useCallback(
+    (entry: CompletionEntry) => {
+      const newInput = entry.isDirectory ? entry.path + "/" : entry.path;
+      setInput(newInput);
+      setDropdownIndex(-1);
+      setDropdownDismissed(false);
+      inputRef.current?.focus();
+    },
+    []
+  );
 
   // Detect input type with debouncing
   useEffect(() => {
@@ -119,20 +197,80 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
       setExistingWorktree("");
       setWorkingDir("");
       lastSuggestedNameRef.current = "";
+      setDropdownIndex(-1);
+      setDropdownDismissed(false);
     }
   }, [isOpen]);
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (isDropdownVisible) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setDropdownIndex((i) => Math.min(i + 1, mergedEntries.length - 1));
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setDropdownIndex((i) => Math.max(i - 1, -1));
+          return;
+        }
+        if (e.key === "Tab") {
+          e.preventDefault();
+          if (dropdownIndex >= 0) {
+            // Explicit selection (including history entries) → accept it.
+            handleCompletionSelect(mergedEntries[dropdownIndex]);
+          } else if (liveEntries.length === 1) {
+            handleCompletionSelect(liveEntries[0]);
+          } else if (liveEntries.length > 1) {
+            // Extend input to longest common prefix of live entry names only.
+            const lcp = liveEntries.reduce((acc, entry) => {
+              let i = 0;
+              while (i < acc.length && i < entry.name.length && acc[i] === entry.name[i]) i++;
+              return acc.slice(0, i);
+            }, liveEntries[0].name);
+            if (lcp) {
+              const sep = completionBaseDir.endsWith("/") ? "" : "/";
+              setInput(completionBaseDir + sep + lcp);
+              setDropdownDismissed(false);
+            }
+          }
+          return;
+        }
+        if (e.key === "Enter" && !e.metaKey && dropdownIndex >= 0) {
+          e.preventDefault();
+          handleCompletionSelect(mergedEntries[dropdownIndex]);
+          return;
+        }
+        if (e.key === "Escape") {
+          // Stop the native event so the global document listener doesn't
+          // also call onClose() — first Escape dismisses the dropdown only.
+          e.nativeEvent.stopImmediatePropagation();
+          setDropdownDismissed(true);
+          setDropdownIndex(-1);
+          return;
+        }
+      }
+
       if (e.key === "Escape") {
+        // Stop propagation so the global document listener doesn't call onClose() a second time.
+        e.nativeEvent.stopImmediatePropagation();
         onClose();
       } else if (e.key === "Enter" && e.metaKey) {
         // Cmd+Enter to submit
         handleSubmit();
       }
     },
-    [onClose]
+    [
+      isDropdownVisible,
+      mergedEntries,
+      liveEntries,
+      completionBaseDir,
+      dropdownIndex,
+      handleCompletionSelect,
+      onClose,
+    ]
   );
 
   // Global keyboard handler
@@ -211,6 +349,10 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
       }
 
       await onCreateSession(sessionData);
+      // Persist the chosen path to history for future completions.
+      if (isPathInput && detection?.localPath) {
+        saveHistory(detection.localPath);
+      }
       onClose();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create session";
@@ -246,14 +388,67 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
             className={styles.input}
             placeholder="Enter path, GitHub URL, or owner/repo..."
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setDropdownDismissed(false);
+              setDropdownIndex(-1);
+            }}
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
             aria-label="Session source input"
+            aria-autocomplete="list"
+            aria-expanded={isDropdownVisible}
+            aria-controls="path-completion-listbox"
+            aria-activedescendant={
+              isDropdownVisible && dropdownIndex >= 0
+                ? `path-completion-listbox-option-${dropdownIndex}`
+                : undefined
+            }
           />
+          {/* Path existence indicator */}
+          {isPathInput && input.trim() && (
+            <span
+              className={styles.pathIndicator}
+              aria-live="polite"
+              aria-label={
+                isCompletionLoading
+                  ? "Checking path"
+                  : pathExists
+                  ? "Path exists"
+                  : "Path does not exist"
+              }
+            >
+              {isCompletionLoading ? (
+                <span className={styles.pathIndicatorLoading} aria-hidden="true">⟳</span>
+              ) : pathExists ? (
+                <span className={styles.pathIndicatorValid} aria-hidden="true">✓</span>
+              ) : (
+                <span className={styles.pathIndicatorInvalid} aria-hidden="true">✗</span>
+              )}
+            </span>
+          )}
         </div>
+
+        {/* Path completion dropdown */}
+        {isDropdownVisible && (
+          <PathCompletionDropdown
+            id="path-completion-listbox"
+            entries={mergedEntries}
+            historyCount={historyCount}
+            selectedIndex={dropdownIndex}
+            onSelect={handleCompletionSelect}
+            isLoading={isCompletionLoading}
+          />
+        )}
+
+        {/* Path completion error */}
+        {isPathInput && completionError && (
+          <div className={styles.completionError} aria-live="polite">
+            Could not load completions
+          </div>
+        )}
 
         {/* Detection Badge */}
         {input.trim() && (
@@ -470,6 +665,16 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
           <span className={styles.shortcut}>
             <span className={styles.shortcutKey}>⌘↵</span> Create
           </span>
+          {isDropdownVisible && (
+            <>
+              <span className={styles.shortcut}>
+                <span className={styles.shortcutKey}>↑↓</span> Navigate
+              </span>
+              <span className={styles.shortcut}>
+                <span className={styles.shortcutKey}>Tab</span> Complete
+              </span>
+            </>
+          )}
         </div>
       </div>
     </div>

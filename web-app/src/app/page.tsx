@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, Suspense, useCallback } from "react";
+import { useState, useEffect, Suspense, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Session } from "@/gen/session/v1/types_pb";
 import { SessionList } from "@/components/sessions/SessionList";
 import { SessionListSkeleton } from "@/components/sessions/SessionListSkeleton";
 import { SessionDetail, SessionDetailTab } from "@/components/sessions/SessionDetail";
+import { SessionWizard } from "@/components/sessions/SessionWizard";
+import { ResumeSessionModal } from "@/components/sessions/ResumeSessionModal";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { KeyboardHints } from "@/components/ui/KeyboardHint";
 import { useSessionService } from "@/lib/hooks/useSessionService";
@@ -13,6 +15,7 @@ import { useSessionNotifications } from "@/lib/hooks/useSessionNotifications";
 import { useKeyboard } from "@/lib/hooks/useKeyboard";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { getApiBaseUrl } from "@/lib/config";
+import { SessionFormData } from "@/lib/validation/sessionSchema";
 import styles from "./page.module.css";
 
 function HomeContent() {
@@ -24,6 +27,15 @@ function HomeContent() {
   const [isHelpOpen, setShowHelp] = useState(false);
   const [isSessionFullscreen, setIsSessionFullscreen] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+
+  // Resume modal state
+  const [resumeTarget, setResumeTarget] = useState<Session | null>(null);
+
+  // Wizard modal state
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardInitialData, setWizardInitialData] = useState<Partial<SessionFormData> | undefined>(undefined);
+  // Track whether wizard was opened via query params so we clean up URL on close
+  const openedViaQueryParam = useRef(false);
 
   // Valid tab values for URL parsing
   const validTabs: SessionDetailTab[] = ["terminal", "diff", "vcs", "logs", "info"];
@@ -43,6 +55,7 @@ function HomeContent() {
     sessions,
     loading,
     error,
+    createSession,
     deleteSession,
     pauseSession,
     resumeSession,
@@ -53,6 +66,7 @@ function HomeContent() {
     forkSession,
     listSessions,
     updateSession,
+    getSession,
   } = useSessionService({
     baseUrl: getApiBaseUrl(),
     autoWatch: true,
@@ -166,6 +180,43 @@ function HomeContent() {
     }
   }, [searchParams, sessions]);
 
+  // Detect ?new=true or ?duplicate=<id> query params and auto-open wizard
+  useEffect(() => {
+    const newParam = searchParams.get("new");
+    const duplicateId = searchParams.get("duplicate");
+
+    if (newParam === "true") {
+      setWizardInitialData(undefined);
+      setShowWizard(true);
+      openedViaQueryParam.current = true;
+      // Clean the URL immediately so refresh doesn't re-open the wizard
+      router.replace("/", { scroll: false });
+    } else if (duplicateId) {
+      openedViaQueryParam.current = true;
+      // Clean the URL immediately before async session load
+      router.replace("/", { scroll: false });
+      // Load session data for duplication
+      getSession(duplicateId).then((session) => {
+        if (session) {
+          setWizardInitialData({
+            title: `${session.title}-copy`,
+            path: session.path,
+            workingDir: session.workingDir || "",
+            branch: session.branch || "",
+            program: session.program || "claude",
+            category: session.category || "",
+            prompt: "",
+            autoYes: false,
+          });
+        }
+        setShowWizard(true);
+      }).catch(() => {
+        // If loading the session fails, still open wizard without initial data
+        setShowWizard(true);
+      });
+    }
+  }, [searchParams, getSession]);
+
   // Update URL with session and tab parameters
   const updateUrl = (sessionId: string | null, tab: SessionDetailTab | null) => {
     const params = new URLSearchParams();
@@ -198,17 +249,104 @@ function HomeContent() {
     await deleteSession(sessionId);
   };
 
-  // Handle session duplication
+  // Handle session duplication - open wizard modal with session data
   const handleDuplicateSession = (sessionId: string) => {
-    router.push(`/sessions/new?duplicate=${sessionId}`);
+    openedViaQueryParam.current = false;
+    getSession(sessionId).then((session) => {
+      if (session) {
+        setWizardInitialData({
+          title: `${session.title}-copy`,
+          path: session.path,
+          workingDir: session.workingDir || "",
+          branch: session.branch || "",
+          program: session.program || "claude",
+          category: session.category || "",
+          prompt: "",
+          autoYes: false,
+        });
+      }
+      setShowWizard(true);
+    }).catch(() => {
+      setShowWizard(true);
+    });
   };
 
-  // Handle tag updates - TODO: requires adding 'tags' field to UpdateSessionRequest proto
-  const handleUpdateTags = async (sessionId: string, tags: string[]) => {
-    // Tags not yet supported in UpdateSessionRequest proto
-    // await updateSession(sessionId, { tags });
-    console.warn('Tag updates not yet implemented in proto');
+  // Handle new session - open wizard modal
+  const handleNewSession = () => {
+    openedViaQueryParam.current = false;
+    setWizardInitialData(undefined);
+    setShowWizard(true);
   };
+
+  // Handle wizard completion
+  const handleWizardComplete = async (data: SessionFormData) => {
+    // If useTitleAsBranch is checked, use the session title as the branch name
+    const branchName = data.useTitleAsBranch ? data.title : (data.branch || "");
+
+    await createSession({
+      title: data.title,
+      path: data.path,
+      workingDir: data.workingDir || "",
+      branch: branchName,
+      program: data.program,
+      category: data.category || "",
+      prompt: data.prompt || "",
+      autoYes: data.autoYes,
+      existingWorktree: data.existingWorktree || "",
+    });
+
+    setShowWizard(false);
+    setWizardInitialData(undefined);
+    if (openedViaQueryParam.current) {
+      router.replace("/", { scroll: false });
+      openedViaQueryParam.current = false;
+    }
+  };
+
+  // Handle wizard cancel
+  const handleWizardCancel = () => {
+    setShowWizard(false);
+    setWizardInitialData(undefined);
+    if (openedViaQueryParam.current) {
+      router.replace("/", { scroll: false });
+      openedViaQueryParam.current = false;
+    }
+  };
+
+  // Handle tag updates - sends non-empty tag arrays; clearing all tags is not yet supported
+  // (proto3 repeated fields cannot distinguish "not set" from "empty array")
+  const handleUpdateTags = async (sessionId: string, tags: string[]) => {
+    if (tags.length > 0) {
+      await updateSession(sessionId, { tags });
+    }
+  };
+
+  // Handle resume request - show modal for user to edit title/tags before resuming
+  const handleResumeRequest = useCallback((session: Session) => {
+    setResumeTarget(session);
+  }, []);
+
+  // Handle direct resume (bulk mode) - resume immediately without showing the modal
+  const handleDirectResume = useCallback((session: Session) => {
+    resumeSession(session.id, { title: session.title, tags: [...(session.tags || [])] });
+  }, [resumeSession]);
+
+  // Handle resume confirm - apply updates and resume session
+  // Only close the modal on success; keep it open on error so the user can retry
+  const handleResumeConfirm = useCallback(async (updates: { title: string; tags: string[] }) => {
+    if (!resumeTarget) return;
+    try {
+      await resumeSession(resumeTarget.id, updates);
+      setResumeTarget(null);
+    } catch {
+      // resumeSession dispatches to Redux error state; modal stays open for retry
+    }
+  }, [resumeTarget, resumeSession]);
+
+  // Handle resume cancel
+  const handleResumeCancel = useCallback(() => {
+    setResumeTarget(null);
+  }, []);
 
   // Handle session selection with URL update
   const handleSessionClick = (session: Session) => {
@@ -229,7 +367,11 @@ function HomeContent() {
   useKeyboard({
     "?": () => setShowHelp(true),
     Escape: () => {
-      if (isHelpOpen) {
+      if (resumeTarget) {
+        setResumeTarget(null);
+      } else if (showWizard) {
+        handleWizardCancel();
+      } else if (isHelpOpen) {
         setShowHelp(false);
       } else if (selectedSession) {
         closeSession();
@@ -256,11 +398,13 @@ function HomeContent() {
             onSessionClick={handleSessionClick}
             onDeleteSession={handleDeleteSession}
             onPauseSession={pauseSession}
-            onResumeSession={resumeSession}
+            onResumeSession={handleResumeRequest}
+            onDirectResumeSession={handleDirectResume}
             onDuplicateSession={handleDuplicateSession}
             onRenameSession={renameSession}
             onRestartSession={restartSession}
             onUpdateTags={handleUpdateTags}
+            onNewSession={handleNewSession}
             onCreateCheckpoint={createCheckpoint}
             onListCheckpoints={listCheckpoints}
             onForkFromCheckpoint={forkSession}
@@ -284,6 +428,42 @@ function HomeContent() {
             />
           </div>
         </div>
+      )}
+
+      {/* Session creation wizard modal */}
+      {showWizard && (
+        <div className={styles.modal} onClick={handleWizardCancel}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>{wizardInitialData ? "Duplicate Session" : "Create New Session"}</h2>
+              <button
+                className={styles.closeButton}
+                onClick={handleWizardCancel}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <SessionWizard
+                onComplete={handleWizardComplete}
+                onCancel={handleWizardCancel}
+                initialData={wizardInitialData}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resume session modal */}
+      {resumeTarget && (
+        <ResumeSessionModal
+          key={resumeTarget.id}
+          session={resumeTarget}
+          sessions={sessions}
+          onConfirm={handleResumeConfirm}
+          onCancel={handleResumeCancel}
+        />
       )}
 
       {/* Keyboard shortcuts help modal */}

@@ -8,6 +8,7 @@ import { VcsPanel } from "./VcsPanel";
 import { WorkspaceSwitchModal } from "./WorkspaceSwitchModal";
 import { ApprovalPanel } from "./ApprovalPanel";
 import { SessionLogsTab } from "./SessionLogsTab";
+import { FilesTab } from "./FilesTab";
 import { useSessionService } from "@/lib/hooks/useSessionService";
 import { getApiBaseUrl } from "@/lib/config";
 import { getProgramDisplay, isKnownProgram, PROGRAMS } from "@/lib/constants/programs";
@@ -26,7 +27,7 @@ const TerminalOutput = dynamic(
   }
 );
 
-export type SessionDetailTab = "terminal" | "diff" | "vcs" | "logs" | "info";
+export type SessionDetailTab = "terminal" | "diff" | "vcs" | "logs" | "info" | "files";
 
 interface SessionDetailProps {
   session: Session;
@@ -59,6 +60,7 @@ export function SessionDetail({
 }: SessionDetailProps) {
   const [activeTab, setActiveTab] = useState<SessionDetailTab>(initialTab);
   const [isFullscreen, setIsFullscreen] = useState(initialTab === "terminal" || initialTab === "diff" || initialTab === "vcs");
+  const [filesSelectedPath, setFilesSelectedPath] = useState<string | null>(null);
   const [showWorkspaceSwitchModal, setShowWorkspaceSwitchModal] = useState(false);
   const [isEditingProgram, setIsEditingProgram] = useState(false);
   const [programValue, setProgramValue] = useState(session.program || "");
@@ -73,6 +75,7 @@ export function SessionDetail({
     { id: "terminal", label: "Terminal", icon: "⌨️" },
     { id: "diff", label: "Diff", icon: "📝" },
     { id: "vcs", label: "VCS", icon: "🌿" },
+    { id: "files", label: "Files", icon: "📁" },
     { id: "logs", label: "Logs", icon: "📋" },
     { id: "info", label: "Info", icon: "ℹ️" },
   ];
@@ -239,7 +242,24 @@ export function SessionDetail({
         )}
         {activeTab === "vcs" && (
           <div className={styles.tabContent}>
-            <VcsPanel sessionId={session.id} baseUrl={getApiBaseUrl()} />
+            <VcsPanel
+              sessionId={session.id}
+              baseUrl={getApiBaseUrl()}
+              onNavigateToFile={(path) => {
+                setFilesSelectedPath(path);
+                handleTabChange("files");
+              }}
+            />
+          </div>
+        )}
+        {activeTab === "files" && (
+          <div className={styles.tabContent}>
+            <FilesTab
+              sessionId={session.id}
+              baseUrl={getApiBaseUrl()}
+              initialSelectedPath={filesSelectedPath}
+              onSelectedPathChange={setFilesSelectedPath}
+            />
           </div>
         )}
         {activeTab === "logs" && (

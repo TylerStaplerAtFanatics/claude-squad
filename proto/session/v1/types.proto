@@ -878,6 +878,37 @@ message DatabaseInfo {
 }
 
 // ============================================================================
+// File Viewer Types
+// ============================================================================
+
+// FileNode represents a single entry (file or directory) in a session's worktree.
+message FileNode {
+  // File or directory name (basename only).
+  string name = 1;
+
+  // Path relative to the session worktree root.
+  string path = 2;
+
+  // True if this entry is a directory.
+  bool is_dir = 3;
+
+  // File size in bytes (0 for directories).
+  int64 size = 4;
+
+  // Git status letter (M/A/D/R/?). Populated client-side; server always returns empty.
+  string git_status = 5;
+
+  // True if this entry is a symbolic link.
+  bool is_symlink = 6;
+
+  // Symlink target path (only set when is_symlink=true).
+  string symlink_target = 7;
+
+  // True if this entry is matched by .gitignore rules.
+  bool is_ignored = 8;
+}
+
+// ============================================================================
 // Checkpoint Types
 // ============================================================================
 

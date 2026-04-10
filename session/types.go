@@ -299,6 +299,19 @@ func (e ErrTagTooLong) Error() string {
 // MaxTagLength is the maximum allowed length for a single tag.
 const MaxTagLength = 50
 
+// MaxTagCount is the maximum number of tags allowed per session.
+const MaxTagCount = 100
+
+// ErrTooManyTags is returned when setting more tags than MaxTagCount allows.
+type ErrTooManyTags struct {
+	Count    int
+	MaxCount int
+}
+
+func (e ErrTooManyTags) Error() string {
+	return fmt.Sprintf("too many tags: %d (maximum is %d)", e.Count, e.MaxCount)
+}
+
 // isValidTitle validates that a title contains only allowed characters:
 // alphanumeric, spaces, dashes, and underscores
 func isValidTitle(title string) bool {
