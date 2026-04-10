@@ -205,6 +205,11 @@ service SessionService {
   // Files over 10MB are rejected; files over 1MB are served truncated with is_truncated=true.
   rpc GetFileContent(GetFileContentRequest) returns (GetFileContentResponse) {}
 
+  // SearchFiles performs a recursive name-substring search in a session's worktree.
+  // Returns matching files with full relative paths for frontend tree reconstruction.
+  // Results are capped at max_results (default 500). Minimum query length is 2 characters.
+  rpc SearchFiles(SearchFilesRequest) returns (SearchFilesResponse) {}
+
   // Path Completion RPCs
 
   // ListPathCompletions returns filesystem directory entries matching a path prefix.
@@ -1216,6 +1221,32 @@ message GetFileContentResponse {
 
   // True if the file exceeded 1MB and was truncated to the first 1MB.
   bool is_truncated = 6;
+}
+
+message SearchFilesRequest {
+  // Session ID whose worktree to search.
+  string session_id = 1;
+
+  // Substring to match against file names and relative paths (case-insensitive).
+  // Minimum 2 characters; shorter queries return empty results.
+  string query = 2;
+
+  // If true, gitignored files are included in search results.
+  bool include_ignored = 3;
+
+  // Maximum number of results to return. 0 uses the server default (500).
+  int32 max_results = 4;
+}
+
+message SearchFilesResponse {
+  // Matching files with full relative paths from worktree root.
+  repeated FileNode files = 1;
+
+  // True if the result set was capped at max_results.
+  bool truncated = 2;
+
+  // Total matches found before the cap was applied.
+  int32 total_matches = 3;
 }
 
 // ============================================================================

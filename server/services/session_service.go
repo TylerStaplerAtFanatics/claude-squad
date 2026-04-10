@@ -1827,6 +1827,14 @@ func (s *SessionService) GetFileContent(
 	return s.fileSvc.GetFileContent(ctx, req)
 }
 
+// SearchFiles performs a recursive name-substring search in a session's worktree.
+func (s *SessionService) SearchFiles(
+	ctx context.Context,
+	req *connect.Request[sessionv1.SearchFilesRequest],
+) (*connect.Response[sessionv1.SearchFilesResponse], error) {
+	return s.fileSvc.SearchFiles(ctx, req)
+}
+
 // checkpointToProto converts a session.Checkpoint to a proto CheckpointProto.
 func checkpointToProto(cp *session.Checkpoint) *sessionv1.CheckpointProto {
 	if cp == nil {

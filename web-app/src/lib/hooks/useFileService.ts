@@ -4,10 +4,10 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { SessionService } from "@/gen/session/v1/session_pb";
-import type { ListFilesResponse, GetFileContentResponse } from "@/gen/session/v1/session_pb";
+import type { ListFilesResponse, GetFileContentResponse, SearchFilesResponse } from "@/gen/session/v1/session_pb";
 import type { FileNode } from "@/gen/session/v1/types_pb";
 
-export type { FileNode, ListFilesResponse, GetFileContentResponse };
+export type { FileNode, ListFilesResponse, GetFileContentResponse, SearchFilesResponse };
 
 interface UseGetFileContentResult {
   data: GetFileContentResponse | null;
@@ -38,6 +38,24 @@ export async function fetchDirectoryFiles(
     sessionId,
     path: path || ".",
     includeIgnored,
+  });
+}
+
+/**
+ * searchFiles calls the SearchFiles RPC and returns matching files with full paths.
+ */
+export async function searchFiles(
+  sessionId: string,
+  query: string,
+  includeIgnored: boolean,
+  baseUrl: string
+): Promise<SearchFilesResponse> {
+  const client = createFileClient(baseUrl);
+  return await client.searchFiles({
+    sessionId,
+    query,
+    includeIgnored,
+    maxResults: 500,
   });
 }
 

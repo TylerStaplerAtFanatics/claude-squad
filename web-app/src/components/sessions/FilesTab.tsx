@@ -57,6 +57,8 @@ export function FilesTab({
   const [selectedPath, setSelectedPath] = useState<string | null>(initialSelectedPath ?? null);
   const [includeIgnored, setIncludeIgnored] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchResultCount, setSearchResultCount] = useState<number | null>(null);
+  const [searchResultTruncated, setSearchResultTruncated] = useState(false);
   const [gitStatusMap, setGitStatusMap] = useState<Map<string, string>>(new Map());
   const [vcsLoading, setVcsLoading] = useState(false);
   const lastVcsFetchRef = useRef<number>(0);
@@ -134,11 +136,16 @@ export function FilesTab({
             ref={searchInputRef}
             type="search"
             className={styles.searchInput}
-            placeholder="Filter files… (⌘F)"
+            placeholder="Search files… (⌘F)"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            aria-label="Filter files"
+            aria-label="Search files"
           />
+          {searchResultCount !== null && searchTerm.length >= 2 && (
+            <span className={styles.searchCount} title={searchResultTruncated ? "Results truncated at 500" : undefined}>
+              {searchResultCount}{searchResultTruncated ? "+" : ""} match{searchResultCount !== 1 ? "es" : ""}
+            </span>
+          )}
           <label className={styles.toolbarLabel} title="Show gitignored files">
             <input
               type="checkbox"
@@ -173,6 +180,10 @@ export function FilesTab({
             includeIgnored={includeIgnored}
             searchTerm={searchTerm}
             onCollapseAllRef={(fn) => { fileTreeCollapseRef.current = fn; }}
+            onSearchResults={(count, truncated) => {
+              setSearchResultCount(count);
+              setSearchResultTruncated(truncated);
+            }}
           />
         </div>
       </div>
