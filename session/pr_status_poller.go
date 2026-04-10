@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -246,16 +247,16 @@ func (p *PRStatusPoller) fetchAndUpdatePRStatus(inst *Instance) {
 		}
 		prInfo, err := github.GetPRForBranch(ctx, owner, repo, branch)
 		if err != nil {
+			if errors.Is(err, github.ErrNoPR) {
+				// No PR exists yet for this branch
+				p.applyNoPR(inst)
+				return
+			}
 			if p.handleFetchError(err) {
 				return // rate limit or auth error handled
 			}
 			log.WarningLog.Printf("PRStatusPoller: PR discovery for '%s' (%s/%s %s): %v",
 				inst.Title, owner, repo, branch, err)
-			return
-		}
-		if prInfo == nil {
-			// No PR exists yet for this branch
-			p.applyNoPR(inst)
 			return
 		}
 		// Persist discovered PR number

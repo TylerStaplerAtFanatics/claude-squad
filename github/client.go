@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"sort"
@@ -10,6 +11,9 @@ import (
 	"strings"
 	"time"
 )
+
+// ErrNoPR is returned by GetPRForBranch when no pull request exists for the branch.
+var ErrNoPR = errors.New("no pull request found for branch")
 
 // PRInfo contains metadata about a GitHub pull request
 type PRInfo struct {
@@ -288,7 +292,7 @@ func GetPRForBranch(ctx context.Context, owner, repo, branch string) (*PRInfo, e
 		return nil, fmt.Errorf("failed to parse PR list: %w", err)
 	}
 	if len(prs) == 0 {
-		return nil, nil
+		return nil, ErrNoPR
 	}
 
 	// Use most recently updated PR if multiple exist for the branch
