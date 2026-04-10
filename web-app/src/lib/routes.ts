@@ -4,7 +4,7 @@
 
 export const routes = {
   home: "/",
-  sessionCreate: "/sessions/new",
+  sessionCreate: "/?new=true",
   reviewQueue: "/review-queue",
   rules: "/rules",
   history: "/history",

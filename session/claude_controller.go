@@ -163,6 +163,13 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 	// Set up context for lifecycle management
 	cc.ctx, cc.cancel = context.WithCancel(ctx)
 
+	// Drive idle detector from PTY events so lastActivity reflects actual output time.
+	// This replaces polling-only updates: lastActivity now resets on every PTY read,
+	// giving accurate idle duration even when active patterns persist in old scrollback.
+	cc.responseStream.SetOnOutput(func() {
+		cc.idleDetector.RecordActivity()
+	})
+
 	// Start response stream
 	if err := cc.responseStream.Start(cc.ctx); err != nil {
 		return fmt.Errorf("failed to start response stream: %w", err)

@@ -1895,6 +1895,53 @@ func (i *Instance) HasClaudeSession() bool {
 	return i.claudeSession != nil && i.claudeSession.SessionID != ""
 }
 
+// tryExtractConversationUUID attempts to detect the Claude conversation UUID
+// by inspecting the open files of the tmux pane process. This uses the
+// HistoryFileDetector to find JSONL files in ~/.claude/projects/.
+//
+// IMPORTANT: This method assumes stateMutex is already held by the caller.
+// It must NOT be called without the lock (e.g., from SwitchWorkspace which
+// holds stateMutex). It sets claudeSession fields directly.
+//
+// The tmux session must be alive for this to work, because it inspects
+// the foreground process's open file descriptors via proc_pidinfo.
+func (i *Instance) tryExtractConversationUUID() {
+	// Skip if we already have a conversation UUID.
+	if i.claudeSession != nil && i.claudeSession.SessionID != "" {
+		return
+	}
+
+	// Need an alive tmux session to get the pane PID.
+	if !i.tmuxManager.DoesSessionExist() {
+		log.DebugLog.Printf("tryExtractConversationUUID: tmux session not alive for '%s'", i.Title)
+		return
+	}
+
+	pid, err := i.tmuxManager.GetPanePID()
+	if err != nil {
+		log.DebugLog.Printf("tryExtractConversationUUID: could not get pane PID for '%s': %v", i.Title, err)
+		return
+	}
+
+	detector := NewHistoryFileDetectorWithRealInspector()
+	info, err := detector.Detect(pid)
+	if err != nil {
+		log.WarningLog.Printf("tryExtractConversationUUID: detect error for '%s' (pid=%d): %v", i.Title, pid, err)
+		return
+	}
+	if info == nil {
+		log.DebugLog.Printf("tryExtractConversationUUID: no JSONL file found for '%s' (pid=%d)", i.Title, pid)
+		return
+	}
+
+	// Set the fields directly (caller holds stateMutex).
+	if i.claudeSession == nil {
+		i.claudeSession = &ClaudeSessionData{}
+	}
+	i.claudeSession.SessionID = info.ConversationUUID
+	i.HistoryFilePath = info.HistoryFilePath
+}
+
 // GetConversationUUID returns the Claude conversation UUID, or "" if not linked.
 func (i *Instance) GetConversationUUID() string {
 	if i.claudeSession == nil {
@@ -1932,6 +1979,33 @@ func (i *Instance) SetHistoryInfo(conversationUUID, historyFilePath string) {
 	}
 	i.claudeSession.SessionID = conversationUUID
 	i.HistoryFilePath = historyFilePath
+}
+
+// CaptureCurrentState records the pane's current working directory into WorkingDir.
+// Called during graceful shutdown so cold restore can restart in the right directory.
+// No-op if the session is not started, paused, or the tmux session is dead.
+func (i *Instance) CaptureCurrentState() error {
+	if !i.started || i.Paused() {
+		return nil
+	}
+	if !i.tmuxManager.DoesSessionExist() {
+		return nil
+	}
+	tmuxSession := i.tmuxManager.Session()
+	if tmuxSession == nil {
+		return nil
+	}
+	path, err := tmuxSession.GetPaneCurrentPath()
+	if err != nil {
+		return fmt.Errorf("CaptureCurrentState '%s': %w", i.Title, err)
+	}
+	if path == "" {
+		return nil
+	}
+	i.stateMutex.Lock()
+	defer i.stateMutex.Unlock()
+	i.WorkingDir = path
+	return nil
 }
 
 // CreateCheckpoint captures a named state bookmark for this session.

@@ -19,6 +19,7 @@ import (
 type ServerDependencies struct {
 	SessionService          *services.SessionService
 	Storage                 *session.Storage
+	Instances               []*session.Instance
 	EventBus                *events.EventBus
 	StatusManager           *session.InstanceStatusManager
 	ReviewQueue             *session.ReviewQueue
@@ -29,6 +30,7 @@ type ServerDependencies struct {
 	TmuxStreamerManager     *session.ExternalTmuxStreamerManager
 	ExternalDiscovery       *session.ExternalSessionDiscovery
 	ExternalApprovalMonitor *session.ExternalApprovalMonitor
+	HistoryLinker           *session.HistoryLinker
 }
 
 // BuildDependencies constructs and wires all server dependencies in the correct order.
@@ -63,6 +65,7 @@ func BuildDependencies() (*ServerDependencies, error) {
 	return &ServerDependencies{
 		SessionService:          rt.SessionService,
 		Storage:                 rt.Storage,
+		Instances:               rt.Instances,
 		EventBus:                rt.EventBus,
 		StatusManager:           rt.StatusManager,
 		ReviewQueue:             rt.ReviewQueue,
@@ -73,6 +76,7 @@ func BuildDependencies() (*ServerDependencies, error) {
 		TmuxStreamerManager:     rt.TmuxStreamerManager,
 		ExternalDiscovery:       rt.ExternalDiscovery,
 		ExternalApprovalMonitor: rt.ExternalApprovalMonitor,
+		HistoryLinker:           rt.HistoryLinker,
 	}, nil
 }
 
@@ -343,6 +347,7 @@ type RuntimeDeps struct {
 	ExternalDiscovery       *session.ExternalSessionDiscovery
 	ExternalApprovalMonitor *session.ExternalApprovalMonitor
 	PRStatusPoller          *session.PRStatusPoller
+	HistoryLinker           *session.HistoryLinker
 }
 
 // BuildRuntimeDeps constructs Phase 3 dependencies using Phase 2 outputs.
@@ -438,6 +443,12 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 	sessionService.SetReactiveQueueManager(reactiveQueueMgr)
 	log.InfoLog.Printf("ReactiveQueueManager initialized")
 
+	// Step 8.5: HistoryLinker — detects Claude JSONL files and links conversation
+	// UUIDs to sessions so cold restore can use --resume on restart.
+	historyLinker := session.NewHistoryLinkerFromRealInspector()
+	historyLinker.SetInstances(instances)
+	log.InfoLog.Printf("HistoryLinker initialized with %d instances", len(instances))
+
 	// Step 9: ScrollbackManager (independent of above)
 	homeDir, _ := os.UserHomeDir()
 	scrollbackPath := filepath.Join(homeDir, ".stapler-squad", "sessions")
@@ -463,12 +474,14 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 		instance.SetStatusManager(statusManager)
 		reviewQueuePoller.AddInstance(instance)
 		svc.PRStatusPoller.AddInstance(instance)
-		log.InfoLog.Printf("Added external session '%s' to review queue poller", instance.Title)
+		historyLinker.AddInstance(instance)
+		log.InfoLog.Printf("Added external session '%s' to review queue poller, PR status poller, and history linker", instance.Title)
 	})
 	externalDiscovery.OnSessionRemoved(func(instance *session.Instance) {
 		reviewQueuePoller.RemoveInstance(instance.Title)
 		svc.PRStatusPoller.RemoveInstance(instance.Title)
-		log.InfoLog.Printf("Removed external session '%s' from review queue poller", instance.Title)
+		historyLinker.RemoveInstance(instance.Title)
+		log.InfoLog.Printf("Removed external session '%s' from review queue poller, PR status poller, and history linker", instance.Title)
 		reviewQueue.Remove(instance.Title)
 		if err := storage.DeleteInstance(instance.Title); err != nil {
 			log.WarningLog.Printf("Failed to remove external session '%s' from storage: %v", instance.Title, err)
@@ -532,5 +545,6 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 		ExternalDiscovery:       externalDiscovery,
 		ExternalApprovalMonitor: externalApprovalMonitor,
 		PRStatusPoller:          svc.PRStatusPoller,
+		HistoryLinker:           historyLinker,
 	}, nil
 }

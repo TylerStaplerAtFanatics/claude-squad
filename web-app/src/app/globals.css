@@ -12,6 +12,16 @@
   --text-muted: #6b6b6b;
   --text-disabled: #9a9a9a;
 
+  /* File viewer / code panel tokens (always dark, VS Code-style) */
+  --surface-bg: #1e1e1e;
+  --surface-header: #252526;
+  --surface-hover: #3a3a3a;
+  --text-default: #d4d4d4;
+  --accent-color: #4d8bf7;
+  --error-color: #f85149;
+  --icon-color: #888888;
+  --selection-bg: rgba(40, 100, 255, 0.25);
+
   /* Terminal-specific colors (always dark, for terminal modals) */
   --terminal-background: #1e1e1e;
   --terminal-foreground: #d4d4d4;

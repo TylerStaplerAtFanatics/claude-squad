@@ -1,0 +1,174 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--surface-bg, #1e1e1e);
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted, #666);
+  gap: 12px;
+}
+
+.emptyIcon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--text-muted, #888);
+}
+
+.error {
+  padding: 24px;
+  color: var(--error-color, #f85149);
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-color, #555);
+  border-top-color: var(--accent-color, #4d8bf7);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Breadcrumb */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-color, #333);
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  background: var(--surface-header, #252526);
+  overflow: hidden;
+}
+
+.breadcrumbSegment {
+  color: var(--text-muted, #888);
+}
+
+.breadcrumbCurrent {
+  color: var(--text-default, #d4d4d4);
+  font-weight: 500;
+}
+
+.breadcrumbSep {
+  color: var(--text-muted, #555);
+  padding: 0 2px;
+}
+
+/* Truncation warning */
+.truncationWarning {
+  padding: 6px 12px;
+  background: rgba(204, 167, 0, 0.1);
+  border-bottom: 1px solid rgba(204, 167, 0, 0.3);
+  color: #cca700;
+  font-size: 12px;
+}
+
+/* Viewer area */
+.viewer {
+  flex: 1;
+  overflow: auto;
+  height: 0; /* allow flex child to scroll */
+}
+
+/* Shiki output */
+.shikiOutput {
+  min-height: 100%;
+}
+
+/* Override Shiki's generated container to fill height */
+.shikiOutput pre {
+  margin: 0;
+  padding: 16px;
+  min-height: 100%;
+  background: transparent !important;
+  font-size: 13px;
+  line-height: 1.6;
+  font-family: var(--font-mono, 'Menlo', 'Consolas', monospace);
+}
+
+/* Dual-theme support via CSS custom properties. */
+.shikiOutput code {
+  counter-reset: line;
+}
+
+.shikiOutput .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 40px;
+  text-align: right;
+  padding-right: 16px;
+  color: var(--text-muted, #555);
+  user-select: none;
+}
+
+/* Plain text fallback */
+.plainPre {
+  margin: 0;
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  font-family: var(--font-mono, 'Menlo', 'Consolas', monospace);
+  color: var(--text-default, #d4d4d4);
+  white-space: pre;
+  overflow: auto;
+}
+
+/* CodeMirror editor wrapper */
+.codeMirrorEditor {
+  height: 100%;
+}
+
+.codeMirrorEditor .cm-editor {
+  height: 100%;
+  font-size: 13px;
+}
+
+/* Binary placeholder */
+.binaryPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 8px;
+  color: var(--text-muted, #666);
+}
+
+.binaryIcon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.binaryTitle {
+  font-size: 15px;
+  color: var(--text-default, #d4d4d4);
+  margin: 0;
+}
+
+.binaryMeta {
+  font-size: 12px;
+  margin: 0;
+}
