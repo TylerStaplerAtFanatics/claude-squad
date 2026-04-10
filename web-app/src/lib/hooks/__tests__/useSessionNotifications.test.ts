@@ -29,7 +29,14 @@ jest.mock("@/gen/session/v1/session_pb", () => ({
 
 jest.mock("@/gen/session/v1/events_pb", () => ({}));
 
-jest.mock("@/components/ui/NotificationToast", () => ({}));
+jest.mock("@/lib/types/notification", () => ({}));
+jest.mock("@/lib/utils/notificationMapping", () => ({
+  mapNotificationType: jest.fn((t: number) => t),
+  mapPriority: jest.fn((p: number) => p),
+}));
+jest.mock("@/lib/notification-policy", () => ({
+  TOAST_DEDUP_WINDOW_MS: 10_000,
+}));
 
 jest.mock("@/lib/config", () => ({
   getApiBaseUrl: () => "http://localhost:8543",

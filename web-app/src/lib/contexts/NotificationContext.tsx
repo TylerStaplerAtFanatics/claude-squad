@@ -1,18 +1,16 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
-import { NotificationData, NotificationToast } from "@/components/ui/NotificationToast";
+import { NotificationToast } from "@/components/ui/NotificationToast";
+import { NotificationData, NotificationHistoryItem } from "@/lib/types/notification";
 import { ReviewItem } from "@/gen/session/v1/types_pb";
-import { NotificationType, NotificationPriority } from "@/gen/session/v1/types_pb";
 import { useAuditLog } from "@/lib/hooks/useAuditLog";
 import { useNotificationHistory } from "@/lib/hooks/useNotificationHistory";
 import { groupNotifications } from "@/lib/utils/notificationGrouping";
+import { mapNotificationType, mapPriority } from "@/lib/utils/notificationMapping";
+import { TOAST_STALE_MS, ACTIONABLE_TOAST_STALE_MS, isActionable } from "@/lib/notification-policy";
 
-export interface NotificationHistoryItem extends NotificationData {
-  isRead: boolean;
-  /** Server-provided occurrence count for deduplicated records. 0 means single/unknown (backward compat). */
-  occurrenceCount?: number;
-}
+export type { NotificationData, NotificationHistoryItem };
 
 interface NotificationContextValue {
   notifications: NotificationData[];
@@ -22,13 +20,13 @@ interface NotificationContextValue {
   /** Add to history panel only — no toast, no sound. For informational events like task_complete. */
   addToHistoryOnly: (notification: Omit<NotificationData, "id" | "timestamp">) => void;
   removeNotification: (id: string) => void;
-  clearAll: () => void;
   /**
-   * Show a notification for a review queue item.
-   * @param item - The review item to show notification for
-   * @param onView - Optional callback when "View Session" is clicked
-   * @param onAcknowledge - Optional callback when "Dismiss" is clicked (should call backend acknowledge)
+   * Acknowledge one or more notifications: removes the active toast(s) and marks
+   * them as read in the history panel. Use this for all user-triggered dismissals
+   * so the two operations are always kept in sync.
    */
+  acknowledgeNotification: (id: string | string[]) => void;
+  clearAll: () => void;
   showSessionNotification: (
     item: ReviewItem,
     onView?: () => void,
@@ -41,78 +39,19 @@ interface NotificationContextValue {
   removeFromHistory: (id: string) => void;
   clearHistory: () => void;
   getUnreadCount: () => number;
-  /** Whether the initial history fetch is in progress */
   historyLoading: boolean;
-  /** Whether there are more history entries to load */
   historyHasMore: boolean;
-  /** Load more history entries (pagination) */
   loadMoreHistory: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
-
-/**
- * Map a protobuf NotificationType to the frontend string union type.
- */
-function mapNotificationType(
-  protoType: number
-): NotificationData["notificationType"] {
-  switch (protoType) {
-    case NotificationType.APPROVAL_NEEDED:
-      return "approval_needed";
-    case NotificationType.ERROR:
-    case NotificationType.FAILURE:
-      return "error";
-    case NotificationType.WARNING:
-      return "warning";
-    case NotificationType.TASK_COMPLETE:
-    case NotificationType.PROCESS_FINISHED:
-      return "task_complete";
-    case NotificationType.INFO:
-    case NotificationType.STATUS_CHANGE:
-    case NotificationType.DEBUG:
-      return "info";
-    case NotificationType.INPUT_REQUIRED:
-    case NotificationType.CONFIRMATION_NEEDED:
-      return "question";
-    case NotificationType.PROCESS_STARTED:
-      return "progress";
-    case NotificationType.CUSTOM:
-      return "custom";
-    default:
-      return "info";
-  }
-}
-
-/**
- * Map a protobuf NotificationPriority to the frontend string union type.
- */
-function mapPriority(
-  protoPriority: number
-): "urgent" | "high" | "medium" | "low" {
-  switch (protoPriority) {
-    case NotificationPriority.URGENT:
-      return "urgent";
-    case NotificationPriority.HIGH:
-      return "high";
-    case NotificationPriority.MEDIUM:
-      return "medium";
-    case NotificationPriority.LOW:
-      return "low";
-    default:
-      return "medium";
-  }
-}
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>([]);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
-  // Initialize audit logging
   const auditLog = useAuditLog();
-
-  // Use the persistent notification history hook
   const history = useNotificationHistory();
 
   // Hydrate notificationHistory from the backend on initial load
@@ -133,28 +72,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       }));
 
       setNotificationHistory((prev) => {
-        // Merge backend records with any real-time notifications already in state.
-        // Deduplicate by ID first, then by (sessionId, notificationType) key to
-        // prevent the same logical notification appearing twice during the window
-        // between a real-time arrival and the next history fetch.
         const existingIds = new Set(prev.map((n) => n.id));
-
-        // Build a set of dedup keys from existing real-time items
         const existingDedupKeys = new Set(
           prev.map((n) => `${n.sessionId ?? ""}:${n.notificationType ?? ""}`)
         );
 
         const newFromBackend = backendItems.filter((n) => {
-          // Skip if same ID already present
           if (existingIds.has(n.id)) return false;
-          // Skip if a real-time item with same (sessionId, notificationType) exists
-          // (the real-time item is more current)
           const dedupKey = `${n.sessionId ?? ""}:${n.notificationType ?? ""}`;
           if (existingDedupKeys.has(dedupKey)) return false;
           return true;
         });
 
-        // Combine: real-time items first (newest), then backend items
         return [...prev, ...newFromBackend];
       });
     }
@@ -163,28 +92,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const addNotification = useCallback(
     (notification: Omit<NotificationData, "id" | "timestamp">) => {
       const id = `notification-${Date.now()}-${Math.random()}`;
-      const newNotification: NotificationData = {
-        ...notification,
-        id,
-        timestamp: Date.now(),
-      };
+      const newNotification: NotificationData = { ...notification, id, timestamp: Date.now() };
 
-      // Add to active toasts
-      setNotifications((prev) => [...prev, newNotification]);
+      // Only show the latest toast per session — replace any existing toast for the
+      // same sessionId so they don't stack. Older notifications remain in history.
+      setNotifications((prev) => {
+        const without = prev.filter((n) => n.sessionId !== notification.sessionId);
+        return [...without, newNotification];
+      });
 
-      // Add to persistent history with deduplication
       setNotificationHistory((prev) => {
-        // Deduplicate by ID
-        if (prev.some((n) => n.id === id)) {
-          return prev;
-        }
-        return [
-          {
-            ...newNotification,
-            isRead: false,
-          },
-          ...prev, // Newest first
-        ];
+        if (prev.some((n) => n.id === id)) return prev;
+        return [{ ...newNotification, isRead: false }, ...prev];
       });
     },
     []
@@ -193,12 +112,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const addToHistoryOnly = useCallback(
     (notification: Omit<NotificationData, "id" | "timestamp">) => {
       const id = `notification-${Date.now()}-${Math.random()}`;
-      const newNotification: NotificationData = {
-        ...notification,
-        id,
-        timestamp: Date.now(),
-      };
-      // History-only: skip the active toasts list entirely
+      const newNotification: NotificationData = { ...notification, id, timestamp: Date.now() };
       setNotificationHistory((prev) => {
         if (prev.some((n) => n.id === id)) return prev;
         return [{ ...newNotification, isRead: false }, ...prev];
@@ -217,18 +131,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const showSessionNotification = useCallback(
     (item: ReviewItem, onView?: () => void, onAcknowledge?: () => void) => {
-      // Map priority from protobuf enum to our notification priority
-      let priority: "urgent" | "high" | "medium" | "low" = "medium";
-      if (item.priority === 0) priority = "urgent";
-      else if (item.priority === 1) priority = "high";
-      else if (item.priority === 2) priority = "medium";
-      else if (item.priority === 3) priority = "low";
-
       addNotification({
         sessionId: item.sessionId,
         sessionName: item.sessionName || "Unnamed Session",
         message: item.context || "This session is waiting for your input",
-        priority,
+        priority: mapPriority(item.priority),
         onView,
         onAcknowledge,
       });
@@ -236,19 +143,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     [addNotification]
   );
 
-  // Remove stale toasts (older than 5 minutes) every minute.
-  // Actionable types that block Claude (approval_needed, question) are exempt —
-  // they must stay visible until the user explicitly responds.
+  // Remove stale toasts every minute.
+  // Non-actionable: removed after TOAST_STALE_MS (5 min).
+  // Actionable (approval_needed, question): removed after ACTIONABLE_TOAST_STALE_MS (6 min).
+  // Both remain in the notification history panel regardless.
   useEffect(() => {
-    const STALE_MS = 5 * 60 * 1000;
     const interval = setInterval(() => {
-      const cutoff = Date.now() - STALE_MS;
+      const now = Date.now();
       setNotifications((prev) =>
-        prev.filter(
-          (n) =>
-            n.timestamp >= cutoff ||
-            n.notificationType === "approval_needed" ||
-            n.notificationType === "question"
+        prev.filter((n) =>
+          isActionable(n.notificationType)
+            ? now - n.timestamp < ACTIONABLE_TOAST_STALE_MS
+            : now - n.timestamp < TOAST_STALE_MS
         )
       );
     }, 60_000);
@@ -258,12 +164,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const togglePanel = useCallback(() => {
     setIsPanelOpen((prev) => {
       const newState = !prev;
-      // Log panel open/close
-      if (newState) {
-        auditLog.logNotificationPanelOpened();
-      } else {
-        auditLog.logNotificationPanelClosed();
-      }
+      if (newState) auditLog.logNotificationPanelOpened();
+      else auditLog.logNotificationPanelClosed();
       return newState;
     });
   }, [auditLog]);
@@ -273,15 +175,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const idSet = new Set(ids);
     setNotificationHistory((prev) => {
       for (const n of prev) {
-        if (idSet.has(n.id)) {
-          auditLog.logNotificationMarkedRead(n.id, n.sessionId);
-        }
+        if (idSet.has(n.id)) auditLog.logNotificationMarkedRead(n.id, n.sessionId);
       }
       return prev.map((n) => (idSet.has(n.id) ? { ...n, isRead: true } : n));
     });
-    // Also persist to backend
     history.markAsRead(ids);
   }, [auditLog, history]);
+
+  /**
+   * Acknowledge one or more notifications: removes the active toast(s) AND marks
+   * them as read in the history panel in a single atomic operation.
+   *
+   * Always prefer this over calling removeNotification + markAsRead separately.
+   */
+  const acknowledgeNotification = useCallback((id: string | string[]) => {
+    const ids = Array.isArray(id) ? id : [id];
+    const idSet = new Set(ids);
+    setNotifications((prev) => prev.filter((n) => !idSet.has(n.id)));
+    markAsRead(ids);
+  }, [markAsRead]);
 
   const markAsReadBySessionId = useCallback((sessionId: string | string[]) => {
     const sessionIds = new Set(Array.isArray(sessionId) ? sessionId : [sessionId]);
@@ -294,9 +206,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
         return n;
       });
-      if (idsToMark.length > 0) {
-        history.markAsRead(idsToMark);
-      }
+      if (idsToMark.length > 0) history.markAsRead(idsToMark);
       return updated;
     });
   }, [history]);
@@ -304,45 +214,30 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const markAllAsRead = useCallback(() => {
     setNotificationHistory((prev) => {
       const unreadCount = prev.filter((n) => !n.isRead).length;
-      if (unreadCount > 0) {
-        auditLog.logNotificationMarkedAllRead(unreadCount);
-      }
+      if (unreadCount > 0) auditLog.logNotificationMarkedAllRead(unreadCount);
       return prev.map((n) => ({ ...n, isRead: true }));
     });
-    // Also persist to backend
     history.markAllAsRead();
   }, [auditLog, history]);
 
   const removeFromHistory = useCallback((id: string) => {
     setNotificationHistory((prev) => {
       const notification = prev.find((n) => n.id === id);
-      if (notification) {
-        auditLog.logNotificationRemoved(notification.id, notification.sessionId);
-      }
+      if (notification) auditLog.logNotificationRemoved(notification.id, notification.sessionId);
       return prev.filter((n) => n.id !== id);
     });
   }, [auditLog]);
 
   const clearHistory = useCallback(() => {
     setNotificationHistory((prev) => {
-      if (prev.length > 0) {
-        auditLog.logNotificationHistoryCleared(prev.length);
-      }
+      if (prev.length > 0) auditLog.logNotificationHistoryCleared(prev.length);
       return [];
     });
-    // Also persist to backend
     history.clearHistory();
   }, [auditLog, history]);
 
-  // Pre-compute unread count once when history changes (avoids O(N log N) groupNotifications
-  // being called on every Header render via getUnreadCount()).
   const unreadCount = useMemo(() => {
-    // Return count of distinct unread (sessionId, notificationType) groups,
-    // not the raw number of unread records. This ensures the header badge
-    // reflects deduplicated groups even for stale pre-dedup data.
-    const unreadGroups = groupNotifications(
-      notificationHistory.filter((n) => !n.isRead)
-    );
+    const unreadGroups = groupNotifications(notificationHistory.filter((n) => !n.isRead));
     return unreadGroups.length;
   }, [notificationHistory]);
 
@@ -357,6 +252,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         addNotification,
         addToHistoryOnly,
         removeNotification,
+        acknowledgeNotification,
         clearAll,
         showSessionNotification,
         togglePanel,
@@ -372,7 +268,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       }}
     >
       {children}
-      {/* Render notification toasts */}
       <div
         style={{
           position: "fixed",
