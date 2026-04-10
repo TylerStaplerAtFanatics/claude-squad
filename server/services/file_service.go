@@ -14,7 +14,6 @@ import (
 	gitignore "github.com/go-git/go-git/v5/plumbing/format/gitignore"
 
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
-	"github.com/tstapler/stapler-squad/session"
 )
 
 const (
@@ -64,29 +63,12 @@ var knownTextExtensions = map[string]bool{
 
 // FileService handles ListFiles and GetFileContent RPCs.
 type FileService struct {
-	storage *session.Storage
+	workspace WorkspaceProvider
 }
 
-// NewFileService creates a FileService with the given storage backend.
-func NewFileService(storage *session.Storage) *FileService {
-	return &FileService{storage: storage}
-}
-
-// findInstance loads instances from storage and returns the one matching id.
-func (fs *FileService) findInstance(id string) (*session.Instance, error) {
-	if fs.storage == nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("storage not available"))
-	}
-	instances, err := fs.storage.LoadInstances()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
-	}
-	for _, inst := range instances {
-		if inst.Title == id {
-			return inst, nil
-		}
-	}
-	return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", id))
+// NewFileService creates a FileService with the given workspace provider.
+func NewFileService(workspace WorkspaceProvider) *FileService {
+	return &FileService{workspace: workspace}
 }
 
 // resolveAndValidatePath resolves a relative path against a base and ensures the
@@ -112,12 +94,12 @@ func (fs *FileService) ListFiles(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session_id is required"))
 	}
 
-	inst, err := fs.findInstance(req.Msg.SessionId)
+	ws, err := fs.workspace.GetWorkspace(req.Msg.SessionId)
 	if err != nil {
 		return nil, err
 	}
 
-	basePath := inst.Path
+	basePath := ws.EffectivePath
 	if basePath == "" {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("session has no working directory"))
 	}
@@ -263,12 +245,12 @@ func (fs *FileService) GetFileContent(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
 	}
 
-	inst, err := fs.findInstance(req.Msg.SessionId)
+	ws, err := fs.workspace.GetWorkspace(req.Msg.SessionId)
 	if err != nil {
 		return nil, err
 	}
 
-	basePath := inst.Path
+	basePath := ws.EffectivePath
 	if basePath == "" {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("session has no working directory"))
 	}

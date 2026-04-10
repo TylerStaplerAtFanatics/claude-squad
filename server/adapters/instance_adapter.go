@@ -15,7 +15,7 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 	protoSession := &sessionv1.Session{
 		Id:          inst.Title, // Using Title as ID
 		Title:       inst.Title,
-		Path:        inst.Path,
+		Path:        inst.Workspace().EffectivePath,
 		WorkingDir:  inst.WorkingDir,
 		Branch:      inst.Branch,
 		Status:      statusToProto(inst.GetEffectiveStatus()),

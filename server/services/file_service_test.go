@@ -24,7 +24,7 @@ type testFileService struct {
 
 func newTestFileService(root string) *testFileService {
 	return &testFileService{
-		FileService: FileService{storage: nil},
+		FileService: FileService{workspace: nil},
 		testRoot:    root,
 	}
 }
