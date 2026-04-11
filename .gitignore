@@ -35,3 +35,6 @@ bench-*.txt
 benchmark_results.txt
 /web-app/out/
 /server/web/dist/
+
+# Build artifacts
+build/

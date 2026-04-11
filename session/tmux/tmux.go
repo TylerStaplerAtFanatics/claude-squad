@@ -974,6 +974,27 @@ func (t *TmuxSession) Detach() {
 	// Mark as detaching to prevent concurrent operations
 	t.detaching = true
 	defer func() {
+		// Clean up attach state. This runs even on panic paths to prevent
+		// goroutine leaks and blocked callers waiting on attachCh.
+		// Order matches DetachSafely: close attachCh, cancel goroutines, wait.
+		if t.attachCh != nil {
+			select {
+			case <-t.attachCh:
+				// Channel is already closed, nothing to do
+			default:
+				close(t.attachCh)
+			}
+			t.attachCh = nil
+		}
+		if t.cancel != nil {
+			t.cancel()
+			t.cancel = nil
+		}
+		if t.wg != nil {
+			t.wg.Wait()
+			t.wg = nil
+		}
+		t.ctx = nil
 		t.detaching = false
 	}()
 
@@ -1007,32 +1028,6 @@ func (t *TmuxSession) Detach() {
 		msg := fmt.Sprintf("error restoring session after detach: %v", restoreErr)
 		log.ErrorLog.Println(msg)
 		panic(msg)
-	}
-
-	// Cancel goroutines created by Attach.
-	if t.cancel != nil {
-		t.cancel()
-		t.cancel = nil
-	}
-	if t.wg != nil {
-		t.wg.Wait()
-		t.wg = nil
-	}
-
-	t.ctx = nil
-
-	// Safely close attachCh only if it exists and isn't already closed
-	// This is done after goroutines finish tearing down to match original behavior.
-	if t.attachCh != nil {
-		// Use a select with default to avoid blocking on an already-closed channel
-		select {
-		case <-t.attachCh:
-			// Channel is already closed, nothing to do
-		default:
-			// Channel is open, safe to close
-			close(t.attachCh)
-		}
-		t.attachCh = nil
 	}
 }
 
