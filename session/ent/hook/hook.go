@@ -5,10 +5,7 @@ package hook
 import (
 	"context"
 	"fmt"
-<<<<<<< HEAD
-=======
 
->>>>>>> 38a8955 (docs: Update TODO.md and bug status based on analysis)
 	"github.com/tstapler/stapler-squad/session/ent"
 )
 

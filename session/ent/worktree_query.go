@@ -5,12 +5,6 @@ package ent
 import (
 	"context"
 	"fmt"
-<<<<<<< HEAD
-	"github.com/tstapler/stapler-squad/session/ent/predicate"
-	"github.com/tstapler/stapler-squad/session/ent/session"
-	"github.com/tstapler/stapler-squad/session/ent/worktree"
-=======
->>>>>>> 38a8955 (docs: Update TODO.md and bug status based on analysis)
 	"math"
 
 	"entgo.io/ent"

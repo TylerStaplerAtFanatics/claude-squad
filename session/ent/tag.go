@@ -4,7 +4,6 @@ package ent
 
 import (
 	"fmt"
-	"github.com/tstapler/stapler-squad/session/ent/tag"
 	"strings"
 
 	"entgo.io/ent"
