@@ -512,18 +512,6 @@ type hookMatcherGroup struct {
 	Hooks   []hookEntry `json:"hooks"`
 }
 
-// claudeSettingsHooks is the top-level hooks map in settings.local.json.
-type claudeSettingsHooks struct {
-	PermissionRequest []hookMatcherGroup `json:"PermissionRequest,omitempty"`
-}
-
-// claudeSettings is the partial structure of .claude/settings.local.json.
-// Only the "hooks" key is read/written; other fields are preserved via rawOther.
-type claudeSettings struct {
-	Hooks    claudeSettingsHooks        `json:"hooks"`
-	rawOther map[string]json.RawMessage // preserves unknown fields
-}
-
 const (
 	hookApprovalURL = "http://localhost:8543/api/hooks/permission-request"
 	hookTimeout     = 300 // seconds — must be ≤ Claude Code's 5-minute hook timeout

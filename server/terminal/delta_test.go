@@ -3,8 +3,6 @@ package terminal
 import (
 	"bytes"
 	"testing"
-
-	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 )
 
 // TestDeltaGenerator_BasicOperations tests core delta generation functionality
@@ -52,9 +50,6 @@ func TestDeltaGenerator_BasicOperations(t *testing.T) {
 			if delta1 == nil {
 				t.Fatal("GenerateDelta returned nil")
 			}
-
-			// Verify delta type is correct
-			var _ *sessionv1.TerminalDelta = delta1
 
 			// Verify initial state
 			if delta1.FromState != 0 {

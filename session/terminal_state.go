@@ -695,10 +695,7 @@ func (ts *TerminalState) getLineText(row int) string {
 			if cell.Style.Underline {
 				sb.WriteString("\x1b[4m")
 			}
-			if cell.Style.FgColor != "" {
-				// Simplified: just output color code
-				// TODO: Parse and output proper ANSI color codes
-			}
+			// TODO: Parse and output proper ANSI color codes for FgColor
 
 			currentStyle = cell.Style
 		}
@@ -761,10 +758,8 @@ func CreateFullSyncDeltaFromRawContent(rawContent string, cursorRow, cursorCol, 
 	tempState := NewTerminalState(rows, cols)
 
 	// Process the raw ANSI content through our terminal parser
-	if err := tempState.ProcessOutput([]byte(rawContent)); err != nil {
-		// Log error but continue - we want to send whatever we can
-		// (logging happens in ProcessOutput)
-	}
+	// Log error but continue - we want to send whatever we can
+	_ = tempState.ProcessOutput([]byte(rawContent))
 
 	// Override cursor position with actual tmux cursor (our processing might differ)
 	tempState.CursorRow = cursorRow

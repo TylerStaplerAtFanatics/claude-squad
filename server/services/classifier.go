@@ -492,7 +492,7 @@ func (c *RuleBasedClassifier) matchesRule(rule Rule, payload PermissionRequestPa
 		if cat != rule.ToolCategory {
 			// ToolCategoryBuiltinAgent is a sub-category of ToolCategoryBuiltin.
 			// A rule targeting "builtin" should also match agent tools.
-			if !(rule.ToolCategory == ToolCategoryBuiltin && cat == ToolCategoryBuiltinAgent) {
+			if rule.ToolCategory != ToolCategoryBuiltin || cat != ToolCategoryBuiltinAgent {
 				return false
 			}
 		}

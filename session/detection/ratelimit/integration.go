@@ -16,7 +16,6 @@ type Integration struct {
 	session    SessionAccessor
 	buffer     BufferReader
 	sessionID  string
-	consumerID string
 	mu         sync.Mutex
 	started    bool
 }

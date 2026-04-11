@@ -85,11 +85,11 @@ func (j *JujutsuProvider) GetStatus() (*VCSStatus, error) {
 	// Categorize files - in jj, working copy changes are always "staged"
 	// since jj auto-commits to the working copy commit
 	for _, f := range files {
-		switch {
-		case f.Status == FileConflict:
+		switch f.Status {
+		case FileConflict:
 			status.ConflictFiles = append(status.ConflictFiles, f)
 			status.HasConflicts = true
-		case f.Status == FileUntracked:
+		case FileUntracked:
 			status.UntrackedFiles = append(status.UntrackedFiles, f)
 			status.HasUntracked = true
 		default:

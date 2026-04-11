@@ -7,7 +7,6 @@ linters:
     - nilnil
     - staticcheck
     - govet
-    - gosimple
     - unused
   disable:
     - errcheck
@@ -20,6 +19,7 @@ linters:
   exclusions:
     paths:
       - session/tmux/tmux_windows
+      - web-app
     rules:
       # Allow fmt.Print* in main.go (CLI output) and test files
       - path: "main\\.go"
@@ -31,4 +31,7 @@ linters:
         linters: [forbidigo]
       # Allow fmt.Print* in tests/demo/ directory (demo helpers)
       - path: "^tests/demo/"
+        linters: [forbidigo]
+      # Allow fmt.Print* in session/mux/picker.go (terminal UI rendering with escape codes)
+      - path: "^session/mux/picker\\.go"
         linters: [forbidigo]

@@ -258,7 +258,7 @@ func (ce *CommandExecutor) executeCommand(cmd *Command, responseCh <-chan Respon
 
 	// Monitor response and detect status changes
 	var outputBuffer []byte
-	var lastStatus detection.DetectedStatus = detection.StatusUnknown
+	lastStatus := detection.StatusUnknown
 	timeoutTimer := time.NewTimer(ce.options.Timeout)
 	defer timeoutTimer.Stop()
 

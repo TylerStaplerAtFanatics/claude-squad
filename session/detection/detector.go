@@ -32,7 +32,6 @@ type StatusPattern struct {
 	Pattern     string `yaml:"pattern"`
 	Description string `yaml:"description"`
 	Priority    int    `yaml:"priority"` // Higher priority patterns checked first
-	compiled    *regexp.Regexp
 }
 
 // StatusPatterns contains all patterns for status detection.
@@ -619,6 +618,12 @@ func (sd *StatusDetector) GetPatternNames(status DetectedStatus) []string {
 // DetectFromString is a convenience method that accepts a string instead of []byte.
 func (sd *StatusDetector) DetectFromString(output string) DetectedStatus {
 	return sd.Detect([]byte(output))
+}
+
+// DetectForProgram detects the status for a specific program name.
+// Currently delegates to Detect; reserved for future per-program pattern sets.
+func (sd *StatusDetector) DetectForProgram(output []byte, program string) DetectedStatus {
+	return sd.Detect(output)
 }
 
 // DetectFromLines analyzes multiple lines of output and returns the most relevant status.

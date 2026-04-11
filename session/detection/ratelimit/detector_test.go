@@ -371,7 +371,7 @@ func TestParseTimestamp_RetryAfter(t *testing.T) {
 	}
 
 	expectedWait := 60 * time.Second
-	actualWait := resetTime.Sub(time.Now())
+	actualWait := time.Until(resetTime)
 	if actualWait < expectedWait-5*time.Second || actualWait > expectedWait+5*time.Second {
 		t.Errorf("expected wait time around 60s, got %v", actualWait)
 	}
