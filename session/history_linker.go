@@ -38,7 +38,10 @@ func NewHistoryLinkerFromRealInspector() *HistoryLinker {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.WarningLog.Printf("HistoryLinker: failed to get home dir, watcher disabled: %v", err)
-		homeDir = ""
+		return &HistoryLinker{
+			detector:  detector,
+			instances: make([]*Instance, 0),
+		}
 	}
 	watchDir := filepath.Join(homeDir, ".claude", "projects")
 

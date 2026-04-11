@@ -190,10 +190,12 @@ install-tools: ensure-tools ## Install all development and analysis tools
 
 # Code quality and analysis
 lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with comprehensive checks
-	@if ! which golangci-lint >/dev/null 2>&1; then \
-		echo "Installing golangci-lint..."; \
-		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
-	fi
+	@GOBIN=$$(go env GOBIN); \
+	if [ -z "$$GOBIN" ]; then GOBIN=$$(go env GOPATH)/bin; fi; \
+	if ! which golangci-lint >/dev/null 2>&1; then \
+		echo "Installing golangci-lint v2..."; \
+		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest; \
+	fi; \
 	golangci-lint run --enable=nilnil,staticcheck,ineffassign,govet
 
 format: ensure-tools ## Format code with gofmt

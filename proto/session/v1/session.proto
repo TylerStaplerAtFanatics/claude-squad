@@ -286,6 +286,7 @@ message UpdateSessionRequest {
   optional string program = 5;
 
   // Update session tags. If non-empty, replaces all existing tags.
+  // To clear all tags, send tags=[""] (single empty string).
   repeated string tags = 6;
 }
 
