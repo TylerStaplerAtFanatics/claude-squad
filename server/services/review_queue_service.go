@@ -350,4 +350,3 @@ func convertProtoReasons(protoReasons []sessionv1.AttentionReason) []session.Att
 	}
 	return result
 }
-

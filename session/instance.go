@@ -1951,6 +1951,7 @@ func (i *Instance) tryExtractConversationUUID() {
 	i.claudeSession.SessionID = info.ConversationUUID
 	i.HistoryFilePath = info.HistoryFilePath
 }
+
 // GetConversationUUID returns the Claude conversation UUID, or "" if not linked.
 func (i *Instance) GetConversationUUID() string {
 	if i.claudeSession == nil {
@@ -2016,6 +2017,7 @@ func (i *Instance) CaptureCurrentState() error {
 	i.WorkingDir = path
 	return nil
 }
+
 // CreateCheckpoint captures a named state bookmark for this session.
 // scrollbackSeq should be the current scrollback high-water mark (from ScrollbackManager);
 // pass 0 if the caller does not have access to scrollback state.

@@ -51,10 +51,12 @@ func (p *PathCompletionService) ListPathCompletions(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	// Determine whether the exact expanded path exists on disk.
+	// Determine whether the exact expanded path exists as a directory.
+	// Intentionally directory-only: clients use this for path completion,
+	// where only directories are valid navigation targets.
 	pathExists := false
-	if _, statErr := os.Stat(expanded); statErr == nil {
-		pathExists = true
+	if info, statErr := os.Stat(expanded); statErr == nil {
+		pathExists = info.IsDir()
 	}
 
 	// Split into base directory and filter prefix.

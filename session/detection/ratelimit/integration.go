@@ -12,12 +12,12 @@ type BufferReader interface {
 }
 
 type Integration struct {
-	manager    *Manager
-	session    SessionAccessor
-	buffer     BufferReader
-	sessionID  string
-	mu         sync.Mutex
-	started    bool
+	manager   *Manager
+	session   SessionAccessor
+	buffer    BufferReader
+	sessionID string
+	mu        sync.Mutex
+	started   bool
 }
 
 func NewIntegrationWithAccessor(sessionID string, session SessionAccessor, buffer BufferReader) *Integration {
