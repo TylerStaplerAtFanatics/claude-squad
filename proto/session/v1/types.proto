@@ -105,7 +105,6 @@ message Session {
 
   // External instance metadata (only populated for external sessions)
   ExternalInstanceMetadata external_metadata = 32;
-<<<<<<< HEAD
 
   // Rate limit detection state
   // Indicates if session is experiencing rate limiting from LLM provider
@@ -119,8 +118,6 @@ message Session {
   // Claude Code conversation UUID extracted from the history file path.
   // Matches the UUID in the JSONL filename under ~/.claude/projects/<dir>/<uuid>.jsonl.
   string claude_conversation_uuid = 35;
-=======
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 }
 
 // SessionStatus represents the current state of a session.
