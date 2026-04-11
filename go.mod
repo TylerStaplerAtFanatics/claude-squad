@@ -8,6 +8,7 @@ require (
 	entgo.io/ent v0.14.5
 	github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2
 	github.com/SherClockHolmes/webpush-go v1.4.0
+	github.com/atotto/clipboard v0.1.4
 	github.com/bufbuild/buf v1.57.2
 	github.com/bufbuild/connect-go v1.10.0
 	github.com/charmbracelet/bubbletea v1.3.5
@@ -66,7 +67,6 @@ require (
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
-	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymanbagabas/go-udiff v0.3.1 // indirect
 	github.com/bmatcuk/doublestar v1.3.4 // indirect

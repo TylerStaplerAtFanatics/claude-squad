@@ -2,6 +2,9 @@
 
 import styles from "./GitHubBadge.module.css";
 
+// Priority values returned by the server-side DerivePRPriority function.
+type PRPriority = "blocking" | "ready" | "pending" | "draft" | "complete" | "no_pr" | "auth_error" | "error" | "";
+
 interface GitHubBadgeProps {
   // PR-specific props
   prNumber?: number;
@@ -12,15 +15,48 @@ interface GitHubBadgeProps {
   repo?: string;
   sourceRef?: string;
 
+  // PR status props (populated by PRStatusPoller)
+  prPriority?: PRPriority | string;
+  prState?: string;
+  isDraft?: boolean;
+  approvedCount?: number;
+  changesRequestedCount?: number;
+  checkConclusion?: string;
+
   // Display mode
   compact?: boolean;
+}
+
+/** Map PRPriority string → CSS module class name for the badge variant. */
+function priorityClass(priority: string | undefined): string {
+  switch (priority) {
+    case "blocking":   return styles.prBadgeBlocking;
+    case "ready":      return styles.prBadgeReady;
+    case "pending":    return styles.prBadgePending;
+    case "draft":      return styles.prBadgeDraft;
+    case "complete":   return styles.prBadgeComplete;
+    default:           return ""; // fall back to base prBadge purple
+  }
+}
+
+/** Human-readable label for each priority state. */
+function priorityLabel(priority: string | undefined, isDraft?: boolean): string {
+  if (isDraft) return "Draft";
+  switch (priority) {
+    case "blocking":   return "Blocked";
+    case "ready":      return "Ready";
+    case "pending":    return "Pending";
+    case "draft":      return "Draft";
+    case "complete":   return "Merged";
+    default:           return "";
+  }
 }
 
 /**
  * Badge component that displays GitHub PR or repository information.
  *
  * Shows:
- * - PR badge with number and link (when prNumber > 0)
+ * - PR badge with number, link, and priority status (when prNumber > 0)
  * - Repository badge with owner/repo (when no PR but has repo info)
  * - Nothing if no GitHub information is available
  */
@@ -30,6 +66,12 @@ export function GitHubBadge({
   owner,
   repo,
   sourceRef,
+  prPriority,
+  prState,
+  isDraft,
+  approvedCount,
+  changesRequestedCount,
+  checkConclusion,
   compact = false,
 }: GitHubBadgeProps) {
   // Don't render if no GitHub information
@@ -54,15 +96,26 @@ export function GitHubBadge({
       }
     };
 
+    const priorityVariant = priorityClass(prPriority);
+    const statusLabel = priorityLabel(prPriority, isDraft);
+
+    // Build tooltip with full status detail
+    const tooltipParts = [`GitHub PR #${prNumber}`];
+    if (prState) tooltipParts.push(`State: ${prState}`);
+    if (approvedCount && approvedCount > 0) tooltipParts.push(`${approvedCount} approval${approvedCount > 1 ? "s" : ""}`);
+    if (changesRequestedCount && changesRequestedCount > 0) tooltipParts.push(`${changesRequestedCount} change request${changesRequestedCount > 1 ? "s" : ""}`);
+    if (checkConclusion) tooltipParts.push(`CI: ${checkConclusion}`);
+    const tooltip = tooltipParts.join(" · ");
+
     return (
       <a
         href={resolvedPrUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className={`${styles.badge} ${styles.prBadge} ${compact ? styles.compact : ""}`}
+        className={`${styles.badge} ${styles.prBadge} ${priorityVariant} ${compact ? styles.compact : ""}`}
         onClick={handleClick}
-        title={`GitHub Pull Request #${prNumber}`}
-        aria-label={`View GitHub Pull Request #${prNumber}`}
+        title={tooltip}
+        aria-label={`View GitHub Pull Request #${prNumber}${statusLabel ? `, status: ${statusLabel}` : ""}`}
       >
         <svg
           className={styles.icon}
@@ -74,6 +127,7 @@ export function GitHubBadge({
           <path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z" />
         </svg>
         <span className={styles.text}>#{prNumber}</span>
+        {statusLabel && <span className={styles.priorityLabel}>{statusLabel}</span>}
       </a>
     );
   }

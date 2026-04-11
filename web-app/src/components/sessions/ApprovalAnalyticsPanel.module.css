@@ -82,8 +82,8 @@
 }
 
 .windowBtnActive {
-  background: var(--accent, #3b82f6);
-  border-color: var(--accent, #3b82f6);
+  background: var(--primary);
+  border-color: var(--primary);
   color: #fff;
 }
 
@@ -288,7 +288,7 @@
   min-width: 2px;
 }
 
-.barTotal  { background: var(--accent, #3b82f6); opacity: 0.7; }
+.barTotal  { background: var(--primary); opacity: 0.7; }
 .barTool   { background: #8b5cf6; opacity: 0.7; }
 .barRule   { background: #22c55e; opacity: 0.7; }
 .barCmd    { background: #f59e0b; opacity: 0.7; }
@@ -341,14 +341,14 @@
 }
 
 .filterInput:focus {
-  border-color: var(--accent, #3b82f6);
+  border-color: var(--primary);
 }
 
 /* ── Add rule link ── */
 
 .addRuleLink {
   font-size: 12px;
-  color: var(--accent, #3b82f6);
+  color: var(--primary);
   text-decoration: none;
   white-space: nowrap;
   opacity: 0.85;

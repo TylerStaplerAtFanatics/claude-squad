@@ -23,17 +23,23 @@ on:
       - '.github/workflows/benchmark.yml'
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Only one benchmark run per branch at a time; cancel in-progress runs on new push.
 concurrency:
   group: benchmarks-${{ github.ref }}
   cancel-in-progress: true
 =======
+=======
+>>>>>>> upstream-fanatics/main
 # Cancel in-progress runs on PRs when a new commit is pushed.
 # On main, never cancel — baseline-commit steps must be allowed to complete.
 concurrency:
   group: benchmarks-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
@@ -55,6 +61,7 @@ jobs:
       pull-requests: write # Post PR comments on regression alerts
     steps:
 <<<<<<< HEAD
+<<<<<<< HEAD
       - uses: actions/checkout@v4
 
       - name: Set up Go
@@ -66,6 +73,8 @@ jobs:
       - name: Install benchstat
         run: go install golang.org/x/perf/cmd/benchstat@latest
 =======
+=======
+>>>>>>> upstream-fanatics/main
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Go
@@ -76,7 +85,10 @@ jobs:
 
       - name: Install benchstat
         run: go install golang.org/x/perf/cmd/benchstat@v0.0.0-20260312031701-16a31bc5fbd0
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
 
       - name: Run Tier 1 benchmarks
         run: |
@@ -98,6 +110,7 @@ jobs:
             echo "No baseline yet — will be established on next push to main." > benchstat-tier1.txt
           fi
 
+<<<<<<< HEAD
 <<<<<<< HEAD
       - name: Fail on regressions (PR only)
         if: github.event_name == 'pull_request'
@@ -123,6 +136,11 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+>>>>>>> upstream-fanatics/main
         with:
           script: |
             const fs = require('fs');
@@ -162,7 +180,11 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add benchmarks/go/tier1-baseline.txt
           git diff --cached --quiet || git commit -m "chore(bench): update go tier1 baseline [skip ci]"
+<<<<<<< HEAD
           git pull --rebase
+=======
+          git pull --rebase --autostash
+>>>>>>> upstream-fanatics/main
           git push
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -180,6 +202,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
 <<<<<<< HEAD
+<<<<<<< HEAD
       - uses: actions/checkout@v4
 
       - name: Set up Go
@@ -187,13 +210,18 @@ jobs:
         with:
           go-version: '1.23'
 =======
+=======
+>>>>>>> upstream-fanatics/main
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: 'go.mod'
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
           cache: true
 
       - name: Run full benchmark suite
@@ -213,7 +241,11 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add benchmarks/go/tier2-baseline.txt
           git diff --cached --quiet || git commit -m "chore(bench): update go tier2 baseline [skip ci]"
+<<<<<<< HEAD
           git pull --rebase
+=======
+          git pull --rebase --autostash
+>>>>>>> upstream-fanatics/main
           git push
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -228,16 +260,22 @@ jobs:
       contents: read
     steps:
 <<<<<<< HEAD
+<<<<<<< HEAD
       - uses: actions/checkout@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
 =======
+=======
+>>>>>>> upstream-fanatics/main
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
         with:
           node-version: '20'
           cache: 'npm'
@@ -247,7 +285,10 @@ jobs:
         run: cd web-app && npm ci
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> upstream-fanatics/main
       - name: Install buf
         run: |
           curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
@@ -256,7 +297,10 @@ jobs:
       - name: Generate protobuf code
         run: buf generate proto
 
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
       - name: Build Next.js app
         run: cd web-app && npm run build
 
@@ -279,16 +323,22 @@ jobs:
       pull-requests: write # Post PR comments on regression alerts
     steps:
 <<<<<<< HEAD
+<<<<<<< HEAD
       - uses: actions/checkout@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
 =======
+=======
+>>>>>>> upstream-fanatics/main
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
         with:
           node-version: '20'
           cache: 'npm'
@@ -298,7 +348,10 @@ jobs:
         run: cd web-app && npm ci
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> upstream-fanatics/main
       - name: Install buf
         run: |
           curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
@@ -307,13 +360,17 @@ jobs:
       - name: Generate protobuf code
         run: buf generate proto
 
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
       - name: Install Playwright browsers
         run: cd web-app && npx playwright install --with-deps chromium
 
       - name: Build Next.js app
         run: cd web-app && npm run build
 
+<<<<<<< HEAD
 <<<<<<< HEAD
       - name: Start server
         run: |
@@ -323,6 +380,8 @@ jobs:
 
 =======
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
       - name: Run terminal throughput benchmark
         run: |
           set -o pipefail
@@ -361,10 +420,14 @@ jobs:
       - name: Post PR comment
         if: github.event_name == 'pull_request'
 <<<<<<< HEAD
+<<<<<<< HEAD
         uses: actions/github-script@v7
 =======
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+>>>>>>> upstream-fanatics/main
         with:
           script: |
             const fs = require('fs');
@@ -404,7 +467,11 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add benchmarks/frontend/throughput-baseline.json
           git diff --cached --quiet || git commit -m "chore(bench): update frontend throughput baseline [skip ci]"
+<<<<<<< HEAD
           git pull --rebase
+=======
+          git pull --rebase --autostash
+>>>>>>> upstream-fanatics/main
           git push
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -420,16 +487,22 @@ jobs:
       contents: read
     steps:
 <<<<<<< HEAD
+<<<<<<< HEAD
       - uses: actions/checkout@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
 =======
+=======
+>>>>>>> upstream-fanatics/main
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
         with:
           node-version: '20'
           cache: 'npm'
@@ -439,7 +512,10 @@ jobs:
         run: cd web-app && npm ci
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> upstream-fanatics/main
       - name: Install buf
         run: |
           curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
@@ -448,7 +524,10 @@ jobs:
       - name: Generate protobuf code
         run: buf generate proto
 
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
       - name: Build Next.js app
         run: cd web-app && npm run build
 
@@ -461,10 +540,14 @@ jobs:
 
       - name: Upload Lighthouse results
 <<<<<<< HEAD
+<<<<<<< HEAD
         uses: actions/upload-artifact@v4
 =======
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+>>>>>>> upstream-fanatics/main
         if: always()
         with:
           name: lighthouse-results
@@ -487,6 +570,7 @@ jobs:
       pull-requests: write # Post PR comments on regression alerts
     steps:
 <<<<<<< HEAD
+<<<<<<< HEAD
       - uses: actions/checkout@v4
 
       - name: Set up Go
@@ -498,6 +582,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
 =======
+=======
+>>>>>>> upstream-fanatics/main
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Go
@@ -508,7 +594,10 @@ jobs:
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
         with:
           node-version: '20'
           cache: 'npm'
@@ -518,7 +607,10 @@ jobs:
         run: cd web-app && npm ci
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> upstream-fanatics/main
       - name: Install buf
         run: |
           curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.41.0/buf-Linux-x86_64" \
@@ -534,7 +626,10 @@ jobs:
       - name: Copy web UI to dist
         run: cp -r web-app/out server/web/dist
 
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
       - name: Install Playwright browsers
         run: cd web-app && npx playwright install --with-deps chromium
 
@@ -542,16 +637,20 @@ jobs:
         run: go build -o stapler-squad .
 
 <<<<<<< HEAD
+<<<<<<< HEAD
       - name: Build Next.js app
         run: cd web-app && npm run build
 
 =======
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
       - name: Start backend server
         run: |
           ./stapler-squad &
           cd web-app && npx wait-on http://localhost:8543 --timeout 30000
 
+<<<<<<< HEAD
 <<<<<<< HEAD
       - name: Start frontend server
         run: |
@@ -560,11 +659,16 @@ jobs:
 
       - name: Run E2E latency benchmark
 =======
+=======
+>>>>>>> upstream-fanatics/main
       - name: Run E2E latency benchmark
         env:
           TEST_PORT: '8543'
           TEST_REUSE_SERVER: '1'
+<<<<<<< HEAD
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+>>>>>>> upstream-fanatics/main
         run: cd web-app && npx playwright test tests/e2e/benchmarks/rpc-latency.spec.ts
 
       - name: Assert E2E latency data was produced
@@ -600,10 +704,14 @@ jobs:
       - name: Post PR comment
         if: github.event_name == 'pull_request'
 <<<<<<< HEAD
+<<<<<<< HEAD
         uses: actions/github-script@v7
 =======
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
 >>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
+=======
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+>>>>>>> upstream-fanatics/main
         with:
           script: |
             const fs = require('fs');
@@ -643,5 +751,9 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add benchmarks/e2e/latency-baseline.json
           git diff --cached --quiet || git commit -m "chore(bench): update e2e latency baseline [skip ci]"
+<<<<<<< HEAD
           git pull --rebase
+=======
+          git pull --rebase --autostash
+>>>>>>> upstream-fanatics/main
           git push

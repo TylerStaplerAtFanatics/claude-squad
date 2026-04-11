@@ -1,0 +1,557 @@
+package services
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"connectrpc.com/connect"
+
+	gitignore "github.com/go-git/go-git/v5/plumbing/format/gitignore"
+	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
+	"github.com/tstapler/stapler-squad/session"
+)
+
+// testFileService wraps FileService with a fake findInstance for unit tests.
+// It bypasses storage and injects a session instance with a known path.
+type testFileService struct {
+	FileService
+	testRoot string
+}
+
+func newTestFileService(root string) *testFileService {
+	return &testFileService{
+		FileService: FileService{storage: nil},
+		testRoot:    root,
+	}
+}
+
+// findInstance overrides the base findInstance to use testRoot.
+func (t *testFileService) findInstance(id string) (*session.Instance, error) {
+	if id != "test-session" {
+		return nil, connect.NewError(connect.CodeNotFound, nil)
+	}
+	return &session.Instance{Title: "test-session", Path: t.testRoot}, nil
+}
+
+// listFilesTest is a testable version of ListFiles that uses the overridden findInstance.
+func (t *testFileService) listFiles(ctx context.Context, req *connect.Request[sessionv1.ListFilesRequest]) (*connect.Response[sessionv1.ListFilesResponse], error) {
+	if req.Msg.SessionId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, nil)
+	}
+
+	inst, err := t.findInstance(req.Msg.SessionId)
+	if err != nil {
+		return nil, err
+	}
+
+	basePath := inst.Path
+	requestedPath := req.Msg.Path
+	if requestedPath == "" {
+		requestedPath = "."
+	}
+
+	fullPath, pathErr := resolveAndValidatePath(basePath, requestedPath)
+	if pathErr != nil {
+		return nil, pathErr
+	}
+
+	entries, readErr := os.ReadDir(fullPath)
+	if readErr != nil {
+		if os.IsNotExist(readErr) {
+			return nil, connect.NewError(connect.CodeNotFound, nil)
+		}
+		return nil, connect.NewError(connect.CodeInternal, readErr)
+	}
+
+	var matcher gitignore.Matcher
+	if !req.Msg.IncludeIgnored {
+		patterns := loadGitignorePatterns(basePath, fullPath)
+		matcher = gitignore.NewMatcher(patterns)
+	}
+
+	var dirs []*sessionv1.FileNode
+	var files []*sessionv1.FileNode
+	truncated := false
+	totalCount := 0
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() && hardSkipDirs[name] {
+			continue
+		}
+
+		isSymlink := entry.Type()&os.ModeSymlink != 0
+		isDir := entry.IsDir()
+		if isSymlink {
+			isDir = false
+		}
+
+		entryFullPath := filepath.Join(fullPath, name)
+		relPath, _ := filepath.Rel(basePath, entryFullPath)
+		relSegments := strings.Split(filepath.ToSlash(relPath), "/")
+
+		isIgnored := false
+		if matcher != nil {
+			isIgnored = matcher.Match(relSegments, isDir)
+		}
+		if isIgnored && !req.Msg.IncludeIgnored {
+			continue
+		}
+
+		var size int64
+		if !isDir && !isSymlink {
+			if info, statErr := entry.Info(); statErr == nil {
+				size = info.Size()
+			}
+		}
+
+		node := &sessionv1.FileNode{
+			Name:      name,
+			Path:      filepath.ToSlash(relPath),
+			IsDir:     isDir,
+			Size:      size,
+			IsIgnored: isIgnored,
+			IsSymlink: isSymlink,
+		}
+
+		totalCount++
+		if totalCount > maxDirEntries {
+			truncated = true
+			break
+		}
+
+		if isDir {
+			dirs = append(dirs, node)
+		} else {
+			files = append(files, node)
+		}
+	}
+
+	allNodes := append(dirs, files...)
+	return connect.NewResponse(&sessionv1.ListFilesResponse{
+		Files:      allNodes,
+		BasePath:   requestedPath,
+		Truncated:  truncated,
+		TotalCount: int32(totalCount),
+	}), nil
+}
+
+// getFileContentTest is a testable version of GetFileContent.
+func (t *testFileService) getFileContent(ctx context.Context, req *connect.Request[sessionv1.GetFileContentRequest]) (*connect.Response[sessionv1.GetFileContentResponse], error) {
+	if req.Msg.SessionId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, nil)
+	}
+
+	inst, err := t.findInstance(req.Msg.SessionId)
+	if err != nil {
+		return nil, err
+	}
+
+	fullPath, pathErr := resolveAndValidatePath(inst.Path, req.Msg.Path)
+	if pathErr != nil {
+		return nil, pathErr
+	}
+
+	info, statErr := os.Lstat(fullPath)
+	if statErr != nil {
+		if os.IsNotExist(statErr) {
+			return nil, connect.NewError(connect.CodeNotFound, nil)
+		}
+		return nil, connect.NewError(connect.CodeInternal, statErr)
+	}
+
+	size := info.Size()
+	if size > maxFileSize {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, nil)
+	}
+
+	readLimit := size
+	isTruncated := false
+	if size > truncateSize {
+		readLimit = truncateSize
+		isTruncated = true
+	}
+
+	ext := strings.ToLower(filepath.Ext(fullPath))
+	isKnownText := knownTextExtensions[ext]
+
+	f, openErr := os.Open(fullPath)
+	if openErr != nil {
+		if os.IsNotExist(openErr) {
+			return nil, connect.NewError(connect.CodeNotFound, nil)
+		}
+		return nil, connect.NewError(connect.CodeInternal, openErr)
+	}
+	defer func() { _ = f.Close() }()
+
+	sniffBuf := make([]byte, 512)
+	sniffN, _ := f.Read(sniffBuf)
+	sniffBuf = sniffBuf[:sniffN]
+
+	isBinary := false
+	if !isKnownText {
+		// Null-byte scan.
+		for _, b := range sniffBuf {
+			if b == 0 {
+				isBinary = true
+				break
+			}
+		}
+	}
+
+	if isBinary {
+		return connect.NewResponse(&sessionv1.GetFileContentResponse{
+			IsBinary: true,
+			Size:     size,
+		}), nil
+	}
+
+	_, _ = f.Seek(0, 0)
+	buf := make([]byte, readLimit)
+	n, _ := readFull(f, buf)
+	buf = buf[:n]
+
+	return connect.NewResponse(&sessionv1.GetFileContentResponse{
+		Content:     string(buf),
+		Encoding:    "utf-8",
+		Size:        size,
+		IsTruncated: isTruncated,
+	}), nil
+}
+
+// ---- Tests for resolveAndValidatePath ----
+
+func TestResolveAndValidatePath_TraversalRejected(t *testing.T) {
+	base := t.TempDir()
+
+	cases := []struct {
+		rel  string
+		desc string
+	}{
+		{"../etc/passwd", "simple traversal"},
+		{"../../etc", "double traversal"},
+		{"foo/../../etc/passwd", "traversal via subdir"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			_, err := resolveAndValidatePath(base, tc.rel)
+			if err == nil {
+				t.Fatalf("expected error for path %q, got nil", tc.rel)
+			}
+		})
+	}
+}
+
+func TestResolveAndValidatePath_ValidPath(t *testing.T) {
+	base := t.TempDir()
+
+	cases := []string{".", "subdir", "subdir/file.go", "a/b/c"}
+	for _, rel := range cases {
+		_, err := resolveAndValidatePath(base, rel)
+		if err != nil {
+			t.Errorf("unexpected error for valid path %q: %v", rel, err)
+		}
+	}
+}
+
+// ---- Tests for ListFiles ----
+
+func TestListFiles_HardSkipDirs(t *testing.T) {
+	root := t.TempDir()
+
+	for _, dir := range []string{"node_modules", "vendor", ".git", "__pycache__"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "src"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+	resp, err := svc.listFiles(context.Background(), connect.NewRequest(&sessionv1.ListFilesRequest{
+		SessionId: "test-session",
+		Path:      ".",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	names := make(map[string]bool)
+	for _, node := range resp.Msg.Files {
+		names[node.Name] = true
+	}
+
+	for _, skip := range []string{"node_modules", "vendor", ".git", "__pycache__"} {
+		if names[skip] {
+			t.Errorf("expected %q to be skipped, but it appeared in results", skip)
+		}
+	}
+	if !names["src"] {
+		t.Error("expected src/ to appear in results")
+	}
+	if !names["main.go"] {
+		t.Error("expected main.go to appear in results")
+	}
+}
+
+func TestListFiles_GitignoreFiltering(t *testing.T) {
+	root := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("*.tmp\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "temp.tmp"), []byte("ignored"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+
+	// Without include_ignored: *.tmp should not appear.
+	resp, err := svc.listFiles(context.Background(), connect.NewRequest(&sessionv1.ListFilesRequest{
+		SessionId:      "test-session",
+		Path:           ".",
+		IncludeIgnored: false,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, node := range resp.Msg.Files {
+		if strings.HasSuffix(node.Name, ".tmp") {
+			t.Errorf("expected .tmp files to be filtered, got %q", node.Name)
+		}
+	}
+
+	// With include_ignored: *.tmp should appear.
+	resp2, err := svc.listFiles(context.Background(), connect.NewRequest(&sessionv1.ListFilesRequest{
+		SessionId:      "test-session",
+		Path:           ".",
+		IncludeIgnored: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, node := range resp2.Msg.Files {
+		if node.Name == "temp.tmp" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected temp.tmp to appear when include_ignored=true")
+	}
+}
+
+func TestListFiles_DirectoriesFirst(t *testing.T) {
+	root := t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(root, "zdir"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "adir"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "afile.go"), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "zfile.go"), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+	resp, err := svc.listFiles(context.Background(), connect.NewRequest(&sessionv1.ListFilesRequest{
+		SessionId: "test-session",
+		Path:      ".",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	nodes := resp.Msg.Files
+	if len(nodes) != 4 {
+		t.Fatalf("expected 4 nodes, got %d", len(nodes))
+	}
+	if !nodes[0].IsDir || !nodes[1].IsDir {
+		t.Error("expected first two entries to be directories")
+	}
+	if nodes[0].Name != "adir" {
+		t.Errorf("expected first dir adir, got %q", nodes[0].Name)
+	}
+	if nodes[2].Name != "afile.go" {
+		t.Errorf("expected first file afile.go, got %q", nodes[2].Name)
+	}
+}
+
+func TestListFiles_PathTraversalRejected(t *testing.T) {
+	root := t.TempDir()
+	svc := newTestFileService(root)
+
+	_, err := svc.listFiles(context.Background(), connect.NewRequest(&sessionv1.ListFilesRequest{
+		SessionId: "test-session",
+		Path:      "../../../etc",
+	}))
+	if err == nil {
+		t.Fatal("expected error for traversal path")
+	}
+}
+
+func TestListFiles_NotFound(t *testing.T) {
+	root := t.TempDir()
+	svc := newTestFileService(root)
+
+	_, err := svc.listFiles(context.Background(), connect.NewRequest(&sessionv1.ListFilesRequest{
+		SessionId: "test-session",
+		Path:      "nonexistent",
+	}))
+	if err == nil {
+		t.Fatal("expected error for non-existent path")
+	}
+}
+
+func TestListFiles_NodeCap(t *testing.T) {
+	root := t.TempDir()
+
+	// Create more than maxDirEntries files.
+	for i := 0; i <= maxDirEntries; i++ {
+		name := filepath.Join(root, fmt.Sprintf("f%07d.txt", i))
+		if err := os.WriteFile(name, []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	svc := newTestFileService(root)
+	resp, err := svc.listFiles(context.Background(), connect.NewRequest(&sessionv1.ListFilesRequest{
+		SessionId: "test-session",
+		Path:      ".",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.Msg.Truncated {
+		t.Error("expected truncated=true when dir has >maxDirEntries entries")
+	}
+}
+
+// ---- Tests for GetFileContent ----
+
+func TestGetFileContent_TextFile(t *testing.T) {
+	root := t.TempDir()
+	content := "package main\n\nfunc main() {}\n"
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+	resp, err := svc.getFileContent(context.Background(), connect.NewRequest(&sessionv1.GetFileContentRequest{
+		SessionId: "test-session",
+		Path:      "main.go",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Msg.IsBinary {
+		t.Error("expected is_binary=false for .go file")
+	}
+	if resp.Msg.Content != content {
+		t.Errorf("content mismatch: got %q, want %q", resp.Msg.Content, content)
+	}
+}
+
+func TestGetFileContent_BinaryFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "data.bin"), []byte{0x00, 0x01, 0x02, 0x00}, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+	resp, err := svc.getFileContent(context.Background(), connect.NewRequest(&sessionv1.GetFileContentRequest{
+		SessionId: "test-session",
+		Path:      "data.bin",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.Msg.IsBinary {
+		t.Error("expected is_binary=true for file with null bytes")
+	}
+	if resp.Msg.Content != "" {
+		t.Error("expected empty content for binary file")
+	}
+}
+
+func TestGetFileContent_FileTooLarge(t *testing.T) {
+	root := t.TempDir()
+	bigContent := strings.Repeat("a", maxFileSize+1)
+	if err := os.WriteFile(filepath.Join(root, "huge.txt"), []byte(bigContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+	_, err := svc.getFileContent(context.Background(), connect.NewRequest(&sessionv1.GetFileContentRequest{
+		SessionId: "test-session",
+		Path:      "huge.txt",
+	}))
+	if err == nil {
+		t.Fatal("expected error for file >maxFileSize")
+	}
+}
+
+func TestGetFileContent_NotFound(t *testing.T) {
+	root := t.TempDir()
+	svc := newTestFileService(root)
+
+	_, err := svc.getFileContent(context.Background(), connect.NewRequest(&sessionv1.GetFileContentRequest{
+		SessionId: "test-session",
+		Path:      "nonexistent.go",
+	}))
+	if err == nil {
+		t.Fatal("expected error for non-existent file")
+	}
+}
+
+func TestGetFileContent_PathTraversal(t *testing.T) {
+	root := t.TempDir()
+	svc := newTestFileService(root)
+
+	_, err := svc.getFileContent(context.Background(), connect.NewRequest(&sessionv1.GetFileContentRequest{
+		SessionId: "test-session",
+		Path:      "../../etc/passwd",
+	}))
+	if err == nil {
+		t.Fatal("expected error for path traversal")
+	}
+}
+
+func TestGetFileContent_Truncation(t *testing.T) {
+	root := t.TempDir()
+	content := strings.Repeat("x", truncateSize+1)
+	if err := os.WriteFile(filepath.Join(root, "big.txt"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+	resp, err := svc.getFileContent(context.Background(), connect.NewRequest(&sessionv1.GetFileContentRequest{
+		SessionId: "test-session",
+		Path:      "big.txt",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.Msg.IsTruncated {
+		t.Error("expected is_truncated=true for file >1MB")
+	}
+	if int64(len(resp.Msg.Content)) != truncateSize {
+		t.Errorf("expected content length %d, got %d", truncateSize, len(resp.Msg.Content))
+	}
+}

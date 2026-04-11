@@ -1,4 +1,4 @@
-import { NotificationHistoryItem } from "@/lib/contexts/NotificationContext";
+import { NotificationHistoryItem } from "@/lib/types/notification";
 
 export interface GroupedNotification {
   /** Representative notification (most recent in the group) */

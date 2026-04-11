@@ -20,14 +20,15 @@ type InstanceContext interface {
 	LastMeaningfulOutputTime() time.Time
 	GetCreatedAt() time.Time
 	SetLastMeaningfulOutput(t time.Time)
+	GetStatus() int
+	WriteToPTY(data []byte) (int, error)
 }
 
 // ClaudeController provides a high-level API for controlling Claude instances.
 // It orchestrates all the underlying components (queue, executor, history, streams).
 type ClaudeController struct {
-<<<<<<< HEAD
 	sessionName      string
-	instance         *Instance
+	instance         InstanceContext
 	ptyAccess        *PTYAccess
 	responseStream   *ResponseStream
 	statusDetector   *detection.StatusDetector
@@ -39,20 +40,6 @@ type ClaudeController struct {
 	mu               sync.RWMutex
 	ctx              context.Context
 	cancel           context.CancelFunc
-=======
-	sessionName    string
-	instance       InstanceContext
-	ptyAccess      *PTYAccess
-	responseStream *ResponseStream
-	statusDetector *detection.StatusDetector
-	idleDetector   *detection.IdleDetector // NEW: Idle state detection
-	queue          *CommandQueue
-	executor       *CommandExecutor
-	history        *CommandHistory
-	mu             sync.RWMutex
-	ctx            context.Context
-	cancel         context.CancelFunc
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 }
 
 // NewClaudeController creates a new controller for the given instance.
@@ -183,6 +170,13 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 
 	// Set up context for lifecycle management
 	cc.ctx, cc.cancel = context.WithCancel(ctx)
+
+	// Drive idle detector from PTY events so lastActivity reflects actual output time.
+	// This replaces polling-only updates: lastActivity now resets on every PTY read,
+	// giving accurate idle duration even when active patterns persist in old scrollback.
+	cc.responseStream.SetOnOutput(func() {
+		cc.idleDetector.RecordActivity()
+	})
 
 	// Start response stream
 	if err := cc.responseStream.Start(cc.ctx); err != nil {

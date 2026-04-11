@@ -18,55 +18,36 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate tag matches version in main.go
-        run: |
-          # Extract version from main.go
-          VERSION=$(grep -E '^[[:space:]]*version[[:space:]]*=' main.go | sed -E 's/.*"([^"]+)".*/\1/')
-          
-          # Get the tag name (remove refs/tags/ prefix)
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-          
-          # Remove 'v' prefix from tag if present
-          TAG_VERSION=${TAG_NAME#v}
-          
-          echo "Version in main.go: $VERSION"
-          echo "Tag version: $TAG_VERSION"
-          
-          # Compare versions
-          if [ "$VERSION" != "$TAG_VERSION" ]; then
-            echo "ERROR: Tag version ($TAG_VERSION) does not match version in main.go ($VERSION)"
-            echo "Please ensure the tag matches the version defined in main.go"
-            exit 1
-          fi
-          
-          echo "✅ Tag version matches main.go version: $VERSION"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install web dependencies
+        run: cd web-app && npm ci
+
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.41.0'
+
+      - name: Generate protobuf code
+        run: buf generate
+
+      - name: Build web UI
+        working-directory: web-app
+        run: npm run build
+
+      - name: Copy web UI to dist
+        run: cp -r web-app/out server/web/dist
 
       - name: Set up Go 1.25.0
         uses: actions/setup-go@v5
         with:
           go-version: '1.25.0'
           cache: true
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: web-app/package-lock.json
-
-      - name: Install Buf
-        uses: bufbuild/buf-setup-action@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate Protos
-        run: make proto-gen
-
-      - name: Build Web UI
-        run: make web-build
-
-      - name: Generate protos and build web UI
-        uses: ./.github/actions/prepare
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
@@ -75,3 +56,6 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO_NAME: ${{ github.event.repository.name }}
+          # GITHUB_REPOSITORY (owner/repo) is set automatically by GitHub Actions

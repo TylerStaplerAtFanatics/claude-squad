@@ -7,33 +7,10 @@ linters:
     - nilnil
     - staticcheck
     - govet
-<<<<<<< HEAD
     - gosimple
     - unused
   disable:
     - errcheck
-
-linters-settings:
-  forbidigo:
-    forbid:
-      - p: ^fmt\.Print(f|ln)?$
-        msg: "use the log package instead of fmt.Print* in production code"
-    exclude-godoc-examples: true
-
-issues:
-  exclude-rules:
-    # Allow fmt.Print* in main.go (CLI output) and test files
-    - path: "main\\.go"
-      linters: [forbidigo]
-    - path: "_test\\.go"
-      linters: [forbidigo]
-    # Allow fmt.Print* in cmd/ subdirectories (CLI output)
-    - path: "^cmd/"
-      linters: [forbidigo]
-    # Allow fmt.Print* in tests/demo/ directory (demo helpers)
-    - path: "^tests/demo/"
-      linters: [forbidigo]
-=======
   settings:
     forbidigo:
       forbid:
@@ -52,4 +29,6 @@ issues:
       # Allow fmt.Print* in cmd/ subdirectories (CLI output)
       - path: "^cmd/"
         linters: [forbidigo]
->>>>>>> 38d40fd (feat: checkpoint system with fork, history detection, and socket registry (#18))
+      # Allow fmt.Print* in tests/demo/ directory (demo helpers)
+      - path: "^tests/demo/"
+        linters: [forbidigo]

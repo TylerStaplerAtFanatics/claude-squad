@@ -9,10 +9,14 @@ import (
 	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/server/middleware"
 	"github.com/tstapler/stapler-squad/server/notifications"
 	"github.com/tstapler/stapler-squad/server/services"
 	"github.com/tstapler/stapler-squad/server/web"
+	"github.com/tstapler/stapler-squad/session/tmux"
+
+	"github.com/google/uuid"
 	"net"
 	"net/http"
 	"os"
@@ -34,6 +38,7 @@ type Server struct {
 	httpsURL       string                          // set when remote access is enabled
 	hostnames      []string                        // detected LAN hostnames
 	origins        []string                        // allowed CORS origins
+	shutdownHooks  []func()                        // called before HTTP server stops
 }
 
 // NewServer creates a new HTTP server instance with SessionService registered.
@@ -84,6 +89,42 @@ func NewServer(addr string) *Server {
 		go deps.ReactiveQueueMgr.Start(serverCtx)
 		log.InfoLog.Printf("ReactiveQueueManager started")
 
+		deps.PRStatusPoller.Start(serverCtx)
+		log.InfoLog.Printf("PRStatusPoller started")
+
+		// Start HistoryLinker: detects Claude JSONL files and links conversation
+		// UUIDs to sessions so cold restore can use --resume on restart.
+		go deps.HistoryLinker.Start(serverCtx)
+		log.InfoLog.Printf("HistoryLinker started")
+
+		// Register shutdown hook: capture pane working dirs and persist instance
+		// state so cold restore can find the right directory on next start.
+		// Uses HistoryLinker.Instances() (not the startup snapshot) so externally
+		// discovered sessions added after startup are also captured.
+		historyLinker := deps.HistoryLinker
+		storage := deps.Storage
+		srv.shutdownHooks = append(srv.shutdownHooks, func() {
+			instances := historyLinker.Instances()
+			deadline := time.Now().Add(4 * time.Second) // leave headroom for HTTP graceful shutdown
+			captured := 0
+			for _, inst := range instances {
+				if time.Now().After(deadline) {
+					log.WarningLog.Printf("[shutdown] Capture deadline exceeded; skipped %d of %d instances",
+						len(instances)-captured, len(instances))
+					break
+				}
+				if err := inst.CaptureCurrentState(); err != nil {
+					log.WarningLog.Printf("[shutdown] CaptureCurrentState '%s': %v", inst.Title, err)
+				}
+				captured++
+			}
+			if err := storage.SaveInstances(instances); err != nil {
+				log.WarningLog.Printf("[shutdown] SaveInstances: %v", err)
+			} else {
+				log.InfoLog.Printf("[shutdown] Persisted working dirs for %d instances", captured)
+			}
+		})
+
 		// Initialize notification history store and EventBus subscriber.
 		// notifStore is declared here so it can be wired into the approval handler below.
 		var notifStore *notifications.NotificationHistoryStore
@@ -105,6 +146,22 @@ func NewServer(addr string) *Server {
 				deps.SessionService.SetNotificationStore(notifStore)
 			}
 		}
+
+		// Wire tmux server recovery → web UI toast notification.
+		tmux.SetServerRecoveryCallback(func() {
+			event := events.NewNotificationEvent(
+				"tmux-server",
+				"System",
+				uuid.New().String(),
+				int32(8), // NotificationType_NOTIFICATION_TYPE_WARNING
+				int32(2), // NotificationPriority_NOTIFICATION_PRIORITY_MEDIUM
+				"Tmux Server Recovered",
+				"Connection to the tmux server has been restored. Sessions will resume automatically.",
+				nil,
+			)
+			deps.EventBus.Publish(event)
+			log.InfoLog.Printf("[tmux] recovery notification sent to connected clients")
+		})
 
 		// Note: SetExternalDiscovery is now called inside BuildRuntimeDeps.
 
@@ -135,7 +192,6 @@ func NewServer(addr string) *Server {
 			deps.ExternalDiscovery,
 			deps.TmuxStreamerManager,
 			deps.ExternalApprovalMonitor,
-			deps.ExternalStatusPoller, // Wired for external session activity detection
 			deps.EventBus,
 		)
 		srv.mux.HandleFunc("/api/external/approvals", externalWsHandler.HandleApprovals)
@@ -277,6 +333,12 @@ func (s *Server) Start(ctx context.Context) error {
 
 // Shutdown gracefully shuts down the HTTP server.
 func (s *Server) Shutdown() error {
+	// Run registered hooks (e.g. capture pane paths, persist instance state) before
+	// stopping the HTTP server so in-flight requests complete first.
+	for _, hook := range s.shutdownHooks {
+		hook()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

@@ -63,7 +63,6 @@ export function SessionCard({
   const [renameError, setRenameError] = useState("");
   const [checkpointError, setCheckpointError] = useState("");
   const [forkError, setForkError] = useState("");
-
   const getStatusColor = (status: SessionStatus): string => {
     switch (status) {
       case SessionStatus.RUNNING:
@@ -554,6 +553,12 @@ export function SessionCard({
               owner={session.githubOwner}
               repo={session.githubRepo}
               sourceRef={session.githubSourceRef}
+              prPriority={session.githubPrPriority}
+              prState={session.githubPrState}
+              isDraft={session.githubPrIsDraft}
+              approvedCount={session.githubApprovedCount}
+              changesRequestedCount={session.githubChangesReqCount}
+              checkConclusion={session.githubCheckConclusion}
               compact={true}
             />
             {reviewItem && (

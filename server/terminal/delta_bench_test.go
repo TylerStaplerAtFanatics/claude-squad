@@ -49,25 +49,6 @@ func generateProgressBar(percent int, width int) []byte {
 
 // BenchmarkDeltaGenerator_LargeANSI_100KB measures delta generation with a realistic
 // 100KB ANSI payload. This is the production-like code path for large terminal sessions.
-<<<<<<< HEAD
-// Generated data is created once in setup (not per iteration) to isolate the delta logic.
-func BenchmarkDeltaGenerator_LargeANSI_100KB(b *testing.B) {
-	const cols, rows = 200, 50
-	const targetSize = 100 * 1024
-
-	// Build up ~100KB by repeating the base content block until we exceed the target,
-	// then truncate exactly. Each block is ~27KB so we need ~4 copies.
-	block := generateANSIContent(rows, cols)
-	var content []byte
-	for len(content) < targetSize {
-		content = append(content, block...)
-	}
-	content = content[:targetSize]
-
-	dg := NewDeltaGenerator(cols, rows)
-
-	b.SetBytes(int64(len(content)))
-=======
 //
 // We pre-generate numVariants slightly-different payloads so every iteration exercises
 // real delta computation rather than the trivial no-change fast path (which would be hit
@@ -96,17 +77,12 @@ func BenchmarkDeltaGenerator_LargeANSI_100KB(b *testing.B) {
 	dg := NewDeltaGenerator(cols, rows)
 
 	b.SetBytes(int64(targetSize))
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 	b.ReportAllocs()
 	runtime.GC()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-<<<<<<< HEAD
-		delta := dg.GenerateDelta(content)
-=======
 		delta := dg.GenerateDelta(variants[i%numVariants])
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 		if delta == nil {
 			b.Fatal("GenerateDelta returned nil")
 		}
@@ -128,15 +104,9 @@ func BenchmarkDeltaGenerator_RapidSequential(b *testing.B) {
 		for line := 0; line < rows; line++ {
 			if line == rows-1 {
 				// Last line changes each update (new output)
-<<<<<<< HEAD
-				buf.WriteString(fmt.Sprintf("\033[32mUpdate %04d: new output line\033[0m\n", i))
-			} else {
-				buf.WriteString(fmt.Sprintf("Stable line %04d: some content here\n", line))
-=======
 				fmt.Fprintf(&buf, "\033[32mUpdate %04d: new output line\033[0m\n", i)
 			} else {
 				fmt.Fprintf(&buf, "Stable line %04d: some content here\n", line)
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 			}
 		}
 		updates[i] = buf.Bytes()

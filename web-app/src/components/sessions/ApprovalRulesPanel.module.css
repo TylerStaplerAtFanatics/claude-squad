@@ -123,8 +123,8 @@
 }
 
 .tabActive {
-  background: var(--accent, #3b82f6);
-  border-color: var(--accent, #3b82f6);
+  background: var(--primary);
+  border-color: var(--primary);
   color: #fff;
 }
 
@@ -328,7 +328,7 @@
 }
 
 .addButton {
-  background: var(--accent, #3b82f6);
+  background: var(--primary);
   border: none;
   border-radius: 8px;
   padding: 8px 16px;
@@ -400,7 +400,7 @@
 .input:focus,
 .select:focus {
   outline: none;
-  border-color: var(--accent, #3b82f6);
+  border-color: var(--primary);
 }
 
 .formActions {
@@ -409,7 +409,7 @@
 }
 
 .saveButton {
-  background: var(--accent, #3b82f6);
+  background: var(--primary);
   border: none;
   border-radius: 7px;
   padding: 8px 18px;

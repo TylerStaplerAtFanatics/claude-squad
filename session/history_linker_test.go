@@ -114,3 +114,50 @@ func TestHistoryLinker_StartAndStop(t *testing.T) {
 	// Verify it doesn't panic or block.
 	<-ctx.Done()
 }
+
+// TestNewHistoryLinkerFromRealInspector_ReturnsNonNil is a smoke test that verifies
+// the production constructor builds without panicking and returns a usable linker.
+func TestNewHistoryLinkerFromRealInspector_ReturnsNonNil(t *testing.T) {
+	linker := NewHistoryLinkerFromRealInspector()
+
+	require.NotNil(t, linker, "constructor should return a non-nil HistoryLinker")
+	require.NotNil(t, linker.detector, "detector should be initialized")
+	// watcher is created but not started yet — Start() is called separately.
+}
+
+// TestHistoryLinker_Instances_SnapshotIncludesAddedSessions verifies that Instances()
+// returns a consistent snapshot that reflects AddInstance calls.
+func TestHistoryLinker_Instances_SnapshotIncludesAddedSessions(t *testing.T) {
+	inspector := &mockProcessInspector{files: []string{}}
+	detector := NewHistoryFileDetector(inspector)
+	linker := NewHistoryLinker(detector, nil)
+
+	a := makeTestInstance("a")
+	b := makeTestInstance("b")
+	linker.AddInstance(a)
+	linker.AddInstance(b)
+
+	snap := linker.Instances()
+
+	require.Len(t, snap, 2)
+	titles := []string{snap[0].Title, snap[1].Title}
+	assert.Contains(t, titles, "a")
+	assert.Contains(t, titles, "b")
+}
+
+// TestHistoryLinker_Instances_SnapshotIsIndependent verifies that mutating the returned
+// snapshot does not affect the linker's internal state.
+func TestHistoryLinker_Instances_SnapshotIsIndependent(t *testing.T) {
+	inspector := &mockProcessInspector{files: []string{}}
+	detector := NewHistoryFileDetector(inspector)
+	linker := NewHistoryLinker(detector, nil)
+	linker.AddInstance(makeTestInstance("original"))
+
+	snap := linker.Instances()
+	snap[0] = makeTestInstance("mutated")
+
+	// Internal state should be unchanged.
+	internal := linker.Instances()
+	require.Len(t, internal, 1)
+	assert.Equal(t, "original", internal[0].Title)
+}

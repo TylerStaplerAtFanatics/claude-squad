@@ -200,17 +200,28 @@ var (
 				}
 			}
 
+			strictStartup := os.Getenv("STAPLER_SQUAD_STRICT_STARTUP") == "true"
+
 			// Ensure tmux server is running before sessions are restored.
 			if err := tmux.EnsureServerRunning(""); err != nil {
+				if strictStartup {
+					return fmt.Errorf("tmux server startup failed (unset STAPLER_SQUAD_STRICT_STARTUP to suppress): %w", err)
+				}
 				log.WarningLog.Printf("Failed to ensure tmux server running: %v", err)
 			}
-			// Layer 3: keepalive session prevents server from exiting when all user sessions close.
+			// Create a keepalive session so the tmux server does not exit when all user sessions close.
 			if err := tmux.CreateKeepaliveSession(""); err != nil {
+				if strictStartup {
+					return fmt.Errorf("failed to create tmux keepalive session (unset STAPLER_SQUAD_STRICT_STARTUP to suppress): %w", err)
+				}
 				log.WarningLog.Printf("Failed to create keepalive session: %v", err)
 			}
-			// Layer 1 (opt-in): configure tmux to keep server alive even if keepalive session dies.
+			// --tmux-keep-server: also set exit-empty off so the server survives even if the keepalive dies.
 			if tmuxKeepServerFlag {
 				if err := tmux.SetExitEmpty("", false); err != nil {
+					if strictStartup {
+						return fmt.Errorf("failed to set tmux exit-empty off (unset STAPLER_SQUAD_STRICT_STARTUP to suppress): %w", err)
+					}
 					log.WarningLog.Printf("Failed to set tmux exit-empty off: %v", err)
 				}
 			}
@@ -337,7 +348,7 @@ var (
 		Short: "Print the version number of stapler-squad",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Printf("stapler-squad version %s\n", version)
-			fmt.Printf("https://github.com/tstapler/stapler-squad/releases/tag/v%s\n", version)
+			fmt.Printf("https://github.com/TylerStaplerAtFanatics/stapler-squad/releases/tag/v%s\n", version)
 		},
 	}
 
@@ -605,7 +616,8 @@ func init() {
 		"WebAuthn Relying Party ID override (your LAN IP or hostname, e.g. '192.168.1.42'). "+
 			"Defaults to the detected LAN IP.")
 	rootCmd.Flags().BoolVar(&tmuxKeepServerFlag, "tmux-keep-server", false,
-		"Configure tmux to keep the server running even when all sessions exit (sets 'exit-empty off')")
+		"Keep tmux server running even when all user sessions close (sets exit-empty off). "+
+			"Use this if the tmux server frequently stops between sessions.")
 
 	// Hide the daemonFlag as it's only for internal use
 	err := rootCmd.Flags().MarkHidden("daemon")

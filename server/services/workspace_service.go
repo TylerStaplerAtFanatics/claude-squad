@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/log"
@@ -23,6 +24,9 @@ import (
 type WorkspaceService struct {
 	storage  *session.Storage
 	eventBus *events.EventBus
+	// inFlightSwitches tracks session IDs currently undergoing a workspace switch.
+	// Prevents concurrent SwitchWorkspace RPCs on the same session from corrupting state.
+	inFlightSwitches sync.Map
 }
 
 // NewWorkspaceService creates a WorkspaceService with the given dependencies.
@@ -216,6 +220,13 @@ func (ws *WorkspaceService) SwitchWorkspace(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("target is required"))
 	}
 
+	// Guard against concurrent switches on the same session.
+	if _, loaded := ws.inFlightSwitches.LoadOrStore(req.Msg.Id, true); loaded {
+		return nil, connect.NewError(connect.CodeUnavailable,
+			fmt.Errorf("workspace switch already in progress for session '%s'", req.Msg.Id))
+	}
+	defer ws.inFlightSwitches.Delete(req.Msg.Id)
+
 	instances, instance, err := ws.findInstance(req.Msg.Id)
 	if err != nil {
 		return nil, err
@@ -251,6 +262,14 @@ func (ws *WorkspaceService) SwitchWorkspace(
 		ChangeStrategy:  changeStrategy,
 		CreateIfMissing: req.Msg.CreateIfMissing,
 		BaseRevision:    req.Msg.BaseRevision,
+	}
+
+	// Create a named checkpoint before switching so the state is recoverable.
+	if instance.Started() && !instance.Paused() {
+		label := "pre-switch: " + req.Msg.Target
+		if _, cpErr := instance.CreateCheckpoint(label, 0); cpErr != nil {
+			log.WarningLog.Printf("SwitchWorkspace: pre-switch checkpoint for '%s' failed (non-fatal): %v", instance.Title, cpErr)
+		}
 	}
 
 	result, err := instance.SwitchWorkspace(switchReq)

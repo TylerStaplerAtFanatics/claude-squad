@@ -59,6 +59,12 @@ type SessionService struct {
 	// databaseSvc handles workspace/database switcher RPCs.
 	databaseSvc *DatabaseService
 
+	// fileSvc handles file tree browsing RPCs (ListFiles, GetFileContent).
+	fileSvc *FileService
+
+	// pathCompletionSvc handles filesystem path completion RPCs.
+	pathCompletionSvc *PathCompletionService
+
 	// scrollbackMgr provides access to per-session scrollback sequence numbers
 	// for checkpoint creation. May be nil if not wired (seq defaults to 0).
 	scrollbackMgr scrollbackSequencer
@@ -138,19 +144,21 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifier)
 
 	return &SessionService{
-		storage:         storage,
-		eventBus:        eventBus,
-		reviewQueueSvc:  reviewQueueSvc,
-		searchSvc:       NewSearchService(searchEngine, search.NewSnippetGenerator(), 5*time.Minute),
-		githubSvc:       NewGitHubService(concStorage),
-		workspaceSvc:    NewWorkspaceService(concStorage, eventBus),
-		configSvc:       NewConfigService(),
-		notificationSvc: notificationSvc,
-		approvalSvc:     approvalSvc,
-		utilitySvc:      utilitySvc,
-		rulesSvc:        rulesSvc,
-		approvalStore:   approvalStore,
-		databaseSvc:     NewDatabaseService(),
+		storage:           storage,
+		eventBus:          eventBus,
+		reviewQueueSvc:    reviewQueueSvc,
+		searchSvc:         NewSearchService(searchEngine, search.NewSnippetGenerator(), 5*time.Minute),
+		githubSvc:         NewGitHubService(concStorage),
+		workspaceSvc:      NewWorkspaceService(concStorage, eventBus),
+		configSvc:         NewConfigService(),
+		notificationSvc:   notificationSvc,
+		approvalSvc:       approvalSvc,
+		utilitySvc:        utilitySvc,
+		rulesSvc:          rulesSvc,
+		approvalStore:     approvalStore,
+		databaseSvc:       NewDatabaseService(),
+		fileSvc:           NewFileService(concStorage),
+		pathCompletionSvc: NewPathCompletionService(),
 	}
 }
 
@@ -628,7 +636,48 @@ func (s *SessionService) UpdateSession(
 	var updatedFields []string
 	var oldStatus session.Status
 
-	// Handle status change (pause/resume)
+	// Handle title update (before status change so rename is atomic with resume)
+	if req.Msg.Title != nil && *req.Msg.Title != "" && *req.Msg.Title != instance.Title {
+		// Check if new title already exists
+		for _, inst := range instances {
+			if inst.Title == *req.Msg.Title {
+				return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("session with title '%s' already exists", *req.Msg.Title))
+			}
+		}
+		instance.Title = *req.Msg.Title
+		updatedFields = append(updatedFields, "title")
+	}
+
+	// Handle category update
+	if req.Msg.Category != nil {
+		instance.Category = *req.Msg.Category
+		updatedFields = append(updatedFields, "category")
+	}
+
+	// Handle tags update
+	if len(req.Msg.Tags) > 0 {
+		if err := instance.SetTags(req.Msg.Tags); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update tags: %w", err))
+		}
+		updatedFields = append(updatedFields, "tags")
+	}
+
+	// Handle program update
+	if req.Msg.Program != nil && *req.Msg.Program != "" && instance.Program != *req.Msg.Program {
+		instance.Program = *req.Msg.Program
+		updatedFields = append(updatedFields, "program")
+
+		// If the session is running, restart it with the new program
+		if instance.Status == session.Running {
+			if err := instance.Restart(true); err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart session after program change: %w", err))
+			}
+		}
+	}
+
+	// Handle status change (pause/resume) LAST - after all metadata updates.
+	// This ensures that if Resume() fails, no partial metadata changes are persisted
+	// (save only happens after all changes succeed).
 	if req.Msg.Status != nil && *req.Msg.Status != sessionv1.SessionStatus_SESSION_STATUS_UNSPECIFIED {
 		targetStatus := adapters.ProtoToStatus(*req.Msg.Status)
 		oldStatus = instance.Status
@@ -644,37 +693,6 @@ func (s *SessionService) UpdateSession(
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to resume session: %w", err))
 			}
 			updatedFields = append(updatedFields, "status")
-		}
-	}
-
-	// Handle category update
-	if req.Msg.Category != nil {
-		instance.Category = *req.Msg.Category
-		updatedFields = append(updatedFields, "category")
-	}
-
-	// Handle title update
-	if req.Msg.Title != nil && *req.Msg.Title != "" && *req.Msg.Title != instance.Title {
-		// Check if new title already exists
-		for _, inst := range instances {
-			if inst.Title == *req.Msg.Title {
-				return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("session with title '%s' already exists", *req.Msg.Title))
-			}
-		}
-		instance.Title = *req.Msg.Title
-		updatedFields = append(updatedFields, "title")
-	}
-
-	// Handle program update
-	if req.Msg.Program != nil && *req.Msg.Program != "" && instance.Program != *req.Msg.Program {
-		instance.Program = *req.Msg.Program
-		updatedFields = append(updatedFields, "program")
-
-		// If the session is running, restart it with the new program
-		if instance.Status == session.Running {
-			if err := instance.Restart(true); err != nil {
-				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart session after program change: %w", err))
-			}
 		}
 	}
 
@@ -1769,6 +1787,14 @@ func (s *SessionService) ForkSession(
 	}), nil
 }
 
+// ListPathCompletions returns filesystem entries matching the given path prefix.
+func (s *SessionService) ListPathCompletions(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ListPathCompletionsRequest],
+) (*connect.Response[sessionv1.ListPathCompletionsResponse], error) {
+	return s.pathCompletionSvc.ListPathCompletions(ctx, req)
+}
+
 // findInstance finds an instance by title using the live in-memory poller.
 func (s *SessionService) findInstance(id string) *session.Instance {
 	if s.reviewQueuePoller != nil {
@@ -1794,6 +1820,22 @@ func (s *SessionService) allInstances() []*session.Instance {
 		result = append(result, s.externalDiscovery.GetSessions()...)
 	}
 	return result
+}
+
+// ListFiles returns the immediate children of a directory in a session's worktree.
+func (s *SessionService) ListFiles(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ListFilesRequest],
+) (*connect.Response[sessionv1.ListFilesResponse], error) {
+	return s.fileSvc.ListFiles(ctx, req)
+}
+
+// GetFileContent retrieves the text content of a file in a session's worktree.
+func (s *SessionService) GetFileContent(
+	ctx context.Context,
+	req *connect.Request[sessionv1.GetFileContentRequest],
+) (*connect.Response[sessionv1.GetFileContentResponse], error) {
+	return s.fileSvc.GetFileContent(ctx, req)
 }
 
 // checkpointToProto converts a session.Checkpoint to a proto CheckpointProto.

@@ -32,19 +32,11 @@ import {
 } from '../terminal-stress/helpers';
 import { writeBenchmarkResults, computeStats } from './output-benchmark-results';
 
-<<<<<<< HEAD
-const RESULTS_PATH = path.resolve(__dirname, '../../benchmark-results.json');
-=======
 const RESULTS_PATH = path.resolve(__dirname, '../../../benchmark-results.json');
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 const WARMUP_RUNS = 2;
 const TOTAL_RUNS = 10;
 // 100KB payload: a realistic terminal burst from a Claude Code session
 const PRESET = 'PAYLOAD_100KB';
-<<<<<<< HEAD
-// Expected payload size — used for documentation; actual bytes are read from metrics
-=======
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 const PAYLOAD_BYTES = 100 * 1024;
 
 test.describe('Terminal Throughput Benchmark', () => {
@@ -53,10 +45,6 @@ test.describe('Terminal Throughput Benchmark', () => {
 
   test('measure xterm.js render throughput over 10 runs', async ({ page }) => {
     const throughputSamples: number[] = [];
-<<<<<<< HEAD
-    let lastBytesRendered = 0;
-=======
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 
     for (let run = 0; run < TOTAL_RUNS; run++) {
       // Navigate fresh for each run to get a clean xterm.js state.
@@ -90,10 +78,6 @@ test.describe('Terminal Throughput Benchmark', () => {
 
       const metrics = await getMetrics(page);
       const bytesRendered = metrics.bytesGenerated;
-<<<<<<< HEAD
-      lastBytesRendered = bytesRendered;
-=======
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
       const bytesPerSec =
         durationMs > 0 ? (bytesRendered / durationMs) * 1000 : 0;
 
@@ -123,11 +107,7 @@ test.describe('Terminal Throughput Benchmark', () => {
         name: 'terminal-throughput-mean',
         unit: 'bytes/sec',
         value: Math.round(stats.mean),
-<<<<<<< HEAD
-        extra: `p50=${(stats.p50 / 1024).toFixed(0)}KB/s p95=${(stats.p95 / 1024).toFixed(0)}KB/s cv=${(stats.cv * 100).toFixed(1)}% payload=${(lastBytesRendered / 1024).toFixed(0)}KB runs=${TOTAL_RUNS - WARMUP_RUNS}`,
-=======
         extra: `p50=${(stats.p50 / 1024).toFixed(0)}KB/s p95=${(stats.p95 / 1024).toFixed(0)}KB/s cv=${(stats.cv * 100).toFixed(1)}% payload=${PAYLOAD_BYTES / 1024}KB runs=${TOTAL_RUNS - WARMUP_RUNS}`,
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
       },
       {
         name: 'terminal-throughput-p50',

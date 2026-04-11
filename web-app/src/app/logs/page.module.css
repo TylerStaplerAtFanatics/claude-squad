@@ -241,16 +241,6 @@
   line-height: 1.4;
 }
 
-.footer {
-  margin-top: 1rem;
-  padding: 0.75rem;
-  text-align: center;
-  background-color: #1a1a1a;
-  border-radius: 6px;
-  border: 1px solid #333;
-  font-size: 0.85rem;
-  color: #999;
-}
 
 .loadingMore {
   padding: 1.5rem;

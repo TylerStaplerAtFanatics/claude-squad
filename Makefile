@@ -12,7 +12,6 @@ GO_FILES := $(shell find . -maxdepth 3 -name "*.go" -not -path "./vendor/*" -not
 WEB_FILES := $(shell find web-app/src -type f 2>/dev/null)
 PROTO_FILES := $(shell find proto -name "*.proto" 2>/dev/null)
 PROTO_STAMP := .proto-gen.stamp
-WEB_STAMP := .web-build.stamp
 PROTO_OUT_DIRS := gen/proto/go web-app/src/gen
 ASDF_STAMP := .asdf-install.stamp
 
@@ -41,7 +40,7 @@ endif
 		touch $(ASDF_STAMP); \
 	fi
 
-.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace
+.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux
 
 # Default target
 help: ## Show this help message
@@ -125,6 +124,14 @@ web-dev: build-all ## Build web UI and server, then restart (detects file change
 install: ensure-tools ## Install stapler-squad locally
 	go install .
 
+build-mux: ensure-tools ## Build the claude-mux PTY multiplexer binary
+	@echo "Building claude-mux..."
+	go build -o claude-mux ./cmd/claude-mux
+	@echo "✅ claude-mux built to ./claude-mux"
+
+install-mux: ensure-tools ## Build and install claude-mux to ~/.local/bin
+	@./scripts/install-mux.sh
+
 # Protocol Buffer code generation
 proto-gen: ensure-tools web-app/node_modules/.package-lock.json ## Generate Go and TypeScript code from proto files
 	@echo "Checking if proto files need regeneration..."
@@ -187,7 +194,7 @@ lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with comprehen
 		echo "Installing golangci-lint..."; \
 		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
 	fi
-	$$(go env GOPATH)/bin/golangci-lint run --enable=nilnil,staticcheck,ineffassign,govet
+	golangci-lint run --enable=nilnil,staticcheck,ineffassign,govet
 
 format: ensure-tools ## Format code with gofmt
 	go fmt ./...
@@ -243,7 +250,7 @@ tidy: ensure-tools ## Tidy and verify go modules
 # Cleanup
 clean: ## Clean build artifacts and temporary files
 	go clean
-	rm -f stapler-squad coverage.out coverage.html benchmark_results.txt
+	rm -f stapler-squad claude-mux coverage.out coverage.html benchmark_results.txt
 	rm -rf analysis_results/
 
 clean-tools: ## Remove all installed development tools (use with caution)

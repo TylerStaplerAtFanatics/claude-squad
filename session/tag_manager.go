@@ -63,6 +63,7 @@ func (tm *TagManager) All() []string {
 
 // Set replaces all tags with a new deduplicated set.
 // Returns ErrTagTooLong on the first tag that exceeds MaxTagLength.
+// Returns ErrTooManyTags if the deduplicated count exceeds MaxTagCount.
 func (tm *TagManager) Set(tags []string) error {
 	seen := make(map[string]struct{}, len(tags))
 	deduped := make([]string, 0, len(tags))
@@ -74,6 +75,9 @@ func (tm *TagManager) Set(tags []string) error {
 			seen[tag] = struct{}{}
 			deduped = append(deduped, tag)
 		}
+	}
+	if len(deduped) > MaxTagCount {
+		return ErrTooManyTags{Count: len(deduped), MaxCount: MaxTagCount}
 	}
 	*tm.tags = deduped
 	return nil

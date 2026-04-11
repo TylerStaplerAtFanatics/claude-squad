@@ -1,13 +1,8 @@
 # ADR-001: CI Benchmark Storage and Regression Gate Strategy
 
-<<<<<<< HEAD
-**Status**: Proposed
-**Date**: 2026-04-02
-=======
 **Status**: Superseded
 **Date**: 2026-04-02
 **Superseded by**: File-in-main baseline approach (see Implementation Note below)
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
 **Context**: Performance Benchmarking feature
 
 ## Context
@@ -63,8 +58,6 @@ Research findings (findings-pitfalls.md) document 10-30% coefficient of variatio
 - The workflow requires `contents: write` permission to push baseline data.
 - PRs from forks cannot push baselines (GitHub Actions security model); fork PRs will compare against the last main baseline only.
 - Bundle size gates require `next build` in CI, adding Node.js setup to the benchmark workflow.
-<<<<<<< HEAD
-=======
 
 ---
 
@@ -86,4 +79,3 @@ During implementation (commit `3211c0f`), `benchmark-action/github-action-benchm
 **Trade-offs accepted:**
 - No time-series visualization (acceptable; regressions visible in PR comments).
 - Slightly more brittle `benchstat` grep in the regression gate (mitigated by pinning benchstat version).
->>>>>>> 9479a1e (feat(benchmarks): comprehensive Go performance benchmarking with CI regression gate (#17))
