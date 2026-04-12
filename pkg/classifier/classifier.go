@@ -362,7 +362,7 @@ func (c *RuleBasedClassifier) Classify(payload PermissionRequestPayload, ctx Cla
 		cmd, _ := payload.ToolInput["command"].(string)
 		if cmd != "" {
 			// Perform deep security audit via AST analysis
-			findings := AuditCommand(cmd)
+			findings := AuditCommand(cmd, ctx.Cwd)
 			for _, f := range findings {
 				if f.RiskLevel == RiskCritical {
 					return ClassificationResult{

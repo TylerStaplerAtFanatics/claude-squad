@@ -370,3 +370,43 @@ func TestClassifier_RmRf_DollarHOMESubdir_NotDenied(t *testing.T) {
 		t.Errorf("rm -rf $HOME/subdir should not be blocked by rm-rf-root rule (requires $HOME expansion)")
 	}
 }
+
+func TestClassifier_RmRf_RelativeDot_FromRoot_Denied(t *testing.T) {
+	c := classifier.NewRuleBasedClassifier()
+	ctx := classifier.ClassificationContext{Cwd: "/"}
+
+	r := c.Classify(classifier.PermissionRequestPayload{
+		ToolName:  "Bash",
+		ToolInput: map[string]interface{}{"command": "rm -rf ."},
+	}, ctx)
+	if r.Decision != classifier.AutoDeny {
+		t.Errorf("rm -rf . from / should be AutoDeny, got %v (rule=%s)", r.Decision, r.RuleID)
+	}
+}
+
+func TestClassifier_RmRf_RelativeDotDot_FromHomeSubdir_Denied(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	c := classifier.NewRuleBasedClassifier()
+	ctx := classifier.ClassificationContext{Cwd: filepath.Join(home, "projects")}
+
+	r := c.Classify(classifier.PermissionRequestPayload{
+		ToolName:  "Bash",
+		ToolInput: map[string]interface{}{"command": "rm -rf .."},
+	}, ctx)
+	if r.Decision != classifier.AutoDeny {
+		t.Errorf("rm -rf .. from %s/projects should be AutoDeny (resolves to home), got %v (rule=%s)", home, r.Decision, r.RuleID)
+	}
+}
+
+func TestClassifier_RmRf_RelativeDot_FromSafeDir_NotDenied(t *testing.T) {
+	c := classifier.NewRuleBasedClassifier()
+	ctx := classifier.ClassificationContext{Cwd: "/tmp/myproject"}
+
+	r := c.Classify(classifier.PermissionRequestPayload{
+		ToolName:  "Bash",
+		ToolInput: map[string]interface{}{"command": "rm -rf ."},
+	}, ctx)
+	if r.Decision == classifier.AutoDeny && r.RuleID == "audit-rm-rf-critical-path" {
+		t.Errorf("rm -rf . from /tmp/myproject should not be blocked by critical-path audit")
+	}
+}

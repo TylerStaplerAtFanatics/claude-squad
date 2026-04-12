@@ -3,6 +3,7 @@ package classifier
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -529,7 +530,7 @@ type SecurityFinding struct {
 }
 
 // AuditCommand performs deep AST analysis on a shell command to identify dangerous patterns.
-func AuditCommand(cmd string) []SecurityFinding {
+func AuditCommand(cmd string, cwd string) []SecurityFinding {
 	r := strings.NewReader(cmd)
 	f, err := syntax.NewParser().Parse(r, "")
 	if err != nil {
@@ -613,7 +614,7 @@ func AuditCommand(cmd string) []SecurityFinding {
 			if err := syntax.NewPrinter().Print(&sb, arg); err != nil {
 				continue
 			}
-			target := expandPathForAudit(stripOuterQuotes(sb.String()))
+			target := expandPathForAudit(stripOuterQuotes(sb.String()), cwd)
 			if target == "/" || target == homeDir {
 				findings = append(findings, SecurityFinding{
 					ID:          "audit-rm-rf-critical-path",
@@ -630,20 +631,25 @@ func AuditCommand(cmd string) []SecurityFinding {
 	return findings
 }
 
-// expandPathForAudit expands ~ and $HOME in a path for security audit purposes.
-func expandPathForAudit(path string) string {
+// expandPathForAudit expands ~, $HOME, and relative paths for security audit.
+// cwd is the working directory used to resolve relative paths like "." or "..".
+func expandPathForAudit(path string, cwd string) string {
 	// Strip trailing slashes for comparison (rm -rf ~/ == rm -rf ~).
 	cleaned := strings.TrimRight(path, "/")
 	if cleaned == "~" || cleaned == "$HOME" {
 		return homeDir
 	}
 	if strings.HasPrefix(path, "~/") {
-		return homeDir + path[1:]
+		return filepath.Clean(homeDir + path[1:])
 	}
 	if strings.HasPrefix(path, "$HOME/") {
-		return homeDir + path[5:]
+		return filepath.Clean(homeDir + path[5:])
 	}
-	return path
+	// Resolve relative paths (., .., etc.) against the working directory.
+	if !filepath.IsAbs(path) && cwd != "" {
+		return filepath.Clean(filepath.Join(cwd, path))
+	}
+	return filepath.Clean(path)
 }
 
 // homeDir caches the user's home directory for audit path expansion.
