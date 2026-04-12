@@ -216,7 +216,7 @@ func loadClassifier(storage *session.Storage) *classifier.RuleBasedClassifier {
 			Enabled:     r.Enabled,
 			Source:      r.Source,
 		}
-		// Pattern compilation happens in AddRules if we use strings, 
+		// Pattern compilation happens in AddRules if we use strings,
 		// but here we might need to compile them if we use the Rule struct directly.
 		// For now, let's assume we need to compile them.
 		if r.ToolPattern != "" {
@@ -251,7 +251,7 @@ func loadClassifier(storage *session.Storage) *classifier.RuleBasedClassifier {
 
 func recordResult(storage *session.Storage, payload classifier.PermissionRequestPayload, result classifier.ClassificationResult, durationMs int64) {
 	cmd, _ := payload.ToolInput["command"].(string)
-	
+
 	entry := session.AnalyticsData{
 		ID:             uuid.New().String(),
 		ToolName:       payload.ToolName,

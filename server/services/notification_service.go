@@ -295,23 +295,20 @@ func recordToProto(r *notifications.NotificationRecord) *sessionv1.NotificationH
 
 // validateLocalhostOrigin ensures the request comes from localhost by checking
 // the actual network connection's remote address.
-func validateLocalhostOrigin(ctx context.Context, req *connect.Request[sessionv1.SendNotificationRequest]) error {
-	peer := req.Peer()
-	if peer.Addr == "" {
-		// Fallback to context peer (e.g. for some test scenarios or interceptors)
-		if p, ok := connect.PeerFromContext(ctx); ok {
-			peer = p
-		}
-	}
+func validateLocalhostOrigin(_ context.Context, req *connect.Request[sessionv1.SendNotificationRequest]) error {
+	return validateLocalhostAddr(req.Peer().Addr)
+}
 
-	if peer.Addr == "" {
+// validateLocalhostAddr checks that the given address (host:port or bare IP)
+// belongs to localhost. Extracted for testability.
+func validateLocalhostAddr(addr string) error {
+	if addr == "" {
 		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("unable to determine client IP"))
 	}
 
-	host, _, err := net.SplitHostPort(peer.Addr)
+	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		// Fallback to the whole string if SplitHostPort fails (might happen if Addr is just an IP)
-		host = peer.Addr
+		host = addr
 	}
 
 	if !isLocalhostIP(host) {

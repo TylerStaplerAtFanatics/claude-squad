@@ -287,17 +287,17 @@ func TestPathMatcher_ZeroMatchIf(t *testing.T) {
 
 func TestClassifier_RmRf_ExpandedHome_Denied(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	c := NewRuleBasedClassifier()
+	c := classifier.NewRuleBasedClassifier()
 	ctx := classifier.ClassificationContext{}
 
 	// Provide the literal home path (as if $HOME was already expanded by shell).
 	cmd := "rm -rf " + home
-	r := c.Classify(PermissionRequestPayload{
+	r := c.Classify(classifier.PermissionRequestPayload{
 		ToolName:  "Bash",
 		ToolInput: map[string]interface{}{"command": cmd},
 	}, ctx)
-	if r.Decision != AutoDeny {
-		t.Errorf("rm -rf <home> should be AutoDeny, got %v (rule=%s)", r.Decision, r.RuleID)
+	if r.Decision != classifier.AutoDeny {
+		t.Errorf("rm -rf <home> should be classifier.AutoDeny, got %v (rule=%s)", r.Decision, r.RuleID)
 	}
 	if r.RuleID != "seed-deny-rm-rf-root" {
 		t.Errorf("expected rule seed-deny-rm-rf-root, got %s", r.RuleID)
@@ -306,21 +306,21 @@ func TestClassifier_RmRf_ExpandedHome_Denied(t *testing.T) {
 
 func TestClassifier_RmRf_HomeSubdir_NotDenied(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	c := NewRuleBasedClassifier()
+	c := classifier.NewRuleBasedClassifier()
 	ctx := classifier.ClassificationContext{}
 
 	cmd := "rm -rf " + filepath.Join(home, "projects/old-branch")
-	r := c.Classify(PermissionRequestPayload{
+	r := c.Classify(classifier.PermissionRequestPayload{
 		ToolName:  "Bash",
 		ToolInput: map[string]interface{}{"command": cmd},
 	}, ctx)
-	if r.Decision == AutoDeny && r.RuleID == "seed-deny-rm-rf-root" {
-		t.Errorf("rm -rf <home subdir> should not be blocked by rm-rf-root rule, got AutoDeny")
+	if r.Decision == classifier.AutoDeny && r.RuleID == "seed-deny-rm-rf-root" {
+		t.Errorf("rm -rf <home subdir> should not be blocked by rm-rf-root rule, got classifier.AutoDeny")
 	}
 }
 
 func TestClassifier_RmRf_TmpDir_NotDenied(t *testing.T) {
-	c := NewRuleBasedClassifier()
+	c := classifier.NewRuleBasedClassifier()
 	ctx := classifier.ClassificationContext{}
 
 	cases := []string{
@@ -329,11 +329,11 @@ func TestClassifier_RmRf_TmpDir_NotDenied(t *testing.T) {
 		"rm -rf /var/tmp/workdir",
 	}
 	for _, cmd := range cases {
-		r := c.Classify(PermissionRequestPayload{
+		r := c.Classify(classifier.PermissionRequestPayload{
 			ToolName:  "Bash",
 			ToolInput: map[string]interface{}{"command": cmd},
 		}, ctx)
-		if r.Decision == AutoDeny && r.RuleID == "seed-deny-rm-rf-root" {
+		if r.Decision == classifier.AutoDeny && r.RuleID == "seed-deny-rm-rf-root" {
 			t.Errorf("cmd %q should not be blocked by rm-rf-root rule", cmd)
 		}
 	}
@@ -345,27 +345,27 @@ func TestClassifier_RmRf_DollarHOME_Denied(t *testing.T) {
 	if !strings.HasPrefix(home, "/") {
 		t.Skip("home dir is not absolute, skipping")
 	}
-	c := NewRuleBasedClassifier()
+	c := classifier.NewRuleBasedClassifier()
 	ctx := classifier.ClassificationContext{}
 
-	r := c.Classify(PermissionRequestPayload{
+	r := c.Classify(classifier.PermissionRequestPayload{
 		ToolName:  "Bash",
 		ToolInput: map[string]interface{}{"command": "rm -rf $HOME"},
 	}, ctx)
-	if r.Decision != AutoDeny {
-		t.Errorf("rm -rf $HOME should be AutoDeny (requires $HOME expansion), got %v (rule=%s)", r.Decision, r.RuleID)
+	if r.Decision != classifier.AutoDeny {
+		t.Errorf("rm -rf $HOME should be classifier.AutoDeny (requires $HOME expansion), got %v (rule=%s)", r.Decision, r.RuleID)
 	}
 }
 
 func TestClassifier_RmRf_DollarHOMESubdir_NotDenied(t *testing.T) {
-	c := NewRuleBasedClassifier()
+	c := classifier.NewRuleBasedClassifier()
 	ctx := classifier.ClassificationContext{}
 
-	r := c.Classify(PermissionRequestPayload{
+	r := c.Classify(classifier.PermissionRequestPayload{
 		ToolName:  "Bash",
 		ToolInput: map[string]interface{}{"command": "rm -rf $HOME/subdir"},
 	}, ctx)
-	if r.Decision == AutoDeny && r.RuleID == "seed-deny-rm-rf-root" {
+	if r.Decision == classifier.AutoDeny && r.RuleID == "seed-deny-rm-rf-root" {
 		t.Errorf("rm -rf $HOME/subdir should not be blocked by rm-rf-root rule (requires $HOME expansion)")
 	}
 }

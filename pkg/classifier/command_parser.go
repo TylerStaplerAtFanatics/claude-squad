@@ -593,12 +593,12 @@ func isDownloadCommand(n syntax.Node) bool {
 		}
 		return true
 	})
-	
+
 	// Strip path
 	if idx := strings.LastIndex(prog, "/"); idx >= 0 {
 		prog = prog[idx+1:]
 	}
-	
+
 	return prog == "curl" || prog == "wget"
 }
 
@@ -633,7 +633,7 @@ func isSensitivePath(path string) bool {
 		"/etc/passwd", "/etc/shadow", "/etc/group", "/etc/sudoers",
 		"authorized_keys", "known_hosts", "id_rsa", "id_ed25519",
 	}
-	
+
 	lower := strings.ToLower(path)
 	for _, s := range sensitive {
 		if strings.Contains(lower, s) {
