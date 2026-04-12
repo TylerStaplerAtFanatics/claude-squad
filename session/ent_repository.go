@@ -986,4 +986,3 @@ func (r *EntRepository) ListAnalytics(ctx context.Context, limit int) ([]Analyti
 	}
 	return result, nil
 }
-
