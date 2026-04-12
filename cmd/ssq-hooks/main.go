@@ -64,6 +64,13 @@ func handleCheck() {
 		os.Exit(1)
 	}
 
+	// AskUserQuestion is not a permission gate — Claude is asking the user a question.
+	// Return no output (empty stdout) so the hook defers to Claude Code's native terminal dialog.
+	// This mirrors the writeDeferDecision path in the HTTP approval handler.
+	if strings.EqualFold(payload.ToolName, "AskUserQuestion") {
+		os.Exit(0)
+	}
+
 	storage := loadStorage(*dbPath)
 	defer storage.Close()
 
@@ -349,7 +356,7 @@ func handleInstall() {
 }
 
 func installGemini() {
-	hookCmd := "ssq-hooks check --tool bash --input-json $TOOL_INPUT"
+	hookCmd := `printf '%s' "$TOOL_INPUT" | ssq-hooks check`
 	fmt.Fprintf(os.Stderr, "To enable Stapler Squad permissions check in Gemini CLI, add the following\n")
 	fmt.Fprintf(os.Stderr, "to your Gemini configuration (e.g., ~/.gemini/config.json):\n\n")
 	fmt.Fprintf(os.Stderr, "{\n")
