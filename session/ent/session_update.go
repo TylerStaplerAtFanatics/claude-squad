@@ -6,17 +6,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/schema/field"
 	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 	"github.com/tstapler/stapler-squad/session/ent/diffstats"
 	"github.com/tstapler/stapler-squad/session/ent/predicate"
 	"github.com/tstapler/stapler-squad/session/ent/session"
 	"github.com/tstapler/stapler-squad/session/ent/tag"
 	"github.com/tstapler/stapler-squad/session/ent/worktree"
-	"time"
-
-	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/schema/field"
 )
 
 // SessionUpdate is the builder for updating Session entities.

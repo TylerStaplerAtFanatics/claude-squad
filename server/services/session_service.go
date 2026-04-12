@@ -12,6 +12,7 @@ import (
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/pkg/classifier"
 	"github.com/tstapler/stapler-squad/server/adapters"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/server/notifications"
@@ -123,25 +124,19 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 	utilitySvc := NewUtilityService(approvalStore)
 
 	// Build rules store, analytics store, and classifier for approval rules service.
-	rulesFilePath := ""
-	analyticsFilePath := ""
-	if configErr == nil {
-		rulesFilePath = configDir + "/auto_approve_rules.json"
-		analyticsFilePath = configDir + "/approval_analytics.jsonl"
-	}
-	rulesStore, rulesErr := NewRulesStore(rulesFilePath)
+	rulesStore, rulesErr := NewRulesStore(concStorage)
 	if rulesErr != nil {
 		log.WarningLog.Printf("Failed to load rules store, using empty store: %v", rulesErr)
-		rulesStore = &RulesStore{}
+		rulesStore = &RulesStore{storage: concStorage}
 	}
-	analyticsStore := NewAnalyticsStore(analyticsFilePath)
+	analyticsStore := NewAnalyticsStore(concStorage)
 	analyticsStore.Start(context.Background())
-	classifier := NewRuleBasedClassifier()
+	classifierObj := classifier.NewRuleBasedClassifier()
 	// Merge user rules into the classifier.
 	if userRules := rulesStore.ToRules(); len(userRules) > 0 {
-		classifier.AddRules(userRules)
+		classifierObj.AddRules(userRules)
 	}
-	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifier)
+	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifierObj)
 
 	return &SessionService{
 		storage:           storage,
@@ -234,7 +229,7 @@ func (s *SessionService) GetApprovalStore() *ApprovalStore {
 }
 
 // GetClassifier returns the rule-based classifier for wiring up the ApprovalHandler.
-func (s *SessionService) GetClassifier() *RuleBasedClassifier {
+func (s *SessionService) GetClassifier() *classifier.RuleBasedClassifier {
 	if s.rulesSvc == nil {
 		return nil
 	}

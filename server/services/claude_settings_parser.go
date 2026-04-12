@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/pkg/classifier"
 )
 
 // ClaudePermissions mirrors the "permissions" key in ~/.claude/settings.json.
@@ -55,8 +56,8 @@ func ParseClaudeSettings(path string) (*ClaudePermissions, error) {
 //
 // Project settings take precedence: if both define the same tool pattern, the project
 // rule will be checked first due to higher priority.
-func LoadClaudeSettingsRules(projectDir string) []Rule {
-	var allRules []Rule
+func LoadClaudeSettingsRules(projectDir string) []classifier.Rule {
+	var allRules []classifier.Rule
 
 	home, _ := os.UserHomeDir()
 
@@ -101,14 +102,14 @@ func LoadClaudeSettingsRules(projectDir string) []Rule {
 //   - "Read"           -- allow any Read invocation
 //
 // Glob wildcards (*) are converted to regex (.*).
-func claudeAllowsToRules(allows []string, basePriority int, label string) []Rule {
-	var rules []Rule
+func claudeAllowsToRules(allows []string, basePriority int, label string) []classifier.Rule {
+	var rules []classifier.Rule
 	for i, pattern := range allows {
-		rule := Rule{
+		rule := classifier.Rule{
 			ID:        fmt.Sprintf("claude-settings-%s-%d", label, i),
 			Name:      fmt.Sprintf("Claude settings allow: %s", pattern),
-			Decision:  AutoAllow,
-			RiskLevel: RiskLow,
+			Decision:  classifier.AutoAllow,
+			RiskLevel: classifier.RiskLow,
 			Reason:    fmt.Sprintf("Allowed by Claude settings (%s): %s", label, pattern),
 			Priority:  basePriority,
 			Enabled:   true,

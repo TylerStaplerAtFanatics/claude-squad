@@ -737,7 +737,7 @@ func writeColorCode(sb *strings.Builder, colorStr string, isBg bool) {
 		// Standard colors: color0 to color7
 		var code int
 		if _, err := fmt.Sscanf(colorStr, "color%d", &code); err == nil {
-			sb.WriteString(fmt.Sprintf("\x1b[%dm", baseCode+code))
+			fmt.Fprintf(sb, "\x1b[%dm", baseCode+code)
 		}
 	} else if strings.HasPrefix(colorStr, "bright-color") {
 		// Bright standard colors: bright-color0 to bright-color7
@@ -747,7 +747,7 @@ func writeColorCode(sb *strings.Builder, colorStr string, isBg bool) {
 		}
 		var code int
 		if _, err := fmt.Sscanf(colorStr, "bright-color%d", &code); err == nil {
-			sb.WriteString(fmt.Sprintf("\x1b[%dm", brightBaseCode+code))
+			fmt.Fprintf(sb, "\x1b[%dm", brightBaseCode+code)
 		}
 	} else if strings.HasPrefix(colorStr, "color-") {
 		// 256 colors: color-0 to color-255
@@ -757,7 +757,7 @@ func writeColorCode(sb *strings.Builder, colorStr string, isBg bool) {
 			if isBg {
 				extendedCode = 48
 			}
-			sb.WriteString(fmt.Sprintf("\x1b[%d;5;%dm", extendedCode, code))
+			fmt.Fprintf(sb, "\x1b[%d;5;%dm", extendedCode, code)
 		}
 	} else if strings.HasPrefix(colorStr, "rgb(") {
 		// RGB colors: rgb(r,g,b)
@@ -767,7 +767,7 @@ func writeColorCode(sb *strings.Builder, colorStr string, isBg bool) {
 			if isBg {
 				extendedCode = 48
 			}
-			sb.WriteString(fmt.Sprintf("\x1b[%d;2;%d;%d;%dm", extendedCode, r, g, b))
+			fmt.Fprintf(sb, "\x1b[%d;2;%d;%d;%dm", extendedCode, r, g, b)
 		}
 	}
 }
