@@ -544,19 +544,13 @@ func (r *EntRepository) Delete(ctx context.Context, title string) error {
 	}
 
 	// Delete claude session and its metadata if exists
-	claudeSessions, err := tx.ClaudeSession.Query().Where(claudesession.HasSessionWith(session.ID(sess.ID))).All(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to query claude sessions: %w", err)
+	// Delete all claude metadata associated with claude sessions for this session
+	if _, err := tx.ClaudeMetadata.Delete().Where(claudemetadata.HasClaudeSessionWith(claudesession.HasSessionWith(session.ID(sess.ID)))).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete claude metadata: %w", err)
 	}
-	for _, cs := range claudeSessions {
-		// Delete claude metadata
-		if _, err := tx.ClaudeMetadata.Delete().Where(claudemetadata.HasClaudeSessionWith(claudesession.ID(cs.ID))).Exec(ctx); err != nil {
-			return fmt.Errorf("failed to delete claude metadata: %w", err)
-		}
-		// Delete claude session
-		if err := tx.ClaudeSession.DeleteOne(cs).Exec(ctx); err != nil {
-			return fmt.Errorf("failed to delete claude session: %w", err)
-		}
+	// Delete all claude sessions for this session
+	if _, err := tx.ClaudeSession.Delete().Where(claudesession.HasSessionWith(session.ID(sess.ID))).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete claude sessions: %w", err)
 	}
 
 	// Clear tag associations (many-to-many)
