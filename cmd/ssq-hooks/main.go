@@ -185,7 +185,11 @@ func loadStorage(path string) *session.Storage {
 		fmt.Fprintf(os.Stderr, "Error opening database %s: %v\n", path, err)
 		os.Exit(1)
 	}
-	storage, _ := session.NewStorageWithRepository(repo)
+	storage, err := session.NewStorageWithRepository(repo)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing storage: %v\n", err)
+		os.Exit(1)
+	}
 	return storage
 }
 
@@ -216,13 +220,28 @@ func loadClassifier(storage *session.Storage) *classifier.RuleBasedClassifier {
 		// but here we might need to compile them if we use the Rule struct directly.
 		// For now, let's assume we need to compile them.
 		if r.ToolPattern != "" {
-			cr.ToolPattern, _ = regexp.Compile(r.ToolPattern)
+			compiled, err := regexp.Compile(r.ToolPattern)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: invalid tool pattern %q in rule %s: %v\n", r.ToolPattern, r.ID, err)
+				continue
+			}
+			cr.ToolPattern = compiled
 		}
 		if r.CommandPattern != "" {
-			cr.CommandPattern, _ = regexp.Compile(r.CommandPattern)
+			compiled, err := regexp.Compile(r.CommandPattern)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: invalid command pattern %q in rule %s: %v\n", r.CommandPattern, r.ID, err)
+				continue
+			}
+			cr.CommandPattern = compiled
 		}
 		if r.FilePattern != "" {
-			cr.FilePattern, _ = regexp.Compile(r.FilePattern)
+			compiled, err := regexp.Compile(r.FilePattern)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: invalid file pattern %q in rule %s: %v\n", r.FilePattern, r.ID, err)
+				continue
+			}
+			cr.FilePattern = compiled
 		}
 		classifierRules = append(classifierRules, cr)
 	}

@@ -215,9 +215,9 @@ func (s *AnalyticsStore) DroppedCount() int64 {
 }
 
 // LoadWindow reads entries from DB with timestamps >= since.
+// TODO: Add a timestamp-filtered query to the repository layer to avoid
+// loading all rows into memory as the analytics table grows.
 func (s *AnalyticsStore) LoadWindow(since time.Time) ([]AnalyticsEntry, error) {
-	// For simplicity, we currently fetch all and filter in memory, 
-	// but the repository could be optimized with a timestamp query.
 	data, err := s.storage.ListAnalytics(context.Background(), 0)
 	if err != nil {
 		return nil, fmt.Errorf("list analytics from DB: %w", err)

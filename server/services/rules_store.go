@@ -199,15 +199,16 @@ func (s *RulesStore) reload() error {
 	return nil
 }
 
-// exportRulesLocked writes compiled rules to ~/.config/stapler-squad/rules.json
-// for use by standalone hooks. Errors are logged but not returned to avoid
-// blocking main application storage.
+// exportRulesLocked writes rule specs to ~/.config/stapler-squad/rules.json
+// for use by standalone hooks. Exports the serializable RuleSpec structs
+// (not compiled Rules, which contain *regexp.Regexp that won't round-trip
+// through JSON). Errors are logged but not returned to avoid blocking
+// main application storage.
 func (s *RulesStore) exportRulesLocked() {
 	home, _ := os.UserHomeDir()
 	exportPath := filepath.Join(home, ".config", "stapler-squad", "rules.json")
 
-	rules := specsToRules(s.specs)
-	data, err := json.MarshalIndent(rules, "", "  ")
+	data, err := json.MarshalIndent(s.specs, "", "  ")
 	if err != nil {
 		return
 	}

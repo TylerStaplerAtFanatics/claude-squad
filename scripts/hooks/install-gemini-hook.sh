@@ -28,7 +28,7 @@ echo "Stapler Squad Gemini Hook Installer"
 echo "===================================="
 echo ""
 
-HOOK_CMD='ssq-hooks check --tool bash --input-json $TOOL_INPUT'
+HOOK_CMD='echo "$TOOL_INPUT" | ssq-hooks check --db ~/.config/stapler-squad/stapler-squad.db'
 
 info "To enable Stapler Squad permissions check in Gemini CLI, add the following"
 info "to your Gemini configuration (e.g., ~/.gemini/config.json or project .gemini.json):"
