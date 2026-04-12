@@ -2,12 +2,12 @@
   {
     "name": "terminal-throughput-mean",
     "unit": "bytes/sec",
-    "value": 17034,
-    "extra": "p50=17KB/s p95=19KB/s cv=5.6% payload=100KB runs=8"
+    "value": 16846,
+    "extra": "p50=17KB/s p95=17KB/s cv=3.2% payload=100KB runs=8"
   },
   {
     "name": "terminal-throughput-p50",
     "unit": "bytes/sec",
-    "value": 17086
+    "value": 17024
   }
 ]
