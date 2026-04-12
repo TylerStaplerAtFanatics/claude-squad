@@ -559,7 +559,7 @@ func (t *TmuxSession) RestoreWithWorkDir(workDir string) error {
 	if !sessionExists {
 		// Session doesn't exist after multiple retries
 		// CRITICAL: One final check without cache before recreating to prevent accidental destruction
-		log.InfoLog.Printf("Tmux session '%s' not found after %d cached checks, performing final non-cached verification", t.sanitizedName)
+		log.InfoLog.Printf("Tmux session '%s' not found after %d cached checks, performing final non-cached verification", t.sanitizedName, maxRetries)
 		finalCheck := t.DoesSessionExistNoCache()
 
 		if finalCheck {

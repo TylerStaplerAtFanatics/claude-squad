@@ -131,7 +131,7 @@ func (ad *AutoDiscovery) startWatching(ctx context.Context) (<-chan struct{}, er
 // startPollingFallback starts traditional polling when watching unavailable.
 func (ad *AutoDiscovery) startPollingFallback(ctx context.Context) (<-chan struct{}, error) {
 	// Use default polling interval of 2 seconds
-	return ad.Discovery.StartPolling(ctx, 2*time.Second), nil
+	return ad.StartPolling(ctx, 2*time.Second), nil
 }
 
 // Stop gracefully stops the auto-discovery service.

@@ -3,7 +3,6 @@ package session
 import (
 	"bufio"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -485,72 +484,6 @@ func (pd *PTYDiscovery) getPTYInfoFromTmuxWithSocket(sessionName string, socket 
 	}
 
 	return ptyPath, pid, nil
-}
-
-// getTmuxPTY gets the PTY path and PID for a tmux session
-func (pd *PTYDiscovery) getTmuxPTY(sessionName string) (string, int, error) {
-	// Get the pane PID
-	cmd := exec.Command("tmux", "display-message", "-p", "-t", sessionName, "#{pane_pid}")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", 0, fmt.Errorf("failed to get pane PID: %w", err)
-	}
-
-	pid, err := strconv.Atoi(strings.TrimSpace(string(output)))
-	if err != nil {
-		return "", 0, fmt.Errorf("invalid PID: %w", err)
-	}
-
-	// Get the PTY path
-	pty, err := pd.getPTYForPID(pid)
-	if err != nil {
-		return "", 0, err
-	}
-
-	return pty, pid, nil
-}
-
-// getPTYForPID gets the PTY path for a given PID
-// This uses platform-specific methods: lsof on macOS/BSD, /proc on Linux
-func (pd *PTYDiscovery) getPTYForPID(pid int) (string, error) {
-	// Method 1: Try lsof (works on macOS, BSD, and Linux)
-	// lsof -a -p <pid> -d 0,1,2 -F n | grep /dev/tty
-	cmd := exec.Command("lsof", "-a", "-p", fmt.Sprintf("%d", pid), "-d", "0,1,2", "-F", "n")
-	output, err := cmd.Output()
-	if err == nil {
-		// Parse lsof output (format: nFILENAME)
-		scanner := bufio.NewScanner(strings.NewReader(string(output)))
-		for scanner.Scan() {
-			line := scanner.Text()
-			if strings.HasPrefix(line, "n/dev/tty") || strings.HasPrefix(line, "n/dev/pts/") {
-				pty := strings.TrimPrefix(line, "n")
-				return pty, nil
-			}
-		}
-	}
-
-	// Method 2: Try /proc filesystem (Linux only)
-	if _, err := os.Stat("/proc"); err == nil {
-		// Read /proc/{pid}/fd/0 symlink (stdin)
-		fdPath := fmt.Sprintf("/proc/%d/fd/0", pid)
-		pty, err := os.Readlink(fdPath)
-		if err != nil {
-			// Fallback: check fd/1 (stdout)
-			fdPath = fmt.Sprintf("/proc/%d/fd/1", pid)
-			pty, err = os.Readlink(fdPath)
-			if err != nil {
-				return "", fmt.Errorf("failed to read PTY via /proc: %w", err)
-			}
-		}
-
-		// Validate it's a PTY
-		if strings.HasPrefix(pty, "/dev/pts/") || strings.HasPrefix(pty, "/dev/tty") {
-			return pty, nil
-		}
-		return "", fmt.Errorf("not a PTY: %s", pty)
-	}
-
-	return "", fmt.Errorf("failed to get PTY for PID %d: no supported method worked", pid)
 }
 
 // isPIDManaged checks if a PID is already managed by squad

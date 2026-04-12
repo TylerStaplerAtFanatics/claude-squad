@@ -544,9 +544,6 @@ func (m *Multiplexer) forwardPTYOutput() {
 
 		n, err := m.ptmx.Read(buf)
 		if err != nil {
-			if err != io.EOF {
-				// Log error if not expected EOF
-			}
 			return
 		}
 
@@ -577,9 +574,6 @@ func (m *Multiplexer) forwardStdinToPTY() {
 
 		n, err := os.Stdin.Read(buf)
 		if err != nil {
-			if err != io.EOF {
-				// Log error if not expected EOF
-			}
 			return
 		}
 

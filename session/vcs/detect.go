@@ -66,7 +66,7 @@ func DetectWithOptions(repoPath string, opts DetectOptions) (VCS, error) {
 			log.InfoLog.Printf("[VCS] Using Git (user preference) for %s", absPath)
 			return NewGitClient(absPath), nil
 		}
-		return nil, fmt.Errorf("Git preferred but not available at %s", absPath)
+		return nil, fmt.Errorf("git preferred but not available at %s", absPath)
 
 	default: // PreferenceAuto
 		// Auto-detect: prefer JJ if available (colocated repos work with both)

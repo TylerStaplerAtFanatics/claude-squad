@@ -72,7 +72,7 @@ func (ps *PushService) generateVapidKeys() error {
 	ps.vapidPrivateKey = privateKey
 
 	publicKey := &privateKey.PublicKey
-	publicKeyBytes := elliptic.Marshal(publicKey.Curve, publicKey.X, publicKey.Y)
+	publicKeyBytes := elliptic.Marshal(publicKey.Curve, publicKey.X, publicKey.Y) //nolint:staticcheck
 	ps.vapidPublicKey = base64.RawURLEncoding.EncodeToString(publicKeyBytes)
 
 	vapidData := map[string]string{
@@ -121,8 +121,8 @@ func (ps *PushService) loadVapidKeys() error {
 	}
 
 	privateKey.D.SetBytes(privateKeyBytes)
-	privateKey.PublicKey.X, privateKey.PublicKey.Y = elliptic.Unmarshal(elliptic.P256(), publicKeyBytes)
-	if privateKey.PublicKey.X == nil {
+	privateKey.PublicKey.X, privateKey.PublicKey.Y = elliptic.Unmarshal(elliptic.P256(), publicKeyBytes) //nolint:staticcheck
+	if privateKey.PublicKey.X == nil {                                                                   //nolint:staticcheck
 		return fmt.Errorf("invalid public key")
 	}
 

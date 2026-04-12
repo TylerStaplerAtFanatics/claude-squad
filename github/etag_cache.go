@@ -74,6 +74,10 @@ func GetPRInfoConditional(ctx context.Context, owner, repo string, prNumber int,
 		if fetchErr != nil {
 			return nil, false, fetchErr
 		}
+		// Update cache so future polls can attempt conditional requests.
+		cache.mu.Lock()
+		cache.store[key] = etagEntry{prInfo: info}
+		cache.mu.Unlock()
 		return info, true, nil
 	}
 

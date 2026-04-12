@@ -1951,6 +1951,7 @@ func (i *Instance) tryExtractConversationUUID() {
 	i.claudeSession.SessionID = info.ConversationUUID
 	i.HistoryFilePath = info.HistoryFilePath
 }
+
 // GetConversationUUID returns the Claude conversation UUID, or "" if not linked.
 func (i *Instance) GetConversationUUID() string {
 	if i.claudeSession == nil {
@@ -2016,6 +2017,7 @@ func (i *Instance) CaptureCurrentState() error {
 	i.WorkingDir = path
 	return nil
 }
+
 // CreateCheckpoint captures a named state bookmark for this session.
 // scrollbackSeq should be the current scrollback high-water mark (from ScrollbackManager);
 // pass 0 if the caller does not have access to scrollback state.
@@ -2380,7 +2382,7 @@ func (i *Instance) UpdateTerminalTimestamps(content string, forceUpdate bool) {
 
 	i.stateMutex.Lock()
 	defer i.stateMutex.Unlock()
-	i.ReviewState.UpdateTimestamps(content, filteredContent, shouldUpdateMeaningful, i.Title)
+	i.UpdateTimestamps(content, filteredContent, shouldUpdateMeaningful, i.Title)
 }
 
 // GetTimeSinceLastMeaningfulOutput delegates to ReviewState.TimeSinceLastMeaningfulOutput.
@@ -2388,7 +2390,7 @@ func (i *Instance) UpdateTerminalTimestamps(content string, forceUpdate bool) {
 func (i *Instance) GetTimeSinceLastMeaningfulOutput() time.Duration {
 	i.stateMutex.RLock()
 	defer i.stateMutex.RUnlock()
-	return i.ReviewState.TimeSinceLastMeaningfulOutput(i.CreatedAt)
+	return i.TimeSinceLastMeaningfulOutput(i.CreatedAt)
 }
 
 // GetTimeSinceLastTerminalUpdate delegates to ReviewState.TimeSinceLastTerminalUpdate.
@@ -2396,7 +2398,7 @@ func (i *Instance) GetTimeSinceLastMeaningfulOutput() time.Duration {
 func (i *Instance) GetTimeSinceLastTerminalUpdate() time.Duration {
 	i.stateMutex.RLock()
 	defer i.stateMutex.RUnlock()
-	return i.ReviewState.TimeSinceLastTerminalUpdate(i.CreatedAt)
+	return i.TimeSinceLastTerminalUpdate(i.CreatedAt)
 }
 
 // Approve transitions the instance from NeedsApproval to Running.
@@ -2591,5 +2593,5 @@ func (i *Instance) DetectAndPopulateWorktreeInfo() error {
 // detectAndTrackPrompt detects if current state is a new prompt and tracks it.
 // Delegates to ReviewState.DetectAndTrackPrompt — caller must hold stateMutex.
 func (i *Instance) detectAndTrackPrompt(content string, statusInfo InstanceStatusInfo) bool {
-	return i.ReviewState.DetectAndTrackPrompt(content, statusInfo, i.Title)
+	return i.DetectAndTrackPrompt(content, statusInfo, i.Title)
 }

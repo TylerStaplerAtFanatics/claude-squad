@@ -654,9 +654,15 @@ func (s *SessionService) UpdateSession(
 		updatedFields = append(updatedFields, "category")
 	}
 
-	// Handle tags update
+	// Handle tags update.
+	// In proto3, an empty repeated field is indistinguishable from "not provided",
+	// so clients send tags=[""] to clear all tags.
 	if len(req.Msg.Tags) > 0 {
-		if err := instance.SetTags(req.Msg.Tags); err != nil {
+		tags := req.Msg.Tags
+		if len(tags) == 1 && tags[0] == "" {
+			tags = nil // Clear all tags
+		}
+		if err := instance.SetTags(tags); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update tags: %w", err))
 		}
 		updatedFields = append(updatedFields, "tags")
