@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense, useCallback } from "react";
+import { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Session } from "@/gen/session/v1/types_pb";
 import { SessionList } from "@/components/sessions/SessionList";
@@ -24,6 +24,13 @@ function HomeContent() {
   const [isHelpOpen, setShowHelp] = useState(false);
   const [isSessionFullscreen, setIsSessionFullscreen] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+
+  // Keep the last visible session alive so SessionDetail doesn't unmount on modal close
+  const lastVisibleSessionRef = useRef<Session | null>(null);
+  if (selectedSession) {
+    lastVisibleSessionRef.current = selectedSession;
+  }
+  const modalSession = lastVisibleSessionRef.current;
 
   // Valid tab values for URL parsing
   const validTabs: SessionDetailTab[] = ["terminal", "diff", "vcs", "logs", "info"];
@@ -268,23 +275,27 @@ function HomeContent() {
         )}
       </main>
 
-      {/* Session detail modal */}
-      {selectedSession && (
-        <div className={styles.modal} onClick={closeSession}>
-          <div
-            className={`${styles.modalContent} ${isSessionFullscreen ? styles.modalContentFullscreen : ""}`}
-            onClick={(e) => e.stopPropagation()}
-          >
+      {/* Session detail modal - kept alive across close/reopen to preserve xterm.js terminals */}
+      <div
+        className={styles.modal}
+        style={{ display: selectedSession ? undefined : 'none' }}
+        onClick={closeSession}
+      >
+        <div
+          className={`${styles.modalContent} ${isSessionFullscreen ? styles.modalContentFullscreen : ""}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {modalSession && (
             <SessionDetail
-              session={selectedSession}
+              session={modalSession}
               onClose={closeSession}
               onFullscreenChange={setIsSessionFullscreen}
               onTabChange={handleTabChange}
               initialTab={activeTab}
             />
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Keyboard shortcuts help modal */}
       {isHelpOpen && (

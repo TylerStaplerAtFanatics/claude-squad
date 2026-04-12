@@ -148,6 +148,10 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, XtermTerminalProps>
     // Always enable WebGL renderer for best performance (falls back to canvas if unavailable)
     try {
       const webglAddon = new WebglAddon();
+      webglAddon.onContextLoss(() => {
+        console.warn('[XtermTerminal] WebGL context lost, falling back to canvas renderer');
+        webglAddon.dispose();
+      });
       terminal.loadAddon(webglAddon);
       console.log("[XtermTerminal] WebGL renderer enabled");
     } catch (e) {

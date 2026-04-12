@@ -64,6 +64,30 @@ export function SessionDetail({
   const [programValue, setProgramValue] = useState(session.program || "");
   const { updateSession } = useSessionService();
 
+  // Terminal instance pool: keeps up to 8 session terminals alive (LRU, oldest first)
+  const [pooledSessionIds, setPooledSessionIds] = useState<string[]>([]);
+  const [pooledMuxPaths, setPooledMuxPaths] = useState<string[]>([]);
+
+  useEffect(() => {
+    setPooledSessionIds(prev => {
+      if (prev.includes(session.id)) return prev;
+      const updated = [...prev, session.id];
+      if (updated.length > 8) return updated.slice(-8);
+      return updated;
+    });
+  }, [session.id]);
+
+  useEffect(() => {
+    const muxPath = session.externalMetadata?.muxSocketPath;
+    if (!muxPath) return;
+    setPooledMuxPaths(prev => {
+      if (prev.includes(muxPath)) return prev;
+      const updated = [...prev, muxPath];
+      if (updated.length > 8) return updated.slice(-8);
+      return updated;
+    });
+  }, [session.externalMetadata?.muxSocketPath]);
+
   // Notify parent of fullscreen state changes
   useEffect(() => {
     onFullscreenChange?.(isFullscreen);
@@ -209,29 +233,64 @@ export function SessionDetail({
       </div>
 
       <div className={`${styles.content} ${isFullscreen ? styles.fullscreenContent : ""}`}>
-        {activeTab === "terminal" && (
-          <div className={styles.tabContent}>
-            <ApprovalPanel sessionId={session.id} onResolved={onApprovalResolved} />
-            {session.instanceType === InstanceType.EXTERNAL && !session.externalMetadata?.muxSocketPath ? (
-              <div className={styles.noTerminalPlaceholder}>
-                <span className={styles.noTerminalIcon}>⛓️</span>
-                <p className={styles.noTerminalText}>Terminal not available</p>
-                <p className={styles.noTerminalSubtext}>
-                  This session is running in an external terminal. Use Approve / Deny above to respond to pending requests.
-                </p>
-              </div>
-            ) : session.instanceType === InstanceType.EXTERNAL && session.externalMetadata?.muxSocketPath ? (
-              <TerminalOutput
-                sessionId={session.externalMetadata.muxSocketPath}
-                baseUrl={getApiBaseUrl()}
-                isExternal={true}
-                tmuxSessionName={session.externalMetadata?.tmuxSessionName}
-              />
-            ) : (
-              <TerminalOutput sessionId={session.id} baseUrl={getApiBaseUrl()} />
-            )}
-          </div>
-        )}
+        {/* Terminal tab: kept mounted but hidden via display:none to preserve xterm.js instances */}
+        <div
+          className={styles.tabContent}
+          style={{ display: activeTab === "terminal" ? undefined : 'none' }}
+        >
+          <ApprovalPanel sessionId={session.id} onResolved={onApprovalResolved} />
+          {session.instanceType === InstanceType.EXTERNAL && !session.externalMetadata?.muxSocketPath ? (
+            <div className={styles.noTerminalPlaceholder}>
+              <span className={styles.noTerminalIcon}>⛓️</span>
+              <p className={styles.noTerminalText}>Terminal not available</p>
+              <p className={styles.noTerminalSubtext}>
+                This session is running in an external terminal. Use Approve / Deny above to respond to pending requests.
+              </p>
+            </div>
+          ) : session.instanceType === InstanceType.EXTERNAL && session.externalMetadata?.muxSocketPath ? (
+            <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+              {pooledMuxPaths.map(poolPath => (
+                <div
+                  key={poolPath}
+                  style={{
+                    position: 'absolute',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    visibility: poolPath === session.externalMetadata?.muxSocketPath ? 'visible' : 'hidden',
+                    pointerEvents: poolPath === session.externalMetadata?.muxSocketPath ? 'auto' : 'none',
+                  }}
+                >
+                  <TerminalOutput
+                    sessionId={poolPath}
+                    baseUrl={getApiBaseUrl()}
+                    isExternal={true}
+                    tmuxSessionName={session.externalMetadata?.tmuxSessionName}
+                    isVisible={poolPath === session.externalMetadata?.muxSocketPath}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+              {pooledSessionIds.map(poolId => (
+                <div
+                  key={poolId}
+                  style={{
+                    position: 'absolute',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    visibility: poolId === session.id ? 'visible' : 'hidden',
+                    pointerEvents: poolId === session.id ? 'auto' : 'none',
+                  }}
+                >
+                  <TerminalOutput
+                    sessionId={poolId}
+                    baseUrl={getApiBaseUrl()}
+                    isVisible={poolId === session.id}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         {activeTab === "diff" && (
           <div className={styles.tabContent}>
             <DiffViewer sessionId={session.id} baseUrl={getApiBaseUrl()} />
