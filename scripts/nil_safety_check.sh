@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Nil Safety Analysis Script for Claude Squad
+# Nil Safety Analysis Script for Stapler Squad
 # This script performs automated static analysis to detect potential nil pointer vulnerabilities
 
 set -e
 
-echo "🔍 Claude Squad Nil Safety Analysis"
+echo "🔍 Stapler Squad Nil Safety Analysis"
 echo "=================================="
 
 # Colors for output
