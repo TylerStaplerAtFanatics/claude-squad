@@ -124,12 +124,12 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 	utilitySvc := NewUtilityService(approvalStore)
 
 	// Build rules store, analytics store, and classifier for approval rules service.
-	rulesStore, rulesErr := NewRulesStore(storage)
+	rulesStore, rulesErr := NewRulesStore(concStorage)
 	if rulesErr != nil {
 		log.WarningLog.Printf("Failed to load rules store, using empty store: %v", rulesErr)
-		rulesStore = &RulesStore{storage: storage}
+		rulesStore = &RulesStore{storage: concStorage}
 	}
-	analyticsStore := NewAnalyticsStore(storage)
+	analyticsStore := NewAnalyticsStore(concStorage)
 	analyticsStore.Start(context.Background())
 	classifierObj := classifier.NewRuleBasedClassifier()
 	// Merge user rules into the classifier.

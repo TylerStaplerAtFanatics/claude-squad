@@ -337,13 +337,46 @@ func (h *ApprovalHandler) broadcastApprovalNotification(sessionID string, approv
 	h.eventBus.Publish(event)
 }
 
+// maxNotificationMessageLen is the maximum number of runes to include in a
+// notification toast message before truncating with "...".
+const maxNotificationMessageLen = 120
+
+// broadcastQuestionNotification fires an INPUT_REQUIRED notification when Claude uses
+// AskUserQuestion. It omits approval_id from metadata so no Approve/Deny buttons are shown —
+// only a ❓ toast directing the user to respond in the terminal.
+func (h *ApprovalHandler) broadcastQuestionNotification(sessionID string, payload classifier.PermissionRequestPayload) {
+	message := "Check the terminal to respond."
+	if prompt, ok := payload.ToolInput["prompt"].(string); ok && prompt != "" {
+		message = truncateString(prompt, maxNotificationMessageLen)
+	}
+
+	event := events.NewNotificationEvent(
+		sessionID,
+		sessionID,
+		uuid.New().String(),
+		int32(sessionv1.NotificationType_NOTIFICATION_TYPE_INPUT_REQUIRED),
+		int32(sessionv1.NotificationPriority_NOTIFICATION_PRIORITY_HIGH),
+		"Claude has a question",
+		message,
+		nil,
+	)
+	h.eventBus.Publish(event)
+}
+
+// truncateString returns s truncated to at most maxRunes Unicode code points,
+// appending "..." when truncation occurs. Safe for any UTF-8 content.
+func truncateString(s string, maxRunes int) string {
+	r := []rune(s)
+	if len(r) <= maxRunes {
+		return s
+	}
+	return string(r[:maxRunes]) + "..."
+}
+
 // buildApprovalMessage builds the human-readable message for an approval notification.
 func buildApprovalMessage(approval *PendingApproval) string {
 	if cmd, ok := approval.ToolInput["command"].(string); ok && cmd != "" {
-		if len(cmd) > 120 {
-			return cmd[:120] + "..."
-		}
-		return cmd
+		return truncateString(cmd, maxNotificationMessageLen)
 	}
 	if filePath, ok := approval.ToolInput["file_path"].(string); ok && filePath != "" {
 		return filePath
@@ -374,6 +407,42 @@ func (h *ApprovalHandler) mapSessionByCwd(cwd string) string {
 		}
 	}
 	return bestTitle
+}
+
+// normalizeSessionID maps a raw X-CS-Session-ID header value to the canonical stapler-squad
+// instance title. If the value already matches a known instance title it is returned unchanged.
+// If the value appears to be a tmux-prefixed session name (e.g. "staplersquad_my-session"),
+// the method strips the prefix and returns the matching instance title. Returns the original
+// value unchanged when no match is found (preserves existing behaviour for unknown sessions).
+func (h *ApprovalHandler) normalizeSessionID(sessionID string) string {
+	if h.storage == nil {
+		return sessionID
+	}
+	instances, err := h.storage.LoadInstances()
+	if err != nil {
+		return sessionID
+	}
+	// First pass: exact title match — nothing to normalize.
+	for _, inst := range instances {
+		if inst.Title == sessionID {
+			return sessionID
+		}
+	}
+	// Second pass: tmux-prefix stripping.
+	for _, inst := range instances {
+		suffix := "_" + inst.Title
+		if strings.HasSuffix(sessionID, suffix) && len(sessionID) > len(suffix) {
+			return inst.Title
+		}
+	}
+	return sessionID
+}
+
+// writeDeferDecision returns an empty HTTP 200 with no body.
+// Claude Code interprets the absence of hookSpecificOutput as "no decision made by the hook"
+// and falls back to its native terminal permission dialog.
+func (h *ApprovalHandler) writeDeferDecision(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusOK)
 }
 
 // writeDecision writes the hookSpecificOutput JSON response to the HTTP response.
