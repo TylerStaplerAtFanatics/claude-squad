@@ -59,6 +59,12 @@
 
   /* Touch target sizes (WCAG 2.1 AA) */
   --min-touch-target: 44px;
+
+  /* Safe area insets (requires viewport-fit=cover in layout.tsx) */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
 }
 
 /* Mobile header height override */
@@ -229,6 +235,7 @@ a {
 @media (max-width: 768px) {
   .modal {
     max-height: calc(100vh - 5rem);
+    max-height: calc(100dvh - 5rem);
     border-radius: 12px 12px 0 0;
     width: 100%;
     max-width: 100%;
@@ -236,6 +243,7 @@ a {
     bottom: 0;
     left: 0;
     right: 0;
+    padding-bottom: var(--safe-area-bottom);
   }
 }
 

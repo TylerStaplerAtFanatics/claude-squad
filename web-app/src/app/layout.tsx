@@ -4,6 +4,7 @@ import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { AuthProvider } from "@/lib/contexts/AuthContext";
 import { Providers } from "./Providers";
 import { NotificationPanel } from "@/components/ui/NotificationPanel";
+import { ViewportProvider } from "@/components/providers/ViewportProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -25,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <ViewportProvider />
         <ErrorBoundary>
           <AuthProvider>
             <Providers>

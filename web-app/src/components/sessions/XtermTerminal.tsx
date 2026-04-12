@@ -285,10 +285,17 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, XtermTerminalProps>
           clearTimeout(resizeTimeout);
         }
 
-        // Schedule fit with adaptive debounce
+        // Schedule fit with adaptive debounce.
+        // Double rAF ensures DOM reflow is complete before measuring on iOS Safari —
+        // a single rAF is insufficient because the browser may batch it with the resize
+        // event, leaving stale dimensions. See xterm.js issue #3895.
         resizeTimeout = setTimeout(() => {
-          fitAddonRef.current?.fit();
-          console.log(`[XtermTerminal] Terminal dimensions AFTER fit: ${terminalRef.current?.cols} cols × ${terminalRef.current?.rows} rows`);
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              fitAddonRef.current?.fit();
+              console.log(`[XtermTerminal] Terminal dimensions AFTER fit: ${terminalRef.current?.cols} cols × ${terminalRef.current?.rows} rows`);
+            });
+          });
           resizeTimeout = null;
         }, debounceDelay);
       }

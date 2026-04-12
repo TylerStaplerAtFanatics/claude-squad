@@ -4,6 +4,7 @@
   right: 24px;
   width: 380px;
   max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   background: var(--modal-background);
   border: 2px solid var(--priority-color, var(--primary, #0070f3));
   border-radius: 12px;
