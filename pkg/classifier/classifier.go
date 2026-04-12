@@ -609,7 +609,7 @@ func SeedRules() []Rule {
 			ID:             "seed-deny-rm-rf-root",
 			Name:           "Block rm -rf on root or home paths",
 			ToolName:       "Bash",
-			CommandPattern: regexp.MustCompile(`rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\s+(/|~|\$HOME)(\s|$)`),
+			CommandPattern: regexp.MustCompile(`rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\s+(/|~|\$HOME)/?(\s|$)`),
 			Decision:       AutoDeny,
 			RiskLevel:      RiskCritical,
 			Reason:         "Deleting the root or home directory would cause irreversible data loss.",

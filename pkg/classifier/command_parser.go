@@ -2,6 +2,7 @@ package classifier
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -576,8 +577,80 @@ func AuditCommand(cmd string) []SecurityFinding {
 		return true
 	})
 
+	// Detect rm with recursive+force flags targeting root or home directory.
+	syntax.Walk(f, func(node syntax.Node) bool {
+		call, ok := node.(*syntax.CallExpr)
+		if !ok || len(call.Args) < 2 {
+			return true
+		}
+		var progSB strings.Builder
+		if err := syntax.NewPrinter().Print(&progSB, call.Args[0]); err != nil {
+			return true
+		}
+		prog := stripOuterQuotes(progSB.String())
+		if idx := strings.LastIndex(prog, "/"); idx >= 0 {
+			prog = prog[idx+1:]
+		}
+		if prog != "rm" {
+			return true
+		}
+		hasRecursiveForce := false
+		for _, arg := range call.Args[1:] {
+			var sb strings.Builder
+			if err := syntax.NewPrinter().Print(&sb, arg); err != nil {
+				continue
+			}
+			a := stripOuterQuotes(sb.String())
+			if strings.HasPrefix(a, "-") && strings.ContainsAny(a, "r") && strings.ContainsAny(a, "f") {
+				hasRecursiveForce = true
+			}
+		}
+		if !hasRecursiveForce {
+			return true
+		}
+		for _, arg := range call.Args[1:] {
+			var sb strings.Builder
+			if err := syntax.NewPrinter().Print(&sb, arg); err != nil {
+				continue
+			}
+			target := expandPathForAudit(stripOuterQuotes(sb.String()))
+			if target == "/" || target == homeDir {
+				findings = append(findings, SecurityFinding{
+					ID:          "audit-rm-rf-critical-path",
+					Name:        "Recursive Force Delete on Critical Path",
+					RiskLevel:   RiskCritical,
+					Reason:      fmt.Sprintf("rm -rf targeting %q would cause irreversible data loss.", target),
+					Alternative: "Specify a precise subdirectory path instead.",
+				})
+			}
+		}
+		return true
+	})
+
 	return findings
 }
+
+// expandPathForAudit expands ~ and $HOME in a path for security audit purposes.
+func expandPathForAudit(path string) string {
+	// Strip trailing slashes for comparison (rm -rf ~/ == rm -rf ~).
+	cleaned := strings.TrimRight(path, "/")
+	if cleaned == "~" || cleaned == "$HOME" {
+		return homeDir
+	}
+	if strings.HasPrefix(path, "~/") {
+		return homeDir + path[1:]
+	}
+	if strings.HasPrefix(path, "$HOME/") {
+		return homeDir + path[5:]
+	}
+	return path
+}
+
+// homeDir caches the user's home directory for audit path expansion.
+var homeDir = func() string {
+	h, _ := os.UserHomeDir()
+	return h
+}()
 
 func isDownloadCommand(n syntax.Node) bool {
 	// For simplicity, we check if the command name is curl or wget.

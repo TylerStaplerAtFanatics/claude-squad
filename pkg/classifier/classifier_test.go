@@ -233,10 +233,10 @@ func TestClassify_ReplaceRules_Atomic(t *testing.T) {
 	}
 	c.ReplaceRules([]Rule{custom})
 
-	// The AutoDeny seed rules are gone, so even rm -rf / should be AutoAllow now.
+	// The AutoDeny seed rules are gone, so a normally-escalated command should AutoAllow.
 	payload := PermissionRequestPayload{
 		ToolName:  "Bash",
-		ToolInput: map[string]interface{}{"command": "rm -rf /"},
+		ToolInput: map[string]interface{}{"command": "docker system prune -af"},
 	}
 	result := c.Classify(payload, ClassificationContext{})
 	if result.Decision != AutoAllow {

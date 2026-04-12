@@ -291,18 +291,18 @@ func TestClassifier_RmRf_ExpandedHome_Denied(t *testing.T) {
 	ctx := classifier.ClassificationContext{}
 
 	// Provide the literal home path (as if $HOME was already expanded by shell).
-	// The seed regex only matches literal /, ~, $HOME — expanded paths like
-	// /home/user require path-classification rules (not yet implemented).
-	// For now, verify the classifier doesn't silently allow it as PassThrough.
+	// The AST-based audit in AuditCommand detects rm -rf on the actual home dir.
 	cmd := "rm -rf " + home
 	r := c.Classify(classifier.PermissionRequestPayload{
 		ToolName:  "Bash",
 		ToolInput: map[string]interface{}{"command": cmd},
 	}, ctx)
-	// TODO: Add a path-classification rule that detects rm -rf on the actual
-	// home directory. For now, just verify it doesn't match the seed regex
-	// (which only catches literal /, ~, $HOME).
-	_ = r
+	if r.Decision != classifier.AutoDeny {
+		t.Errorf("rm -rf <home> should be AutoDeny, got %v (rule=%s)", r.Decision, r.RuleID)
+	}
+	if r.RuleID != "audit-rm-rf-critical-path" {
+		t.Errorf("expected rule audit-rm-rf-critical-path, got %s", r.RuleID)
+	}
 }
 
 func TestClassifier_RmRf_HomeSubdir_NotDenied(t *testing.T) {
