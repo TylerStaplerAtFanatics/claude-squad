@@ -97,7 +97,7 @@ func ExtractAllCommands(cmd string) []ParsedCommand {
 			prog = prog[idx+1:]
 		}
 
-		raw := fmt.Sprintf("%s", strings.Join(tokens, " "))
+		raw := strings.Join(tokens, " ")
 		cmds = append(cmds, ParsedCommand{
 			Program:      prog,
 			Args:         tokens[1:],
@@ -193,11 +193,11 @@ func isSubcommandLike(tok string) bool {
 		return false
 	}
 	c := tok[0]
-	if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+	if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
 		return false
 	}
 	for _, r := range tok {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' && r != '_' {
 			return false
 		}
 	}

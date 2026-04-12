@@ -493,9 +493,7 @@ func (s *AnalyticsStore) flush(ctx interface{ Done() <-chan struct{} }) {
 			PythonImports:      e.PythonImports,
 			CreatedAt:          e.Timestamp,
 		}
-		if err := s.storage.RecordAnalytics(context.Background(), data); err != nil {
-			// Fail silently or log error
-		}
+		_ = s.storage.RecordAnalytics(context.Background(), data)
 	}
 
 	for {

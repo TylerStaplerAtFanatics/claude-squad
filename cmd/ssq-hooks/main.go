@@ -318,7 +318,7 @@ func shellEscape(arg string) string {
 	}
 	safe := true
 	for _, c := range arg {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '/' || c == '.' || c == '+' || c == '=' || c == ':' || c == '@') {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '-' && c != '_' && c != '/' && c != '.' && c != '+' && c != '=' && c != ':' && c != '@' {
 			safe = false
 			break
 		}

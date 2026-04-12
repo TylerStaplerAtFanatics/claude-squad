@@ -13,9 +13,9 @@ import (
 
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/pkg/classifier"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/session"
-	"github.com/tstapler/stapler-squad/pkg/classifier"
 
 	"github.com/google/uuid"
 )
@@ -198,7 +198,6 @@ func (h *ApprovalHandler) HandlePermissionRequest(w http.ResponseWriter, r *http
 		h.writeDeferDecision(w)
 		return
 	}
-
 
 	// Classify the request: auto-allow/deny if a rule matches; escalate to manual review otherwise.
 	if h.classifier != nil {
@@ -407,35 +406,6 @@ func (h *ApprovalHandler) mapSessionByCwd(cwd string) string {
 		}
 	}
 	return bestTitle
-}
-
-// normalizeSessionID maps a raw X-CS-Session-ID header value to the canonical stapler-squad
-// instance title. If the value already matches a known instance title it is returned unchanged.
-// If the value appears to be a tmux-prefixed session name (e.g. "staplersquad_my-session"),
-// the method strips the prefix and returns the matching instance title. Returns the original
-// value unchanged when no match is found (preserves existing behaviour for unknown sessions).
-func (h *ApprovalHandler) normalizeSessionID(sessionID string) string {
-	if h.storage == nil {
-		return sessionID
-	}
-	instances, err := h.storage.LoadInstances()
-	if err != nil {
-		return sessionID
-	}
-	// First pass: exact title match — nothing to normalize.
-	for _, inst := range instances {
-		if inst.Title == sessionID {
-			return sessionID
-		}
-	}
-	// Second pass: tmux-prefix stripping.
-	for _, inst := range instances {
-		suffix := "_" + inst.Title
-		if strings.HasSuffix(sessionID, suffix) && len(sessionID) > len(suffix) {
-			return inst.Title
-		}
-	}
-	return sessionID
 }
 
 // writeDeferDecision returns an empty HTTP 200 with no body.
