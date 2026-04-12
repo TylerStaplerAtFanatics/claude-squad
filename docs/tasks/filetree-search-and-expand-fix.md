@@ -1,5 +1,20 @@
 # FileTree: Fix Directory Expand and Nested File Search
 
+## Status: COMPLETE
+
+**Branch**: claude-squad-fix-filesystem-nested
+**Stories**: 3 / 3 complete
+**Tasks**: 10 / 10 complete
+**Key commits**:
+- `c8fbb64` - docs: Add feature plan
+- `cc65029` - feat(filetree): add backend SearchFiles RPC and frontend search mode with auto-expand (Stories 1 + 2 + Tasks 3.1-3.2)
+- `efa27c0` - fix(filetree): propagate ctx to search walk and restore browse state on search exit (Task 3.3 + ctx fix)
+
+**Go tests**: 218 passing (server/services); SearchFiles tests: 8 passing
+**Remaining work**: End-to-end smoke test, then open PR to main
+
+---
+
 ## Epic Overview
 
 ### User Value Statement
@@ -77,7 +92,7 @@ Story 2 depends on Story 1's RPC endpoint. Story 3 depends on Story 2's wiring.
 
 ---
 
-## Story 1: Backend -- SearchFiles RPC
+## Story 1: Backend -- SearchFiles RPC [COMPLETE]
 
 ### Goal
 
@@ -97,7 +112,7 @@ Acceptance Criteria:
 
 ### Tasks
 
-**Task 1.1: Proto schema additions**
+**Task 1.1: Proto schema additions** [COMPLETE - commit cc65029]
 
 Add new messages and RPC to the proto files.
 
@@ -127,7 +142,7 @@ message SearchFilesResponse {
 
 Run `make generate-proto` after changes.
 
-**Task 1.2: SearchFiles handler implementation**
+**Task 1.2: SearchFiles handler implementation** [COMPLETE - commit cc65029]
 
 Add the `SearchFiles` method to `FileService` in the existing file service file.
 
@@ -146,14 +161,14 @@ Key implementation details:
 Files touched (1):
 - `server/services/file_service.go`
 
-**Task 1.3: Wire up and register handler**
+**Task 1.3: Wire up and register handler** [COMPLETE - commit cc65029]
 
 The FileService is already instantiated and wired into SessionService. The new `SearchFiles` method on `FileService` needs a delegation method on `SessionService`.
 
 Files touched (1):
 - `server/services/session_service.go` -- add `SearchFiles` delegation method
 
-**Task 1.4: Unit tests**
+**Task 1.4: Unit tests** [COMPLETE - commit cc65029; 8 tests passing]
 
 Files touched (1):
 - `server/services/file_service_test.go` -- add tests following the existing pattern (`testFileService` with `listFiles`/`getFileContent` helpers)
@@ -178,7 +193,7 @@ Verify: `SearchFiles` RPC responds correctly via manual curl or grpcurl.
 
 ---
 
-## Story 2: Frontend -- Search integration with auto-expand
+## Story 2: Frontend -- Search integration with auto-expand [COMPLETE]
 
 ### Goal
 
@@ -202,14 +217,14 @@ Acceptance Criteria:
 
 ### Tasks
 
-**Task 2.1: Add `searchFiles` fetch function**
+**Task 2.1: Add `searchFiles` fetch function** [COMPLETE - commit cc65029]
 
 Add a standalone async function to the file service hook file, following the pattern of `fetchDirectoryFiles`.
 
 Files touched (1):
 - `web-app/src/lib/hooks/useFileService.ts` -- add `searchFiles(sessionId, query, includeIgnored, baseUrl)` function that calls the `SearchFiles` RPC
 
-**Task 2.2: Implement search mode in FileTree component**
+**Task 2.2: Implement search mode in FileTree component** [COMPLETE - commit cc65029]
 
 This is the core change. The FileTree component needs two modes:
 1. **Browse mode** (current behavior): lazy-load directories on expand, react-arborist `searchTerm` prop used for local filtering
@@ -243,7 +258,7 @@ function buildSearchTree(files: FileNode[]): TreeNode[] {
 Files touched (1):
 - `web-app/src/components/sessions/FileTree.tsx`
 
-**Task 2.3: Wire search result count in FilesTab**
+**Task 2.3: Wire search result count in FilesTab** [COMPLETE - commit cc65029]
 
 Add a search result count indicator to the toolbar.
 
@@ -265,7 +280,7 @@ make restart-web
 
 ---
 
-## Story 3: Polish -- Debounce, UX, and edge cases
+## Story 3: Polish -- Debounce, UX, and edge cases [COMPLETE]
 
 ### Goal
 
@@ -273,7 +288,7 @@ Refine the search experience with proper debounce, loading states, empty states,
 
 ### Tasks
 
-**Task 3.1: Debounce and cancellation**
+**Task 3.1: Debounce and cancellation** [COMPLETE - commits cc65029, efa27c0]
 
 Ensure the search debounce properly cancels in-flight requests when the user types more characters or clears the field.
 
@@ -286,7 +301,7 @@ Key implementation details:
 Files touched (1):
 - `web-app/src/components/sessions/FileTree.tsx` -- add request cancellation logic
 
-**Task 3.2: Search loading and empty states**
+**Task 3.2: Search loading and empty states** [COMPLETE - commit cc65029]
 
 - While the search RPC is in flight, show a small spinner next to the search input (or replace the tree with a loading indicator)
 - When the search returns 0 results, show "No files match '[query]'"
@@ -296,7 +311,7 @@ Files touched (2):
 - `web-app/src/components/sessions/FileTree.tsx` -- add loading/empty/truncated states
 - `web-app/src/components/sessions/FileTree.module.css` -- add `.searchEmpty`, `.searchTruncated` styles
 
-**Task 3.3: Restore browse state on search clear**
+**Task 3.3: Restore browse state on search clear** [COMPLETE - commit efa27c0]
 
 When the user clears the search, the tree should return to its previous browse state. The `dirContents` map (which tracks lazily loaded directories) should be preserved during search mode so the user doesn't lose their expand state.
 
