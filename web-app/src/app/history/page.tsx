@@ -88,7 +88,7 @@ export default function HistoryBrowserPage() {
       setError(null); setLoadingPreview(true); setPreviewMessages([]);
       const [detailResponse, messagesResponse] = await Promise.all([
         clientRef.current.getClaudeHistoryDetail({ id }),
-        clientRef.current.getClaudeHistoryMessages({ id, limit: 5 }),
+        clientRef.current.getClaudeHistoryMessages({ id, limit: 5, tail: true }),
       ]);
       if (detailResponse.entry) setSelectedEntry(detailResponse.entry);
       if (messagesResponse.messages) setPreviewMessages([...messagesResponse.messages].reverse());

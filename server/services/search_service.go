@@ -284,14 +284,12 @@ func (ss *SearchService) GetClaudeHistoryMessages(
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %w", err))
 	}
 
-	// When the caller specifies a limit (e.g. preview panel requesting the last 5
-	// messages), pass that limit to the file reader so it can use the reverse tail
-	// reader and avoid loading the entire file.  offset-based pagination still loads
-	// all messages because we cannot efficiently seek to an arbitrary message index
-	// without reading forward from the start.
-	fileLimit := int(req.Msg.Limit)
-	if req.Msg.Offset > 0 {
-		fileLimit = 0 // need all messages to honour the offset
+	// Use the reverse tail reader only when explicitly requested via tail=true.
+	// Standard limit/offset reads always scan from the start so offset semantics
+	// remain correct and total_count reflects the full conversation length.
+	fileLimit := 0
+	if req.Msg.Tail && req.Msg.Limit > 0 && req.Msg.Offset == 0 {
+		fileLimit = int(req.Msg.Limit)
 	}
 	messages, err := hist.GetMessagesFromConversationFile(req.Msg.Id, fileLimit)
 	if err != nil {
