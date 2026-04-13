@@ -1329,7 +1329,6 @@ message PathEntry {
   bool is_directory = 3;
 }
 
-<<<<<<< HEAD
 // ─── Session Defaults Messages ──────────────────────────────────────────────
 
 // ProfileDefaultsProto holds the configurable fields for a named profile.
