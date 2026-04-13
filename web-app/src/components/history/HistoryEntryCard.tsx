@@ -1,16 +1,23 @@
 "use client";
 
 import { ClaudeHistoryEntry } from "@/gen/session/v1/session_pb";
-import { formatTimeAgo, truncateMiddle } from "@/lib/utils/timestamp";
+import { formatTimeAgo } from "@/lib/utils/timestamp";
 import styles from "./HistoryEntryCard.module.css";
 
 interface HistoryEntryCardProps {
   entry: ClaudeHistoryEntry;
   isSelected: boolean;
+  /** Enriched entry from GetClaudeHistoryDetail — provides VCS state for the selected card */
+  enrichedEntry?: ClaudeHistoryEntry | null;
   onSelect: () => void;
 }
 
-export function HistoryEntryCard({ entry, isSelected, onSelect }: HistoryEntryCardProps) {
+export function HistoryEntryCard({ entry, isSelected, enrichedEntry, onSelect }: HistoryEntryCardProps) {
+  // Use the enriched entry (from GetClaudeHistoryDetail) when this card is selected,
+  // so VCS state shows immediately without an extra prop-thread to every card.
+  const vcs = isSelected && enrichedEntry ? enrichedEntry.vcsStatus : undefined;
+  const isDirty = vcs ? !vcs.isClean : false;
+
   return (
     <div
       onClick={onSelect}
@@ -35,10 +42,21 @@ export function HistoryEntryCard({ entry, isSelected, onSelect }: HistoryEntryCa
         <span className={styles.entryMessages}>
           {entry.messageCount} {entry.messageCount === 1 ? "message" : "messages"}
         </span>
+        {vcs?.branch && (
+          <>
+            <span className={styles.entryDivider}>•</span>
+            <span className={styles.entryBranch} title="Current branch">
+              ⎇ {vcs.branch}
+            </span>
+          </>
+        )}
+        {isDirty && (
+          <span className={styles.entryDirty} title="Uncommitted changes present">✦</span>
+        )}
       </div>
       {entry.project && (
         <div className={styles.entryProject} title={entry.project}>
-          📁 {truncateMiddle(entry.project, 50)}
+          📁 {entry.project}
         </div>
       )}
     </div>

@@ -71,6 +71,52 @@ export function HistoryDetailPanel({
               </div>
             </div>
           )}
+          {entry.vcsStatus && (
+            <div className={styles.detailField}>
+              <div className={styles.fieldLabel}>Git State</div>
+              <div className={styles.vcsSection}>
+                <div className={styles.vcsRow}>
+                  <span className={styles.vcsLabel}>Branch:</span>
+                  <span className={styles.vcsBranch}>⎇ {entry.vcsStatus.branch || "(detached)"}</span>
+                </div>
+                <div className={styles.vcsRow}>
+                  <span className={styles.vcsLabel}>Status:</span>
+                  <span className={entry.vcsStatus.isClean ? styles.vcsClean : styles.vcsDirty}>
+                    {entry.vcsStatus.isClean ? "✓ Clean" : "✦ Uncommitted changes"}
+                  </span>
+                </div>
+                {!entry.vcsStatus.isClean && (
+                  <div className={styles.vcsChanges}>
+                    {entry.vcsStatus.hasStaged && (
+                      <span className={styles.vcsStat} title="Staged files">
+                        +{entry.vcsStatus.stagedFiles.length} staged
+                      </span>
+                    )}
+                    {entry.vcsStatus.hasUnstaged && (
+                      <span className={styles.vcsStat} title="Modified files">
+                        ~{entry.vcsStatus.unstagedFiles.length} modified
+                      </span>
+                    )}
+                    {entry.vcsStatus.hasUntracked && (
+                      <span className={styles.vcsStat} title="Untracked files">
+                        ?{entry.vcsStatus.untrackedFiles.length} untracked
+                      </span>
+                    )}
+                  </div>
+                )}
+                {(entry.vcsStatus.aheadBy > 0 || entry.vcsStatus.behindBy > 0) && (
+                  <div className={styles.vcsRow}>
+                    <span className={styles.vcsLabel}>Remote:</span>
+                    <span className={styles.vcsRemote}>
+                      {entry.vcsStatus.aheadBy > 0 && `↑${entry.vcsStatus.aheadBy} ahead`}
+                      {entry.vcsStatus.aheadBy > 0 && entry.vcsStatus.behindBy > 0 && " · "}
+                      {entry.vcsStatus.behindBy > 0 && `↓${entry.vcsStatus.behindBy} behind`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           <div className={styles.detailField}>
             <div className={styles.fieldLabel}>Model:</div>
             <div className="text-primary">{entry.model}</div>

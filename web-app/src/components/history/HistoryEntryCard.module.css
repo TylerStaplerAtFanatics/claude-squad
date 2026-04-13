@@ -30,8 +30,10 @@
 .entryCard.selected .entryModel,
 .entryCard.selected .entryDivider,
 .entryCard.selected .entryMessages,
-.entryCard.selected .entryProject {
-  color: white !important;
+.entryCard.selected .entryProject,
+.entryCard.selected .entryBranch,
+.entryCard.selected .entryDirty {
+  color: rgba(255, 255, 255, 0.9) !important;
 }
 
 /* Entry Card Contents */
@@ -86,7 +88,19 @@
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-all;
+  font-family: monospace;
+}
+
+.entryBranch {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.entryDirty {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--warning);
 }

@@ -562,6 +562,11 @@ message ClaudeHistoryEntry {
   string model = 6;
   // Number of messages in the conversation
   int32 message_count = 7;
+
+  // VCS state for the project directory — populated only by GetClaudeHistoryDetail
+  // (lazy enrichment, not included in list responses).  Null/absent means the
+  // directory is not a version-controlled repo or state was not requested.
+  VCSStatus vcs_status = 8;
 }
 
 message GetClaudeHistoryMessagesRequest {
