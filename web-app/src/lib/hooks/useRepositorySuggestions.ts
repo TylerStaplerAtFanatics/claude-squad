@@ -5,6 +5,19 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { SessionService } from "@/gen/session/v1/session_pb";
 import { getApiBaseUrl } from "@/lib/config";
+import { rankPathsByFrecency } from "@/lib/utils/frecency";
+
+/** Returns OS-appropriate example paths shown when no sessions exist yet. */
+function getFallbackHints(): string[] {
+  if (typeof window === "undefined") return ["/home/username/projects", "/home/username/code"];
+  // Prefer the non-deprecated userAgentData API; fall back to platform string.
+  const platform =
+    (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
+    navigator.platform ??
+    "";
+  const home = platform.toLowerCase().includes("mac") ? "/Users" : "/home";
+  return [`${home}/username/projects`, `${home}/username/code`];
+}
 
 interface RepositorySuggestionsOptions {
   baseUrl?: string;
@@ -12,7 +25,8 @@ interface RepositorySuggestionsOptions {
 
 /**
  * Hook to provide repository path suggestions based on existing sessions.
- * Returns a list of unique repository paths from all sessions.
+ * Paths are ranked by frecency (frequency × recency decay) so the project
+ * you use most often AND most recently appears first.
  */
 export function useRepositorySuggestions(options: RepositorySuggestionsOptions = {}) {
   const { baseUrl = getApiBaseUrl() } = options;
@@ -24,44 +38,29 @@ export function useRepositorySuggestions(options: RepositorySuggestionsOptions =
       try {
         setIsLoading(true);
 
-        // Create ConnectRPC client
         const transport = createConnectTransport({ baseUrl });
         const client = createClient(SessionService, transport);
 
-        // Fetch all sessions to extract repository paths
         const response = await client.listSessions({});
         const sessions = response.sessions || [];
 
-        // Extract unique repository paths
-        const paths = new Set<string>();
-        sessions.forEach((session) => {
-          if (session.path) {
-            paths.add(session.path);
-          }
-        });
+        // Build the input shape rankPathsByFrecency expects
+        const frecencyInput = sessions.map((session) => ({
+          path: session.path,
+          timestampsMs: [
+            session.updatedAt          ? Number(session.updatedAt.seconds) * 1000          : 0,
+            session.lastMeaningfulOutput ? Number(session.lastMeaningfulOutput.seconds) * 1000 : 0,
+            session.createdAt          ? Number(session.createdAt.seconds) * 1000          : 0,
+          ],
+        }));
 
-        // Convert to sorted array
-        const sortedPaths = Array.from(paths).sort();
+        const ranked = rankPathsByFrecency(frecencyInput);
 
-        // Add common project directory patterns if no suggestions exist
-        if (sortedPaths.length === 0) {
-          sortedPaths.push(
-            "/Users/username/projects",
-            "/Users/username/code",
-            "/Users/username/workspace",
-            "/Users/username/IdeaProjects"
-          );
-        }
-
-        setSuggestions(sortedPaths);
+        const fallback = ranked.length === 0 ? getFallbackHints() : null;
+        setSuggestions(fallback ?? ranked);
       } catch (error) {
         console.error("Failed to fetch repository suggestions:", error);
-        // Provide fallback suggestions on error
-        setSuggestions([
-          "/Users/username/projects",
-          "/Users/username/code",
-          "/Users/username/workspace",
-        ]);
+        setSuggestions(getFallbackHints());
       } finally {
         setIsLoading(false);
       }

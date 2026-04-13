@@ -29,6 +29,9 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
     trigger,
     watch,
     control,
+    setValue,
+    getValues,
+    setError,
   } = useForm<SessionFormData>({
     resolver: zodResolver(sessionSchema),
     defaultValues: initialData ? { ...defaultValues, ...initialData } : defaultValues,
@@ -69,7 +72,21 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
   const validateStep = async () => {
     const fields = stepFields[step];
     const isValid = await trigger(fields);
-    return isValid;
+    if (!isValid) return false;
+
+    // Cross-field check: root-level z.refine for branch doesn't fire via trigger(fields).
+    // Manually enforce it here so the error surfaces on step 1 rather than silently blocking step 3.
+    if (step === 1) {
+      const values = getValues();
+      if (values.sessionType === "new_worktree" && !values.useTitleAsBranch) {
+        if (!values.branch || values.branch.trim() === "") {
+          setError("branch", { type: "manual", message: "Branch name is required when creating new worktree" });
+          return false;
+        }
+      }
+    }
+
+    return true;
   };
 
   const handleNext = async () => {
@@ -214,48 +231,60 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
             </div>
 
             {sessionType === "new_worktree" && (
-              <>
-                <div className={styles.field}>
-                  <label className={styles.checkbox}>
-                    <input type="checkbox" {...register("useTitleAsBranch")} />
-                    <span>Use session name as branch name</span>
-                  </label>
-                  <span className={styles.hint}>
-                    Automatically use the session title as the branch name
-                  </span>
-                </div>
-
-                <div className={styles.field}>
-                  <label htmlFor="branch">Git Branch</label>
-                  <Controller
-                    name="branch"
-                    control={control}
-                    render={({ field }) => (
-                      <AutocompleteInput
-                        id="branch"
-                        value={useTitleAsBranch ? sessionTitle : (field.value || "")}
-                        onChange={(value) => {
-                          if (!useTitleAsBranch) {
-                            field.onChange(value);
-                          }
-                        }}
-                        onBlur={field.onBlur}
-                        placeholder={useTitleAsBranch ? sessionTitle || "Enter session title first" : "feature/my-feature"}
-                        suggestions={branchSuggestions}
-                        isLoading={isLoadingBranches}
-                        error={!!errors.branch}
-                        disabled={useTitleAsBranch}
-                      />
+              <div className={styles.field}>
+                <label htmlFor="branch">Git Branch</label>
+                {useTitleAsBranch ? (
+                  <div className={styles.branchPreview}>
+                    <span className={styles.branchPreviewName}>
+                      {sessionTitle || "(enter session title first)"}
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.branchCustomizeButton}
+                      aria-label="Customize branch name"
+                      onClick={() => setValue("useTitleAsBranch", false)}
+                    >
+                      ✏️ Customize
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Controller
+                      name="branch"
+                      control={control}
+                      render={({ field }) => (
+                        <AutocompleteInput
+                          id="branch"
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          placeholder="feature/my-feature"
+                          suggestions={branchSuggestions}
+                          isLoading={isLoadingBranches}
+                          error={!!errors.branch}
+                        />
+                      )}
+                    />
+                    {errors.branch && (
+                      <span className={styles.errorMessage}>{errors.branch.message}</span>
                     )}
-                  />
-                  {errors.branch && (
-                    <span className={styles.errorMessage}>{errors.branch.message}</span>
-                  )}
-                  <span className={styles.hint}>
-                    {useTitleAsBranch ? "Branch name will be: " + (sessionTitle || "(enter session title)") : "Branch to create for the new worktree"}
-                  </span>
-                </div>
-              </>
+                    <div className={styles.branchCustomHint}>
+                      <button
+                        type="button"
+                        className={styles.branchCustomizeButton}
+                        onClick={() => { setValue("useTitleAsBranch", true); setValue("branch", ""); }}
+                      >
+                        Use session name instead
+                      </button>
+                    </div>
+                  </>
+                )}
+                <span className={styles.hint}>
+                  {useTitleAsBranch
+                    ? "Branch name is automatically set from session title"
+                    : "Custom branch name for the new worktree"}
+                </span>
+              </div>
             )}
 
             {sessionType === "existing_worktree" && (
@@ -388,11 +417,15 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
                   {formValues.sessionType === "directory" && "Directory Only"}
                 </span>
               </div>
-              {formValues.sessionType === "new_worktree" && formValues.branch && (
+              {formValues.sessionType === "new_worktree" && (
                 <div className={styles.reviewItem}>
                   <span className={styles.reviewLabel}>Git Branch:</span>
-                  <span className={styles.reviewValue}>{formValues.branch}</span>
-                  <span className={styles.hint}>A new worktree will be created</span>
+                  <span className={styles.reviewValue}>
+                    {formValues.useTitleAsBranch ? formValues.title : formValues.branch}
+                  </span>
+                  <span className={styles.hint}>
+                    A new worktree will be created on this branch
+                  </span>
                 </div>
               )}
               {formValues.sessionType === "existing_worktree" && formValues.existingWorktree && (
