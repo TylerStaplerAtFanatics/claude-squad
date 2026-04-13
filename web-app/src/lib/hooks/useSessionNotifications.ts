@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useRef } from "react";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
+import { NotificationEvent } from "@/gen/session/v1/events_pb";
+import { NotificationPriority, NotificationType } from "@/gen/session/v1/types_pb";
+import { SessionService } from "@/gen/session/v1/session_pb";
 import { useNotifications } from "@/lib/contexts/NotificationContext";
+import { NotificationData } from "@/lib/types/notification";
+import { mapNotificationType, mapPriority } from "@/lib/utils/notificationMapping";
+import { TOAST_DEDUP_WINDOW_MS } from "@/lib/notification-policy";
+import { getApiBaseUrl } from "@/lib/config";
 
 /**
  * Notification types that should only appear in history — no toast, no sound.
@@ -17,11 +24,6 @@ const HISTORY_ONLY_TYPES = new Set([
   NotificationType.INFO,
   NotificationType.DEBUG,
 ]);
-import { NotificationEvent } from "@/gen/session/v1/events_pb";
-import { NotificationPriority, NotificationType } from "@/gen/session/v1/types_pb";
-import { SessionService } from "@/gen/session/v1/session_pb";
-import { NotificationData } from "@/components/ui/NotificationToast";
-import { getApiBaseUrl } from "@/lib/config";
 
 /**
  * Calls resolveApproval RPC to allow or deny a pending tool use.
@@ -33,55 +35,6 @@ async function resolveApproval(approvalId: string, decision: "allow" | "deny"): 
     await client.resolveApproval({ approvalId, decision });
   } catch (error) {
     console.error(`[resolveApproval] Failed to resolve approval ${approvalId}:`, error);
-  }
-}
-
-/**
- * Maps protobuf NotificationPriority enum to UI priority string
- */
-function mapPriority(priority: NotificationPriority): "urgent" | "high" | "medium" | "low" {
-  switch (priority) {
-    case NotificationPriority.URGENT:
-      return "urgent";
-    case NotificationPriority.HIGH:
-      return "high";
-    case NotificationPriority.MEDIUM:
-      return "medium";
-    case NotificationPriority.LOW:
-      return "low";
-    default:
-      return "medium";
-  }
-}
-
-/**
- * Maps protobuf NotificationType enum to UI notification type string
- */
-function mapNotificationType(type: NotificationType): NotificationData["notificationType"] {
-  switch (type) {
-    case NotificationType.APPROVAL_NEEDED:
-    case NotificationType.CONFIRMATION_NEEDED:
-      return "approval_needed";
-    case NotificationType.INPUT_REQUIRED:
-      return "question";
-    case NotificationType.ERROR:
-    case NotificationType.FAILURE:
-      return "error";
-    case NotificationType.WARNING:
-      return "warning";
-    case NotificationType.TASK_COMPLETE:
-    case NotificationType.PROCESS_FINISHED:
-      return "task_complete";
-    case NotificationType.PROCESS_STARTED:
-      return "progress";
-    case NotificationType.INFO:
-    case NotificationType.DEBUG:
-    case NotificationType.STATUS_CHANGE:
-      return "info";
-    case NotificationType.CUSTOM:
-      return "custom";
-    default:
-      return "info";
   }
 }
 
@@ -259,7 +212,7 @@ export function useSessionNotifications(options: UseSessionNotificationsOptions 
     // Suppress duplicate toasts for the same (sessionId, notificationType)
     // within a 10-second window. The server handles history-store dedup
     // independently; this only prevents redundant UI toasts.
-    const DEDUP_WINDOW_MS = 10_000;
+    const DEDUP_WINDOW_MS = TOAST_DEDUP_WINDOW_MS;
     const dedupKey = `${event.sessionId}:${event.notificationType}`;
     const now = Date.now();
     const lastShown = recentToastKeys.current.get(dedupKey);

@@ -10,6 +10,8 @@ import styles from "./VcsPanel.module.css";
 interface VcsPanelProps {
   sessionId: string;
   baseUrl: string;
+  /** Optional callback to navigate to a file in the Files tab. */
+  onNavigateToFile?: (path: string) => void;
 }
 
 function getFileStatusIcon(status: FileStatus): string {
@@ -63,7 +65,17 @@ function getVcsTypeName(type: VCSType): string {
   }
 }
 
-function FileList({ title, files, icon }: { title: string; files: FileChange[]; icon: string }) {
+function FileList({
+  title,
+  files,
+  icon,
+  onNavigateToFile,
+}: {
+  title: string;
+  files: FileChange[];
+  icon: string;
+  onNavigateToFile?: (path: string) => void;
+}) {
   if (files.length === 0) return null;
 
   return (
@@ -76,7 +88,11 @@ function FileList({ title, files, icon }: { title: string; files: FileChange[]; 
         {files.map((file, index) => (
           <li key={index} className={`${styles.fileItem} ${getFileStatusClass(file.status)}`}>
             <span className={styles.fileStatus}>{getFileStatusIcon(file.status)}</span>
-            <span className={styles.filePath}>
+            <span
+              className={`${styles.filePath} ${onNavigateToFile ? styles.filePathClickable : ""}`}
+              onClick={onNavigateToFile && file.path ? () => onNavigateToFile(file.path) : undefined}
+              title={onNavigateToFile ? "Open in Files tab" : undefined}
+            >
               {file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
             </span>
           </li>
@@ -86,7 +102,7 @@ function FileList({ title, files, icon }: { title: string; files: FileChange[]; 
   );
 }
 
-export function VcsPanel({ sessionId, baseUrl }: VcsPanelProps) {
+export function VcsPanel({ sessionId, baseUrl, onNavigateToFile }: VcsPanelProps) {
   const [status, setStatus] = useState<VCSStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -230,21 +246,25 @@ export function VcsPanel({ sessionId, baseUrl }: VcsPanelProps) {
           title="Conflicts"
           files={status.conflictFiles}
           icon="⚠️"
+          onNavigateToFile={onNavigateToFile}
         />
         <FileList
           title="Staged Changes"
           files={status.stagedFiles}
           icon="●"
+          onNavigateToFile={onNavigateToFile}
         />
         <FileList
           title="Unstaged Changes"
           files={status.unstagedFiles}
           icon="○"
+          onNavigateToFile={onNavigateToFile}
         />
         <FileList
           title="Untracked Files"
           files={status.untrackedFiles}
           icon="?"
+          onNavigateToFile={onNavigateToFile}
         />
       </div>
     </div>

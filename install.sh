@@ -2,6 +2,36 @@
 
 set -e
 
+# Detect which GitHub repo to install from.
+# Resolution order:
+#   1. REPO env var override (e.g. REPO=tstapler/stapler-squad ./install.sh)
+#   2. git remote origin of the current directory (works when run from a clone)
+#   3. Default: TylerStaplerAtFanatics/stapler-squad
+detect_repo() {
+    if [ -n "${REPO:-}" ]; then
+        echo "$REPO"
+        return
+    fi
+
+    if command -v git &> /dev/null; then
+        local remote_url
+        remote_url=$(git remote get-url origin 2>/dev/null || true)
+        if [ -n "$remote_url" ]; then
+            # Handle both https://github.com/owner/repo[.git] and git@github.com:owner/repo[.git]
+            local repo_path
+            repo_path=$(echo "$remote_url" | sed -E 's|.*github\.com[:/]([^/]+/[^/.]+)(\.git)?$|\1|')
+            if [ -n "$repo_path" ] && [[ "$repo_path" == */* ]]; then
+                echo "$repo_path"
+                return
+            fi
+        fi
+    fi
+
+    echo "TylerStaplerAtFanatics/stapler-squad"
+}
+
+GITHUB_REPO=$(detect_repo)
+
 setup_shell_and_path() {
     BIN_DIR=${BIN_DIR:-$HOME/.local/bin}
 
@@ -59,7 +89,7 @@ detect_platform_and_arch() {
 
 get_latest_version() {
     # Get latest version from GitHub API, including prereleases
-    API_RESPONSE=$(curl -sS "https://api.github.com/repos/tstapler/stapler-squad/releases")
+    API_RESPONSE=$(curl -sS "https://api.github.com/repos/${GITHUB_REPO}/releases")
     if [ $? -ne 0 ]; then
         echo "Error: Failed to connect to GitHub API" >&2
         exit 1
@@ -67,14 +97,14 @@ get_latest_version() {
 
     if echo "$API_RESPONSE" | grep -q "Not Found"; then
         echo "Error: Repository not found or no releases published yet." >&2
-        echo "Visit https://github.com/tstapler/stapler-squad/releases to check." >&2
+        echo "Visit https://github.com/${GITHUB_REPO}/releases to check." >&2
         exit 1
     fi
 
     # Check for empty releases list
     if [ "$API_RESPONSE" = "[]" ] || [ -z "$(echo "$API_RESPONSE" | tr -d '[] \n\r')" ]; then
         echo "Error: No releases have been published yet for stapler-squad." >&2
-        echo "Build from source: https://github.com/tstapler/stapler-squad#installation" >&2
+        echo "Build from source: https://github.com/${GITHUB_REPO}#installation" >&2
         exit 1
     fi
 
@@ -167,6 +197,89 @@ extract_and_install() {
         echo "Installed as '$INSTALL_NAME':"
     fi
     echo "$("$bin_dir/$INSTALL_NAME${extension}" version)"
+}
+
+install_go_if_missing() {
+    if command -v go >/dev/null 2>&1; then
+        echo "Go is already installed: $(go version)"
+        return 0
+    fi
+
+    echo "Go is not installed. Installing..."
+
+    if [[ "$PLATFORM" == "darwin" ]]; then
+        if command -v brew &> /dev/null; then
+            ensure brew install go
+        else
+            echo "Homebrew is required to install Go on macOS."
+            echo "Install Homebrew from https://brew.sh, then re-run this script."
+            exit 1
+        fi
+    elif [[ "$PLATFORM" == "linux" ]]; then
+        if command -v apt-get &> /dev/null; then
+            ensure sudo apt-get update
+            ensure sudo apt-get install -y golang-go
+        elif command -v dnf &> /dev/null; then
+            ensure sudo dnf install -y golang
+        elif command -v yum &> /dev/null; then
+            ensure sudo yum install -y golang
+        elif command -v pacman &> /dev/null; then
+            ensure sudo pacman -S --noconfirm go
+        elif command -v brew &> /dev/null; then
+            ensure brew install go
+        else
+            echo "Could not determine a package manager to install Go."
+            echo "Install Go manually from https://go.dev/dl/, then re-run this script."
+            exit 1
+        fi
+    else
+        echo "Automatic Go installation is not supported on this platform."
+        echo "Install Go manually from https://go.dev/dl/, then re-run this script."
+        exit 1
+    fi
+
+    echo "Go installed: $(go version)"
+}
+
+build_from_source() {
+    local bin_dir=$1
+
+    install_go_if_missing
+
+    echo "Cloning repository..."
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    ensure git clone --depth=1 "https://github.com/${GITHUB_REPO}.git" "$tmp_dir/stapler-squad"
+
+    echo "Building from source (this will install node and buf via Homebrew if missing)..."
+    # make build handles proto generation, Next.js web UI build, and Go compilation.
+    (cd "$tmp_dir/stapler-squad" && ensure make build)
+
+    if [ ! -d "$bin_dir" ]; then
+        mkdir -p "$bin_dir"
+    fi
+
+    if [ "$UPGRADE_MODE" = true ] && [ -f "$bin_dir/$INSTALL_NAME" ]; then
+        echo "Removing previous installation from $bin_dir/$INSTALL_NAME"
+        rm -f "$bin_dir/$INSTALL_NAME"
+    fi
+
+    mv "$tmp_dir/stapler-squad/stapler-squad" "$bin_dir/$INSTALL_NAME"
+    chmod +x "$bin_dir/$INSTALL_NAME"
+    rm -rf "$tmp_dir"
+
+    if [ ! -f "$bin_dir/$INSTALL_NAME" ]; then
+        echo "Installation failed, could not find $bin_dir/$INSTALL_NAME"
+        exit 1
+    fi
+
+    echo ""
+    if [ "$UPGRADE_MODE" = true ]; then
+        echo "Successfully upgraded '$INSTALL_NAME' to:"
+    else
+        echo "Installed as '$INSTALL_NAME':"
+    fi
+    echo "$("$bin_dir/$INSTALL_NAME" version)"
 }
 
 check_command_exists() {
@@ -276,16 +389,26 @@ main() {
     # Parse command line arguments
     INSTALL_NAME="ssq"
     UPGRADE_MODE=false
-    
+    FROM_SOURCE=false
+
     while [[ $# -gt 0 ]]; do
         case $1 in
             --name)
                 INSTALL_NAME="$2"
                 shift 2
                 ;;
+            --from-source)
+                FROM_SOURCE=true
+                shift
+                ;;
             *)
                 echo "Unknown option: $1"
-                echo "Usage: install.sh [--name <n>]"
+                echo "Usage: install.sh [--name <name>] [--from-source]"
+                echo ""
+                echo "Options:"
+                echo "  --name <name>    Install binary under a custom name (default: ssq)"
+                echo "  --from-source    Build from source instead of downloading a pre-built binary"
+                echo "                   Installs Go via Homebrew if not already present"
                 exit 1
                 ;;
         esac
@@ -293,23 +416,27 @@ main() {
 
     check_command_exists
     detect_platform_and_arch
-    
+
     check_and_install_dependencies
-    
+
     setup_shell_and_path
 
-    VERSION=${VERSION:-"latest"}
-    if [[ "$VERSION" == "latest" ]]; then
-        VERSION=$(get_latest_version)
-    fi
+    if [ "$FROM_SOURCE" = true ]; then
+        build_from_source "$BIN_DIR"
+    else
+        VERSION=${VERSION:-"latest"}
+        if [[ "$VERSION" == "latest" ]]; then
+            VERSION=$(get_latest_version)
+        fi
 
-    RELEASE_URL="https://github.com/tstapler/stapler-squad/releases/download/v${VERSION}"
-    ARCHIVE_NAME="stapler-squad_${VERSION}_${PLATFORM}_${ARCHITECTURE}${ARCHIVE_EXT}"
-    BINARY_URL="${RELEASE_URL}/${ARCHIVE_NAME}"
-    TMP_DIR=$(mktemp -d)
-    
-    download_release "$VERSION" "$BINARY_URL" "$ARCHIVE_NAME" "$TMP_DIR"
-    extract_and_install "$TMP_DIR" "$ARCHIVE_NAME" "$BIN_DIR" "$EXTENSION"
+        RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
+        ARCHIVE_NAME="stapler-squad_${VERSION}_${PLATFORM}_${ARCHITECTURE}${ARCHIVE_EXT}"
+        BINARY_URL="${RELEASE_URL}/${ARCHIVE_NAME}"
+        TMP_DIR=$(mktemp -d)
+
+        download_release "$VERSION" "$BINARY_URL" "$ARCHIVE_NAME" "$TMP_DIR"
+        extract_and_install "$TMP_DIR" "$ARCHIVE_NAME" "$BIN_DIR" "$EXTENSION"
+    fi
 }
 
 # Run a command that should never fail. If the command fails execution

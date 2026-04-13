@@ -1,13 +1,19 @@
 package github
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// ErrNoPR is returned by GetPRForBranch when no pull request exists for the branch.
+var ErrNoPR = errors.New("no pull request found for branch")
 
 // PRInfo contains metadata about a GitHub pull request
 type PRInfo struct {
@@ -27,6 +33,13 @@ type PRInfo struct {
 	Additions    int       `json:"additions"`
 	Deletions    int       `json:"deletions"`
 	ChangedFiles int       `json:"changedFiles"`
+
+	// Review and CI status fields (populated by GetPRInfo with extended fields)
+	ReviewDecision        string // "approved" / "changes_requested" / "review_required" / ""
+	ApprovedCount         int    // Count of current non-dismissed APPROVED reviews
+	ChangesRequestedCount int    // Count of current non-dismissed CHANGES_REQUESTED reviews
+	CheckConclusion       string // "success" / "failure" / "pending" / "action_required" / "neutral" / ""
+	CheckStatus           string // "completed" / "in_progress" / ""
 }
 
 // PRComment represents a comment on a PR (either issue comment or review comment)
@@ -62,6 +75,27 @@ type ghPRResponse struct {
 	Labels []struct {
 		Name string `json:"name"`
 	} `json:"labels"`
+	ReviewDecision    string              `json:"reviewDecision"` // APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, ""
+	Reviews           []ghReviewItem      `json:"reviews"`
+	StatusCheckRollup []ghStatusCheckItem `json:"statusCheckRollup"`
+}
+
+// ghReviewItem represents a single review from gh pr view --json reviews
+type ghReviewItem struct {
+	Author struct {
+		Login string `json:"login"`
+	} `json:"author"`
+	State string `json:"state"` // APPROVED, CHANGES_REQUESTED, DISMISSED, COMMENTED, PENDING
+	Body  string `json:"body"`
+}
+
+// ghStatusCheckItem represents a single status check from gh pr view --json statusCheckRollup
+type ghStatusCheckItem struct {
+	Name       string `json:"name"`
+	Context    string `json:"context"`
+	State      string `json:"state"`      // SUCCESS, FAILURE, PENDING, ERROR, NEUTRAL
+	Status     string `json:"status"`     // completed, in_progress, queued
+	Conclusion string `json:"conclusion"` // success, failure, cancelled, action_required, neutral, skipped, timed_out
 }
 
 // ghCommentResponse represents a comment from gh pr view --json comments
@@ -92,8 +126,14 @@ func CheckGHAuth() error {
 	return nil
 }
 
-// GetPRInfo fetches metadata for a pull request
+// GetPRInfo fetches metadata for a pull request including review and CI status.
 func GetPRInfo(owner, repo string, prNumber int) (*PRInfo, error) {
+	return GetPRInfoCtx(context.Background(), owner, repo, prNumber)
+}
+
+// GetPRInfoCtx fetches metadata for a pull request with context support.
+// Includes review decisions and CI/check status.
+func GetPRInfoCtx(ctx context.Context, owner, repo string, prNumber int) (*PRInfo, error) {
 	if err := CheckGHAuth(); err != nil {
 		return nil, err
 	}
@@ -101,9 +141,8 @@ func GetPRInfo(owner, repo string, prNumber int) (*PRInfo, error) {
 	repoRef := fmt.Sprintf("%s/%s", owner, repo)
 	prRef := strconv.Itoa(prNumber)
 
-	// Get PR info with all relevant fields
-	fields := "number,title,body,headRefName,baseRefName,state,url,createdAt,updatedAt,isDraft,mergeable,additions,deletions,changedFiles,author,labels"
-	cmd := exec.Command("gh", "pr", "view", prRef, "--repo", repoRef, "--json", fields)
+	fields := "number,title,body,headRefName,baseRefName,state,url,createdAt,updatedAt,isDraft,mergeable,additions,deletions,changedFiles,author,labels,reviews,reviewDecision,statusCheckRollup"
+	cmd := exec.CommandContext(ctx, "gh", "pr", "view", prRef, "--repo", repoRef, "--json", fields)
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -117,34 +156,174 @@ func GetPRInfo(owner, repo string, prNumber int) (*PRInfo, error) {
 		return nil, fmt.Errorf("failed to parse PR info: %w", err)
 	}
 
-	// Parse timestamps
 	createdAt, _ := time.Parse(time.RFC3339, resp.CreatedAt)
 	updatedAt, _ := time.Parse(time.RFC3339, resp.UpdatedAt)
 
-	// Extract label names
 	labels := make([]string, len(resp.Labels))
 	for i, label := range resp.Labels {
 		labels[i] = label.Name
 	}
 
+	approvedCount, changesReqCount := parseReviewCounts(resp.Reviews)
+	checkConclusion, checkStatus := getCheckConclusion(resp.StatusCheckRollup)
+
 	return &PRInfo{
-		Number:       resp.Number,
-		Title:        resp.Title,
-		Body:         resp.Body,
-		HeadRef:      resp.HeadRefName,
-		BaseRef:      resp.BaseRefName,
-		State:        resp.State,
-		Author:       resp.Author.Login,
-		Labels:       labels,
-		HTMLURL:      resp.URL,
-		CreatedAt:    createdAt,
-		UpdatedAt:    updatedAt,
-		IsDraft:      resp.IsDraft,
-		Mergeable:    resp.Mergeable,
-		Additions:    resp.Additions,
-		Deletions:    resp.Deletions,
-		ChangedFiles: resp.ChangedFiles,
+		Number:                resp.Number,
+		Title:                 resp.Title,
+		Body:                  resp.Body,
+		HeadRef:               resp.HeadRefName,
+		BaseRef:               resp.BaseRefName,
+		State:                 strings.ToLower(resp.State),
+		Author:                resp.Author.Login,
+		Labels:                labels,
+		HTMLURL:               resp.URL,
+		CreatedAt:             createdAt,
+		UpdatedAt:             updatedAt,
+		IsDraft:               resp.IsDraft,
+		Mergeable:             resp.Mergeable,
+		Additions:             resp.Additions,
+		Deletions:             resp.Deletions,
+		ChangedFiles:          resp.ChangedFiles,
+		ReviewDecision:        strings.ToLower(resp.ReviewDecision),
+		ApprovedCount:         approvedCount,
+		ChangesRequestedCount: changesReqCount,
+		CheckConclusion:       checkConclusion,
+		CheckStatus:           checkStatus,
 	}, nil
+}
+
+// parseReviewCounts derives approved/changes-requested counts from review items.
+// Uses latest non-dismissed, non-comment state per reviewer.
+func parseReviewCounts(reviews []ghReviewItem) (approved, changesRequested int) {
+	latestState := make(map[string]string)
+	for _, r := range reviews {
+		login := r.Author.Login
+		state := strings.ToUpper(r.State)
+		if state == "DISMISSED" {
+			delete(latestState, login)
+			continue
+		}
+		// COMMENTED does not override a blocking or approving review
+		if state == "COMMENTED" {
+			continue
+		}
+		latestState[login] = state
+	}
+	for _, state := range latestState {
+		switch state {
+		case "APPROVED":
+			approved++
+		case "CHANGES_REQUESTED":
+			changesRequested++
+		}
+	}
+	return
+}
+
+// getCheckConclusion derives a single conclusion from statusCheckRollup items.
+func getCheckConclusion(checks []ghStatusCheckItem) (conclusion, status string) {
+	if len(checks) == 0 {
+		return "", ""
+	}
+	hasInProgress := false
+	hasFailure := false
+	allSuccess := true
+
+	for _, check := range checks {
+		c := strings.ToLower(check.Conclusion)
+		s := strings.ToLower(check.Status)
+		st := strings.ToLower(check.State)
+		if c == "" {
+			c = st
+		}
+		switch {
+		case c == "failure" || c == "error" || c == "action_required" || c == "timed_out":
+			hasFailure = true
+			allSuccess = false
+		case c == "success":
+			// success
+		case s == "in_progress" || s == "queued" || c == "pending":
+			hasInProgress = true
+			allSuccess = false
+		default:
+			allSuccess = false
+		}
+	}
+	if hasFailure {
+		return "failure", "completed"
+	}
+	if hasInProgress {
+		return "pending", "in_progress"
+	}
+	if allSuccess {
+		return "success", "completed"
+	}
+	return "neutral", "completed"
+}
+
+// GetPRForBranch finds the GitHub PR associated with a branch.
+// Returns nil (with nil error) if no PR exists for the branch.
+func GetPRForBranch(ctx context.Context, owner, repo, branch string) (*PRInfo, error) {
+	if err := CheckGHAuth(); err != nil {
+		return nil, err
+	}
+
+	repoRef := fmt.Sprintf("%s/%s", owner, repo)
+	cmd := exec.CommandContext(ctx, "gh", "pr", "list",
+		"--repo", repoRef,
+		"--head", branch,
+		"--json", "number,updatedAt",
+		"--state", "all",
+		"--limit", "10",
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("failed to list PRs for branch: %s", string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("failed to list PRs for branch: %w", err)
+	}
+
+	var prs []struct {
+		Number    int    `json:"number"`
+		UpdatedAt string `json:"updatedAt"`
+	}
+	if err := json.Unmarshal(output, &prs); err != nil {
+		return nil, fmt.Errorf("failed to parse PR list: %w", err)
+	}
+	if len(prs) == 0 {
+		return nil, ErrNoPR
+	}
+
+	// Use most recently updated PR if multiple exist for the branch
+	sort.Slice(prs, func(i, j int) bool {
+		ti, _ := time.Parse(time.RFC3339, prs[i].UpdatedAt)
+		tj, _ := time.Parse(time.RFC3339, prs[j].UpdatedAt)
+		return ti.After(tj)
+	})
+
+	return GetPRInfoCtx(ctx, owner, repo, prs[0].Number)
+}
+
+// IsForkRepo reports whether the given repo is a fork of another repository.
+func IsForkRepo(ctx context.Context, owner, repo string) (bool, error) {
+	if err := CheckGHAuth(); err != nil {
+		return false, err
+	}
+
+	cmd := exec.CommandContext(ctx, "gh", "api",
+		fmt.Sprintf("repos/%s/%s", owner, repo),
+		"--jq", ".fork",
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return false, fmt.Errorf("failed to check fork status: %s", string(exitErr.Stderr))
+		}
+		return false, fmt.Errorf("failed to check fork status: %w", err)
+	}
+
+	return strings.TrimSpace(string(output)) == "true", nil
 }
 
 // GetPRComments fetches all comments on a pull request

@@ -38,6 +38,7 @@ type ResponseStream struct {
 	started      bool
 	bufferSize   int                         // Channel buffer size for each subscriber
 	escapeParser *analytics.EscapeCodeParser // For escape code analytics
+	onOutput     func()                      // Called on every PTY read with data (for event-driven activity tracking)
 }
 
 // NewResponseStream creates a new response stream for the given session.
@@ -72,6 +73,13 @@ func NewResponseStreamWithBuffer(sessionName string, ptyAccess *PTYAccess, buffe
 		started:      false,
 		escapeParser: escapeParser,
 	}
+}
+
+// SetOnOutput registers a callback invoked each time PTY bytes arrive.
+// Used by ClaudeController to drive event-based activity tracking in IdleDetector.
+// Must be called before Start().
+func (rs *ResponseStream) SetOnOutput(fn func()) {
+	rs.onOutput = fn
 }
 
 // Start begins streaming responses from the PTY to all subscribers.
@@ -167,6 +175,11 @@ func (rs *ResponseStream) streamLoop() {
 					Timestamp: time.Now(),
 				}
 				copy(chunk.Data, readBuf[:n])
+
+				// Notify activity listener (e.g. IdleDetector.RecordActivity)
+				if rs.onOutput != nil {
+					rs.onOutput()
+				}
 
 				// Parse escape codes for analytics (passthrough - doesn't modify data)
 				if rs.escapeParser != nil {

@@ -12,7 +12,13 @@ import { useAuditLog } from "@/lib/hooks/useAuditLog";
 import { formatRelativeTime } from "@/lib/utils/datetime";
 import { groupNotifications } from "@/lib/utils/notificationGrouping";
 import { getApiBaseUrl } from "@/lib/config";
-import { NotificationData } from "./NotificationToast";
+import { NotificationData } from "@/lib/types/notification";
+import {
+  notificationTypeIcon,
+  notificationTypeLabel,
+  priorityColor,
+  notificationTypeFilter,
+} from "@/lib/utils/notificationMapping";
 import styles from "./NotificationPanel.module.css";
 
 type TypeFilter = "all" | "approval_needed" | "error" | "task_complete" | "info";
@@ -38,6 +44,7 @@ export function NotificationPanel() {
     markAsRead,
     markAllAsRead,
     removeFromHistory,
+    acknowledgeNotification,
     clearHistory,
     getUnreadCount,
     historyLoading,
@@ -93,7 +100,8 @@ export function NotificationPanel() {
     try {
       await getClient().resolveApproval(create(ResolveApprovalRequestSchema, { approvalId, decision }));
       setResolvedApprovals(prev => ({ ...prev, [approvalId]: decision }));
-      markAsRead(notificationIds);
+      // Single call: marks as read in history AND closes the active toast
+      acknowledgeNotification(notificationIds);
     } catch (err) {
       console.error("Failed to resolve approval:", err);
       // Approval already timed out or was resolved elsewhere — mark as expired.
@@ -101,32 +109,16 @@ export function NotificationPanel() {
     } finally {
       setPendingApprovals(prev => { const next = { ...prev }; delete next[approvalId]; return next; });
     }
-  }, [getClient, markAsRead]);
+  }, [getClient, acknowledgeNotification]);
   // Filter notifications by search query and type
   const filteredNotifications = useMemo(() => {
     let list = notificationHistory;
 
     if (typeFilter !== "all") {
-      if (typeFilter === "error") {
-        // "Error" pill covers error + task_failed + warning
-        list = list.filter((n) =>
-          n.notificationType === "error" ||
-          n.notificationType === "task_failed" ||
-          n.notificationType === "warning"
-        );
-      } else if (typeFilter === "info") {
-        // "Info" covers everything not covered by the other explicit filters
-        list = list.filter(
-          (n) =>
-            n.notificationType !== "approval_needed" &&
-            n.notificationType !== "error" &&
-            n.notificationType !== "task_failed" &&
-            n.notificationType !== "warning" &&
-            n.notificationType !== "task_complete"
-        );
-      } else {
-        list = list.filter((n) => n.notificationType === typeFilter);
-      }
+      const allowed = new Set(
+        notificationTypeFilter(typeFilter, list.map((n) => n.notificationType))
+      );
+      list = list.filter((n) => allowed.has(n.notificationType));
     }
 
     if (searchQuery.trim()) {
@@ -156,72 +148,9 @@ export function NotificationPanel() {
     }
   };
 
-  const getPriorityColor = (priority?: string) => {
-    switch (priority) {
-      case "urgent":
-        return "var(--color-error, #f44336)";
-      case "high":
-        return "var(--color-warning, #ff9800)";
-      case "medium":
-        return "var(--color-info, #2196f3)";
-      case "low":
-        return "var(--color-success, #4caf50)";
-      default:
-        return "var(--color-primary, #0070f3)";
-    }
-  };
-
-  const getTypeIcon = (notificationType?: NotificationData["notificationType"]) => {
-    switch (notificationType) {
-      case "approval_needed":
-        return "⚠️";
-      case "error":
-        return "❌";
-      case "warning":
-        return "⚠️";
-      case "task_complete":
-        return "✅";
-      case "task_failed":
-        return "💥";
-      case "progress":
-        return "⏳";
-      case "question":
-        return "❓";
-      case "reminder":
-        return "⏰";
-      case "system":
-        return "⚙️";
-      default:
-        return "🔔";
-    }
-  };
-
-  const getTypeLabel = (notificationType?: NotificationData["notificationType"]) => {
-    switch (notificationType) {
-      case "approval_needed":
-        return "Approval Needed";
-      case "error":
-        return "Error";
-      case "warning":
-        return "Warning";
-      case "task_complete":
-        return "Task Complete";
-      case "task_failed":
-        return "Task Failed";
-      case "progress":
-        return "Progress";
-      case "question":
-        return "Question";
-      case "reminder":
-        return "Reminder";
-      case "system":
-        return "System";
-      case "custom":
-        return "Custom";
-      default:
-        return "Info";
-    }
-  };
+  const getPriorityColor = (priority?: NotificationData["priority"]) => priorityColor(priority);
+  const getTypeIcon = (type?: NotificationData["notificationType"]) => notificationTypeIcon(type);
+  const getTypeLabel = (type?: NotificationData["notificationType"]) => notificationTypeLabel(type);
 
   // Build context string for notification (project/directory via app)
   const getContextString = (notification: NotificationData) => {

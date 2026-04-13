@@ -38,7 +38,7 @@ endif
 		touch $(ASDF_STAMP); \
 	fi
 
-.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace
+.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux
 
 # Default target
 help: ## Show this help message
@@ -120,6 +120,14 @@ web-dev: build-all ## Build web UI and server, then restart (detects file change
 
 install: ensure-tools ## Install stapler-squad locally
 	go install .
+
+build-mux: ensure-tools ## Build the claude-mux PTY multiplexer binary
+	@echo "Building claude-mux..."
+	go build -o claude-mux ./cmd/claude-mux
+	@echo "✅ claude-mux built to ./claude-mux"
+
+install-mux: ensure-tools ## Build and install claude-mux to ~/.local/bin
+	@./scripts/install-mux.sh
 
 # Protocol Buffer code generation
 proto-gen: ensure-tools web-app/node_modules/.package-lock.json ## Generate Go and TypeScript code from proto files
@@ -235,7 +243,7 @@ tidy: ensure-tools ## Tidy and verify go modules
 # Cleanup
 clean: ## Clean build artifacts and temporary files
 	go clean
-	rm -f stapler-squad coverage.out coverage.html benchmark_results.txt
+	rm -f stapler-squad claude-mux coverage.out coverage.html benchmark_results.txt
 	rm -rf analysis_results/
 
 clean-tools: ## Remove all installed development tools (use with caution)

@@ -2,6 +2,8 @@ package session
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -25,6 +27,40 @@ type HistoryLinker struct {
 
 	mu        sync.RWMutex
 	instances []*Instance
+}
+
+// NewHistoryLinkerFromRealInspector creates a HistoryLinker backed by the real
+// gopsutil-based process inspector and an fsnotify watcher on ~/.claude/projects/.
+// This is the production constructor; use NewHistoryLinker in tests.
+func NewHistoryLinkerFromRealInspector() *HistoryLinker {
+	detector := NewHistoryFileDetectorWithRealInspector()
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.WarningLog.Printf("HistoryLinker: failed to get home dir, watcher disabled: %v", err)
+		homeDir = ""
+	}
+	watchDir := filepath.Join(homeDir, ".claude", "projects")
+
+	// Build the linker first so the watcher callback can close over it.
+	hl := &HistoryLinker{
+		detector:  detector,
+		instances: make([]*Instance, 0),
+	}
+	hl.watcher = NewHistoryFileWatcher(watchDir, func(_ string) {
+		hl.ScanAll()
+	})
+	return hl
+}
+
+// Instances returns a snapshot of the currently monitored instances.
+// Used by shutdown hooks that need the live set (including externally added sessions).
+func (hl *HistoryLinker) Instances() []*Instance {
+	hl.mu.RLock()
+	defer hl.mu.RUnlock()
+	snap := make([]*Instance, len(hl.instances))
+	copy(snap, hl.instances)
+	return snap
 }
 
 // NewHistoryLinker creates a HistoryLinker backed by the given detector and watcher.

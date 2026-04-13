@@ -22,20 +22,20 @@
   font-weight: 500;
   line-height: 1;
   color: var(--foreground);
-  background: var(--gray-100, #f3f4f6);
+  background: var(--surface-muted);
   border: 1px solid var(--border-color, #e5e7eb);
   border-radius: 4px;
-  box-shadow: 0 1px 0 0 var(--gray-200, #e5e7eb);
+  box-shadow: 0 1px 0 0 var(--border-subtle);
 }
 
 .separator {
-  color: var(--gray-500, #6b7280);
+  color: var(--text-muted);
   font-size: 0.875rem;
   margin: 0 0.125rem;
 }
 
 .description {
-  color: var(--gray-600, #6b7280);
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -78,13 +78,13 @@
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
   .key {
-    background: var(--gray-800, #1f2937);
-    border-color: var(--gray-700, #374151);
-    box-shadow: 0 1px 0 0 var(--gray-700, #374151);
+    background: var(--surface-subtle);
+    border-color: var(--border-subtle);
+    box-shadow: 0 1px 0 0 var(--border-subtle);
   }
 
   .hintsContainer {
-    background: var(--gray-900, #111827);
-    border-color: var(--gray-700, #374151);
+    background: var(--card-background);
+    border-color: var(--border-subtle);
   }
 }

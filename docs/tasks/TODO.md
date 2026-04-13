@@ -17,6 +17,7 @@ This file serves as a lightweight index of all feature plans in `docs/tasks/`.
 | [Circuit Breaker Executor](circuit-breaker-executor.md) | Draft | 4 stories | Medium |
 | [Frontend Quick Wins](frontend-quick-wins.md) | Draft | 5 atomic tasks | Low |
 | [Backlog Pipeline](worktrees/feat/backlog-pipeline-planning/docs/tasks/backlog-pipeline.md) | Planning - Phase 3 Complete | TBD | High |
+| [Mobile UX Improvements](mobile-ux-improvements.md) | Ready for Implementation | 3 stories, 11 tasks | Medium |
 
 ## Completed Plans
 
@@ -28,6 +29,9 @@ This file serves as a lightweight index of all feature plans in `docs/tasks/`.
 | [Web UI Enhancements](web-ui-enhancements.md) | Implemented | - |
 | [Session Rename/Restart](session-rename-restart.md) | Implemented | - |
 | [Full Text Search History](full-text-search-history.md) | Implemented | - |
+| claude-mux build/install + from-source installer | Implemented (6518db9) | 2026-04 |
+| Classifier: AskUserQuestion escalation + path expansion | Implemented (65b8c8e, 627c3af) | 2026-04 |
+| Fork compatibility (dynamic repo owner) | Implemented (a1b0ed6) | 2026-04 |
 
 ## Reference Plans
 
@@ -49,12 +53,12 @@ This file serves as a lightweight index of all feature plans in `docs/tasks/`.
 
 | Bug | Severity | Status | Notes |
 |-----|----------|--------|-------|
-| [review-queue-gaps](../bugs/open/review-queue-gaps.md) | Low | Open | GAP-001/003/004 - low-priority UX gaps |
-| [BUG-010](../bugs/open/BUG-010-tmux-banner-prompt-detection.md) | High | Investigating | tmux prompt detection in tests |
+| [review-queue-gaps](../bugs/open/review-queue-gaps.md) | Low | Open | GAP-001/003/004 remain; BUG-001/002/003 fixed same session |
+| [BUG-010](../bugs/open/BUG-010-tmux-banner-prompt-detection.md) | High | Investigating | tmux prompt detection in tests; test-infra only |
 | [BUG-012](../bugs/open/BUG-012-testutil-package-failures.md) | Medium | Investigating | testutil package test infrastructure |
 
-## Obsolete Bugs (TUI era - ui/ package removed)
+## Notes
 
-BUG-008, BUG-009, BUG-011 referenced a `ui/` Go package that no longer exists. The
-codebase migrated from TUI (BubbleTea) to web UI. These bugs should be moved to
-`docs/bugs/obsolete/` when that directory is created.
+- No critical bugs blocking active feature work as of 2026-04-08.
+- BUG-010 and BUG-012 are test-infrastructure issues; they do not affect production runtime.
+- BUG-008, BUG-009, BUG-011 referenced a `ui/` Go package (TUI era) that no longer exists. Move to `docs/bugs/obsolete/` when that directory is created.

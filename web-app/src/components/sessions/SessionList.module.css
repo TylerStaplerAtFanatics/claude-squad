@@ -33,7 +33,7 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: white;
-  background: var(--primary-color, #0066cc);
+  background: var(--primary);
   text-decoration: none;
   transition: all 0.2s ease;
   white-space: nowrap;
@@ -70,13 +70,13 @@
 
 .selectModeButton:hover {
   background: var(--hover-background);
-  border-color: var(--primary-color, #0066cc);
+  border-color: var(--primary);
 }
 
 .selectModeButton.active {
-  background: var(--primary-color, #0066cc);
+  background: var(--primary);
   color: white;
-  border-color: var(--primary-color, #0066cc);
+  border-color: var(--primary);
 }
 
 .filters {
@@ -114,15 +114,15 @@
 }
 
 .filterToggleActive {
-  border-color: var(--primary-color, #0066cc);
-  color: var(--primary-color, #0066cc);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .filterActiveDot {
   display: inline-block;
   width: 8px;
   height: 8px;
-  background: var(--primary-color, #0066cc);
+  background: var(--primary);
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -289,7 +289,7 @@
   font-size: 1rem;
   font-weight: 600;
   color: white;
-  background: var(--primary-color, #0066cc);
+  background: var(--primary);
   text-decoration: none;
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(0, 102, 204, 0.2);
@@ -355,6 +355,7 @@
 
   .searchInput {
     min-width: unset;
+    flex: 1;
   }
 
   /* On mobile: switch top row to a real flex row */
@@ -362,10 +363,6 @@
     display: flex;
     gap: 8px;
     width: 100%;
-  }
-
-  .searchInput {
-    flex: 1;
   }
 
   /* Show filter toggle on mobile */

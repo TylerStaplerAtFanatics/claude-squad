@@ -226,6 +226,25 @@ func (id *IdleDetector) GetStateInfo() IdleStateInfo {
 	}
 }
 
+// minActivityInterval is the minimum time between RecordActivity updates.
+// Prevents the review-queue content cache (which uses lastActivity as its change
+// signal) from being invalidated on every PTY read while still keeping the idle
+// timer event-driven.
+const minActivityInterval = 500 * time.Millisecond
+
+// RecordActivity updates lastActivity to now when PTY bytes arrive.
+// It is debounced: if lastActivity was already updated within minActivityInterval,
+// this is a no-op. This keeps the idle timer accurate while avoiding excessive
+// cache invalidation in the review queue poller.
+func (id *IdleDetector) RecordActivity() {
+	id.mu.Lock()
+	defer id.mu.Unlock()
+	if time.Since(id.lastActivity) < minActivityInterval {
+		return
+	}
+	id.lastActivity = time.Now()
+}
+
 // Reset resets the idle detector's state tracking.
 // Use this when reattaching to a session or after significant changes.
 func (id *IdleDetector) Reset() {
