@@ -201,8 +201,8 @@ func TestApprovalFlow_SessionIDFromHeader(t *testing.T) {
 	postPermissionRequest(t, h, "my-session", "Read")
 }
 
-// TestApprovalFlow_AskUserQuestion_ImmediateAllow verifies that AskUserQuestion:
-//  1. Returns "allow" immediately without blocking.
+// TestApprovalFlow_AskUserQuestion_Defer verifies that AskUserQuestion:
+//  1. Returns HTTP 200 with an empty body (defer-to-native-dialog signal).
 //  2. Does NOT create a PendingApproval in the store.
 //  3. Is case-insensitive ("askuserquestion" also fast-paths).
 func TestApprovalFlow_AskUserQuestion_ImmediateAllow(t *testing.T) {
@@ -228,12 +228,9 @@ func TestApprovalFlow_AskUserQuestion_ImmediateAllow(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", rr.Code)
 		}
-		var resp hookDecisionResponse
-		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
-			t.Fatalf("failed to decode response: %v (body=%q)", err, rr.Body.String())
-		}
-		if resp.HookSpecificOutput.Decision.Behavior != "allow" {
-			t.Errorf("expected behavior=allow, got %q", resp.HookSpecificOutput.Decision.Behavior)
+		// AskUserQuestion defers to the native dialog: empty body signals no hook decision.
+		if body := rr.Body.String(); body != "" {
+			t.Errorf("expected empty body (defer), got %q", body)
 		}
 		// No approval record must be created — this is not a gated action.
 		if got := store.ListAll(); len(got) != 0 {
@@ -258,12 +255,12 @@ func TestApprovalFlow_AskUserQuestion_ImmediateAllow(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.HandlePermissionRequest(rr, req)
 
-		var resp hookDecisionResponse
-		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rr.Code)
 		}
-		if resp.HookSpecificOutput.Decision.Behavior != "allow" {
-			t.Errorf("expected behavior=allow for lowercase tool name, got %q", resp.HookSpecificOutput.Decision.Behavior)
+		// Case-insensitive match must also defer.
+		if body := rr.Body.String(); body != "" {
+			t.Errorf("expected empty body (defer) for lowercase tool name, got %q", body)
 		}
 		if got := store.ListAll(); len(got) != 0 {
 			t.Errorf("expected empty approval store, got %d entries", len(got))
