@@ -516,15 +516,25 @@ message ListClaudeHistoryRequest {
   optional string project = 1;
   // Optional search query (searches name and project)
   optional string search_query = 2;
-  // Maximum number of results to return (0 = all)
+  // Legacy limit field; prefer page_size for new callers.
   int32 limit = 3;
+  // Maximum number of results per page (default 100, max 500).
+  // When combined with page_token this enables cursor-based pagination.
+  int32 page_size = 4;
+  // Opaque pagination token returned by a previous ListClaudeHistory call.
+  // When set, returns the page of results after the cursor position.
+  // Leave empty to start from the beginning.
+  string page_token = 5;
 }
 
 message ListClaudeHistoryResponse {
-  // List of history entries
+  // List of history entries for this page
   repeated ClaudeHistoryEntry entries = 1;
-  // Total count of entries (before limit applied)
+  // Total count of matching entries across all pages
   int32 total_count = 2;
+  // Opaque token to pass as page_token in the next request.
+  // Empty string indicates this is the last page.
+  string next_page_token = 3;
 }
 
 message GetClaudeHistoryDetailRequest {
@@ -559,8 +569,13 @@ message GetClaudeHistoryMessagesRequest {
   string id = 1;
   // Optional limit on number of messages to return
   int32 limit = 2;
-  // Optional offset for pagination
+  // Optional offset for pagination (reads from the start of the conversation)
   int32 offset = 3;
+  // When true and limit > 0, return the last `limit` messages instead of the
+  // first `limit` messages.  Used by the preview panel to efficiently read
+  // the tail of a large conversation file without loading the whole file.
+  // Mutually exclusive with offset.
+  bool tail = 4;
 }
 
 message GetClaudeHistoryMessagesResponse {
