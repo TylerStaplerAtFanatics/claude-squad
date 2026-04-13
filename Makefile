@@ -5,7 +5,8 @@
 PROFILE_FLAGS ?=
 PROFILE_PORT ?= 6060
 SERVER_FLAGS ?= --remote-access
-export CGO_CFLAGS := -Wno-discarded-qualifiers
+export CGO_CFLAGS := -Wno-ignored-qualifiers
+export CGO_ENABLED := 1
 
 # File dependencies
 GO_FILES := $(shell find . -maxdepth 3 -name "*.go" -not -path "./vendor/*" -not -path "./node_modules/*")
