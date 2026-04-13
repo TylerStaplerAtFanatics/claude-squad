@@ -1,14 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-web";
-import { SessionService } from "@/gen/session/v1/session_pb";
+import { useState, useMemo } from "react";
+import { useSessionVcsContext } from "@/lib/contexts/SessionVcsContext";
 import styles from "./DiffViewer.module.css";
 
 interface DiffViewerProps {
-  sessionId: string;
-  baseUrl: string;
+  // Props kept for backward compatibility but data now comes from SessionVcsContext.
 }
 
 interface DiffFile {
@@ -128,49 +125,14 @@ function parseDiff(diffContent: string): DiffFile[] {
   return files;
 }
 
-export function DiffViewer({ sessionId, baseUrl }: DiffViewerProps) {
-  const [diff, setDiff] = useState<DiffFile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function DiffViewer(_props: DiffViewerProps) {
+  const { diff: rawDiff, diffLoading: loading, refreshDiff } = useSessionVcsContext();
   const [viewMode, setViewMode] = useState<"split" | "unified">("unified");
-  const [rawDiffContent, setRawDiffContent] = useState<string>("");
-  const [totalAdditions, setTotalAdditions] = useState(0);
-  const [totalDeletions, setTotalDeletions] = useState(0);
 
-  useEffect(() => {
-    const fetchDiff = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const client = createClient(
-          SessionService,
-          createConnectTransport({ baseUrl })
-        );
-
-        const response = await client.getSessionDiff({ id: sessionId });
-
-        if (response.diffStats) {
-          setTotalAdditions(response.diffStats.added);
-          setTotalDeletions(response.diffStats.removed);
-          setRawDiffContent(response.diffStats.content);
-
-          // Parse the diff content
-          const parsedDiff = parseDiff(response.diffStats.content);
-          setDiff(parsedDiff);
-        } else {
-          setDiff([]);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load diff");
-        console.error("Error fetching diff:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDiff();
-  }, [sessionId, baseUrl]);
+  const diff = useMemo(() => parseDiff(rawDiff?.content ?? ""), [rawDiff?.content]);
+  const totalAdditions = rawDiff?.added ?? 0;
+  const totalDeletions = rawDiff?.removed ?? 0;
 
   if (loading) {
     return (
@@ -180,15 +142,7 @@ export function DiffViewer({ sessionId, baseUrl }: DiffViewerProps) {
     );
   }
 
-  if (error) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.error}>{error}</div>
-      </div>
-    );
-  }
-
-  if (diff.length === 0 && !loading && !error) {
+  if (diff.length === 0 && !loading) {
     return (
       <div className={styles.container}>
         <div className={styles.empty}>
@@ -211,6 +165,9 @@ export function DiffViewer({ sessionId, baseUrl }: DiffViewerProps) {
           <span className={styles.additions}>+{totalAdditions}</span>
           <span className={styles.deletions}>-{totalDeletions}</span>
         </div>
+        <button className={styles.viewModeButton} onClick={refreshDiff} title="Refresh diff">
+          ↺
+        </button>
         <div className={styles.viewModeToggle}>
           <button
             className={`${styles.viewModeButton} ${

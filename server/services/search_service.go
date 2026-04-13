@@ -12,6 +12,7 @@ import (
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session"
 	"github.com/tstapler/stapler-squad/session/search"
+	"github.com/tstapler/stapler-squad/session/vc"
 	"github.com/tstapler/stapler-squad/telemetry"
 
 	"connectrpc.com/connect"
@@ -241,7 +242,11 @@ func (ss *SearchService) ListClaudeHistory(
 	}), nil
 }
 
-// GetClaudeHistoryDetail retrieves detailed information for a specific history entry.
+// GetClaudeHistoryDetail retrieves detailed information for a specific history entry,
+// including lazily-fetched VCS status for the project directory.
+//
+// VCS status reuses the same vc.VCSProvider + vcsStatusToProto path that
+// GetVCSStatus uses for running sessions, so the logic is not duplicated.
 func (ss *SearchService) GetClaudeHistoryDetail(
 	ctx context.Context,
 	req *connect.Request[sessionv1.GetClaudeHistoryDetailRequest],
@@ -256,17 +261,54 @@ func (ss *SearchService) GetClaudeHistoryDetail(
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
+	protoEntry := &sessionv1.ClaudeHistoryEntry{
+		Id:           entry.ID,
+		Name:         entry.Name,
+		Project:      entry.Project,
+		CreatedAt:    timestamppb.New(entry.CreatedAt),
+		UpdatedAt:    timestamppb.New(entry.UpdatedAt),
+		Model:        entry.Model,
+		MessageCount: int32(entry.MessageCount),
+	}
+
+	// Lazily enrich with VCS status. Reuse the existing vc.VCSProvider so the
+	// git/jj logic is not duplicated. Errors are non-fatal — the UI should
+	// handle a nil VcsStatus gracefully.
+	if entry.Project != "" {
+		if vcsStatus := fetchHistoryVCSStatus(entry.Project); vcsStatus != nil {
+			protoEntry.VcsStatus = vcsStatus
+		}
+	}
+
 	return connect.NewResponse(&sessionv1.GetClaudeHistoryDetailResponse{
-		Entry: &sessionv1.ClaudeHistoryEntry{
-			Id:           entry.ID,
-			Name:         entry.Name,
-			Project:      entry.Project,
-			CreatedAt:    timestamppb.New(entry.CreatedAt),
-			UpdatedAt:    timestamppb.New(entry.UpdatedAt),
-			Model:        entry.Model,
-			MessageCount: int32(entry.MessageCount),
-		},
+		Entry: protoEntry,
 	}), nil
+}
+
+// newHistoryVCSProvider returns a VCS provider for the given project path,
+// preferring Git and falling back to Jujutsu.
+func newHistoryVCSProvider(projectPath string) (vc.VCSProvider, error) {
+	provider, err := vc.NewGitProvider(projectPath)
+	if err == nil {
+		return provider, nil
+	}
+	return vc.NewJujutsuProvider(projectPath)
+}
+
+// fetchHistoryVCSStatus fetches VCS status for an arbitrary project path.
+// Returns nil when the directory is not a VCS repo or when the fetch fails.
+func fetchHistoryVCSStatus(projectPath string) *sessionv1.VCSStatus {
+	provider, err := newHistoryVCSProvider(projectPath)
+	if err != nil {
+		log.DebugLog.Printf("fetchHistoryVCSStatus: no VCS provider for %q: %v", projectPath, err)
+		return nil
+	}
+	status, err := provider.GetStatus()
+	if err != nil {
+		log.DebugLog.Printf("fetchHistoryVCSStatus: GetStatus failed for %q: %v", projectPath, err)
+		return nil
+	}
+	return vcsStatusToProto(status)
 }
 
 // GetClaudeHistoryMessages retrieves messages from a specific conversation.
