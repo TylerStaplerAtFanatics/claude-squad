@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-web";
-import { SessionService } from "@/gen/session/v1/session_pb";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { FileStatus, FileChange } from "@/gen/session/v1/types_pb";
 import { FileTree } from "./FileTree";
 import { FileContentViewer } from "./FileContentViewer";
+import { useSessionVcsContext } from "@/lib/contexts/SessionVcsContext";
 import styles from "./FilesTab.module.css";
 
 // ---- Git status helpers ----
@@ -46,8 +44,6 @@ interface FilesTabProps {
 
 // ---- Component ----
 
-const VCS_CACHE_TTL_MS = 5000;
-
 export function FilesTab({
   sessionId,
   baseUrl,
@@ -57,11 +53,18 @@ export function FilesTab({
   const [selectedPath, setSelectedPath] = useState<string | null>(initialSelectedPath ?? null);
   const [includeIgnored, setIncludeIgnored] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [gitStatusMap, setGitStatusMap] = useState<Map<string, string>>(new Map());
-  const [vcsLoading, setVcsLoading] = useState(false);
-  const lastVcsFetchRef = useRef<number>(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fileTreeCollapseRef = useRef<(() => void) | null>(null);
+
+  // VCS status comes from shared context — no independent fetch.
+  const { status, statusLoading: vcsLoading, refreshStatus } = useSessionVcsContext();
+
+  // Derive git status map from shared VCS status.
+  const gitStatusMap = useMemo(() => {
+    if (!status) return new Map<string, string>();
+    const { stagedFiles, unstagedFiles, untrackedFiles } = status;
+    return buildGitStatusMap([...stagedFiles, ...unstagedFiles, ...untrackedFiles]);
+  }, [status]);
 
   // Notify parent when selection changes.
   const handleFileSelect = useCallback(
@@ -79,44 +82,10 @@ export function FilesTab({
     }
   }, [initialSelectedPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch VCS status.
-  const fetchVcsStatus = useCallback(
-    async (force = false) => {
-      const now = Date.now();
-      if (!force && now - lastVcsFetchRef.current < VCS_CACHE_TTL_MS) return;
-      lastVcsFetchRef.current = now;
-
-      setVcsLoading(true);
-      try {
-        const client = createClient(
-          SessionService,
-          createConnectTransport({ baseUrl })
-        );
-        const response = await client.getVCSStatus({ id: sessionId });
-        if (response.vcsStatus) {
-          const { stagedFiles, unstagedFiles, untrackedFiles } = response.vcsStatus;
-          const allFiles = [...stagedFiles, ...unstagedFiles, ...untrackedFiles];
-          setGitStatusMap(buildGitStatusMap(allFiles));
-        }
-      } catch (err) {
-        console.error("Failed to fetch VCS status for file tree:", err);
-      } finally {
-        setVcsLoading(false);
-      }
-    },
-    [sessionId, baseUrl]
-  );
-
-  // Fetch VCS status on mount.
-  useEffect(() => {
-    fetchVcsStatus(true);
-  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Cmd+F / Ctrl+F focuses the search input.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "f") {
-        // Only intercept if this tab is active (we're rendered).
         e.preventDefault();
         searchInputRef.current?.focus();
       }
@@ -156,7 +125,7 @@ export function FilesTab({
           </button>
           <button
             className={styles.toolbarButton}
-            onClick={() => fetchVcsStatus(true)}
+            onClick={() => refreshStatus()}
             title="Refresh git status"
             disabled={vcsLoading}
           >

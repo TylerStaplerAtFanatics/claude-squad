@@ -10,6 +10,7 @@ import { ApprovalPanel } from "./ApprovalPanel";
 import { SessionLogsTab } from "./SessionLogsTab";
 import { FilesTab } from "./FilesTab";
 import { useSessionService } from "@/lib/hooks/useSessionService";
+import { SessionVcsProvider } from "@/lib/contexts/SessionVcsContext";
 import { getApiBaseUrl } from "@/lib/config";
 import { getProgramDisplay, isKnownProgram, PROGRAMS } from "@/lib/constants/programs";
 import styles from "./SessionDetail.module.css";
@@ -211,6 +212,7 @@ export function SessionDetail({
         ))}
       </div>
 
+      <SessionVcsProvider sessionId={session.id} baseUrl={getApiBaseUrl()}>
       <div className={`${styles.content} ${isFullscreen ? styles.fullscreenContent : ""}`}>
         {activeTab === "terminal" && (
           <div className={styles.tabContent}>
@@ -237,14 +239,12 @@ export function SessionDetail({
         )}
         {activeTab === "diff" && (
           <div className={styles.tabContent}>
-            <DiffViewer sessionId={session.id} baseUrl={getApiBaseUrl()} />
+            <DiffViewer />
           </div>
         )}
         {activeTab === "vcs" && (
           <div className={styles.tabContent}>
             <VcsPanel
-              sessionId={session.id}
-              baseUrl={getApiBaseUrl()}
               onNavigateToFile={(path) => {
                 setFilesSelectedPath(path);
                 handleTabChange("files");
@@ -385,6 +385,7 @@ export function SessionDetail({
           </div>
         )}
       </div>
+      </SessionVcsProvider>
 
       {/* Workspace Switch Modal */}
       {showWorkspaceSwitchModal && (
