@@ -17,6 +17,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// WorkspaceProvider resolves workspace path information for a session.
+// Inject this interface into services that need path resolution instead of
+// accessing session.Instance.Path directly.
+type WorkspaceProvider interface {
+	GetWorkspace(sessionID string) (session.Workspace, error)
+}
+
 // WorkspaceService handles all VCS/workspace RPC methods.
 //
 // These methods operate on session workspace state (git/jj status, branch
@@ -49,6 +56,15 @@ func (ws *WorkspaceService) findInstance(id string) ([]*session.Instance, *sessi
 	return instances, nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", id))
 }
 
+// GetWorkspace implements WorkspaceProvider.
+func (ws *WorkspaceService) GetWorkspace(sessionID string) (session.Workspace, error) {
+	_, inst, err := ws.findInstance(sessionID)
+	if err != nil {
+		return session.Workspace{}, err
+	}
+	return inst.Workspace(), nil
+}
+
 // GetVCSStatus retrieves the current version control status for a session.
 func (ws *WorkspaceService) GetVCSStatus(
 	ctx context.Context,
@@ -63,7 +79,7 @@ func (ws *WorkspaceService) GetVCSStatus(
 		return nil, err
 	}
 
-	workDir := instance.Path
+	workDir := instance.Workspace().EffectivePath
 	if workDir == "" {
 		return connect.NewResponse(&sessionv1.GetVCSStatusResponse{
 			Error: "session has no working directory",

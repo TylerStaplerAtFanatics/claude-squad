@@ -11,6 +11,46 @@ interface DiffViewerProps {
   baseUrl: string;
 }
 
+// ---- Module-level diff cache ----
+
+interface DiffCacheEntry {
+  files: DiffFile[];
+  additions: number;
+  deletions: number;
+  rawContent: string;
+  timestamp: number;
+}
+
+const diffCache = new Map<string, DiffCacheEntry>();
+const DIFF_CACHE_TTL_MS = 30_000;
+
+function getDiffCached(sessionId: string): DiffCacheEntry | null {
+  const entry = diffCache.get(sessionId);
+  if (entry && Date.now() - entry.timestamp < DIFF_CACHE_TTL_MS) return entry;
+  return null;
+}
+
+/**
+ * Warm the diff cache for a session without rendering anything.
+ * Call from SessionDetail when a session is selected.
+ */
+export async function prefetchDiff(sessionId: string, baseUrl: string): Promise<void> {
+  if (getDiffCached(sessionId)) return;
+  try {
+    const client = createClient(SessionService, createConnectTransport({ baseUrl }));
+    const response = await client.getSessionDiff({ id: sessionId });
+    diffCache.set(sessionId, {
+      files: parseDiff(response.diffStats?.content ?? ""),
+      additions: response.diffStats?.added ?? 0,
+      deletions: response.diffStats?.removed ?? 0,
+      rawContent: response.diffStats?.content ?? "",
+      timestamp: Date.now(),
+    });
+  } catch {
+    // Prefetch failures are silent – the component will retry on mount.
+  }
+}
+
 interface DiffFile {
   filename: string;
   additions: number;
@@ -129,16 +169,28 @@ function parseDiff(diffContent: string): DiffFile[] {
 }
 
 export function DiffViewer({ sessionId, baseUrl }: DiffViewerProps) {
-  const [diff, setDiff] = useState<DiffFile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const initialCached = getDiffCached(sessionId);
+  const [diff, setDiff] = useState<DiffFile[]>(initialCached?.files ?? []);
+  const [loading, setLoading] = useState(!initialCached);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"split" | "unified">("unified");
-  const [rawDiffContent, setRawDiffContent] = useState<string>("");
-  const [totalAdditions, setTotalAdditions] = useState(0);
-  const [totalDeletions, setTotalDeletions] = useState(0);
+  const [rawDiffContent, setRawDiffContent] = useState<string>(initialCached?.rawContent ?? "");
+  const [totalAdditions, setTotalAdditions] = useState(initialCached?.additions ?? 0);
+  const [totalDeletions, setTotalDeletions] = useState(initialCached?.deletions ?? 0);
 
   useEffect(() => {
     const fetchDiff = async () => {
+      // Use cache if fresh – avoids refetch on tab re-entry.
+      const cached = getDiffCached(sessionId);
+      if (cached) {
+        setDiff(cached.files);
+        setTotalAdditions(cached.additions);
+        setTotalDeletions(cached.deletions);
+        setRawDiffContent(cached.rawContent);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
@@ -150,17 +202,19 @@ export function DiffViewer({ sessionId, baseUrl }: DiffViewerProps) {
 
         const response = await client.getSessionDiff({ id: sessionId });
 
-        if (response.diffStats) {
-          setTotalAdditions(response.diffStats.added);
-          setTotalDeletions(response.diffStats.removed);
-          setRawDiffContent(response.diffStats.content);
+        const entry: DiffCacheEntry = {
+          files: parseDiff(response.diffStats?.content ?? ""),
+          additions: response.diffStats?.added ?? 0,
+          deletions: response.diffStats?.removed ?? 0,
+          rawContent: response.diffStats?.content ?? "",
+          timestamp: Date.now(),
+        };
+        diffCache.set(sessionId, entry);
 
-          // Parse the diff content
-          const parsedDiff = parseDiff(response.diffStats.content);
-          setDiff(parsedDiff);
-        } else {
-          setDiff([]);
-        }
+        setTotalAdditions(entry.additions);
+        setTotalDeletions(entry.deletions);
+        setRawDiffContent(entry.rawContent);
+        setDiff(entry.files);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load diff");
         console.error("Error fetching diff:", err);

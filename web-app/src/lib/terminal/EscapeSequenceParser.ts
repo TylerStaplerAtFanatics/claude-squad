@@ -33,19 +33,24 @@ export class EscapeSequenceParser {
     const fullData = this.partialSequence + data;
     this.partialSequence = "";
 
+    // ED3 filter: strip ED3 (erase scrollback) when immediately preceded by ED2
+    // (erase visible screen). Most terminals redraw after ED2 alone; the paired
+    // ED2+ED3 sequence causes xterm.js to flicker by also wiping scrollback.
+    const filtered = fullData.replace(/\x1b\[2J\x1b\[3J/g, "\x1b[2J");
+
     // Check if data ends with a partial escape sequence
-    const partial = this.findPartialEscapeAtEnd(fullData);
+    const partial = this.findPartialEscapeAtEnd(filtered);
 
     if (partial.length > 0) {
       // Buffer the partial sequence for next call
       this.partialSequence = partial;
 
       // Return data up to (but not including) the partial sequence
-      return fullData.substring(0, fullData.length - partial.length);
+      return filtered.substring(0, filtered.length - partial.length);
     }
 
     // No partial sequence - safe to write all data
-    return fullData;
+    return filtered;
   }
 
   /**

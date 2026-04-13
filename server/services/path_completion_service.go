@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -161,6 +162,57 @@ func (p *PathCompletionService) ListPathCompletions(
 		BaseDirExists: true,
 		PathExists:    pathExists,
 	}), nil
+}
+
+// ListWorktrees returns the git worktrees for a given repository path.
+func (p *PathCompletionService) ListWorktrees(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ListWorktreesRequest],
+) (*connect.Response[sessionv1.ListWorktreesResponse], error) {
+	repoPath := req.Msg.GetRepoPath()
+
+	expanded, err := expandTilde(repoPath)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	expanded = strings.TrimRight(expanded, "/")
+
+	cmd := exec.CommandContext(ctx, "git", "worktree", "list", "--porcelain")
+	cmd.Dir = expanded
+	output, err := cmd.Output()
+	if err != nil {
+		// Not a git repo or git not available — return empty list gracefully.
+		return connect.NewResponse(&sessionv1.ListWorktreesResponse{}), nil
+	}
+
+	worktrees := parseWorktreeList(string(output))
+	return connect.NewResponse(&sessionv1.ListWorktreesResponse{Worktrees: worktrees}), nil
+}
+
+// parseWorktreeList parses the output of 'git worktree list --porcelain'.
+func parseWorktreeList(porcelainOutput string) []*sessionv1.WorktreeEntry {
+	var result []*sessionv1.WorktreeEntry
+	var current *sessionv1.WorktreeEntry
+	isFirst := true
+
+	for _, line := range strings.Split(strings.TrimSpace(porcelainOutput), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			current = nil
+			continue
+		}
+		if strings.HasPrefix(line, "worktree ") {
+			current = &sessionv1.WorktreeEntry{
+				Path:   strings.TrimPrefix(line, "worktree "),
+				IsMain: isFirst,
+			}
+			isFirst = false
+			result = append(result, current)
+		} else if current != nil && strings.HasPrefix(line, "branch ") {
+			current.Branch = strings.TrimPrefix(line, "branch refs/heads/")
+		}
+	}
+	return result
 }
 
 // expandTilde replaces a leading "~" with the user's home directory.

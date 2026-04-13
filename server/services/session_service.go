@@ -146,13 +146,15 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 	}
 	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifier)
 
+	workspaceSvc := NewWorkspaceService(concStorage, eventBus)
+
 	return &SessionService{
 		storage:           storage,
 		eventBus:          eventBus,
 		reviewQueueSvc:    reviewQueueSvc,
 		searchSvc:         NewSearchService(searchEngine, search.NewSnippetGenerator(), 5*time.Minute),
 		githubSvc:         NewGitHubService(concStorage),
-		workspaceSvc:      NewWorkspaceService(concStorage, eventBus),
+		workspaceSvc:      workspaceSvc,
 		configSvc:         NewConfigService(),
 		notificationSvc:   notificationSvc,
 		approvalSvc:       approvalSvc,
@@ -160,7 +162,7 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 		rulesSvc:          rulesSvc,
 		approvalStore:     approvalStore,
 		databaseSvc:       NewDatabaseService(),
-		fileSvc:           NewFileService(concStorage),
+		fileSvc:           NewFileService(workspaceSvc),
 		pathCompletionSvc: NewPathCompletionService(),
 		defaultsSvc:       NewDefaultsService(),
 	}
@@ -1799,6 +1801,14 @@ func (s *SessionService) ListPathCompletions(
 	return s.pathCompletionSvc.ListPathCompletions(ctx, req)
 }
 
+// ListWorktrees returns the git worktrees for a given repository path.
+func (s *SessionService) ListWorktrees(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ListWorktreesRequest],
+) (*connect.Response[sessionv1.ListWorktreesResponse], error) {
+	return s.pathCompletionSvc.ListWorktrees(ctx, req)
+}
+
 // findInstance finds an instance by title using the live in-memory poller.
 func (s *SessionService) findInstance(id string) *session.Instance {
 	if s.reviewQueuePoller != nil {
@@ -1877,6 +1887,14 @@ func (s *SessionService) UpsertDirectoryRule(ctx context.Context, req *connect.R
 // DeleteDirectoryRule removes a directory rule by path.
 func (s *SessionService) DeleteDirectoryRule(ctx context.Context, req *connect.Request[sessionv1.DeleteDirectoryRuleRequest]) (*connect.Response[sessionv1.DeleteDirectoryRuleResponse], error) {
 	return s.defaultsSvc.DeleteDirectoryRule(ctx, req)
+}
+
+// SearchFiles performs a recursive name-substring search in a session's worktree.
+func (s *SessionService) SearchFiles(
+	ctx context.Context,
+	req *connect.Request[sessionv1.SearchFilesRequest],
+) (*connect.Response[sessionv1.SearchFilesResponse], error) {
+	return s.fileSvc.SearchFiles(ctx, req)
 }
 
 // checkpointToProto converts a session.Checkpoint to a proto CheckpointProto.

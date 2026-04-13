@@ -1,0 +1,36 @@
+.actionBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--action-bar-gap, 0.5rem);
+}
+
+/* Gap variants */
+.gapSm { --action-bar-gap: 0.25rem; }
+.gapMd { --action-bar-gap: 0.5rem; }
+.gapLg { --action-bar-gap: 0.75rem; }
+
+/* Justify variants */
+.justifyStart   { justify-content: flex-start; }
+.justifyEnd     { justify-content: flex-end; }
+.justifyBetween { justify-content: space-between; }
+.justifyCenter  { justify-content: center; }
+
+/* Scroll variant: single row with horizontal scroll on small screens */
+@media (max-width: 640px) {
+  .scroll {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Prevent children from shrinking so they remain tappable */
+  .scroll > * {
+    flex-shrink: 0;
+  }
+}

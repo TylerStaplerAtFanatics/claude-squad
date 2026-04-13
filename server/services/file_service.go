@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,7 +15,6 @@ import (
 	gitignore "github.com/go-git/go-git/v5/plumbing/format/gitignore"
 
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
-	"github.com/tstapler/stapler-squad/session"
 )
 
 const (
@@ -27,6 +27,9 @@ const (
 
 	// maxDirEntries is the cap on entries returned per ListFiles call.
 	maxDirEntries = 10_000
+
+	// maxSearchResults is the default cap on entries returned by SearchFiles.
+	maxSearchResults = 500
 )
 
 // hardSkipDirs are always excluded from directory listings regardless of gitignore settings.
@@ -64,29 +67,12 @@ var knownTextExtensions = map[string]bool{
 
 // FileService handles ListFiles and GetFileContent RPCs.
 type FileService struct {
-	storage *session.Storage
+	workspace WorkspaceProvider
 }
 
-// NewFileService creates a FileService with the given storage backend.
-func NewFileService(storage *session.Storage) *FileService {
-	return &FileService{storage: storage}
-}
-
-// findInstance loads instances from storage and returns the one matching id.
-func (fs *FileService) findInstance(id string) (*session.Instance, error) {
-	if fs.storage == nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("storage not available"))
-	}
-	instances, err := fs.storage.LoadInstances()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
-	}
-	for _, inst := range instances {
-		if inst.Title == id {
-			return inst, nil
-		}
-	}
-	return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", id))
+// NewFileService creates a FileService with the given workspace provider.
+func NewFileService(workspace WorkspaceProvider) *FileService {
+	return &FileService{workspace: workspace}
 }
 
 // resolveAndValidatePath resolves a relative path against a base and ensures the
@@ -112,12 +98,12 @@ func (fs *FileService) ListFiles(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session_id is required"))
 	}
 
-	inst, err := fs.findInstance(req.Msg.SessionId)
+	ws, err := fs.workspace.GetWorkspace(req.Msg.SessionId)
 	if err != nil {
 		return nil, err
 	}
 
-	basePath := inst.Path
+	basePath := ws.EffectivePath
 	if basePath == "" {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("session has no working directory"))
 	}
@@ -263,12 +249,12 @@ func (fs *FileService) GetFileContent(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
 	}
 
-	inst, err := fs.findInstance(req.Msg.SessionId)
+	ws, err := fs.workspace.GetWorkspace(req.Msg.SessionId)
 	if err != nil {
 		return nil, err
 	}
 
-	basePath := inst.Path
+	basePath := ws.EffectivePath
 	if basePath == "" {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("session has no working directory"))
 	}
@@ -408,6 +394,187 @@ func readFull(r interface{ Read([]byte) (int, error) }, buf []byte) (int, error)
 		}
 	}
 	return total, nil
+}
+
+// SearchFiles performs a recursive name-substring search in the session's worktree.
+func (fs *FileService) SearchFiles(
+	ctx context.Context,
+	req *connect.Request[sessionv1.SearchFilesRequest],
+) (*connect.Response[sessionv1.SearchFilesResponse], error) {
+	if req.Msg.SessionId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session_id is required"))
+	}
+	if len(req.Msg.Query) < 2 {
+		return connect.NewResponse(&sessionv1.SearchFilesResponse{}), nil
+	}
+
+	ws, err := fs.workspace.GetWorkspace(req.Msg.SessionId)
+	if err != nil {
+		return nil, err
+	}
+
+	basePath := ws.EffectivePath
+	if basePath == "" {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("session has no working directory"))
+	}
+
+	maxResults := int(req.Msg.MaxResults)
+	if maxResults <= 0 {
+		maxResults = maxSearchResults
+	}
+
+	files, truncated, totalMatches, walkErr := searchFilesInWorktree(ctx, basePath, req.Msg.Query, req.Msg.IncludeIgnored, maxResults)
+	if walkErr != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("search failed: %w", walkErr))
+	}
+
+	return connect.NewResponse(&sessionv1.SearchFilesResponse{
+		Files:        files,
+		Truncated:    truncated,
+		TotalMatches: totalMatches,
+	}), nil
+}
+
+// searchFilesInWorktree walks basePath recursively and returns files whose name or
+// relative path contains query (case-insensitive substring match).
+func searchFilesInWorktree(ctx context.Context, basePath, query string, includeIgnored bool, maxResults int) ([]*sessionv1.FileNode, bool, int32, error) {
+	queryLower := strings.ToLower(query)
+	basePath = filepath.Clean(basePath)
+
+	var matcher gitignore.Matcher
+	if !includeIgnored {
+		patterns := collectAllGitignorePatterns(basePath)
+		if len(patterns) > 0 {
+			matcher = gitignore.NewMatcher(patterns)
+		}
+	}
+
+	var results []*sessionv1.FileNode
+	truncated := false
+	totalMatches := int32(0)
+
+	walkErr := filepath.WalkDir(basePath, func(path string, d fs.DirEntry, err error) error {
+		// Respect context cancellation (e.g. client disconnect).
+		if ctx.Err() != nil {
+			return filepath.SkipAll
+		}
+
+		if err != nil {
+			// Skip unreadable paths without aborting the walk.
+			return nil
+		}
+
+		name := d.Name()
+
+		// Skip symlinks to prevent traversal loops.
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+
+		// Always skip hardcoded directories.
+		if d.IsDir() && hardSkipDirs[name] {
+			return filepath.SkipDir
+		}
+
+		// Skip the root itself.
+		if path == basePath {
+			return nil
+		}
+
+		// Build relative path for gitignore matching.
+		relPath, relErr := filepath.Rel(basePath, path)
+		if relErr != nil {
+			return nil
+		}
+		relPath = filepath.ToSlash(relPath)
+		relSegments := strings.Split(relPath, "/")
+
+		// Apply gitignore filter.
+		if matcher != nil {
+			if matcher.Match(relSegments, d.IsDir()) {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+		}
+
+		// Only match files, not directories (ancestor dirs are reconstructed on the frontend).
+		if d.IsDir() {
+			return nil
+		}
+
+		// Case-insensitive substring match against both name and path.
+		if !strings.Contains(strings.ToLower(name), queryLower) &&
+			!strings.Contains(strings.ToLower(relPath), queryLower) {
+			return nil
+		}
+
+		totalMatches++
+		if len(results) >= maxResults {
+			truncated = true
+			return nil
+		}
+
+		var size int64
+		if info, statErr := d.Info(); statErr == nil {
+			size = info.Size()
+		}
+
+		results = append(results, &sessionv1.FileNode{
+			Name:  name,
+			Path:  relPath,
+			IsDir: false,
+			Size:  size,
+		})
+
+		return nil
+	})
+
+	return results, truncated, totalMatches, walkErr
+}
+
+// collectAllGitignorePatterns walks rootPath to collect gitignore patterns from all
+// .gitignore files found in the tree, building them with correct domain prefixes.
+func collectAllGitignorePatterns(rootPath string) []gitignore.Pattern {
+	var patterns []gitignore.Pattern
+
+	_ = filepath.WalkDir(rootPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || !d.IsDir() {
+			return nil
+		}
+		if path != rootPath && hardSkipDirs[d.Name()] {
+			return filepath.SkipDir
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+
+		giPath := filepath.Join(path, ".gitignore")
+		f, openErr := os.Open(giPath)
+		if openErr != nil {
+			return nil
+		}
+
+		relDir, relErr := filepath.Rel(rootPath, path)
+		var domain []string
+		if relErr == nil && relDir != "." && relDir != "" {
+			domain = strings.Split(filepath.ToSlash(relDir), "/")
+		}
+
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			patterns = append(patterns, gitignore.ParsePattern(line, domain))
+		}
+		_ = f.Close()
+		return nil
+	})
+
+	return patterns
 }
 
 // loadGitignorePatterns reads .gitignore files from the worktree root down to targetDir,

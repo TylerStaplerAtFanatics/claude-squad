@@ -954,6 +954,16 @@ func (i *Instance) GetEffectiveRootDir() string {
 	return i.Path
 }
 
+// Workspace returns where this session is operating.
+// Use this as the single source of truth for path resolution instead of
+// accessing inst.Path directly, which is wrong for worktree sessions.
+func (i *Instance) Workspace() Workspace {
+	return Workspace{
+		EffectivePath: i.GetEffectiveRootDir(),
+		RepoRoot:      i.Path,
+	}
+}
+
 // Kill terminates the instance and cleans up all resources
 // Kill destroys both tmux session and worktree (legacy method)
 func (i *Instance) Kill() error {

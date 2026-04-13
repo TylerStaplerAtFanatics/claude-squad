@@ -1886,9 +1886,48 @@ Do an end-to-end smoke test. If the UI renders and approve/deny work, the core f
 
 ---
 
+---
+
+## COMPLETE: FileTree Nested Search and Auto-Expand
+
+**Status**: Implementation complete, pending PR to main
+**Branch**: claude-squad-fix-filesystem-nested
+**Priority**: P1 - Core file discovery UX fix
+**Epic ID**: EPIC-FILETREE-SEARCH-001
+**Progress**: 100% (3 of 3 stories, 10 of 10 tasks)
+
+### Problem Solved
+
+File search in the Files tab only matched files already loaded via manual directory expansion. Files in collapsed directories were invisible to search, making the search bar effectively useless for project discovery.
+
+### What Was Implemented
+
+- **Backend**: `SearchFiles` RPC in `server/services/file_service.go` -- recursive `filepath.WalkDir` with gitignore support, hardSkipDirs, 500-result cap, context cancellation
+- **Proto**: `SearchFilesRequest` / `SearchFilesResponse` messages and `rpc SearchFiles` in `proto/session/v1/session.proto`; codegen run
+- **Frontend**: Dual-mode FileTree (browse vs. search), 300ms debounce, stale response prevention via requestIdRef, `buildSearchTree()` for nested display, `treeRef.openAll()` on results
+- **UX**: Loading spinner, "No files match" empty state, "Showing first 500" truncation notice, result count badge in toolbar ("12 matches"), browse-state restoration on search clear, Cmd+F keyboard shortcut
+
+### Key Files
+
+- `server/services/file_service.go` - SearchFiles handler + searchFilesInWorktree walk
+- `server/services/file_service_test.go` - 8 SearchFiles unit tests
+- `server/services/session_service.go` - SearchFiles delegation
+- `proto/session/v1/session.proto` - SearchFilesRequest/Response + RPC
+- `web-app/src/components/sessions/FileTree.tsx` - Search mode, debounce, auto-expand, browse restore
+- `web-app/src/components/sessions/FilesTab.tsx` - Result count badge, Cmd+F binding
+- `web-app/src/lib/hooks/useFileService.ts` - `searchFiles()` RPC client function
+
+### Next Action
+
+Open PR: `gh pr create` from `claude-squad-fix-filesystem-nested` to `main`
+
+**See Full Details**: [FileTree Search and Expand Fix](docs/tasks/filetree-search-and-expand-fix.md)
+
+---
+
 ## Context Notes
 
-**Last Updated**: 2026-03-20
+**Last Updated**: 2026-04-11
 **Current Phase**: Architecture refactoring wave complete; tmux user options metadata implemented (uncommitted); Approval Stories 5-6 pending
 **Next Milestone**: Wire ScanFromUserOptions() into server startup (2h); Approval Story 5 smoke test then Review Queue Integration
 

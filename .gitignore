@@ -22,6 +22,8 @@ web/src/gen/
 worktrees/
 
 # outputs
+coverage.out
+web-app/tsconfig.tsbuildinfo
 test-results/
 tests/playwright-report/
 tests/test-results/

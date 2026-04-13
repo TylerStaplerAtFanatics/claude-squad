@@ -1,10 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-web";
-import { SessionService } from "@/gen/session/v1/session_pb";
-import { VCSStatus, VCSType, FileStatus, FileChange } from "@/gen/session/v1/types_pb";
+import { VCSType, FileStatus, FileChange } from "@/gen/session/v1/types_pb";
+import { useVcsStatus } from "@/lib/hooks/useVcsStatus";
 import styles from "./VcsPanel.module.css";
 
 interface VcsPanelProps {
@@ -103,42 +100,7 @@ function FileList({
 }
 
 export function VcsPanel({ sessionId, baseUrl, onNavigateToFile }: VcsPanelProps) {
-  const [status, setStatus] = useState<VCSStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchStatus = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const client = createClient(
-        SessionService,
-        createConnectTransport({ baseUrl })
-      );
-
-      const response = await client.getVCSStatus({ id: sessionId });
-
-      if (response.error) {
-        setError(response.error);
-        setStatus(null);
-      } else {
-        setStatus(response.vcsStatus ?? null);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load VCS status");
-      console.error("Error fetching VCS status:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStatus();
-    // Refresh every 10 seconds
-    const interval = setInterval(fetchStatus, 10000);
-    return () => clearInterval(interval);
-  }, [sessionId, baseUrl]);
+  const { data: status, loading, error, refetch: fetchStatus } = useVcsStatus(sessionId, baseUrl);
 
   if (loading && !status) {
     return (

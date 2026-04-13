@@ -77,6 +77,14 @@ func sanitizeInitialContent(content string) string {
 	return rePositionCodes.ReplaceAllString(content, "")
 }
 
+// sessionSnapshot caches terminal capture-pane output per session.
+// dirty is set true when new output arrives so the next connect gets a fresh capture.
+type sessionSnapshot struct {
+	content    string
+	capturedAt time.Time
+	dirty      bool // true when output has arrived since last capture
+}
+
 type ConnectRPCWebSocketHandler struct {
 	sessionService    *SessionService
 	scrollbackManager *scrollback.ScrollbackManager
@@ -85,6 +93,10 @@ type ConnectRPCWebSocketHandler struct {
 	// External session support (for unified WebSocket streaming)
 	externalDiscovery   *session.ExternalSessionDiscovery
 	tmuxStreamerManager *session.ExternalTmuxStreamerManager
+
+	// Snapshot cache for cold-start terminal content
+	snapshotCache   map[string]sessionSnapshot
+	snapshotCacheMu sync.RWMutex
 }
 
 // NewConnectRPCWebSocketHandler creates a new ConnectRPC WebSocket handler
@@ -100,7 +112,77 @@ func NewConnectRPCWebSocketHandler(sessionService *SessionService, scrollbackMan
 		scrollbackManager:   scrollbackManager,
 		tmuxStreamerManager: tmuxStreamerManager,
 		streamingMode:       streamingMode,
+		snapshotCache:       make(map[string]sessionSnapshot),
 	}
+}
+
+// waitForQuiescence waits until no updates arrive for quietFor duration, or timeout elapses.
+// Used after resize nudges to detect when the TUI has finished redrawing.
+func waitForQuiescence(updates <-chan struct{}, timeout, quietFor time.Duration) {
+	deadline := time.After(timeout)
+	quiet := time.NewTimer(quietFor)
+	defer quiet.Stop()
+	for {
+		select {
+		case _, ok := <-updates:
+			if !ok {
+				return
+			}
+			if !quiet.Stop() {
+				select {
+				case <-quiet.C:
+				default:
+				}
+			}
+			quiet.Reset(quietFor)
+		case <-quiet.C:
+			return
+		case <-deadline:
+			return
+		}
+	}
+}
+
+// markSnapshotDirty marks a session's snapshot as dirty so the next connect captures fresh content.
+func (h *ConnectRPCWebSocketHandler) markSnapshotDirty(sessionID string) {
+	h.snapshotCacheMu.Lock()
+	defer h.snapshotCacheMu.Unlock()
+	if snap, ok := h.snapshotCache[sessionID]; ok {
+		snap.dirty = true
+		h.snapshotCache[sessionID] = snap
+	}
+}
+
+// getOrRefreshSnapshot returns a cached snapshot if clean, otherwise calls captureFn to refresh.
+func (h *ConnectRPCWebSocketHandler) getOrRefreshSnapshot(
+	sessionID string,
+	captureFn func() (string, error),
+) (string, error) {
+	h.snapshotCacheMu.RLock()
+	snap, ok := h.snapshotCache[sessionID]
+	h.snapshotCacheMu.RUnlock()
+
+	if ok && !snap.dirty {
+		log.InfoLog.Printf("[SnapshotCache] Serving cached snapshot for '%s' (%d bytes, age: %s)",
+			sessionID, len(snap.content), time.Since(snap.capturedAt).Round(time.Millisecond))
+		return snap.content, nil
+	}
+
+	content, err := captureFn()
+	if err != nil {
+		return "", err
+	}
+
+	h.snapshotCacheMu.Lock()
+	h.snapshotCache[sessionID] = sessionSnapshot{
+		content:    content,
+		capturedAt: time.Now(),
+		dirty:      false,
+	}
+	h.snapshotCacheMu.Unlock()
+
+	log.InfoLog.Printf("[SnapshotCache] Refreshed snapshot for '%s' (%d bytes)", sessionID, len(content))
+	return content, nil
 }
 
 // SetExternalSessionSupport configures external session discovery support
@@ -366,6 +448,34 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 	// Without the nudge, tmux resize-window is a no-op when dimensions match and the TUI
 	// never redraws, leaving capture-pane content from a prior mid-session state that
 	// produces garbled output in a fresh xterm.js terminal.
+	// Start control mode streaming early so we can subscribe to output events
+	// for quiescence detection BEFORE the resize nudge.
+	tmuxSession := instance.GetTmuxSession()
+	if tmuxSession == nil {
+		return fmt.Errorf("tmux session not available for control mode")
+	}
+
+	if err := tmuxSession.StartControlMode(); err != nil {
+		return fmt.Errorf("failed to start control mode: %w", err)
+	}
+	defer func() {
+		if err := tmuxSession.StopControlMode(); err != nil {
+			log.WarningLog.Printf("[waitForQuiescence] StopControlMode: %v", err)
+		}
+	}()
+
+	// Subscribe for quiescence detection (separate subscription from the streaming one below)
+	quiescenceSubID, quiescenceUpdateChan := tmuxSession.SubscribeToControlModeUpdates()
+	quiescenceCh := make(chan struct{}, 16)
+	go func() {
+		for range quiescenceUpdateChan {
+			select {
+			case quiescenceCh <- struct{}{}:
+			default:
+			}
+		}
+	}()
+
 	if currentPaneReq.TargetCols != nil && currentPaneReq.TargetRows != nil {
 		targetCols := int(*currentPaneReq.TargetCols)
 		targetRows := int(*currentPaneReq.TargetRows)
@@ -376,27 +486,29 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 		if targetCols > 1 {
 			if resizeErr := instance.ResizePTY(targetCols-1, targetRows); resizeErr != nil {
 				log.WarningLog.Printf("[streamViaControlMode] Pre-nudge resize failed: %v", resizeErr)
-			} else {
-				time.Sleep(50 * time.Millisecond)
 			}
 		}
 
 		if err := instance.ResizePTY(targetCols, targetRows); err != nil {
 			log.ErrorLog.Printf("[streamViaControlMode] Failed to resize: %v", err)
 		} else {
-			// Wait for TUI to complete its full redraw at the correct dimensions
-			time.Sleep(200 * time.Millisecond)
+			// Wait for TUI to complete its full redraw using quiescence detection
+			waitForQuiescence(quiescenceCh, 500*time.Millisecond, 50*time.Millisecond)
 			log.InfoLog.Printf("[streamViaControlMode] Tmux resized to %dx%d, redraw complete", targetCols, targetRows)
 		}
 	} else {
 		log.WarningLog.Printf("[streamViaControlMode] Handshake missing dimensions, layout may be incorrect")
 	}
 
+	tmuxSession.UnsubscribeFromControlModeUpdates(quiescenceSubID)
+
 	// Now capture content at correct dimensions.
 	// If capture fails (session died), proceed with empty content rather than trying
 	// to restart — automatic restarts can create reconnection loops when the session
 	// exits immediately (e.g. no API proxy running).
-	initialContent, err := instance.CapturePaneContentRaw()
+	initialContent, err := h.getOrRefreshSnapshot(sessionID, func() (string, error) {
+		return instance.CapturePaneContentRaw()
+	})
 	if err != nil {
 		log.InfoLog.Printf("[streamViaControlMode] capture-pane failed for '%s', proceeding with empty content: %v", sessionID, err)
 		initialContent = ""
@@ -408,7 +520,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 		// session. Replaying these in a fresh xterm.js terminal causes garbled output
 		// because the positions assume a prior terminal state that no longer exists.
 		// Colors (SGR) are preserved; only context-dependent positioning is removed.
-		clearAndHome := "\x1b[2J\x1b[H"
+		clearAndHome := "\x1b[H"
 		fullContent := clearAndHome + sanitizeInitialContent(initialContent)
 
 		terminalData := &sessionv1.TerminalData{
@@ -436,18 +548,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 		instance.UpdateTerminalTimestamps(initialContent, true)
 	}
 
-	// Start control mode streaming
-	tmuxSession := instance.GetTmuxSession()
-	if tmuxSession == nil {
-		return fmt.Errorf("tmux session not available for control mode")
-	}
-
-	if err := tmuxSession.StartControlMode(); err != nil {
-		return fmt.Errorf("failed to start control mode: %w", err)
-	}
-	defer tmuxSession.StopControlMode()
-
-	// Subscribe to control mode updates
+	// Subscribe to control mode updates for streaming
 	subscriberID, updateChan := tmuxSession.SubscribeToControlModeUpdates()
 	defer tmuxSession.UnsubscribeFromControlModeUpdates(subscriberID)
 
@@ -472,6 +573,9 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 					log.InfoLog.Printf("[streamViaControlMode] Update channel closed for session '%s'", sessionID)
 					return
 				}
+
+				// Mark snapshot dirty so the next client connect captures fresh content
+				h.markSnapshotDirty(sessionID)
 
 				// Send incremental output (control mode provides raw terminal output)
 				terminalData := &sessionv1.TerminalData{
@@ -673,7 +777,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 	// Send initial content to client
 	// Prepend clear-screen and cursor-home escape sequences since this is a full snapshot
 	// ESC[2J = Clear entire screen, ESC[H = Move cursor to home (1,1)
-	const clearAndHome = "\x1b[2J\x1b[H"
+	const clearAndHome = "\x1b[H"
 	// For managed sessions that just had a forced redraw, capture fresh content directly.
 	// For external sessions, fall back to the streamer's cached snapshot.
 	var initialContent string

@@ -13,6 +13,17 @@ builds:
       - CGO_ENABLED=0
     ldflags:
       - -X main.version={{.Version}}
+  - binary: claude-mux
+    main: ./cmd/claude-mux
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
 
 archives:
   - format: tar.gz

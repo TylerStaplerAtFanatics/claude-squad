@@ -5,6 +5,7 @@ import { detect, InputType, INPUT_TYPE_INFO, DetectionResult } from "@/lib/omnib
 import { PROGRAMS } from "@/lib/constants/programs";
 import { usePathCompletions } from "@/lib/hooks/usePathCompletions";
 import { usePathHistory } from "@/lib/hooks/usePathHistory";
+import { useWorktreeSuggestions } from "@/lib/hooks/useWorktreeSuggestions";
 import { PathCompletionDropdown, type CompletionEntry } from "./PathCompletionDropdown";
 import styles from "./Omnibar.module.css";
 
@@ -84,6 +85,12 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
   });
 
   const { getMatching: getHistoryMatching, save: saveHistory } = usePathHistory();
+
+  // Worktree suggestions for the "Use Existing Worktree" mode
+  const repoPathForWorktrees = isPathInput ? (detection?.localPath ?? "") : "";
+  const { worktrees } = useWorktreeSuggestions(repoPathForWorktrees, {
+    enabled: sessionType === "existing_worktree" && !!repoPathForWorktrees,
+  });
 
   // Convert live OS entries to CompletionEntry for type-safe downstream use.
   const liveEntries = useMemo<CompletionEntry[]>(
@@ -543,15 +550,35 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
               <label className={styles.label} htmlFor="omnibar-existing-worktree">
                 Existing Worktree Path *
               </label>
-              <input
-                id="omnibar-existing-worktree"
-                type="text"
-                className={styles.fieldInput}
-                placeholder="/path/to/existing/worktree"
-                value={existingWorktree}
-                onChange={(e) => setExistingWorktree(e.target.value)}
-              />
-              <span className={styles.hint}>Absolute path to an existing git worktree</span>
+              {worktrees.length > 0 ? (
+                <select
+                  id="omnibar-existing-worktree"
+                  className={styles.select}
+                  value={existingWorktree}
+                  onChange={(e) => setExistingWorktree(e.target.value)}
+                >
+                  <option value="">Select a worktree...</option>
+                  {worktrees.map((wt) => (
+                    <option key={wt.path} value={wt.path}>
+                      {wt.branch ? `${wt.branch} (${wt.path})` : wt.path}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id="omnibar-existing-worktree"
+                  type="text"
+                  className={styles.fieldInput}
+                  placeholder="/path/to/existing/worktree"
+                  value={existingWorktree}
+                  onChange={(e) => setExistingWorktree(e.target.value)}
+                />
+              )}
+              <span className={styles.hint}>
+                {worktrees.length > 0
+                  ? "Select an existing git worktree for this repository"
+                  : "Absolute path to an existing git worktree"}
+              </span>
             </div>
           )}
 

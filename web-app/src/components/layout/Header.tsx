@@ -36,6 +36,16 @@ export function Header() {
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
+  // Clear session params from URL when navigating away from home, so returning doesn't reopen
+  const handleNavLinkClick = () => {
+    if (typeof window !== "undefined" && pathname === routes.home) {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("session")) {
+        window.history.replaceState(null, "", "/");
+      }
+    }
+  };
+
   return (
     <>
       <header className={styles.header}>
@@ -65,12 +75,14 @@ export function Header() {
           <AppLink
             href={routes.home}
             className={`${styles.navLink} ${pathname === routes.home ? styles.active : ""}`}
+            onClick={handleNavLinkClick}
           >
             Sessions
           </AppLink>
           <AppLink
             href={routes.reviewQueue}
             className={`${styles.navLink} ${pathname === routes.reviewQueue ? styles.active : ""}`}
+            onClick={handleNavLinkClick}
           >
             <span className={styles.navLinkText}>Review Queue</span>
             <ReviewQueueNavBadge inline={true} />
@@ -78,24 +90,28 @@ export function Header() {
           <AppLink
             href={routes.rules}
             className={`${styles.navLink} ${pathname === routes.rules ? styles.active : ""}`}
+            onClick={handleNavLinkClick}
           >
             Rules
           </AppLink>
           <AppLink
             href={routes.logs}
             className={`${styles.navLink} ${pathname === routes.logs ? styles.active : ""}`}
+            onClick={handleNavLinkClick}
           >
             Logs
           </AppLink>
           <AppLink
             href={routes.history}
             className={`${styles.navLink} ${pathname === routes.history ? styles.active : ""}`}
+            onClick={handleNavLinkClick}
           >
             History
           </AppLink>
           <AppLink
             href={routes.config}
             className={`${styles.navLink} ${pathname === routes.config ? styles.active : ""}`}
+            onClick={handleNavLinkClick}
           >
             Config
           </AppLink>
