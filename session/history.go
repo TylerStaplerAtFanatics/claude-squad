@@ -30,7 +30,6 @@ type ClaudeHistoryEntry struct {
 	Model string `json:"model"`
 	// MessageCount is the number of messages in the conversation
 	MessageCount int `json:"message_count"`
-
 }
 
 // ClaudeSessionHistory manages access to Claude session history
