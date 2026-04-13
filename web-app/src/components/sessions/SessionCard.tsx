@@ -519,6 +519,12 @@ export function SessionCard({
               owner={session.githubOwner}
               repo={session.githubRepo}
               sourceRef={session.githubSourceRef}
+              prPriority={session.githubPrPriority}
+              prState={session.githubPrState}
+              isDraft={session.githubPrIsDraft}
+              approvedCount={session.githubApprovedCount}
+              changesRequestedCount={session.githubChangesReqCount}
+              checkConclusion={session.githubCheckConclusion}
               compact={true}
             />
             {reviewItem && (

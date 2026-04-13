@@ -73,6 +73,15 @@ type WorkspaceSwitchResult struct {
 // For directory changes, this is a simple cd operation.
 // For revision/worktree switches, this restarts Claude with --resume to preserve conversation.
 func (i *Instance) SwitchWorkspace(req WorkspaceSwitchRequest) (*WorkspaceSwitchResult, error) {
+	// Extract conversation UUID before acquiring stateMutex to avoid holding the lock
+	// during expensive syscalls (tmux PID lookup, CGo) and I/O (JSONL history reads).
+	// Convention: I/O must NOT be done while holding stateMutex (see git_worktree_manager.go:154).
+	// Unsynchronized read is intentional here - false negatives are safe because we
+	// double-check inside the lock below.
+	if i.claudeSession == nil || i.claudeSession.SessionID == "" {
+		i.tryExtractConversationUUID()
+	}
+
 	i.stateMutex.Lock()
 	defer i.stateMutex.Unlock()
 
@@ -158,7 +167,14 @@ func (i *Instance) SwitchWorkspace(req WorkspaceSwitchRequest) (*WorkspaceSwitch
 	}
 
 	// 4. Claude session ID is preserved in i.claudeSession
-	// ClaudeCommandBuilder will use it on restart
+	// ClaudeCommandBuilder will use it on restart.
+	// tryExtractConversationUUID() was called before acquiring stateMutex (double-checked
+	// locking pattern) to avoid I/O under the lock. Log the result here under the lock.
+	if i.claudeSession != nil && i.claudeSession.SessionID != "" {
+		log.InfoLog.Printf("[Workspace] Captured conversation ID '%s' for resume", i.claudeSession.SessionID)
+	} else {
+		log.InfoLog.Printf("[Workspace] No conversation ID found -- restart will begin fresh conversation")
+	}
 
 	// 5. Kill tmux session (but keep claudeSession data for resume)
 	log.InfoLog.Printf("[Workspace] Stopping tmux session for workspace switch")

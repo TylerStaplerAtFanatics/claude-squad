@@ -282,6 +282,47 @@
   font-family: monospace;
 }
 
+/* Path completion error (inline hint below the input) */
+.completionError {
+  padding: 4px 16px;
+  font-size: 12px;
+  color: var(--error);
+}
+
+/* Path existence indicator */
+.pathIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.pathIndicatorValid {
+  color: #22c55e;
+}
+
+.pathIndicatorInvalid {
+  color: #ef4444;
+}
+
+.pathIndicatorLoading {
+  color: var(--text-muted, #666);
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Dark mode adjustments */
 @media (prefers-color-scheme: light) {
   .overlay {

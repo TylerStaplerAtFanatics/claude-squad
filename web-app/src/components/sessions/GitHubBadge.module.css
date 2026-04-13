@@ -51,6 +51,80 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* PR Priority variant overrides – replace the default purple with status colors */
+
+/* blocking: changes requested or CI failure */
+.prBadgeBlocking {
+  background: var(--error);
+  color: #ffffff;
+  border-color: var(--error);
+}
+
+.prBadgeBlocking:hover {
+  opacity: 0.9;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* ready: approved + CI green */
+.prBadgeReady {
+  background: var(--success);
+  color: #ffffff;
+  border-color: var(--success);
+}
+
+.prBadgeReady:hover {
+  opacity: 0.9;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* pending: CI in progress, awaiting review */
+.prBadgePending {
+  background: var(--warning);
+  color: #1a1a1a;
+  border-color: var(--warning);
+}
+
+.prBadgePending:hover {
+  opacity: 0.9;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* draft: PR is in draft state */
+.prBadgeDraft {
+  background: var(--text-muted, #6e7681);
+  color: #ffffff;
+  border-color: var(--text-muted, #6e7681);
+}
+
+.prBadgeDraft:hover {
+  opacity: 0.9;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* complete: merged or closed */
+.prBadgeComplete {
+  background: var(--text-secondary, #57606a);
+  color: #ffffff;
+  border-color: var(--text-secondary, #57606a);
+  opacity: 0.8;
+}
+
+.prBadgeComplete:hover {
+  opacity: 1;
+}
+
+/* Priority label displayed after PR number */
+.priorityLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.9;
+  padding-left: 2px;
+  border-left: 1px solid rgba(255, 255, 255, 0.4);
+  margin-left: 2px;
+}
+
 /* Icon styling */
 .icon {
   width: 14px;

@@ -86,6 +86,9 @@ func NewServer(addr string) *Server {
 		go deps.ReactiveQueueMgr.Start(serverCtx)
 		log.InfoLog.Printf("ReactiveQueueManager started")
 
+		deps.PRStatusPoller.Start(serverCtx)
+		log.InfoLog.Printf("PRStatusPoller started")
+
 		// Start HistoryLinker: detects Claude JSONL files and links conversation
 		// UUIDs to sessions so cold restore can use --resume on restart.
 		go deps.HistoryLinker.Start(serverCtx)

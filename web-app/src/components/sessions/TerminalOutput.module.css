@@ -264,10 +264,21 @@
   transform: translateY(2px);
 }
 
+/* Mobile keyboard toggle — hidden on desktop, shown only on mobile */
+.mobileKeyboardToggle {
+  display: none;
+}
+
+/* Developer-only buttons — hidden on mobile (Debug, Record, streaming mode) */
+.devOnly {
+  /* visible on desktop by default */
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
   .mobileKeyboard {
     display: flex;
+    padding-bottom: max(var(--safe-area-bottom, 0px), 0.4rem);
   }
 
   .toolbar {
@@ -281,6 +292,8 @@
   .toolbarButton {
     padding: 0.4rem 0.6rem;
     font-size: 0.8rem;
+    min-height: var(--min-touch-target, 44px);
+    min-width: var(--min-touch-target, 44px);
   }
 
   .terminal {
@@ -290,5 +303,32 @@
 
   .actions {
     gap: 0.25rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
+
+  .actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .devOnly {
+    display: none;
+  }
+
+  .mobileKeyboardToggle {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--min-touch-target, 44px);
+    min-width: var(--min-touch-target, 44px);
+  }
+}
+
+/* Prevent iOS auto-zoom when xterm's hidden textarea gains focus.
+   iOS auto-zooms any input with font-size < 16px; xterm's textarea inherits
+   the terminal font size (~13-14px) which triggers this behavior. */
+.terminal :global(.xterm-helper-textarea) {
+  font-size: 16px !important;
 }

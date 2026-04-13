@@ -12,6 +12,16 @@
   --text-muted: #6b6b6b;
   --text-disabled: #9a9a9a;
 
+  /* File viewer / code panel tokens (always dark, VS Code-style) */
+  --surface-bg: #1e1e1e;
+  --surface-header: #252526;
+  --surface-hover: #3a3a3a;
+  --text-default: #d4d4d4;
+  --accent-color: #4d8bf7;
+  --error-color: #f85149;
+  --icon-color: #888888;
+  --selection-bg: rgba(40, 100, 255, 0.25);
+
   /* Terminal-specific colors (always dark, for terminal modals) */
   --terminal-background: #1e1e1e;
   --terminal-foreground: #d4d4d4;
@@ -59,6 +69,18 @@
 
   /* Touch target sizes (WCAG 2.1 AA) */
   --min-touch-target: 44px;
+
+  /* Safe area insets (requires viewport-fit=cover in layout.tsx) */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+
+  /* Dynamic viewport vars — overwritten at runtime by ViewportProvider via
+     document.documentElement.style.setProperty from the visualViewport API.
+     Fallback values apply during SSR and before hydration. */
+  --viewport-height: 100dvh;
+  --keyboard-height: 0px;
 
   /* Typography */
   --font-mono: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -306,6 +328,7 @@ a {
 @media (max-width: 768px) {
   .modal {
     max-height: calc(100vh - 5rem);
+    max-height: calc(100dvh - 5rem);
     border-radius: 12px 12px 0 0;
     width: 100%;
     max-width: 100%;
@@ -313,6 +336,7 @@ a {
     bottom: 0;
     left: 0;
     right: 0;
+    padding-bottom: var(--safe-area-bottom);
   }
 }
 

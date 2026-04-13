@@ -102,6 +102,29 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     return false;
   });
 
+  // Mobile keyboard visibility — persisted in localStorage
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const stored = localStorage.getItem('stapler-squad-mobile-keyboard-visible');
+      return stored === null ? true : stored === 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleMobileKeyboard = useCallback(() => {
+    setIsKeyboardVisible(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('stapler-squad-mobile-keyboard-visible', String(next));
+      } catch {
+        // localStorage full or disabled — continue without persistence
+      }
+      return next;
+    });
+  }, []);
+
   // Streaming mode selection
   const [streamingMode, setStreamingMode] = useState<"raw" | "raw-compressed" | "state" | "hybrid">("raw");
 
@@ -617,7 +640,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
             </button>
           )}
           <button
-            className={`${styles.toolbarButton} ${debugMode ? styles.debugActive : ''}`}
+            className={`${styles.toolbarButton} ${styles.devOnly} ${debugMode ? styles.debugActive : ''}`}
             onClick={handleToggleDebug}
             title={debugMode ? "Disable debug logging" : "Enable debug logging"}
             aria-label={debugMode ? "Disable debug mode" : "Enable debug mode"}
@@ -626,7 +649,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
             🛠️ {debugMode ? 'Debug ON' : 'Debug'}
           </button>
           <button
-            className={styles.toolbarButton}
+            className={`${styles.toolbarButton} ${styles.devOnly}`}
             onClick={() => {
               if (isRecording) {
                 stopRecording();
@@ -644,7 +667,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
           <select
             value={streamingMode}
             onChange={(e) => setStreamingMode(e.target.value as "raw" | "raw-compressed" | "state" | "hybrid")}
-            className={styles.toolbarButton}
+            className={`${styles.toolbarButton} ${styles.devOnly}`}
             title="Terminal streaming mode - choose how terminal output is delivered"
             aria-label="Select terminal streaming mode"
             disabled={!isConnected}
@@ -687,6 +710,15 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
           >
             📋 Copy
           </button>
+          <button
+            className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle}`}
+            onClick={toggleMobileKeyboard}
+            aria-label={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
+            aria-expanded={isKeyboardVisible}
+            title={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
+          >
+            ⌨️ {isKeyboardVisible ? 'Hide Keys' : 'Show Keys'}
+          </button>
         </div>
       </div>
       <div className={styles.terminal}>
@@ -715,21 +747,23 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
   mouseTracking="any"
 />
       </div>
-      {/* Mobile keyboard toolbar */}
-      <div className={styles.mobileKeyboard}>
-        <div className={styles.mobileKeyRow}>
-          <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b'); }} aria-label="Escape">Esc</button>
-          <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\t'); }} aria-label="Tab">Tab</button>
-          <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x03'); }} aria-label="Control C">Ctrl+C</button>
-          <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x04'); }} aria-label="Control D">Ctrl+D</button>
+      {/* Mobile keyboard toolbar — visibility controlled by toggle (persisted in localStorage) */}
+      {isKeyboardVisible && (
+        <div className={styles.mobileKeyboard}>
+          <div className={styles.mobileKeyRow}>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b'); }} aria-label="Escape">Esc</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\t'); }} aria-label="Tab">Tab</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x03'); }} aria-label="Control C">Ctrl+C</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x04'); }} aria-label="Control D">Ctrl+D</button>
+          </div>
+          <div className={styles.mobileKeyRow}>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[D'); }} aria-label="Left arrow">←</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[A'); }} aria-label="Up arrow">↑</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[B'); }} aria-label="Down arrow">↓</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[C'); }} aria-label="Right arrow">→</button>
+          </div>
         </div>
-        <div className={styles.mobileKeyRow}>
-          <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[D'); }} aria-label="Left arrow">←</button>
-          <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[A'); }} aria-label="Up arrow">↑</button>
-          <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[B'); }} aria-label="Down arrow">↓</button>
-          <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[C'); }} aria-label="Right arrow">→</button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
