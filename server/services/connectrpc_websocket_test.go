@@ -61,6 +61,37 @@ func readEnvelopeFromClient(t *testing.T, conn *websocket.Conn) *protocol.Envelo
 	return env
 }
 
+// --- Streaming mode validation ---
+
+// TestNewHandlerAcceptsValidStreamingModes verifies that each documented
+// transport mode is stored on the handler without being silently replaced.
+func TestNewHandlerAcceptsValidStreamingModes(t *testing.T) {
+	validModes := []string{"raw", "raw-compressed", "state", "hybrid"}
+	for _, mode := range validModes {
+		t.Run(mode, func(t *testing.T) {
+			h := NewConnectRPCWebSocketHandler(nil, nil, nil, mode)
+			if h.streamingMode != mode {
+				t.Errorf("mode %q: expected handler.streamingMode=%q, got %q", mode, mode, h.streamingMode)
+			}
+		})
+	}
+}
+
+// TestNewHandlerDefaultsInvalidModeToRawCompressed verifies that an unrecognised
+// mode (including the empty string) is replaced with "raw-compressed", matching
+// the documented default transport.
+func TestNewHandlerDefaultsInvalidModeToRawCompressed(t *testing.T) {
+	invalidModes := []string{"", "unknown", "ssp", "HYBRID", "Raw"}
+	for _, mode := range invalidModes {
+		t.Run(mode, func(t *testing.T) {
+			h := NewConnectRPCWebSocketHandler(nil, nil, nil, mode)
+			if h.streamingMode != "raw-compressed" {
+				t.Errorf("invalid mode %q: expected default %q, got %q", mode, "raw-compressed", h.streamingMode)
+			}
+		})
+	}
+}
+
 // TestSendEndStreamSuccess verifies that sendEndStreamSuccess writes a message
 // with the EndStream flag set (regression: streamViaControlMode was missing this call).
 func TestSendEndStreamSuccess(t *testing.T) {
