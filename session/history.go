@@ -223,7 +223,6 @@ func cleanDisplayName(display string) string {
 	return display
 }
 
-
 // GetAll returns all history entries, sorted by UpdatedAt descending
 func (sh *ClaudeSessionHistory) GetAll() []ClaudeHistoryEntry {
 	sh.mu.RLock()
