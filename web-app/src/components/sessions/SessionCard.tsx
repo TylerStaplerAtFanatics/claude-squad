@@ -14,6 +14,7 @@ interface SessionCardProps {
   onPause?: () => void;
   onResume?: () => void;
   onDuplicate?: () => void;
+  onNewWorkspace?: () => void;
   onRename?: (sessionId: string, newTitle: string) => Promise<boolean>;
   onRestart?: (sessionId: string) => Promise<boolean>;
   onUpdateTags?: (sessionId: string, tags: string[]) => void;
@@ -33,6 +34,7 @@ export function SessionCard({
   onPause,
   onResume,
   onDuplicate,
+  onNewWorkspace,
   onRename,
   onRestart,
   onUpdateTags,
@@ -788,6 +790,17 @@ export function SessionCard({
               🍴 Fork
             </button>
           )}
+          <button
+            className={styles.actionButton}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNewWorkspace?.();
+            }}
+            title="New workspace on the same project (same path, fresh title and branch)"
+            aria-label={`New workspace from ${session.title}`}
+          >
+            ➕ New Workspace
+          </button>
           <button
             className={styles.actionButton}
             onClick={(e) => {

@@ -107,6 +107,44 @@
   color: var(--foreground);
 }
 
+.branchPreview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 6px;
+  background: var(--input-background, white);
+  color: var(--foreground);
+}
+
+.branchPreviewName {
+  flex: 1;
+  font-family: monospace;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.branchCustomizeButton {
+  background: none;
+  border: none;
+  color: var(--primary, #0070f3);
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+  text-decoration: underline;
+}
+
+.branchCustomizeButton:hover {
+  opacity: 0.75;
+}
+
+.branchCustomHint {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .buttonPrimary,
 .buttonSecondary {
   padding: 0.625rem 1.5rem;
