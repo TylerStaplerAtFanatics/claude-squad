@@ -210,6 +210,30 @@ service SessionService {
   // ListPathCompletions returns filesystem directory entries matching a path prefix.
   // Used by the Omnibar for real-time path completion and inline path validation.
   rpc ListPathCompletions(ListPathCompletionsRequest) returns (ListPathCompletionsResponse) {}
+
+  // Session Defaults RPCs
+
+  // GetSessionDefaults returns the full session defaults configuration (global, profiles, directory rules).
+  rpc GetSessionDefaults(GetSessionDefaultsRequest) returns (GetSessionDefaultsResponse) {}
+
+  // ResolveDefaults merges all default layers for a given working directory and optional profile.
+  // Returns the resolved values plus source metadata for per-field badges in the UI.
+  rpc ResolveDefaults(ResolveDefaultsRequest) returns (ResolveDefaultsResponse) {}
+
+  // UpdateGlobalDefaults replaces the global default fields.
+  rpc UpdateGlobalDefaults(UpdateGlobalDefaultsRequest) returns (UpdateGlobalDefaultsResponse) {}
+
+  // UpsertProfile creates or updates a named profile.
+  rpc UpsertProfile(UpsertProfileRequest) returns (UpsertProfileResponse) {}
+
+  // DeleteProfile removes a named profile by name.
+  rpc DeleteProfile(DeleteProfileRequest) returns (DeleteProfileResponse) {}
+
+  // UpsertDirectoryRule creates or updates a directory rule (matched by path).
+  rpc UpsertDirectoryRule(UpsertDirectoryRuleRequest) returns (UpsertDirectoryRuleResponse) {}
+
+  // DeleteDirectoryRule removes a directory rule by path.
+  rpc DeleteDirectoryRule(DeleteDirectoryRuleRequest) returns (DeleteDirectoryRuleResponse) {}
 }
 
 // ListSessionsRequest allows filtering sessions by various criteria.
@@ -271,6 +295,12 @@ message CreateSessionRequest {
   // Optional: Resume an existing Claude conversation by ID.
   // This ID comes from ClaudeHistoryEntry.id and will use Claude's --resume flag.
   string resume_id = 10;
+
+  // Optional: Apply a named profile's defaults before creation.
+  string profile = 11;
+
+  // Optional: Skip all session defaults (explicit override — form values used as-is).
+  bool skip_defaults = 12;
 }
 
 message CreateSessionResponse {
@@ -1263,3 +1293,114 @@ message PathEntry {
   // True if this entry is a directory (symlinks resolved).
   bool is_directory = 3;
 }
+
+// ─── Session Defaults Messages ──────────────────────────────────────────────
+
+// ProfileDefaultsProto holds the configurable fields for a named profile.
+message ProfileDefaultsProto {
+  string name = 1;
+  string description = 2;
+  string program = 3;
+  bool auto_yes = 4;
+  repeated string tags = 5;
+  map<string, string> env_vars = 6;
+  string cli_flags = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// DirectoryRuleProto associates a working-directory path prefix with defaults.
+message DirectoryRuleProto {
+  string path = 1;
+  string profile = 2;
+  ProfileDefaultsProto overrides = 3;
+}
+
+// SessionDefaultsConfig is the full defaults configuration returned by GetSessionDefaults.
+message SessionDefaultsConfig {
+  string program = 1;
+  bool auto_yes = 2;
+  repeated string tags = 3;
+  map<string, string> env_vars = 4;
+  string cli_flags = 5;
+  map<string, ProfileDefaultsProto> profiles = 6;
+  repeated DirectoryRuleProto directory_rules = 7;
+}
+
+// GetSessionDefaults
+
+message GetSessionDefaultsRequest {}
+
+message GetSessionDefaultsResponse {
+  SessionDefaultsConfig defaults = 1;
+}
+
+// ResolveDefaults
+
+message ResolveDefaultsRequest {
+  string working_dir = 1;
+  string profile_name = 2;
+}
+
+message ResolveDefaultsResponse {
+  string program = 1;
+  bool auto_yes = 2;
+  repeated string tags = 3;
+  map<string, string> env_vars = 4;
+  string cli_flags = 5;
+  // Source tracking
+  bool used_global = 6;
+  bool used_directory = 7;
+  bool used_profile = 8;
+  string matched_directory = 9;
+}
+
+// UpdateGlobalDefaults
+
+message UpdateGlobalDefaultsRequest {
+  string program = 1;
+  bool auto_yes = 2;
+  repeated string tags = 3;
+  map<string, string> env_vars = 4;
+  string cli_flags = 5;
+}
+
+message UpdateGlobalDefaultsResponse {
+  SessionDefaultsConfig defaults = 1;
+}
+
+// UpsertProfile
+
+message UpsertProfileRequest {
+  ProfileDefaultsProto profile = 1;
+}
+
+message UpsertProfileResponse {
+  ProfileDefaultsProto profile = 1;
+}
+
+// DeleteProfile
+
+message DeleteProfileRequest {
+  string name = 1;
+}
+
+message DeleteProfileResponse {}
+
+// UpsertDirectoryRule
+
+message UpsertDirectoryRuleRequest {
+  DirectoryRuleProto rule = 1;
+}
+
+message UpsertDirectoryRuleResponse {
+  DirectoryRuleProto rule = 1;
+}
+
+// DeleteDirectoryRule
+
+message DeleteDirectoryRuleRequest {
+  string path = 1;
+}
+
+message DeleteDirectoryRuleResponse {}
