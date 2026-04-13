@@ -80,9 +80,9 @@ func sanitizeInitialContent(content string) string {
 // sessionSnapshot caches terminal capture-pane output per session.
 // dirty is set true when new output arrives so the next connect gets a fresh capture.
 type sessionSnapshot struct {
-	content     string
-	capturedAt  time.Time
-	dirty       bool // true when output has arrived since last capture
+	content    string
+	capturedAt time.Time
+	dirty      bool // true when output has arrived since last capture
 }
 
 type ConnectRPCWebSocketHandler struct {
@@ -115,7 +115,6 @@ func NewConnectRPCWebSocketHandler(sessionService *SessionService, scrollbackMan
 		snapshotCache:       make(map[string]sessionSnapshot),
 	}
 }
-
 
 // waitForQuiescence waits until no updates arrive for quietFor duration, or timeout elapses.
 // Used after resize nudges to detect when the TUI has finished redrawing.
@@ -185,7 +184,6 @@ func (h *ConnectRPCWebSocketHandler) getOrRefreshSnapshot(
 	log.InfoLog.Printf("[SnapshotCache] Refreshed snapshot for '%s' (%d bytes)", sessionID, len(content))
 	return content, nil
 }
-
 
 // SetExternalSessionSupport configures external session discovery support
 // This enables the handler to discover and stream external sessions (via mux socket monitoring)
