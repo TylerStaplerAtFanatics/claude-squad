@@ -186,12 +186,6 @@ func (h *ConnectRPCWebSocketHandler) getOrRefreshSnapshot(
 	return content, nil
 }
 
-// evictSnapshot removes a session's snapshot from the cache.
-func (h *ConnectRPCWebSocketHandler) evictSnapshot(sessionID string) {
-	h.snapshotCacheMu.Lock()
-	defer h.snapshotCacheMu.Unlock()
-	delete(h.snapshotCache, sessionID)
-}
 
 // SetExternalSessionSupport configures external session discovery support
 // This enables the handler to discover and stream external sessions (via mux socket monitoring)
@@ -466,7 +460,11 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 	if err := tmuxSession.StartControlMode(); err != nil {
 		return fmt.Errorf("failed to start control mode: %w", err)
 	}
-	defer tmuxSession.StopControlMode()
+	defer func() {
+		if err := tmuxSession.StopControlMode(); err != nil {
+			log.WarningLog.Printf("[waitForQuiescence] StopControlMode: %v", err)
+		}
+	}()
 
 	// Subscribe for quiescence detection (separate subscription from the streaming one below)
 	quiescenceSubID, quiescenceUpdateChan := tmuxSession.SubscribeToControlModeUpdates()
