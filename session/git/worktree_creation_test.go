@@ -39,7 +39,6 @@ func setupTestRepo(t *testing.T) string {
 	return dir
 }
 
-
 // TestNewWorktreeSetup_SetsBaseCommitSHA verifies that Setup() on a brand-new worktree
 // records the HEAD SHA as baseCommitSHA so Diff() can work immediately.
 func TestNewWorktreeSetup_SetsBaseCommitSHA(t *testing.T) {

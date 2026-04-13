@@ -116,7 +116,6 @@ func (g *GitWorktree) initBaseCommitSHA() {
 	log.WarningLog.Printf("Could not find merge-base for branch '%s' with any default branch (main/master/develop/trunk)", g.branchName)
 }
 
-
 // findWorktreeForBranch parses the output of 'git worktree list --porcelain'
 // and returns the path of the worktree that has the specified branch checked out
 func (g *GitWorktree) findWorktreeForBranch(porcelainOutput, targetBranch string) (string, bool) {
