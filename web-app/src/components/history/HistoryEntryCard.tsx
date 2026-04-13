@@ -42,11 +42,11 @@ export function HistoryEntryCard({ entry, isSelected, enrichedEntry, onSelect }:
         <span className={styles.entryMessages}>
           {entry.messageCount} {entry.messageCount === 1 ? "message" : "messages"}
         </span>
-        {vcs?.branch && (
+        {vcs && (
           <>
             <span className={styles.entryDivider}>•</span>
             <span className={styles.entryBranch} title="Current branch">
-              ⎇ {vcs.branch}
+              ⎇ {vcs.branch || "(detached)"}
             </span>
           </>
         )}

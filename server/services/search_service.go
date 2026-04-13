@@ -285,25 +285,27 @@ func (ss *SearchService) GetClaudeHistoryDetail(
 	}), nil
 }
 
-// fetchHistoryVCSStatus fetches VCS status for an arbitrary project path.
-// It tries git first, then jujutsu. Returns nil when the directory is not a
-// VCS repo or when the fetch fails.
-func fetchHistoryVCSStatus(projectPath string) *sessionv1.VCSStatus {
+// newHistoryVCSProvider returns a VCS provider for the given project path,
+// preferring Git and falling back to Jujutsu.
+func newHistoryVCSProvider(projectPath string) (vc.VCSProvider, error) {
 	provider, err := vc.NewGitProvider(projectPath)
+	if err == nil {
+		return provider, nil
+	}
+	return vc.NewJujutsuProvider(projectPath)
+}
+
+// fetchHistoryVCSStatus fetches VCS status for an arbitrary project path.
+// Returns nil when the directory is not a VCS repo or when the fetch fails.
+func fetchHistoryVCSStatus(projectPath string) *sessionv1.VCSStatus {
+	provider, err := newHistoryVCSProvider(projectPath)
 	if err != nil {
-		// Try jujutsu if git fails
-		jjProvider, jjErr := vc.NewJujutsuProvider(projectPath)
-		if jjErr != nil {
-			return nil // not a VCS repo
-		}
-		status, jjErr := jjProvider.GetStatus()
-		if jjErr != nil {
-			return nil
-		}
-		return vcsStatusToProto(status)
+		log.DebugLog.Printf("fetchHistoryVCSStatus: no VCS provider for %q: %v", projectPath, err)
+		return nil
 	}
 	status, err := provider.GetStatus()
 	if err != nil {
+		log.DebugLog.Printf("fetchHistoryVCSStatus: GetStatus failed for %q: %v", projectPath, err)
 		return nil
 	}
 	return vcsStatusToProto(status)

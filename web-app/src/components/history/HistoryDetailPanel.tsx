@@ -1,6 +1,7 @@
 "use client";
 
 import { ClaudeHistoryEntry, ClaudeMessage } from "@/gen/session/v1/session_pb";
+import { VCSType } from "@/gen/session/v1/types_pb";
 import { formatDate } from "@/lib/utils/timestamp";
 import styles from "./HistoryDetailPanel.module.css";
 
@@ -73,7 +74,9 @@ export function HistoryDetailPanel({
           )}
           {entry.vcsStatus && (
             <div className={styles.detailField}>
-              <div className={styles.fieldLabel}>Git State</div>
+              <div className={styles.fieldLabel}>
+                {entry.vcsStatus.type === VCSType.VCS_TYPE_JUJUTSU ? "Jujutsu State" : "Git State"}
+              </div>
               <div className={styles.vcsSection}>
                 <div className={styles.vcsRow}>
                   <span className={styles.vcsLabel}>Branch:</span>

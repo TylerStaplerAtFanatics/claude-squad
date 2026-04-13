@@ -31,9 +31,14 @@
 .entryCard.selected .entryDivider,
 .entryCard.selected .entryMessages,
 .entryCard.selected .entryProject,
-.entryCard.selected .entryBranch,
-.entryCard.selected .entryDirty {
+.entryCard.selected .entryBranch {
   color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Keep warning color visible on selected cards — the dirty indicator should
+   still draw attention even when the card background is the primary color. */
+.entryCard.selected .entryDirty {
+  color: #fde68a !important;
 }
 
 /* Entry Card Contents */
