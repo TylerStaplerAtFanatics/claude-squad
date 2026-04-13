@@ -2,7 +2,7 @@
 
 **Date**: 2026-04-13 (planned)
 **Status**: Planned
-**Scope**: Unify the command parser infrastructure so both the classifier and analytics paths use the `mvdan.cc/sh` AST, add missing seed rules for observed programs, and harden `splitCommandParts` as a fallback.
+**Scope**: Unify the command parser infrastructure so both the classifier and analytics paths use the `mvdan.cc/sh` AST, add missing seed rules for observed programs, harden `splitCommandParts` as a fallback, and teach the AST walker to unwrap transparent proxy commands (`rtk`, `sudo`, `env`, etc.) so `rtk git clone` is classified as `git clone`.
 
 ---
 
@@ -28,7 +28,9 @@
 
 The classifier (`ExtractAllCommands`) and the analytics layer (`ParseBashCommand`) use fundamentally different parsing strategies for the same input. `ExtractAllCommands` walks the `mvdan.cc/sh/v3/syntax` AST and correctly handles subshells, pipelines, compound commands, and env-var prefixes. `ParseBashCommand` delegates to `splitCommandParts`, a naive regex splitter that fails on background operators (`&`), line continuations (`\`), shell flow-control keywords (`for`, `while`, `if`), and function definitions. This divergence causes analytics to record phantom programs (`#`, `for`, `\`) and miss the actual primary program in multi-line or compound commands.
 
-Additionally, four frequently-observed programs lack seed rules: `gofmt` (77 occurrences), `rtk` (23), `source` (9), and `asdf` (10). Adding rules for these addresses a measurable portion of the 10.9% coverage gap rate.
+Additionally, three frequently-observed programs lack seed rules: `gofmt` (77 occurrences), `source` (9), and `asdf` (10). Adding rules for these addresses a measurable portion of the 10.9% coverage gap rate.
+
+`rtk` (23 occurrences) is handled differently: it is a **transparent proxy wrapper** that rewrites commands before passing them to the shell (e.g., `rtk git status` → executes `git status` with token-saving wrappers). Adding a blanket `AutoAllow` for `rtk` would be unsafe — `rtk rm -rf /` would bypass the deny rule. Instead, `rtk` is added to `wrapperCommands` and the `ExtractAllCommands` AST walker is updated to unwrap it, so `rtk git clone` is classified identically to `git clone`, inheriting all existing safety rules.
 
 ---
 
@@ -61,7 +63,8 @@ Additionally, four frequently-observed programs lack seed rules: `gofmt` (77 occ
 
 1. **ParseBashCommand parity**: For any input where the AST parser succeeds, `ParseBashCommand` returns the same `Program` and `Subcommand` as the first `ParsedCommand` from `ExtractAllCommands`. Verified by a cross-check test.
 2. **Phantom program elimination**: After Story 1, the programs `#`, `for`, `while`, `if`, `then`, `do`, `done`, `fi`, `elif`, `else`, `function`, and `\` no longer appear in `AnalyticsEntry.CommandProgram`.
-3. **Coverage gap reduction**: After Story 2, commands using `gofmt`, `rtk`, `source`, and `asdf` produce a matching `RuleID` instead of falling through to the no-rule escalation path. Estimated reduction: ~70 historical entries move from gap to covered.
+3. **Coverage gap reduction**: After Story 2, commands using `gofmt`, `source`, and `asdf` produce a matching `RuleID` instead of falling through to the no-rule escalation path. Estimated reduction: ~45 historical entries move from gap to covered.
+4. **`rtk` wrapper transparency**: After Story 3, `rtk git status` → `{Program: "git"}`, `rtk rm -rf /` → `AutoDeny` (deny rule fires on unwrapped command). The 23 `rtk` gap entries are resolved by the correct underlying classification rather than a new rule.
 4. **Fallback resilience**: After Story 3, `splitCommandParts` correctly handles `&`, `\`-continuations, and shell keywords. Verified by targeted unit tests.
 5. **Zero regressions**: All existing tests pass: `go test -run "TestClassify|TestExtract|TestDetect|TestMatches|TestCategorize|TestSeed|TestParse" ./server/services/`
 
@@ -204,18 +207,18 @@ Steps:
 
 ### Story 2: Add Missing Seed Rules
 
-**Goal**: Add seed rules for `gofmt`, `rtk`, `source`/`.`, and `asdf` to cover the top observed programs that currently fall through to the no-rule escalation path.
+**Goal**: Add seed rules for `gofmt`, `source`/`.`, and `asdf` to cover the top observed programs that currently fall through to the no-rule escalation path.
 
 **Acceptance Criteria**:
 - `gofmt` is AutoAllow at Priority 100 (safe code formatter, equivalent to `go fmt`).
-- `rtk` is AutoAllow at Priority 100 (transparent token-proxy wrapper, always safe).
+- `rtk` is **NOT** a seed rule — it is handled as a wrapper command in Story 3 (Task 3.4) so that `rtk git push` escalates and `rtk rm -rf /` denies.
 - `source` and `.` (dot-source builtin) are Escalate at Priority 50, with an Alternative message suggesting `python -m venv` or explicit environment activation.
 - `asdf` is Escalate at Priority 50 (installs/activates language runtimes, modifies system state).
-- All four new rules have test coverage.
+- All three new rules have test coverage.
 - No existing seed rules are modified or removed.
 - `categorizeProgram` is updated to include `gofmt` in the `"go"` category.
 
-#### Task 2.1: Add gofmt and rtk AutoAllow rules
+#### Task 2.1: Add gofmt AutoAllow rule
 
 **File**: `server/services/classifier.go`
 
@@ -236,26 +239,14 @@ Add to the AutoAllow (Priority 100) section of `SeedRules()`:
     Enabled:   true,
     Source:    "seed",
 },
-{
-    ID:       "seed-allow-bash-rtk",
-    Name:     "Allow rtk (token proxy wrapper)",
-    ToolName: "Bash",
-    Criteria: &CommandCriteria{
-        Programs: []string{"rtk"},
-    },
-    Decision:  AutoAllow,
-    RiskLevel: RiskLow,
-    Reason:    "rtk is a transparent token-proxy wrapper that rewrites commands; it never executes independently.",
-    Priority:  100,
-    Enabled:   true,
-    Source:    "seed",
-},
 ```
 
 **File**: `server/services/command_parser.go`
 
 Update `categorizeProgram()`:
 - Add `"gofmt"` to the `"go"` case.
+
+**Note**: `rtk` is handled as a transparent proxy wrapper in Story 3 (Task 3.4), not as a seed rule. This ensures `rtk rm -rf /` is still AutoDeny and `rtk git push` still Escalates.
 
 #### Task 2.2: Add source/asdf Escalate rules
 
@@ -306,11 +297,11 @@ Add test functions:
 
 1. **`TestClassify_Gofmt_AutoAllow`**: Tests `gofmt file.go`, `gofmt -e -l server/`, `gofmt -w file.go`.
 
-2. **`TestClassify_Rtk_AutoAllow`**: Tests `rtk git status`, `rtk gain`, `rtk discover`.
+2. **`TestClassify_Source_Escalate`**: Tests `source ~/.bashrc`, `source .venv/bin/activate`, `. ~/.profile`. Verify Decision is Escalate and Alternative mentions virtualenv.
 
-3. **`TestClassify_Source_Escalate`**: Tests `source ~/.bashrc`, `source .venv/bin/activate`, `. ~/.profile`. Verify Decision is Escalate and Alternative mentions virtualenv.
+3. **`TestClassify_Asdf_Escalate`**: Tests `asdf install python 3.11.0`, `asdf global python 3.11.0`, `asdf list`. Verify Decision is Escalate.
 
-4. **`TestClassify_Asdf_Escalate`**: Tests `asdf install python 3.11.0`, `asdf global python 3.11.0`, `asdf list`. Verify Decision is Escalate.
+**Note**: `rtk` wrapper transparency tests are in Task 3.4 (`TestClassify_Rtk_WrapperTransparency`), not here, since rtk is handled via wrapperCommands rather than a seed rule.
 
 ---
 
@@ -392,6 +383,69 @@ Tests to add:
 
 4. **`TestParseBashCommand_ForLoop`**: `ParseBashCommand("for f in *.go; do gofmt $f; done")` returns `Program: "gofmt"` (from AST path).
 
+#### Task 3.4: Add rtk to wrapperCommands and update AST walker
+
+**File**: `server/services/command_parser.go`
+
+**Goal**: Make `rtk` a transparent proxy wrapper so `rtk git clone` is classified identically to `git clone`, inheriting all existing safety rules. `rtk rm -rf /` must still trigger AutoDeny.
+
+**Step 1 — Add rtk to wrapperCommands**:
+
+```go
+var wrapperCommands = map[string]bool{
+    "sudo":  true,
+    "exec":  true,
+    "time":  true,
+    "nice":  true,
+    "nohup": true,
+    "env":   true,
+    "watch": true,
+    "rtk":   true, // transparent CLI proxy; args are the actual command
+}
+```
+
+**Step 2 — Update ExtractAllCommands AST walker to unwrap wrappers**:
+
+In the section of `ExtractAllCommands` where it processes a `CallExpr` node and extracts the program from the first token, add a wrapper-unwrapping loop after the initial `prog` is extracted. The loop advances past any wrapper tokens (skipping over env-var prefixes) to find the true underlying program:
+
+```go
+// After extracting prog from tokens[0]:
+startIdx := 1
+for wrapperCommands[strings.ToLower(prog)] && startIdx < len(tokens) {
+    // Skip env-var assignments (KEY=VALUE patterns) before the real program.
+    for startIdx < len(tokens) && envVarPattern.MatchString(tokens[startIdx]) {
+        startIdx++
+    }
+    if startIdx >= len(tokens) {
+        break // wrapper with no following command (e.g., bare "rtk")
+    }
+    // The next non-env-var token is the wrapped program.
+    prog = tokens[startIdx]
+    if idx := strings.LastIndex(prog, "/"); idx >= 0 {
+        prog = prog[idx+1:] // strip path prefix
+    }
+    startIdx++
+}
+args := tokens[startIdx:]
+```
+
+This handles chained wrappers (`sudo rtk git status` → `git`), env-var prefixes (`sudo KEY=VAL git status` → `git`), and bare wrappers with no following command (`rtk` alone → returns the wrapper name itself, producing an empty program in classification, which falls through to escalate).
+
+**Key constraint**: The existing `wrapperCommands` usage in `extractProgramAndSubcommand` (naive path) already skips wrappers. This task adds equivalent logic to the AST walker so both paths are consistent.
+
+**File**: `server/services/classifier_test.go`
+
+Add test function **`TestClassify_Rtk_WrapperTransparency`**:
+
+1. `rtk git status` → Decision: AutoAllow, RuleID: `seed-allow-git-read` (inherits git read rule)
+2. `rtk rm -rf /` → Decision: AutoDeny, RuleID: `seed-deny-rm-rf-root` (deny rule fires on unwrapped command)
+3. `rtk git push origin main` → Decision: Escalate, RuleID: `seed-escalate-git-push` (push still escalates)
+4. `sudo rtk git status` → Decision: AutoAllow (chained wrappers both unwrapped)
+5. `rtk` (bare, no subcommand) → Decision: Escalate (no matching rule for bare rtk; falls through)
+6. `rtk gain` → Decision: Escalate (no rule for `gain` program; rtk wrapper stripped, `gain` has no seed rule)
+
+Also update **`TestClassify_Rtk_AutoAllow`** in Task 2.3 to be removed and replaced by `TestClassify_Rtk_WrapperTransparency` here. The test in Task 2.3 was predicated on a blanket AutoAllow rule that was removed from Story 2.
+
 ---
 
 ## Dependency Visualization
@@ -423,7 +477,7 @@ Story 2 (Add Seed Rules)
   |  Can be implemented in any order.
   |
   v
-  Four new programs covered by rules.
+  Three new programs covered by rules (gofmt, source, asdf).
   Coverage gap rate reduced.
 ```
 
@@ -452,10 +506,9 @@ Stories 2 and 3 can be done in parallel since they modify different sections of 
 
 - [ ] All existing classifier tests still pass (no regressions from new rules)
 - [ ] New `TestClassify_Gofmt_AutoAllow` passes
-- [ ] New `TestClassify_Rtk_AutoAllow` passes
 - [ ] New `TestClassify_Source_Escalate` passes
 - [ ] New `TestClassify_Asdf_Escalate` passes
-- [ ] `SeedRules()` count increases by exactly 4
+- [ ] `SeedRules()` count increases by exactly 3 (gofmt, source, asdf)
 
 ### After Story 3
 
@@ -463,8 +516,11 @@ Stories 2 and 3 can be done in parallel since they modify different sections of 
 - [ ] New `TestSplitCommandParts_BackgroundOperator` passes
 - [ ] New `TestSplitCommandParts_LineContinuation` passes
 - [ ] New `TestExtractProgramAndSubcommand_SkipsKeywords` passes
+- [ ] New `TestClassify_Rtk_WrapperTransparency` passes (all 6 cases)
 - [ ] `splitCommandParts("make restart-web 2>&1 &")` returns `["make restart-web 2>&1"]`
 - [ ] `splitCommandParts("# this is a comment")` returns `[]` (existing behavior preserved)
+- [ ] `rtk git status` → AutoAllow (wrapperCommands unwrapping works end-to-end)
+- [ ] `rtk rm -rf /` → AutoDeny (safety rules still apply after unwrapping)
 
 ### Final Integration
 
@@ -552,7 +608,8 @@ Stories 2 and 3 can be done in parallel since they modify different sections of 
 - `ParseBashCommand("# comment")` previously returned `Program: "#"`, will now return `Program: ""`.
 - `ParseBashCommand("cmd1 &")` via `splitCommandParts` fallback previously kept `&` attached, will now split it off.
 - `gofmt` commands previously escalated (no rule), will now AutoAllow.
-- `rtk` commands previously escalated (no rule), will now AutoAllow.
+- `rtk git status` previously escalated (no rule for `rtk`), will now AutoAllow (wrapper unwrapped → `git` → git read rule).
+- `rtk rm -rf /` previously escalated (no rule), will now AutoDeny (wrapper unwrapped → `rm -rf /` → deny rule).
 - `source`/`.` commands previously escalated with generic "no matching rule" reason, will now escalate with a specific reason and alternative suggestion.
 - `asdf` commands previously escalated with generic reason, will now escalate with a specific reason.
 
@@ -562,6 +619,6 @@ Stories 2 and 3 can be done in parallel since they modify different sections of 
 
 | File | Stories | Change Type |
 |---|---|---|
-| `server/services/command_parser.go` | 1, 3 | Modified: `ParseBashCommand` rewrite, `splitCommandParts` hardening, `extractProgramAndSubcommand` keyword filter, `categorizeProgram` additions |
-| `server/services/classifier.go` | 2 | Modified: 4 new rules in `SeedRules()` |
-| `server/services/classifier_test.go` | 1, 2, 3 | Modified: new test functions for ParseBashCommand, seed rules, splitCommandParts |
+| `server/services/command_parser.go` | 1, 3 | Modified: `ParseBashCommand` rewrite, `splitCommandParts` hardening, `extractProgramAndSubcommand` keyword filter, `categorizeProgram` additions, `wrapperCommands` rtk entry, `ExtractAllCommands` wrapper-unwrap loop |
+| `server/services/classifier.go` | 2 | Modified: 3 new rules in `SeedRules()` (gofmt, source, asdf) |
+| `server/services/classifier_test.go` | 1, 2, 3 | Modified: new test functions for ParseBashCommand, seed rules, splitCommandParts, rtk wrapper |
