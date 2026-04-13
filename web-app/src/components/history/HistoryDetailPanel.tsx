@@ -3,6 +3,7 @@
 import { ClaudeHistoryEntry, ClaudeMessage } from "@/gen/session/v1/session_pb";
 import { VCSType } from "@/gen/session/v1/types_pb";
 import { formatDate } from "@/lib/utils/timestamp";
+import { VcsStatusDisplay } from "@/components/shared/VcsStatusDisplay";
 import styles from "./HistoryDetailPanel.module.css";
 
 interface HistoryDetailPanelProps {
@@ -77,47 +78,7 @@ export function HistoryDetailPanel({
               <div className={styles.fieldLabel}>
                 {entry.vcsStatus.type === VCSType.VCS_TYPE_JUJUTSU ? "Jujutsu State" : "Git State"}
               </div>
-              <div className={styles.vcsSection}>
-                <div className={styles.vcsRow}>
-                  <span className={styles.vcsLabel}>Branch:</span>
-                  <span className={styles.vcsBranch}>⎇ {entry.vcsStatus.branch || "(detached)"}</span>
-                </div>
-                <div className={styles.vcsRow}>
-                  <span className={styles.vcsLabel}>Status:</span>
-                  <span className={entry.vcsStatus.isClean ? styles.vcsClean : styles.vcsDirty}>
-                    {entry.vcsStatus.isClean ? "✓ Clean" : "✦ Uncommitted changes"}
-                  </span>
-                </div>
-                {!entry.vcsStatus.isClean && (
-                  <div className={styles.vcsChanges}>
-                    {entry.vcsStatus.hasStaged && (
-                      <span className={styles.vcsStat} title="Staged files">
-                        +{entry.vcsStatus.stagedFiles.length} staged
-                      </span>
-                    )}
-                    {entry.vcsStatus.hasUnstaged && (
-                      <span className={styles.vcsStat} title="Modified files">
-                        ~{entry.vcsStatus.unstagedFiles.length} modified
-                      </span>
-                    )}
-                    {entry.vcsStatus.hasUntracked && (
-                      <span className={styles.vcsStat} title="Untracked files">
-                        ?{entry.vcsStatus.untrackedFiles.length} untracked
-                      </span>
-                    )}
-                  </div>
-                )}
-                {(entry.vcsStatus.aheadBy > 0 || entry.vcsStatus.behindBy > 0) && (
-                  <div className={styles.vcsRow}>
-                    <span className={styles.vcsLabel}>Remote:</span>
-                    <span className={styles.vcsRemote}>
-                      {entry.vcsStatus.aheadBy > 0 && `↑${entry.vcsStatus.aheadBy} ahead`}
-                      {entry.vcsStatus.aheadBy > 0 && entry.vcsStatus.behindBy > 0 && " · "}
-                      {entry.vcsStatus.behindBy > 0 && `↓${entry.vcsStatus.behindBy} behind`}
-                    </span>
-                  </div>
-                )}
-              </div>
+              <VcsStatusDisplay status={entry.vcsStatus} />
             </div>
           )}
           <div className={styles.detailField}>

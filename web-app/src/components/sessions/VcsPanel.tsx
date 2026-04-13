@@ -5,6 +5,7 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { SessionService } from "@/gen/session/v1/session_pb";
 import { VCSStatus, VCSType, FileStatus, FileChange } from "@/gen/session/v1/types_pb";
+import { VcsStatusDisplay } from "@/components/shared/VcsStatusDisplay";
 import styles from "./VcsPanel.module.css";
 
 interface VcsPanelProps {
@@ -174,7 +175,7 @@ export function VcsPanel({ sessionId, baseUrl, onNavigateToFile }: VcsPanelProps
 
   return (
     <div className={styles.container}>
-      {/* Header with VCS type and branch */}
+      {/* Header with VCS type and refresh */}
       <div className={styles.header}>
         <div className={styles.vcsType}>
           <span className={styles.vcsIcon}>
@@ -187,60 +188,22 @@ export function VcsPanel({ sessionId, baseUrl, onNavigateToFile }: VcsPanelProps
         </button>
       </div>
 
-      {/* Branch and commit info */}
-      <div className={styles.branchInfo}>
-        <div className={styles.branchRow}>
-          <span className={styles.branchIcon}>⎇</span>
-          <span className={styles.branchName}>{status.branch || "(detached)"}</span>
+      {/* Commit description (HEAD summary — VcsPanel-specific) */}
+      {(status.headCommit || status.description) && (
+        <div className={styles.branchInfo}>
           {status.headCommit && (
             <span className={styles.commitHash}>{status.headCommit}</span>
           )}
-        </div>
-        {status.description && (
-          <div className={styles.commitMessage}>{status.description}</div>
-        )}
-      </div>
-
-      {/* Remote sync status */}
-      {(status.aheadBy > 0 || status.behindBy > 0 || status.upstream) && (
-        <div className={styles.syncStatus}>
-          <span className={styles.syncIcon}>🔗</span>
-          <span className={styles.upstream}>{status.upstream || "origin"}</span>
-          {status.aheadBy > 0 && (
-            <span className={styles.ahead}>↑{status.aheadBy}</span>
-          )}
-          {status.behindBy > 0 && (
-            <span className={styles.behind}>↓{status.behindBy}</span>
+          {status.description && (
+            <div className={styles.commitMessage}>{status.description}</div>
           )}
         </div>
       )}
 
-      {/* Working directory status */}
-      <div className={styles.workdirStatus}>
-        {status.isClean ? (
-          <div className={styles.cleanStatus}>
-            <span className={styles.cleanIcon}>✓</span>
-            <span>Working directory clean</span>
-          </div>
-        ) : (
-          <div className={styles.dirtyStatus}>
-            {status.hasConflicts && (
-              <span className={styles.conflictBadge}>⚠️ Conflicts</span>
-            )}
-            {status.hasStaged && (
-              <span className={styles.stagedBadge}>● Staged</span>
-            )}
-            {status.hasUnstaged && (
-              <span className={styles.unstagedBadge}>○ Unstaged</span>
-            )}
-            {status.hasUntracked && (
-              <span className={styles.untrackedBadge}>? Untracked</span>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Shared status summary: branch, clean/dirty, counts, ahead/behind */}
+      <VcsStatusDisplay status={status} />
 
-      {/* File lists */}
+      {/* File lists — clickable file navigation is VcsPanel-specific */}
       <div className={styles.fileLists}>
         <FileList
           title="Conflicts"
