@@ -344,7 +344,7 @@ func parseLogs(reader io.Reader, req *sessionv1.GetLogsRequest) (*parseLogsResul
 
 		// Try to parse the log line
 		matches := logLineRegex.FindStringSubmatch(line)
-		if matches == nil || len(matches) < 7 {
+		if len(matches) < 7 {
 			// Skip lines that don't match expected format
 			continue
 		}

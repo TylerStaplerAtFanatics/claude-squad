@@ -99,7 +99,7 @@ func (h *EchoHistory) GetAckNum(clientID string) uint64 {
 	timeoutMs := h.ackTimeout.Milliseconds()
 
 	// Find the highest echo number older than timeout
-	var highestReady uint64 = h.lastAcked[clientID]
+	highestReady := h.lastAcked[clientID]
 
 	for i := range h.entries {
 		entry := &h.entries[i]

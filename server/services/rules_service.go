@@ -7,6 +7,7 @@ import (
 
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/pkg/classifier"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -16,11 +17,11 @@ import (
 type RulesService struct {
 	rulesStore     *RulesStore
 	analyticsStore *AnalyticsStore
-	classifier     *RuleBasedClassifier
+	classifier     *classifier.RuleBasedClassifier
 }
 
 // NewRulesService creates a RulesService.
-func NewRulesService(rulesStore *RulesStore, analyticsStore *AnalyticsStore, classifier *RuleBasedClassifier) *RulesService {
+func NewRulesService(rulesStore *RulesStore, analyticsStore *AnalyticsStore, classifier *classifier.RuleBasedClassifier) *RulesService {
 	return &RulesService{
 		rulesStore:     rulesStore,
 		analyticsStore: analyticsStore,
@@ -178,7 +179,7 @@ func (rs *RulesService) allRuleSpecs() []RuleSpec {
 	all = append(all, rs.rulesStore.All()...)
 
 	// Seed rules as specs.
-	for _, r := range SeedRules() {
+	for _, r := range classifier.SeedRules() {
 		all = append(all, ruleToSpec(r))
 	}
 
@@ -197,7 +198,7 @@ func (rs *RulesService) rebuildClassifier() {
 	userRules := rs.rulesStore.ToRules()
 	// Keep seed rules and claude-settings rules; replace user rules.
 	existing := rs.classifier.Rules()
-	var nonUser []Rule
+	var nonUser []classifier.Rule
 	for _, r := range existing {
 		if r.Source != "user" {
 			nonUser = append(nonUser, r)
@@ -230,7 +231,7 @@ func specToProto(spec RuleSpec) *sessionv1.ApprovalRuleProto {
 	return p
 }
 
-func ruleToSpec(r Rule) RuleSpec {
+func ruleToSpec(r classifier.Rule) RuleSpec {
 	spec := RuleSpec{
 		ID:          r.ID,
 		Name:        r.Name,

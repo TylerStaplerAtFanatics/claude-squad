@@ -32,7 +32,6 @@ type StatusPattern struct {
 	Pattern     string `yaml:"pattern"`
 	Description string `yaml:"description"`
 	Priority    int    `yaml:"priority"` // Higher priority patterns checked first
-	compiled    *regexp.Regexp
 }
 
 // StatusPatterns contains all patterns for status detection.
@@ -363,19 +362,45 @@ func getDefaultPatterns() StatusPatterns {
 				Description: "Claude Code command prompt",
 				Priority:    1,
 			},
+			// Gemini CLI status indicators
+			{
+				Name:        "gemini_ready",
+				Pattern:     `(?:◇|✓).*(?:Ready|ready)`,
+				Description: "Gemini CLI ready status (◇ Ready)",
+				Priority:    5,
+			},
 		},
 		Processing: []StatusPattern{
 			{
-				Name:        "thinking",
-				Pattern:     `(?i)(thinking|processing|analyzing|working)`,
+				Name: "thinking",
+				// Match "Thinking/Processing/etc." as standalone action indicators.
+				// Require the keyword at or near the start of a line to avoid matching
+				// mid-sentence prose like "I was thinking about it".
+				Pattern:     `(?im)^\s*\W{0,3}\s*(thinking|processing|analyzing|working)\b`,
 				Description: "Claude is processing a command",
 				Priority:    10,
 			},
 			{
-				Name:        "tool_use",
-				Pattern:     `(?i)(reading|writing|editing|executing|running)`,
+				Name: "tool_use",
+				// Require tool action keywords at the start of a line (or after
+				// whitespace/indicator) followed by a path-like target, to avoid
+				// matching prose like "currently running in".
+				Pattern:     `(?im)^\s*(Reading|Writing|Editing|Executing|Running)\s+[./\w]`,
 				Description: "Claude is using tools",
 				Priority:    9,
+			},
+			{
+				Name:        "opencode_arrow_action",
+				Pattern:     `→\s*(Read|Write|Edit|Create|Delete)\b`,
+				Description: "OpenCode tool action arrow (→ Read, → Write, etc.)",
+				Priority:    10,
+			},
+			// Gemini CLI working status
+			{
+				Name:        "gemini_working",
+				Pattern:     `(?:✦|⏲).*(?:Working|working)`,
+				Description: "Gemini CLI working status (✦ Working)",
+				Priority:    11,
 			},
 		},
 		NeedsApproval: []StatusPattern{
@@ -402,6 +427,18 @@ func getDefaultPatterns() StatusPatterns {
 				Pattern:     `(?i)Yes, allow once`,
 				Description: "Gemini permission prompt",
 				Priority:    17,
+			},
+			{
+				Name:        "gemini_allow_execution",
+				Pattern:     `(?i)Allow execution of:`,
+				Description: "Gemini tool execution permission prompt",
+				Priority:    19,
+			},
+			{
+				Name:        "opencode_permission",
+				Pattern:     `\[\s*Allow\s*\([aA]\)\s*\]`,
+				Description: "OpenCode permission prompt with [ Allow (a) ] buttons",
+				Priority:    18,
 			},
 		},
 		Error: []StatusPattern{
@@ -452,12 +489,24 @@ func getDefaultPatterns() StatusPatterns {
 				Description: "Vim in NORMAL mode",
 				Priority:    13,
 			},
+			{
+				Name:        "bracket_insert_mode",
+				Pattern:     `\[INSERT\]`,
+				Description: "Gemini/editor in INSERT mode (bracket format)",
+				Priority:    15,
+			},
+			{
+				Name:        "claude_shortcuts_prompt",
+				Pattern:     `\?\s+for shortcuts`,
+				Description: "Claude Code idle prompt showing ? for shortcuts",
+				Priority:    15,
+			},
 		},
 		Active: []StatusPattern{
 			{
 				Name:        "esc_to_interrupt",
-				Pattern:     `esc to interrupt`,
-				Description: "Active operation that can be interrupted",
+				Pattern:     `esc\s+(to\s+)?(interrupt|cancel)`,
+				Description: "Active operation that can be interrupted or cancelled",
 				Priority:    25,
 			},
 			{
@@ -533,11 +582,28 @@ func getDefaultPatterns() StatusPatterns {
 			// This is much more reliable than trying to match generic question text.
 			{
 				Name: "numbered_option_selector",
-				// Matches Claude Code's numbered selection format with arrow selector
-				// Example: " ❯ 1. Yes" or "   2. No"
-				Pattern:     `[❯>]\s*\d+\.\s+\w`,
+				// Matches Claude/Gemini numbered selection format with arrow/bullet selector.
+				// Uses ❯ and ● (not >) to avoid false positives on markdown blockquotes
+				// like "> 1. Clone the repository".
+				Pattern:     `[❯●]\s*\d+\.\s+\w`,
 				Description: "Selection prompt with numbered options",
 				Priority:    16,
+			},
+			{
+				Name: "opencode_bar_prefixed_options",
+				// Matches OpenCode's ┃-prefixed numbered options in the footer area.
+				// Example: "┃  4. Icons:" or "┃ 1. Option A"
+				Pattern:     `┃\s*\d+\.\s+\w`,
+				Description: "OpenCode bar-prefixed numbered option selector",
+				Priority:    17,
+			},
+			{
+				Name: "opencode_permission_buttons",
+				// Matches OpenCode's permission dialog buttons.
+				// Example: "Allow once   Allow always   Reject"
+				Pattern:     `(?i)Allow\s+once.*Allow\s+always|Allow\s+always.*Allow\s+once`,
+				Description: "OpenCode permission dialog buttons",
+				Priority:    18,
 			},
 		},
 	}
@@ -619,6 +685,12 @@ func (sd *StatusDetector) GetPatternNames(status DetectedStatus) []string {
 // DetectFromString is a convenience method that accepts a string instead of []byte.
 func (sd *StatusDetector) DetectFromString(output string) DetectedStatus {
 	return sd.Detect([]byte(output))
+}
+
+// DetectForProgram detects the status for a specific program name.
+// Currently delegates to Detect; reserved for future per-program pattern sets.
+func (sd *StatusDetector) DetectForProgram(output []byte, program string) DetectedStatus {
+	return sd.Detect(output)
 }
 
 // DetectFromLines analyzes multiple lines of output and returns the most relevant status.

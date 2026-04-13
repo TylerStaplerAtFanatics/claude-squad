@@ -300,10 +300,8 @@ func (g *GitClient) DescribeWIP(message string) error {
 
 // AbandonChanges discards all uncommitted changes
 func (g *GitClient) AbandonChanges() error {
-	// Reset staged changes
-	if _, err := g.run("reset", "HEAD"); err != nil {
-		// Ignore errors - might be on initial commit
-	}
+	// Reset staged changes - ignore errors as it might be an initial commit with no HEAD
+	_, _ = g.run("reset", "HEAD")
 
 	// Discard working tree changes
 	if _, err := g.run("checkout", "."); err != nil {

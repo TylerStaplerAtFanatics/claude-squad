@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	cmdbridge "github.com/tstapler/stapler-squad/cmd"
+	"github.com/tstapler/stapler-squad/cmd/commands"
 	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/daemon"
 	"github.com/tstapler/stapler-squad/executor"
@@ -30,7 +31,7 @@ import (
 )
 
 var (
-	version            = "dev"
+	version            = "1.1.2"
 	daemonFlag         bool
 	testModeFlag       bool
 	testDirFlag        string
@@ -633,6 +634,7 @@ func init() {
 	rootCmd.AddCommand(testPtyCmd)
 	rootCmd.AddCommand(listSessionsCmd)
 	rootCmd.AddCommand(printQRCodesCmd)
+	rootCmd.AddCommand(commands.GetSessionCmd)
 }
 
 // resolveLANHostnames returns a list of domain names suitable for use as a WebAuthn rpID
@@ -759,11 +761,10 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 
 	remoteAddr := fmt.Sprintf("0.0.0.0:%d", remotePort)
 
-	// Build SAN list for the TLS cert — hostnames only.
-	// IPs are intentionally excluded: WebAuthn rpID must be a hostname, so
-	// including the LAN IP in the SANs would cause the CA to regenerate on
-	// every DHCP lease change, invalidating previously installed CA certs.
-	sans := []string{"localhost"}
+	// Build SAN list for the TLS cert (include localhost, IP, and all hostnames).
+	// WebAuthn rpID must be a hostname, so including the LAN IP in the SANs
+	// is fine for HTTPS but rpID itself must be a hostname for most browsers.
+	sans := []string{"localhost", "127.0.0.1", lanIPStr}
 	sans = append(sans, hostnames...)
 
 	tlsPaths, err := server.EnsureTLSCerts(sans)
@@ -776,6 +777,8 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 		return fmt.Errorf("load TLS config: %w", err)
 	}
 
+	// Determine rpID: config/flag override > first detected hostname > detected LAN IP.
+	// WebAuthn spec requires a domain name; IP addresses are not accepted by browsers.
 	rpID := cfg.PasskeyRPID
 	if rpID == "" {
 		if len(hostnames) > 0 {

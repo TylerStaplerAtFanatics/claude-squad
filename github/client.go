@@ -525,16 +525,16 @@ func GetRemoteURL(repoPath string) (string, error) {
 func GeneratePRPrompt(pr *PRInfo, includeDescription bool) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("Working on PR #%d: %s\n", pr.Number, pr.Title))
-	sb.WriteString(fmt.Sprintf("Branch: %s → %s\n", pr.HeadRef, pr.BaseRef))
-	sb.WriteString(fmt.Sprintf("Author: %s | State: %s\n", pr.Author, pr.State))
+	fmt.Fprintf(&sb, "Working on PR #%d: %s\n", pr.Number, pr.Title)
+	fmt.Fprintf(&sb, "Branch: %s → %s\n", pr.HeadRef, pr.BaseRef)
+	fmt.Fprintf(&sb, "Author: %s | State: %s\n", pr.Author, pr.State)
 
 	if pr.ChangedFiles > 0 {
-		sb.WriteString(fmt.Sprintf("Changes: +%d/-%d across %d files\n", pr.Additions, pr.Deletions, pr.ChangedFiles))
+		fmt.Fprintf(&sb, "Changes: +%d/-%d across %d files\n", pr.Additions, pr.Deletions, pr.ChangedFiles)
 	}
 
 	if len(pr.Labels) > 0 {
-		sb.WriteString(fmt.Sprintf("Labels: %s\n", strings.Join(pr.Labels, ", ")))
+		fmt.Fprintf(&sb, "Labels: %s\n", strings.Join(pr.Labels, ", "))
 	}
 
 	if includeDescription && pr.Body != "" {

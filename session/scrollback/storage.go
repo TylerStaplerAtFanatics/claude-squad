@@ -40,7 +40,6 @@ type FileScrollbackStorage struct {
 	basePath         string
 	compressionType  string // "none", "zstd", or "gzip"
 	compressionLevel int    // Compression level
-	fileMutex        sync.Mutex
 	fileLocks        map[string]*sync.Mutex
 	locksGuard       sync.Mutex
 	zstdEncoder      *zstd.Encoder // Reusable zstd encoder
@@ -213,7 +212,9 @@ func (s *FileScrollbackStorage) Read(sessionID string, fromSeq uint64, limit int
 		defer gzipReader.Close()
 		reader = gzipReader
 	case "zstd":
-		s.zstdDecoder.Reset(file)
+		if err := s.zstdDecoder.Reset(file); err != nil {
+			return nil, fmt.Errorf("failed to reset zstd decoder: %w", err)
+		}
 		reader = s.zstdDecoder
 	}
 
@@ -330,7 +331,9 @@ func (s *FileScrollbackStorage) Truncate(sessionID string, keepBytes int64) erro
 		defer gzipReader.Close()
 		reader = gzipReader
 	case "zstd":
-		s.zstdDecoder.Reset(file)
+		if err := s.zstdDecoder.Reset(file); err != nil {
+			return fmt.Errorf("failed to reset zstd decoder: %w", err)
+		}
 		reader = s.zstdDecoder
 	}
 

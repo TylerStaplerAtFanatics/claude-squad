@@ -73,7 +73,7 @@ func TestApprovalDetector_RemovePattern(t *testing.T) {
 		Pattern: `test`,
 	}
 
-	detector.AddPattern(pattern)
+	_ = detector.AddPattern(pattern)
 
 	if !detector.RemovePattern("test_remove") {
 		t.Error("RemovePattern() should return true for existing pattern")
@@ -266,7 +266,7 @@ func TestApprovalDetector_GetRequestByID(t *testing.T) {
 	found := detector.GetRequestByID(id)
 
 	if found == nil {
-		t.Error("GetRequestByID() returned nil for existing ID")
+		t.Fatal("GetRequestByID() returned nil for existing ID")
 	}
 
 	if found.ID != id {
@@ -405,12 +405,12 @@ func TestApprovalDetector_GetStatistics(t *testing.T) {
 	// Create some detections
 	requests := detector.Detect(`Execute command: "test1"`)
 	if len(requests) > 0 {
-		detector.UpdateRequestStatus(requests[0].ID, ApprovalApproved, nil)
+		_ = detector.UpdateRequestStatus(requests[0].ID, ApprovalApproved, nil)
 	}
 
 	requests = detector.Detect(`Write file to /path`)
 	if len(requests) > 0 {
-		detector.UpdateRequestStatus(requests[0].ID, ApprovalRejected, nil)
+		_ = detector.UpdateRequestStatus(requests[0].ID, ApprovalRejected, nil)
 	}
 
 	detector.Detect(`Do you want to proceed?`)
@@ -566,6 +566,6 @@ func Benchmark_ApprovalDetector_AddPattern(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		detector.AddPattern(pattern)
+		_ = detector.AddPattern(pattern)
 	}
 }

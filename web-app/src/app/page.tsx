@@ -256,6 +256,29 @@ function HomeContent() {
     await deleteSession(sessionId);
   };
 
+  // Handle new workspace on same project - open wizard with path/program/category pre-filled but fresh title
+  const handleNewWorkspaceSession = (sessionId: string) => {
+    openedViaQueryParam.current = false;
+    getSession(sessionId).then((session) => {
+      if (session) {
+        setWizardInitialData({
+          path: session.path,
+          workingDir: session.workingDir || "",
+          program: session.program || "claude",
+          category: session.category || "",
+          title: "",
+          branch: "",
+          prompt: "",
+          autoYes: false,
+          useTitleAsBranch: true,
+        });
+      }
+      setShowWizard(true);
+    }).catch(() => {
+      setShowWizard(true);
+    });
+  };
+
   // Handle session duplication - open wizard modal with session data
   const handleDuplicateSession = (sessionId: string) => {
     openedViaQueryParam.current = false;
@@ -408,6 +431,7 @@ function HomeContent() {
             onResumeSession={handleResumeRequest}
             onDirectResumeSession={handleDirectResume}
             onDuplicateSession={handleDuplicateSession}
+            onNewWorkspaceSession={handleNewWorkspaceSession}
             onRenameSession={renameSession}
             onRestartSession={restartSession}
             onUpdateTags={handleUpdateTags}

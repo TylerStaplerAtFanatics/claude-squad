@@ -4,12 +4,12 @@ package ent
 
 import (
 	"context"
-	"github.com/tstapler/stapler-squad/session/ent/diffstats"
-	"github.com/tstapler/stapler-squad/session/ent/predicate"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/tstapler/stapler-squad/session/ent/diffstats"
+	"github.com/tstapler/stapler-squad/session/ent/predicate"
 )
 
 // DiffStatsDelete is the builder for deleting a DiffStats entity.

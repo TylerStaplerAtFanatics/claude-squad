@@ -22,21 +22,6 @@ type CommandExecutor interface {
 	LookPath(file string) (string, error)
 }
 
-// realCommandExecutor implements CommandExecutor using actual system commands
-type realCommandExecutor struct{}
-
-func (r *realCommandExecutor) Command(name string, args ...string) *exec.Cmd {
-	return exec.Command(name, args...)
-}
-
-func (r *realCommandExecutor) Output(cmd *exec.Cmd) ([]byte, error) {
-	return cmd.Output()
-}
-
-func (r *realCommandExecutor) LookPath(file string) (string, error) {
-	return exec.LookPath(file)
-}
-
 // timeoutCommandExecutor wraps command execution with timeout protection
 // This prevents commands from hanging indefinitely, which is critical for
 // preventing hangs on external commands like 'which claude'
@@ -87,9 +72,9 @@ const (
 
 // isTestMode detects if the application is running in test/benchmark mode
 func isTestMode() bool {
+
 	// Check command line arguments for test/benchmark indicators
 	for _, arg := range os.Args {
-		// Match test binary names and flags
 		if strings.Contains(arg, ".test") ||
 			strings.Contains(arg, "-test.") ||
 			strings.HasSuffix(arg, ".test.exe") ||
@@ -131,7 +116,7 @@ func GetConfigDir() (string, error) {
 		legacyDir := filepath.Join(homeDir, ".claude-squad")
 		if _, legacyErr := os.Stat(legacyDir); legacyErr == nil {
 			if migrateErr := os.Rename(legacyDir, baseDir); migrateErr == nil {
-				fmt.Printf("Migrated data directory: %s → %s\n", legacyDir, baseDir)
+				log.InfoLog.Printf("Migrated data directory: %s → %s\n", legacyDir, baseDir)
 			}
 		}
 	}

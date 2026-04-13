@@ -196,7 +196,9 @@ func (s *State) loadFromDisk() error {
 	if !locked {
 		return fmt.Errorf("could not acquire read lock within timeout")
 	}
-	defer s.lockFile.Unlock()
+	defer func() {
+		_ = s.lockFile.Unlock()
+	}()
 
 	// Now that we have a lock, load the state
 	return s.loadFromDiskWithoutLocking()
@@ -262,7 +264,9 @@ func (s *State) saveToDisk() error {
 	if !locked {
 		return fmt.Errorf("could not acquire write lock within timeout")
 	}
-	defer s.lockFile.Unlock()
+	defer func() {
+		_ = s.lockFile.Unlock()
+	}()
 
 	// Now that we have a lock, save the state
 	return s.saveToDiskWithoutLocking()

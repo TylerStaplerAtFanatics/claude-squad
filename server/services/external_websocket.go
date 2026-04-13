@@ -79,7 +79,7 @@ func (h *ExternalWebSocketHandler) HandleApprovals(w http.ResponseWriter, r *htt
 	}
 	response += "}"
 
-	w.Write([]byte(response))
+	_, _ = w.Write([]byte(response))
 }
 
 // HandleApprovalResponse handles user response to an approval request

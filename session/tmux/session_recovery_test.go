@@ -76,7 +76,7 @@ func testKilledSessionRestoresInCorrectWorktree(t *testing.T) {
 	// Restore after session was killed - this is where the bug would occur
 	// OLD behavior: would use os.Getwd()
 	// NEW behavior: should use the provided worktreeDir
-	err = session.RestoreWithWorkDir(worktreeDir)
+	_ = session.RestoreWithWorkDir(worktreeDir)
 
 	// The restore will timeout with our mock, but that's expected
 	// The important thing is that it attempts to create a new session
@@ -105,6 +105,10 @@ func testKilledSessionRestoresInCorrectWorktree(t *testing.T) {
 // testCompareOldVsNewRestoreBehavior demonstrates the difference between
 // the old buggy behavior and the new fixed behavior
 func testCompareOldVsNewRestoreBehavior(t *testing.T) {
+	// Create test directories - use sibling dirs so worktreeDir is NOT a subdirectory
+	// of currentDirBase. Using filepath.Join(tempDir, "sub") would make tempDir a
+	// substring of worktreeDir, causing the NotContains assertion below to spuriously
+	// fail on Linux CI.
 	worktreeBase := t.TempDir()
 	worktreeDir := filepath.Join(worktreeBase, "session-worktree")
 	err := os.MkdirAll(worktreeDir, 0755)
@@ -118,6 +122,7 @@ func testCompareOldVsNewRestoreBehavior(t *testing.T) {
 	require.NoError(t, err)
 
 	currentDir, _ := os.Getwd()
+
 	// Resolve paths to handle /var vs /private/var on macOS
 	resolvedCurrentDir, _ := filepath.EvalSymlinks(currentDir)
 	resolvedDifferentDir, _ := filepath.EvalSymlinks(differentDir)

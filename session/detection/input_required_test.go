@@ -21,10 +21,6 @@ func TestStatusDetector_DetectInputRequired(t *testing.T) {
 			output: " ❯ 1. Type here to tell Claude what to do differently",
 		},
 		{
-			name:   "ascii_arrow_selector",
-			output: " > 1. Yes",
-		},
-		{
 			name:   "three_options_with_selector",
 			output: " ❯ 1. Option A\n   2. Option B\n   3. Option C",
 		},
@@ -85,8 +81,6 @@ func TestStatusDetector_InputRequired_CaseInsensitive(t *testing.T) {
 		" ❯ 1. YES",
 		" ❯ 1. yes",
 		" ❯ 1. Yes",
-		" > 1. YES",
-		" > 1. yes",
 	}
 
 	for _, output := range tests {
@@ -218,6 +212,21 @@ func TestStatusDetector_InputRequired_NoFalsePositives(t *testing.T) {
 		{
 			name:   "numbered_list_with_period",
 			output: "Here are the steps:\n1. Do this\n2. Do that",
+		},
+		// ASCII > is NOT a selection prompt indicator — it appears in Gradle output,
+		// markdown blockquotes, shell redirects, and many other non-selection contexts.
+		// Using > caused false positives for Gemini, OpenCode, and other programs.
+		{
+			name:   "ascii_greater_than_numbered_list",
+			output: "> 1. Run gradlew tasks to get a list of available tasks.",
+		},
+		{
+			name:   "ascii_greater_than_yes",
+			output: " > 1. Yes",
+		},
+		{
+			name:   "gradle_output_with_numbered_steps",
+			output: "* Try:\n> Run gradlew tasks to get a list of available tasks.\n> Run gradlew projects for a list of available project names.",
 		},
 		// Enter/type prompts without numbered options
 		{

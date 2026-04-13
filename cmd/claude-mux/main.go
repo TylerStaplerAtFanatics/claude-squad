@@ -146,13 +146,13 @@ func main() {
 			fmt.Fprintf(os.Stderr, "claude-mux: failed to set raw mode: %v\n", err)
 			os.Exit(1)
 		}
-		defer term.Restore(int(os.Stdin.Fd()), oldState)
+		defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
 
 		// Run the attach
 		exitCode, err := mux.RunAttach(attachSession)
 		if err != nil {
 			// Restore terminal before printing error
-			term.Restore(int(os.Stdin.Fd()), oldState)
+			_ = term.Restore(int(os.Stdin.Fd()), oldState)
 			fmt.Fprintf(os.Stderr, "claude-mux: %v\n", err)
 			os.Exit(1)
 		}
@@ -178,13 +178,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "claude-mux: failed to set raw mode: %v\n", err)
 		os.Exit(1)
 	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
+	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
 
 	// Run the multiplexer with optional custom session name
 	exitCode, err := mux.RunWithName(command, args, sessionName)
 	if err != nil {
 		// Restore terminal before printing error
-		term.Restore(int(os.Stdin.Fd()), oldState)
+		_ = term.Restore(int(os.Stdin.Fd()), oldState)
 		fmt.Fprintf(os.Stderr, "claude-mux: %v\n", err)
 		os.Exit(1)
 	}

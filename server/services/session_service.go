@@ -12,6 +12,7 @@ import (
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/pkg/classifier"
 	"github.com/tstapler/stapler-squad/server/adapters"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/server/notifications"
@@ -123,25 +124,19 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 	utilitySvc := NewUtilityService(approvalStore)
 
 	// Build rules store, analytics store, and classifier for approval rules service.
-	rulesFilePath := ""
-	analyticsFilePath := ""
-	if configErr == nil {
-		rulesFilePath = configDir + "/auto_approve_rules.json"
-		analyticsFilePath = configDir + "/approval_analytics.jsonl"
-	}
-	rulesStore, rulesErr := NewRulesStore(rulesFilePath)
+	rulesStore, rulesErr := NewRulesStore(concStorage)
 	if rulesErr != nil {
 		log.WarningLog.Printf("Failed to load rules store, using empty store: %v", rulesErr)
-		rulesStore = &RulesStore{}
+		rulesStore = &RulesStore{storage: concStorage}
 	}
-	analyticsStore := NewAnalyticsStore(analyticsFilePath)
+	analyticsStore := NewAnalyticsStore(concStorage)
 	analyticsStore.Start(context.Background())
-	classifier := NewRuleBasedClassifier()
+	classifierObj := classifier.NewRuleBasedClassifier()
 	// Merge user rules into the classifier.
 	if userRules := rulesStore.ToRules(); len(userRules) > 0 {
-		classifier.AddRules(userRules)
+		classifierObj.AddRules(userRules)
 	}
-	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifier)
+	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifierObj)
 
 	workspaceSvc := NewWorkspaceService(concStorage, eventBus)
 
@@ -236,7 +231,7 @@ func (s *SessionService) GetApprovalStore() *ApprovalStore {
 }
 
 // GetClassifier returns the rule-based classifier for wiring up the ApprovalHandler.
-func (s *SessionService) GetClassifier() *RuleBasedClassifier {
+func (s *SessionService) GetClassifier() *classifier.RuleBasedClassifier {
 	if s.rulesSvc == nil {
 		return nil
 	}
@@ -524,13 +519,28 @@ func (s *SessionService) CreateSession(
 		program = cfg.DefaultProgram
 	}
 
-	// Determine session type based on ExistingWorktree field
-	sessionType := session.SessionTypeDirectory
-	if req.Msg.ExistingWorktree != "" {
-		sessionType = session.SessionTypeExistingWorktree
-	} else if branch != "" {
-		// If branch is specified, create a new worktree
-		sessionType = session.SessionTypeNewWorktree
+	// Determine session type - use explicit session_type if provided, otherwise infer from fields
+	var sessionType session.SessionType
+	if req.Msg.SessionType != sessionv1.SessionType_SESSION_TYPE_UNSPECIFIED {
+		// Use explicit session_type from request
+		switch req.Msg.SessionType {
+		case sessionv1.SessionType_SESSION_TYPE_DIRECTORY:
+			sessionType = session.SessionTypeDirectory
+		case sessionv1.SessionType_SESSION_TYPE_NEW_WORKTREE:
+			sessionType = session.SessionTypeNewWorktree
+		case sessionv1.SessionType_SESSION_TYPE_EXISTING_WORKTREE:
+			sessionType = session.SessionTypeExistingWorktree
+		default:
+			sessionType = session.SessionTypeDirectory
+		}
+	} else {
+		// Fall back to inference logic for backward compatibility
+		sessionType = session.SessionTypeDirectory
+		if req.Msg.ExistingWorktree != "" {
+			sessionType = session.SessionTypeExistingWorktree
+		} else if branch != "" {
+			sessionType = session.SessionTypeNewWorktree
+		}
 	}
 
 	// Build instance options
@@ -656,18 +666,31 @@ func (s *SessionService) UpdateSession(
 		updatedFields = append(updatedFields, "category")
 	}
 
-	// Handle tags update
+	// Handle tags update.
+	// In proto3, an empty repeated field is indistinguishable from "not provided",
+	// so clients send tags=[""] to clear all tags.
 	if len(req.Msg.Tags) > 0 {
-		if err := instance.SetTags(req.Msg.Tags); err != nil {
+		tags := req.Msg.Tags
+		if len(tags) == 1 && tags[0] == "" {
+			tags = nil // Clear all tags
+		}
+		if err := instance.SetTags(tags); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update tags: %w", err))
 		}
 		updatedFields = append(updatedFields, "tags")
 	}
 
 	// Handle program update
-	if req.Msg.Program != nil && *req.Msg.Program != "" {
+	if req.Msg.Program != nil && *req.Msg.Program != "" && instance.Program != *req.Msg.Program {
 		instance.Program = *req.Msg.Program
 		updatedFields = append(updatedFields, "program")
+
+		// If the session is running, restart it with the new program
+		if instance.Status == session.Running {
+			if err := instance.Restart(true); err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart session after program change: %w", err))
+			}
+		}
 	}
 
 	// Handle status change (pause/resume) LAST - after all metadata updates.
@@ -754,6 +777,12 @@ func (s *SessionService) DeleteSession(
 	// Delete from storage
 	if err := s.storage.DeleteInstance(req.Msg.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete instance from storage: %w", err))
+	}
+
+	// Remove from review queue immediately
+	if s.reviewQueueSvc != nil {
+		s.reviewQueueSvc.GetQueue().Remove(req.Msg.Id)
+		log.InfoLog.Printf("[ReviewQueue] Removed deleted session '%s' from review queue", req.Msg.Id)
 	}
 
 	// CRITICAL: Update the ReviewQueuePoller's instance references after deletion

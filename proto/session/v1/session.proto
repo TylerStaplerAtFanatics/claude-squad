@@ -79,19 +79,11 @@ service SessionService {
   // Returns ranked results with contextual snippets showing where query terms appear.
   rpc SearchClaudeHistory(SearchClaudeHistoryRequest) returns (SearchClaudeHistoryResponse) {}
 
-  // GetPRInfo retrieves the latest PR information for a session.
+  // PR Info and management RPCs
   rpc GetPRInfo(GetPRInfoRequest) returns (GetPRInfoResponse) {}
-
-  // GetPRComments retrieves all comments on the PR for a session.
   rpc GetPRComments(GetPRCommentsRequest) returns (GetPRCommentsResponse) {}
-
-  // PostPRComment posts a new comment to the PR for a session.
   rpc PostPRComment(PostPRCommentRequest) returns (PostPRCommentResponse) {}
-
-  // MergePR merges the PR for a session using the specified merge method.
   rpc MergePR(MergePRRequest) returns (MergePRResponse) {}
-
-  // ClosePR closes the PR without merging for a session.
   rpc ClosePR(ClosePRRequest) returns (ClosePRResponse) {}
 
   // SendNotification allows tmux sessions to send notifications to the server.
@@ -280,6 +272,10 @@ message CreateSessionRequest {
   // Optional: Resume an existing Claude conversation by ID.
   // This ID comes from ClaudeHistoryEntry.id and will use Claude's --resume flag.
   string resume_id = 10;
+
+  // Optional: Session type (directory, new_worktree, existing_worktree).
+  // If not specified, backend will infer from other fields (branch, existing_worktree).
+  SessionType session_type = 11;
 }
 
 message CreateSessionResponse {
@@ -303,6 +299,7 @@ message UpdateSessionRequest {
   optional string program = 5;
 
   // Update session tags. If non-empty, replaces all existing tags.
+  // To clear all tags, send tags=[""] (single empty string).
   repeated string tags = 6;
 }
 
@@ -528,15 +525,25 @@ message ListClaudeHistoryRequest {
   optional string project = 1;
   // Optional search query (searches name and project)
   optional string search_query = 2;
-  // Maximum number of results to return (0 = all)
+  // Legacy limit field; prefer page_size for new callers.
   int32 limit = 3;
+  // Maximum number of results per page (default 100, max 500).
+  // When combined with page_token this enables cursor-based pagination.
+  int32 page_size = 4;
+  // Opaque pagination token returned by a previous ListClaudeHistory call.
+  // When set, returns the page of results after the cursor position.
+  // Leave empty to start from the beginning.
+  string page_token = 5;
 }
 
 message ListClaudeHistoryResponse {
-  // List of history entries
+  // List of history entries for this page
   repeated ClaudeHistoryEntry entries = 1;
-  // Total count of entries (before limit applied)
+  // Total count of matching entries across all pages
   int32 total_count = 2;
+  // Opaque token to pass as page_token in the next request.
+  // Empty string indicates this is the last page.
+  string next_page_token = 3;
 }
 
 message GetClaudeHistoryDetailRequest {
@@ -571,8 +578,13 @@ message GetClaudeHistoryMessagesRequest {
   string id = 1;
   // Optional limit on number of messages to return
   int32 limit = 2;
-  // Optional offset for pagination
+  // Optional offset for pagination (reads from the start of the conversation)
   int32 offset = 3;
+  // When true and limit > 0, return the last `limit` messages instead of the
+  // first `limit` messages.  Used by the preview panel to efficiently read
+  // the tail of a large conversation file without loading the whole file.
+  // Mutually exclusive with offset.
+  bool tail = 4;
 }
 
 message GetClaudeHistoryMessagesResponse {

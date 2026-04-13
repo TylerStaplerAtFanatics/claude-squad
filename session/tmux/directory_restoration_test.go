@@ -175,7 +175,7 @@ func testRestoreWithWorkDirFallback(t *testing.T) {
 	// Create test directory and change to it
 	testDir := t.TempDir()
 	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	err := os.Chdir(testDir)
 	require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestOldVsNewBehaviorComparison(t *testing.T) {
 	require.NoError(t, err)
 
 	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 	err = os.Chdir(wrongDir)
 	require.NoError(t, err)
 

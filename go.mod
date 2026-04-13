@@ -7,6 +7,7 @@ require (
 	connectrpc.com/otelconnect v0.8.0
 	entgo.io/ent v0.14.5
 	github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2
+	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/bufbuild/buf v1.57.2
 	github.com/bufbuild/connect-go v1.10.0
@@ -21,7 +22,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/klauspost/compress v1.18.0
 	github.com/mattn/go-runewidth v0.0.16
-	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/mattn/go-sqlite3 v1.14.40
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spaolacci/murmur3 v1.1.0
@@ -176,7 +177,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/crypto v0.49.0 // indirect
-	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b // indirect
+	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/text v0.35.0 // indirect

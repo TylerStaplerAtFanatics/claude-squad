@@ -237,9 +237,7 @@ func (i *Instance) ToInstanceData() InstanceData {
 		GitHubRepo:      i.GitHubRepo,
 		GitHubSourceRef: i.GitHubSourceRef,
 		ClonedRepoPath:  i.ClonedRepoPath,
-		// Worktree detection fields
-		MainRepoPath: i.MainRepoPath,
-		IsWorktree:   i.IsWorktree,
+		// GitHub integration fields
 		GitHubIsFork: i.GitHubIsFork,
 		// PR status fields (populated by PRStatusPoller)
 		GitHubPRState:          i.GitHubPRState,
@@ -252,6 +250,12 @@ func (i *Instance) ToInstanceData() InstanceData {
 		LastPRStatusCheck:      i.LastPRStatusCheck,
 		// Crew autonomy mode
 		AutonomousMode: i.AutonomousMode,
+		// Checkpoint metadata
+		Checkpoints:      i.Checkpoints,
+		ActiveCheckpoint: i.ActiveCheckpoint,
+		ForkedFromID:     i.ForkedFromID,
+		// History file linkage
+		HistoryFilePath: i.HistoryFilePath,
 	}
 
 	// Only include worktree data if gitWorktree is initialized
@@ -361,10 +365,7 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		GitHubRepo:      data.GitHubRepo,
 		GitHubSourceRef: data.GitHubSourceRef,
 		ClonedRepoPath:  data.ClonedRepoPath,
-		// Worktree detection fields
-		MainRepoPath: data.MainRepoPath,
-		IsWorktree:   data.IsWorktree,
-		GitHubIsFork: data.GitHubIsFork,
+		GitHubIsFork:    data.GitHubIsFork,
 		// PR status fields (populated by PRStatusPoller)
 		GitHubPRState:          data.GitHubPRState,
 		GitHubPRIsDraft:        data.GitHubPRIsDraft,
@@ -374,8 +375,17 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		GitHubCheckConclusion:  data.GitHubCheckConclusion,
 		GitHubPRStatusTerminal: data.GitHubPRStatusTerminal,
 		LastPRStatusCheck:      data.LastPRStatusCheck,
+		// Worktree detection fields
+		MainRepoPath: data.MainRepoPath,
+		IsWorktree:   data.IsWorktree,
 		// Crew autonomy mode
 		AutonomousMode: data.AutonomousMode,
+		// Checkpoint metadata
+		Checkpoints:      data.Checkpoints,
+		ActiveCheckpoint: data.ActiveCheckpoint,
+		ForkedFromID:     data.ForkedFromID,
+		// History file linkage
+		HistoryFilePath: data.HistoryFilePath,
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice
@@ -2202,6 +2212,12 @@ func (i *Instance) GetEffectiveStatus() Status {
 	return StatusFromDetected(statusInfo.ClaudeStatus)
 }
 
+// GetStatus returns the current lifecycle status of this instance as an int.
+// This is intentionally returns int to implement the SessionAccessor interface.
+func (i *Instance) GetStatus() int {
+	return int(i.Status)
+}
+
 // StartController creates and starts a ClaudeController for this instance.
 // The controller enables automated idle detection and queue management.
 func (i *Instance) StartController() error {
@@ -2283,6 +2299,32 @@ func (i *Instance) GetController() *ClaudeController {
 	return i.controllerManager.GetController()
 }
 
+// GetRateLimitState returns the current rate limit detection state.
+func (i *Instance) GetRateLimitState() int {
+	ctrl := i.GetController()
+	if ctrl == nil {
+		return 0
+	}
+	return int(ctrl.GetRateLimitState())
+}
+
+// SetRateLimitEnabled enables or disables rate limit detection.
+func (i *Instance) SetRateLimitEnabled(enabled bool) {
+	ctrl := i.GetController()
+	if ctrl != nil {
+		ctrl.SetRateLimitEnabled(enabled)
+	}
+}
+
+// IsRateLimitEnabled returns whether rate limit detection is enabled.
+func (i *Instance) IsRateLimitEnabled() bool {
+	ctrl := i.GetController()
+	if ctrl == nil {
+		return true // Default to enabled
+	}
+	return ctrl.IsRateLimitEnabled()
+}
+
 // GetPermissions returns the permissions for this instance based on its type
 func (i *Instance) GetPermissions() InstancePermissions {
 	if i.IsManaged {
@@ -2350,7 +2392,7 @@ func (i *Instance) UpdateTerminalTimestamps(content string, forceUpdate bool) {
 
 	i.stateMutex.Lock()
 	defer i.stateMutex.Unlock()
-	i.ReviewState.UpdateTimestamps(content, filteredContent, shouldUpdateMeaningful, i.Title)
+	i.UpdateTimestamps(content, filteredContent, shouldUpdateMeaningful, i.Title)
 }
 
 // GetTimeSinceLastMeaningfulOutput delegates to ReviewState.TimeSinceLastMeaningfulOutput.
@@ -2358,7 +2400,7 @@ func (i *Instance) UpdateTerminalTimestamps(content string, forceUpdate bool) {
 func (i *Instance) GetTimeSinceLastMeaningfulOutput() time.Duration {
 	i.stateMutex.RLock()
 	defer i.stateMutex.RUnlock()
-	return i.ReviewState.TimeSinceLastMeaningfulOutput(i.CreatedAt)
+	return i.TimeSinceLastMeaningfulOutput(i.CreatedAt)
 }
 
 // GetTimeSinceLastTerminalUpdate delegates to ReviewState.TimeSinceLastTerminalUpdate.
@@ -2366,7 +2408,7 @@ func (i *Instance) GetTimeSinceLastMeaningfulOutput() time.Duration {
 func (i *Instance) GetTimeSinceLastTerminalUpdate() time.Duration {
 	i.stateMutex.RLock()
 	defer i.stateMutex.RUnlock()
-	return i.ReviewState.TimeSinceLastTerminalUpdate(i.CreatedAt)
+	return i.TimeSinceLastTerminalUpdate(i.CreatedAt)
 }
 
 // Approve transitions the instance from NeedsApproval to Running.
@@ -2561,5 +2603,5 @@ func (i *Instance) DetectAndPopulateWorktreeInfo() error {
 // detectAndTrackPrompt detects if current state is a new prompt and tracks it.
 // Delegates to ReviewState.DetectAndTrackPrompt — caller must hold stateMutex.
 func (i *Instance) detectAndTrackPrompt(content string, statusInfo InstanceStatusInfo) bool {
-	return i.ReviewState.DetectAndTrackPrompt(content, statusInfo, i.Title)
+	return i.DetectAndTrackPrompt(content, statusInfo, i.Title)
 }

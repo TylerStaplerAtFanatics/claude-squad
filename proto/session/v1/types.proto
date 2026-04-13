@@ -128,6 +128,19 @@ message Session {
 
   // When PR status was last successfully fetched
   google.protobuf.Timestamp last_pr_status_check = 39;
+
+  // Rate limit detection state
+  // Indicates if session is experiencing rate limiting from LLM provider
+  RateLimitState rate_limit_state = 40;
+
+  // Path to the Claude Code JSONL history file for this session.
+  // Populated by HistoryLinker once the session's open files are detected.
+  // Used to pass --resume <uuid> when reattaching after server restart.
+  string history_file_path = 41;
+
+  // Claude Code conversation UUID extracted from the history file path.
+  // Matches the UUID in the JSONL filename under ~/.claude/projects/<dir>/<uuid>.jsonl.
+  string claude_conversation_uuid = 42;
 }
 
 // SessionStatus represents the current state of a session.
@@ -164,6 +177,21 @@ enum InstanceType {
   INSTANCE_TYPE_MANAGED = 1;
   // Session discovered externally (e.g., via claude-mux) with limited interaction.
   INSTANCE_TYPE_EXTERNAL = 2;
+}
+
+// RateLimitState indicates whether the session is experiencing rate limiting.
+enum RateLimitState {
+  RATE_LIMIT_STATE_UNSPECIFIED = 0;
+  // No rate limit detected
+  RATE_LIMIT_STATE_NONE = 1;
+  // Rate limit detected, waiting for reset time
+  RATE_LIMIT_STATE_WAITING = 2;
+  // Currently attempting recovery
+  RATE_LIMIT_STATE_RECOVERING = 3;
+  // Successfully recovered from rate limit
+  RATE_LIMIT_STATE_RECOVERED = 4;
+  // Recovery failed
+  RATE_LIMIT_STATE_FAILED = 5;
 }
 
 // ExternalInstanceMetadata contains metadata for externally discovered sessions.

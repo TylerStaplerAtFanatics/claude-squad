@@ -43,10 +43,11 @@ jobs:
       - name: Copy web UI to dist
         run: cp -r web-app/out server/web/dist
 
-      - name: Set up Go 1.23
-        uses: actions/setup-go@v4
+      - name: Set up Go 1.23.0
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.23.0'
+          cache: true
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6

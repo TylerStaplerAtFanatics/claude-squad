@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/tstapler/stapler-squad/session/ent"
+	"github.com/tstapler/stapler-squad/session/ent/approvalrule"
+	"github.com/tstapler/stapler-squad/session/ent/classificationanalytics"
 	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
 	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 	"github.com/tstapler/stapler-squad/session/ent/diffstats"
@@ -544,19 +546,13 @@ func (r *EntRepository) Delete(ctx context.Context, title string) error {
 	}
 
 	// Delete claude session and its metadata if exists
-	claudeSessions, err := tx.ClaudeSession.Query().Where(claudesession.HasSessionWith(session.ID(sess.ID))).All(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to query claude sessions: %w", err)
+	// Delete all claude metadata associated with claude sessions for this session
+	if _, err := tx.ClaudeMetadata.Delete().Where(claudemetadata.HasClaudeSessionWith(claudesession.HasSessionWith(session.ID(sess.ID)))).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete claude metadata: %w", err)
 	}
-	for _, cs := range claudeSessions {
-		// Delete claude metadata
-		if _, err := tx.ClaudeMetadata.Delete().Where(claudemetadata.HasClaudeSessionWith(claudesession.ID(cs.ID))).Exec(ctx); err != nil {
-			return fmt.Errorf("failed to delete claude metadata: %w", err)
-		}
-		// Delete claude session
-		if err := tx.ClaudeSession.DeleteOne(cs).Exec(ctx); err != nil {
-			return fmt.Errorf("failed to delete claude session: %w", err)
-		}
+	// Delete all claude sessions for this session
+	if _, err := tx.ClaudeSession.Delete().Where(claudesession.HasSessionWith(session.ID(sess.ID))).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete claude sessions: %w", err)
 	}
 
 	// Clear tag associations (many-to-many)
@@ -865,4 +861,128 @@ func (r *EntRepository) ListByStatusWithOptions(ctx context.Context, status Stat
 // EntRepository: Delegates to ListByTag with full loading.
 func (r *EntRepository) ListByTagWithOptions(ctx context.Context, tag string, options LoadOptions) ([]InstanceData, error) {
 	return r.ListByTag(ctx, tag)
+}
+
+// --- Permissions & Analytics --------------------------------------------------
+
+func (r *EntRepository) AllRules(ctx context.Context) ([]ApprovalRuleData, error) {
+	rules, err := r.client.ApprovalRule.Query().
+		Order(ent.Asc(approvalrule.FieldPriority)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]ApprovalRuleData, len(rules))
+	for i, rule := range rules {
+		result[i] = ApprovalRuleData{
+			ID:             rule.RuleID,
+			Name:           rule.Name,
+			ToolName:       rule.ToolName,
+			ToolPattern:    rule.ToolPattern,
+			ToolCategory:   rule.ToolCategory,
+			CommandPattern: rule.CommandPattern,
+			FilePattern:    rule.FilePattern,
+			Decision:       rule.Decision,
+			RiskLevel:      rule.RiskLevel,
+			Reason:         rule.Reason,
+			Alternative:    rule.Alternative,
+			Priority:       rule.Priority,
+			Enabled:        rule.Enabled,
+			Source:         rule.Source,
+			CreatedAt:      rule.CreatedAt,
+			UpdatedAt:      rule.UpdatedAt,
+		}
+	}
+	return result, nil
+}
+
+func (r *EntRepository) UpsertRule(ctx context.Context, data ApprovalRuleData) error {
+	return r.client.ApprovalRule.Create().
+		SetRuleID(data.ID).
+		SetName(data.Name).
+		SetToolName(data.ToolName).
+		SetToolPattern(data.ToolPattern).
+		SetToolCategory(data.ToolCategory).
+		SetCommandPattern(data.CommandPattern).
+		SetFilePattern(data.FilePattern).
+		SetDecision(data.Decision).
+		SetRiskLevel(data.RiskLevel).
+		SetReason(data.Reason).
+		SetAlternative(data.Alternative).
+		SetPriority(data.Priority).
+		SetEnabled(data.Enabled).
+		SetSource(data.Source).
+		OnConflictColumns(approvalrule.FieldRuleID).
+		UpdateNewValues().
+		Exec(ctx)
+}
+
+func (r *EntRepository) DeleteRule(ctx context.Context, id string) error {
+	_, err := r.client.ApprovalRule.Delete().
+		Where(approvalrule.RuleID(id)).
+		Exec(ctx)
+	return err
+}
+
+func (r *EntRepository) RecordAnalytics(ctx context.Context, data AnalyticsData) error {
+	return r.client.ClassificationAnalytics.Create().
+		SetAnalyticsID(data.ID).
+		SetSessionID(data.SessionID).
+		SetToolName(data.ToolName).
+		SetCommandPreview(data.CommandPreview).
+		SetCwd(data.Cwd).
+		SetDecision(data.Decision).
+		SetRiskLevel(data.RiskLevel).
+		SetRuleID(data.RuleID).
+		SetRuleName(data.RuleName).
+		SetReason(data.Reason).
+		SetAlternative(data.Alternative).
+		SetDurationMs(data.DurationMs).
+		SetApprovalID(data.ApprovalID).
+		SetCommandProgram(data.CommandProgram).
+		SetCommandCategory(data.CommandCategory).
+		SetCommandSubcategory(data.CommandSubcategory).
+		SetPythonImports(data.PythonImports).
+		SetCreatedAt(data.CreatedAt).
+		Exec(ctx)
+}
+
+func (r *EntRepository) ListAnalytics(ctx context.Context, limit int) ([]AnalyticsData, error) {
+	query := r.client.ClassificationAnalytics.Query().
+		Order(ent.Desc(classificationanalytics.FieldCreatedAt))
+
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+
+	entries, err := query.All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]AnalyticsData, len(entries))
+	for i, entry := range entries {
+		result[i] = AnalyticsData{
+			ID:                 entry.AnalyticsID,
+			SessionID:          entry.SessionID,
+			ToolName:           entry.ToolName,
+			CommandPreview:     entry.CommandPreview,
+			Cwd:                entry.Cwd,
+			Decision:           entry.Decision,
+			RiskLevel:          entry.RiskLevel,
+			RuleID:             entry.RuleID,
+			RuleName:           entry.RuleName,
+			Reason:             entry.Reason,
+			Alternative:        entry.Alternative,
+			DurationMs:         entry.DurationMs,
+			ApprovalID:         entry.ApprovalID,
+			CommandProgram:     entry.CommandProgram,
+			CommandCategory:    entry.CommandCategory,
+			CommandSubcategory: entry.CommandSubcategory,
+			PythonImports:      entry.PythonImports,
+			CreatedAt:          entry.CreatedAt,
+		}
+	}
+	return result, nil
 }

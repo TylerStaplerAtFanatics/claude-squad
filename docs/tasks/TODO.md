@@ -18,6 +18,9 @@ This file serves as a lightweight index of all feature plans in `docs/tasks/`.
 | [Frontend Quick Wins](frontend-quick-wins.md) | Draft | 5 atomic tasks | Low |
 | [Backlog Pipeline](worktrees/feat/backlog-pipeline-planning/docs/tasks/backlog-pipeline.md) | Planning - Phase 3 Complete | TBD | High |
 | [Mobile UX Improvements](mobile-ux-improvements.md) | Ready for Implementation | 3 stories, 11 tasks | Medium |
+| [AskUserQuestion Rich UI](askuserquestion-ui.md) | Draft | 3 stories | Low |
+| [History Page Revamp](history-page-revamp.md) | Ready for Implementation | 5 stories, 13 tasks | High |
+| [System Service Auto-Start](system-service-autostart.md) | Draft | 4 stories, 12 tasks | Medium |
 
 ## Completed Plans
 
