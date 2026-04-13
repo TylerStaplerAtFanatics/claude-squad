@@ -1,5 +1,6 @@
 .page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background-color: var(--background);
@@ -65,7 +66,9 @@
   width: 98vw !important;
   /* Use remaining space after header + padding (0.5rem top + 1rem bottom) */
   max-height: calc(100vh - var(--header-height) - 1.5rem) !important;
+  max-height: calc(100dvh - var(--header-height) - 1.5rem) !important;
   height: calc(100vh - var(--header-height) - 1.5rem) !important;
+  height: calc(100dvh - var(--header-height) - 1.5rem) !important;
   border-radius: 8px;
   /* Aspect ratio constraint to prevent extreme portrait orientations */
   aspect-ratio: 16/9 auto; /* Prefer landscape, but allow flexibility */
@@ -154,14 +157,14 @@
   }
 
   .modalContent {
-    max-height: calc(100vh - var(--header-height));
-    height: calc(100vh - var(--header-height));
+    max-height: calc(var(--viewport-height, 100dvh) - var(--header-height));
+    height: calc(var(--viewport-height, 100dvh) - var(--header-height));
     border-radius: 0;
   }
 
   .modalContentFullscreen {
-    max-height: calc(100vh - var(--header-height)) !important;
-    height: calc(100vh - var(--header-height)) !important;
+    max-height: calc(var(--viewport-height, 100dvh) - var(--header-height)) !important;
+    height: calc(var(--viewport-height, 100dvh) - var(--header-height)) !important;
   }
 
   .modalHeader {
