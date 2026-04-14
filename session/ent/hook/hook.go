@@ -5,8 +5,33 @@ package hook
 import (
 	"context"
 	"fmt"
+
 	"github.com/tstapler/stapler-squad/session/ent"
 )
+
+// The ApprovalRuleFunc type is an adapter to allow the use of ordinary
+// function as ApprovalRule mutator.
+type ApprovalRuleFunc func(context.Context, *ent.ApprovalRuleMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ApprovalRuleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ApprovalRuleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expected *ent.ApprovalRuleMutation", m)
+}
+
+// The ClassificationAnalyticsFunc type is an adapter to allow the use of ordinary
+// function as ClassificationAnalytics mutator.
+type ClassificationAnalyticsFunc func(context.Context, *ent.ClassificationAnalyticsMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ClassificationAnalyticsFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ClassificationAnalyticsMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expected *ent.ClassificationAnalyticsMutation", m)
+}
 
 // The ClaudeMetadataFunc type is an adapter to allow the use of ordinary
 // function as ClaudeMetadata mutator.
@@ -17,7 +42,7 @@ func (f ClaudeMetadataFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 	if mv, ok := m.(*ent.ClaudeMetadataMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ClaudeMetadataMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expected *ent.ClaudeMetadataMutation", m)
 }
 
 // The ClaudeSessionFunc type is an adapter to allow the use of ordinary
@@ -29,7 +54,7 @@ func (f ClaudeSessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	if mv, ok := m.(*ent.ClaudeSessionMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ClaudeSessionMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expected *ent.ClaudeSessionMutation", m)
 }
 
 // The DiffStatsFunc type is an adapter to allow the use of ordinary
@@ -41,7 +66,7 @@ func (f DiffStatsFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 	if mv, ok := m.(*ent.DiffStatsMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DiffStatsMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expected *ent.DiffStatsMutation", m)
 }
 
 // The SessionFunc type is an adapter to allow the use of ordinary
@@ -53,7 +78,7 @@ func (f SessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 	if mv, ok := m.(*ent.SessionMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SessionMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expected *ent.SessionMutation", m)
 }
 
 // The TagFunc type is an adapter to allow the use of ordinary
@@ -65,7 +90,7 @@ func (f TagFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) 
 	if mv, ok := m.(*ent.TagMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TagMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expected *ent.TagMutation", m)
 }
 
 // The WorktreeFunc type is an adapter to allow the use of ordinary
@@ -77,7 +102,7 @@ func (f WorktreeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	if mv, ok := m.(*ent.WorktreeMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorktreeMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expected *ent.WorktreeMutation", m)
 }
 
 // Condition is a hook condition function.

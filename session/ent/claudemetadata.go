@@ -4,12 +4,12 @@ package ent
 
 import (
 	"fmt"
-	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
-	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 	"strings"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
+	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 )
 
 // ClaudeMetadata is the model entity for the ClaudeMetadata schema.

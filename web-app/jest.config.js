@@ -4,6 +4,7 @@ module.exports = {
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
   moduleNameMapper: {
+    '^@/gen/session/v1/session_pb$': '<rootDir>/src/__mocks__/session_pb.js',
     '^@/(.*)$': '<rootDir>/src/$1',
     '\\.module\\.css$': 'identity-obj-proxy',
     '\\.css$': '<rootDir>/src/__mocks__/styleMock.js',

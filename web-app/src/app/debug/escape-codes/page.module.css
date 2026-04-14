@@ -157,7 +157,7 @@
 }
 
 .table tbody tr:hover {
-  background: var(--hover-background));
+  background: var(--hover-background);
 }
 
 .hexCode {

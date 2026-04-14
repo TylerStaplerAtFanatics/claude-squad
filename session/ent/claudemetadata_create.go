@@ -6,11 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
-	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
+	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 )
 
 // ClaudeMetadataCreate is the builder for creating a ClaudeMetadata entity.
@@ -18,6 +19,7 @@ type ClaudeMetadataCreate struct {
 	config
 	mutation *ClaudeMetadataMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetKey sets the "key" field.
@@ -122,6 +124,7 @@ func (_c *ClaudeMetadataCreate) createSpec() (*ClaudeMetadata, *sqlgraph.CreateS
 		_node = &ClaudeMetadata{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(claudemetadata.Table, sqlgraph.NewFieldSpec(claudemetadata.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Key(); ok {
 		_spec.SetField(claudemetadata.FieldKey, field.TypeString, value)
 		_node.Key = value
@@ -150,11 +153,186 @@ func (_c *ClaudeMetadataCreate) createSpec() (*ClaudeMetadata, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ClaudeMetadata.Create().
+//		SetKey(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ClaudeMetadataUpsert) {
+//			SetKey(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ClaudeMetadataCreate) OnConflict(opts ...sql.ConflictOption) *ClaudeMetadataUpsertOne {
+	_c.conflict = opts
+	return &ClaudeMetadataUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ClaudeMetadata.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ClaudeMetadataCreate) OnConflictColumns(columns ...string) *ClaudeMetadataUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ClaudeMetadataUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ClaudeMetadataUpsertOne is the builder for "upsert"-ing
+	//  one ClaudeMetadata node.
+	ClaudeMetadataUpsertOne struct {
+		create *ClaudeMetadataCreate
+	}
+
+	// ClaudeMetadataUpsert is the "OnConflict" setter.
+	ClaudeMetadataUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetKey sets the "key" field.
+func (u *ClaudeMetadataUpsert) SetKey(v string) *ClaudeMetadataUpsert {
+	u.Set(claudemetadata.FieldKey, v)
+	return u
+}
+
+// UpdateKey sets the "key" field to the value that was provided on create.
+func (u *ClaudeMetadataUpsert) UpdateKey() *ClaudeMetadataUpsert {
+	u.SetExcluded(claudemetadata.FieldKey)
+	return u
+}
+
+// SetValue sets the "value" field.
+func (u *ClaudeMetadataUpsert) SetValue(v string) *ClaudeMetadataUpsert {
+	u.Set(claudemetadata.FieldValue, v)
+	return u
+}
+
+// UpdateValue sets the "value" field to the value that was provided on create.
+func (u *ClaudeMetadataUpsert) UpdateValue() *ClaudeMetadataUpsert {
+	u.SetExcluded(claudemetadata.FieldValue)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ClaudeMetadata.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ClaudeMetadataUpsertOne) UpdateNewValues() *ClaudeMetadataUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ClaudeMetadata.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ClaudeMetadataUpsertOne) Ignore() *ClaudeMetadataUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ClaudeMetadataUpsertOne) DoNothing() *ClaudeMetadataUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ClaudeMetadataCreate.OnConflict
+// documentation for more info.
+func (u *ClaudeMetadataUpsertOne) Update(set func(*ClaudeMetadataUpsert)) *ClaudeMetadataUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ClaudeMetadataUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetKey sets the "key" field.
+func (u *ClaudeMetadataUpsertOne) SetKey(v string) *ClaudeMetadataUpsertOne {
+	return u.Update(func(s *ClaudeMetadataUpsert) {
+		s.SetKey(v)
+	})
+}
+
+// UpdateKey sets the "key" field to the value that was provided on create.
+func (u *ClaudeMetadataUpsertOne) UpdateKey() *ClaudeMetadataUpsertOne {
+	return u.Update(func(s *ClaudeMetadataUpsert) {
+		s.UpdateKey()
+	})
+}
+
+// SetValue sets the "value" field.
+func (u *ClaudeMetadataUpsertOne) SetValue(v string) *ClaudeMetadataUpsertOne {
+	return u.Update(func(s *ClaudeMetadataUpsert) {
+		s.SetValue(v)
+	})
+}
+
+// UpdateValue sets the "value" field to the value that was provided on create.
+func (u *ClaudeMetadataUpsertOne) UpdateValue() *ClaudeMetadataUpsertOne {
+	return u.Update(func(s *ClaudeMetadataUpsert) {
+		s.UpdateValue()
+	})
+}
+
+// Exec executes the query.
+func (u *ClaudeMetadataUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ClaudeMetadataCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ClaudeMetadataUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ClaudeMetadataUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ClaudeMetadataUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ClaudeMetadataCreateBulk is the builder for creating many ClaudeMetadata entities in bulk.
 type ClaudeMetadataCreateBulk struct {
 	config
 	err      error
 	builders []*ClaudeMetadataCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ClaudeMetadata entities in the database.
@@ -183,6 +361,7 @@ func (_c *ClaudeMetadataCreateBulk) Save(ctx context.Context) ([]*ClaudeMetadata
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -233,6 +412,138 @@ func (_c *ClaudeMetadataCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ClaudeMetadataCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ClaudeMetadata.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ClaudeMetadataUpsert) {
+//			SetKey(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ClaudeMetadataCreateBulk) OnConflict(opts ...sql.ConflictOption) *ClaudeMetadataUpsertBulk {
+	_c.conflict = opts
+	return &ClaudeMetadataUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ClaudeMetadata.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ClaudeMetadataCreateBulk) OnConflictColumns(columns ...string) *ClaudeMetadataUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ClaudeMetadataUpsertBulk{
+		create: _c,
+	}
+}
+
+// ClaudeMetadataUpsertBulk is the builder for "upsert"-ing
+// a bulk of ClaudeMetadata nodes.
+type ClaudeMetadataUpsertBulk struct {
+	create *ClaudeMetadataCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ClaudeMetadata.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ClaudeMetadataUpsertBulk) UpdateNewValues() *ClaudeMetadataUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ClaudeMetadata.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ClaudeMetadataUpsertBulk) Ignore() *ClaudeMetadataUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ClaudeMetadataUpsertBulk) DoNothing() *ClaudeMetadataUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ClaudeMetadataCreateBulk.OnConflict
+// documentation for more info.
+func (u *ClaudeMetadataUpsertBulk) Update(set func(*ClaudeMetadataUpsert)) *ClaudeMetadataUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ClaudeMetadataUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetKey sets the "key" field.
+func (u *ClaudeMetadataUpsertBulk) SetKey(v string) *ClaudeMetadataUpsertBulk {
+	return u.Update(func(s *ClaudeMetadataUpsert) {
+		s.SetKey(v)
+	})
+}
+
+// UpdateKey sets the "key" field to the value that was provided on create.
+func (u *ClaudeMetadataUpsertBulk) UpdateKey() *ClaudeMetadataUpsertBulk {
+	return u.Update(func(s *ClaudeMetadataUpsert) {
+		s.UpdateKey()
+	})
+}
+
+// SetValue sets the "value" field.
+func (u *ClaudeMetadataUpsertBulk) SetValue(v string) *ClaudeMetadataUpsertBulk {
+	return u.Update(func(s *ClaudeMetadataUpsert) {
+		s.SetValue(v)
+	})
+}
+
+// UpdateValue sets the "value" field to the value that was provided on create.
+func (u *ClaudeMetadataUpsertBulk) UpdateValue() *ClaudeMetadataUpsertBulk {
+	return u.Update(func(s *ClaudeMetadataUpsert) {
+		s.UpdateValue()
+	})
+}
+
+// Exec executes the query.
+func (u *ClaudeMetadataUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ClaudeMetadataCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ClaudeMetadataCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ClaudeMetadataUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

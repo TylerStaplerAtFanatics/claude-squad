@@ -58,8 +58,6 @@ func (t *TmuxSession) StartControlMode() error {
 		return fmt.Errorf("failed to start control mode for session '%s': %w", t.sanitizedName, err)
 	}
 
-	log.InfoLog.Printf("Started control mode for session '%s' (pid: %d)", t.sanitizedName, cmd.Process.Pid)
-
 	// Store control mode infrastructure
 	t.controlModeCmd = cmd
 	t.controlModeStdout = stdout
@@ -87,8 +85,6 @@ func (t *TmuxSession) StopControlMode() error {
 		return nil // Not running
 	}
 
-	log.InfoLog.Printf("Stopping control mode for session '%s'", t.sanitizedName)
-
 	// Signal termination
 	if t.controlModeDone != nil {
 		close(t.controlModeDone)
@@ -115,7 +111,7 @@ func (t *TmuxSession) StopControlMode() error {
 	case <-time.After(2 * time.Second):
 		// Timeout after 2 seconds - force kill
 		log.WarningLog.Printf("Control mode process did not exit cleanly, killing")
-		t.controlModeCmd.Process.Kill()
+		_ = t.controlModeCmd.Process.Kill()
 		<-done // Wait for kill to complete
 	}
 
@@ -134,7 +130,6 @@ func (t *TmuxSession) StopControlMode() error {
 	t.controlModeSubMu.Unlock()
 
 	t.controlModeCmd = nil
-	log.InfoLog.Printf("Stopped control mode for session '%s'", t.sanitizedName)
 	return nil
 }
 
@@ -168,8 +163,6 @@ func (t *TmuxSession) readControlModeOutput() {
 			log.ErrorLog.Printf("Control mode output scanner error for session '%s': %v", t.sanitizedName, err)
 		}
 	}
-
-	log.InfoLog.Printf("Control mode output reader finished for session '%s'", t.sanitizedName)
 
 	// Control mode process has exited. Close all subscriber channels so that waiting
 	// goroutines (e.g. streamViaControlMode) detect the end-of-stream and unblock.
@@ -368,8 +361,6 @@ func (t *TmuxSession) SubscribeToControlModeUpdates() (string, chan []byte) {
 	}
 	t.controlModeSubscribers[subscriberID] = ch
 
-	log.InfoLog.Printf("New control mode subscriber %s for session '%s' (total: %d)",
-		subscriberID, t.sanitizedName, len(t.controlModeSubscribers))
 	return subscriberID, ch
 }
 
@@ -381,7 +372,5 @@ func (t *TmuxSession) UnsubscribeFromControlModeUpdates(subscriberID string) {
 	if ch, exists := t.controlModeSubscribers[subscriberID]; exists {
 		close(ch)
 		delete(t.controlModeSubscribers, subscriberID)
-		log.InfoLog.Printf("Unsubscribed %s from control mode session '%s' (remaining: %d)",
-			subscriberID, t.sanitizedName, len(t.controlModeSubscribers))
 	}
 }

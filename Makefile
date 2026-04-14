@@ -5,6 +5,8 @@
 PROFILE_FLAGS ?=
 PROFILE_PORT ?= 6060
 SERVER_FLAGS ?= --remote-access
+export CGO_CFLAGS := -Wno-ignored-qualifiers
+export CGO_ENABLED := 1
 
 # File dependencies
 GO_FILES := $(shell find . -maxdepth 3 -name "*.go" -not -path "./vendor/*" -not -path "./node_modules/*")
@@ -22,6 +24,7 @@ $(ASDF_STAMP): .tool-versions
 ifneq ($(wildcard .tool-versions),)
 	@if which asdf >/dev/null 2>&1; then \
 		echo "🔍 asdf detected, ensuring versions from .tool-versions are installed..."; \
+		asdf plugin add nodejs || true; \
 		asdf install; \
 	fi
 endif
@@ -49,7 +52,7 @@ help: ## Show this help message
 # Build targets
 build: stapler-squad ## Build the Go application
 
-stapler-squad: ensure-tools proto-gen server/web/dist $(GO_FILES) ## Build the Go binary
+stapler-squad: ensure-tools proto-gen server/web/dist lint $(GO_FILES) ## Build the Go binary
 	@echo "Building Go application..."
 	go build -o stapler-squad .
 	@echo "✅ stapler-squad built successfully"
@@ -70,7 +73,8 @@ web-app/out: ensure-tools web-app/node_modules/.package-lock.json $(WEB_FILES) w
 server/web/dist: web-app/out
 	@echo "Copying built files to server/web/dist..."
 	@rm -rf server/web/dist
-	@cp -r web-app/out server/web/dist
+	@mkdir -p server/web/dist
+	@cp -r web-app/out/* server/web/dist/
 	@touch server/web/dist # Update timestamp
 	@echo "✅ Web UI built and copied successfully"
 
@@ -186,7 +190,13 @@ install-tools: ensure-tools ## Install all development and analysis tools
 	@echo "All tools installed successfully!"
 
 # Code quality and analysis
-lint: ensure-tools proto-gen ## Run golangci-lint with comprehensive checks
+lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with comprehensive checks
+	@GOBIN=$$(go env GOBIN); \
+	if [ -z "$$GOBIN" ]; then GOBIN=$$(go env GOPATH)/bin; fi; \
+	if ! which golangci-lint >/dev/null 2>&1; then \
+		echo "Installing golangci-lint v2..."; \
+		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest; \
+	fi; \
 	golangci-lint run --enable=nilnil,staticcheck,ineffassign,govet
 
 format: ensure-tools ## Format code with gofmt
@@ -335,7 +345,7 @@ benchmark-compare: ensure-tools proto-gen ## Run benchmarks and compare against 
 benchmark-tier1: ensure-tools proto-gen ## Run Tier 1 critical-path benchmarks (fast, ~5 min)
 	@echo "Running Tier 1 benchmarks..."
 	go test \
-		-bench='BenchmarkEventBus|BenchmarkDeltaGenerat|BenchmarkCircularBuffer|BenchmarkSessionService_List|BenchmarkSessionService_Get' \
+		-bench='BenchmarkEventBus|BenchmarkDeltaGeneration|BenchmarkCircularBuffer|BenchmarkSessionService_List|BenchmarkSessionService_Get|BenchmarkSessionService_Stream' \
 		-benchmem \
 		-count=8 \
 		-timeout=10m \

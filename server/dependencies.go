@@ -393,50 +393,51 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 		eventBus.Publish(events.NewSessionUpdatedEvent(inst, []string{"github_pr_priority", "github_pr_state"}))
 	})
 
-	// Step 6: start tmux sessions for loaded instances (non-fatal failures)
-	for _, inst := range instances {
-		if !inst.Started() {
-			if err := inst.Start(false); err != nil {
-				log.ErrorLog.Printf("Failed to start loaded instance '%s': %v", inst.Title, err)
-			} else {
-				log.InfoLog.Printf("Started loaded instance '%s'", inst.Title)
-			}
-		}
-	}
-
-	// Step 6.5: Persist any auto-detected worktree info (must happen after Step 6)
-	if len(instances) > 0 {
-		if err := storage.SaveInstances(instances); err != nil {
-			log.WarningLog.Printf("Failed to persist migrated instance data: %v", err)
-		} else {
-			log.InfoLog.Printf("Persisted migrated instance data for %d instances", len(instances))
-		}
-	}
-
-	// Step 7: start controllers (requires started instances + StatusManager)
-	log.InfoLog.Printf("Attempting controller startup for %d loaded instances", len(instances))
-	for _, inst := range instances {
-		started := inst.Started()
-		paused := inst.Paused()
-		log.InfoLog.Printf("Instance '%s': Started()=%v, Paused()=%v", inst.Title, started, paused)
-		if started && !paused {
-			if inst.GetController() == nil {
-				if err := inst.StartController(); err != nil {
-					log.WarningLog.Printf("Failed to start controller for '%s': %v", inst.Title, err)
+	// Perform heavy initialization (tmux starting, controllers, scanning) in the background
+	// so the HTTP server can bind and start immediately.
+	go func() {
+		// Step 6: start tmux sessions for loaded instances (non-fatal failures)
+		for _, inst := range instances {
+			if !inst.Started() {
+				if err := inst.Start(false); err != nil {
+					log.ErrorLog.Printf("Failed to start loaded instance '%s': %v", inst.Title, err)
 				} else {
-					log.InfoLog.Printf("Started controller for '%s'", inst.Title)
+					log.InfoLog.Printf("Started loaded instance '%s'", inst.Title)
 				}
-			} else {
-				log.InfoLog.Printf("Instance '%s' already has active controller", inst.Title)
 			}
 		}
-	}
 
-	// Step 7.5: Startup scan and orphaned approval sync (after controllers, before ReactiveQueueManager)
-	// Brief settling delay to allow controllers to initialize their terminal readers.
-	time.Sleep(500 * time.Millisecond)
-	scanSessionsOnStartup(instances, reviewQueue, statusManager)
-	syncOrphanedApprovalsToQueue(svc.ApprovalStore, instances, reviewQueue)
+		// Step 6.5: Persist any auto-detected worktree info (must happen after Step 6)
+		if len(instances) > 0 {
+			if err := storage.SaveInstances(instances); err != nil {
+				log.WarningLog.Printf("Failed to persist migrated instance data: %v", err)
+			} else {
+				log.InfoLog.Printf("Persisted migrated instance data for %d instances", len(instances))
+			}
+		}
+
+		// Step 7: start controllers (requires started instances + StatusManager)
+		log.InfoLog.Printf("Attempting controller startup for %d loaded instances", len(instances))
+		for _, inst := range instances {
+			started := inst.Started()
+			paused := inst.Paused()
+			if started && !paused {
+				if inst.GetController() == nil {
+					if err := inst.StartController(); err != nil {
+						log.WarningLog.Printf("Failed to start controller for '%s': %v", inst.Title, err)
+					} else {
+						log.InfoLog.Printf("Started controller for '%s'", inst.Title)
+					}
+				}
+			}
+		}
+
+		// Step 7.5: Startup scan and orphaned approval sync
+		// Brief settling delay to allow controllers to initialize their terminal readers.
+		time.Sleep(500 * time.Millisecond)
+		scanSessionsOnStartup(instances, reviewQueue, statusManager)
+		syncOrphanedApprovalsToQueue(svc.ApprovalStore, instances, reviewQueue)
+	}()
 
 	// Step 8: ReactiveQueueManager
 	reactiveQueueMgr := NewReactiveQueueManager(reviewQueue, reviewQueuePoller, eventBus, statusManager, storage)
@@ -456,7 +457,7 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 	scrollbackConfig.StoragePath = scrollbackPath
 	scrollbackManager := scrollback.NewScrollbackManager(scrollbackConfig)
 	log.InfoLog.Printf("Initialized ScrollbackManager: path=%s, compression=%s, maxLines=%d",
-		scrollbackPath, scrollbackConfig.CompressionType, scrollbackConfig.MaxLines)
+		scrollbackPath, scrollbackConfig.StoragePath, scrollbackConfig.MaxLines)
 
 	// Step 10: TmuxStreamerManager (independent)
 	tmuxStreamerManager := session.NewExternalTmuxStreamerManager()

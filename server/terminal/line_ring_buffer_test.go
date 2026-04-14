@@ -327,4 +327,5 @@ func BenchmarkSliceSetAll(b *testing.B) {
 			lines = lines[len(lines)-100:]
 		}
 	}
+	_ = lines
 }

@@ -17,6 +17,7 @@ interface SessionListProps {
   /** Called for bulk resume to skip the confirmation modal and resume immediately. */
   onDirectResumeSession?: (session: Session) => void;
   onDuplicateSession?: (sessionId: string) => void;
+  onNewWorkspaceSession?: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, newTitle: string) => Promise<boolean>;
   onRestartSession?: (sessionId: string) => Promise<boolean>;
   onUpdateTags?: (sessionId: string, tags: string[]) => void;
@@ -75,6 +76,7 @@ export function SessionList({
   onResumeSession,
   onDirectResumeSession,
   onDuplicateSession,
+  onNewWorkspaceSession,
   onRenameSession,
   onRestartSession,
   onUpdateTags,
@@ -531,6 +533,7 @@ export function SessionList({
                       onPause={() => onPauseSession?.(session.id)}
                       onResume={() => onResumeSession?.(session)}
                       onDuplicate={() => onDuplicateSession?.(session.id)}
+                      onNewWorkspace={() => onNewWorkspaceSession?.(session.id)}
                       onRename={onRenameSession}
                       onRestart={onRestartSession}
                       onUpdateTags={onUpdateTags}

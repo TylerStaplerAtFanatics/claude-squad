@@ -49,8 +49,15 @@ type TerminalState struct {
 	CursorCol     int
 	CursorVisible bool
 
+	// Saved cursor state
+	SavedCursorRow int
+	SavedCursorCol int
+
 	// Current text style for new characters
 	CurrentStyle CellStyle
+
+	// Tab stops (column index -> is set)
+	TabStops map[int]bool
 
 	// State version for delta tracking
 	Version uint64
@@ -59,14 +66,22 @@ type TerminalState struct {
 // NewTerminalState creates a new terminal state with given dimensions
 func NewTerminalState(rows, cols int) *TerminalState {
 	state := &TerminalState{
-		Rows:          rows,
-		Cols:          cols,
-		Grid:          make([][]Cell, rows),
-		CursorRow:     0,
-		CursorCol:     0,
-		CursorVisible: true,
-		CurrentStyle:  DefaultStyle(),
-		Version:       0,
+		Rows:           rows,
+		Cols:           cols,
+		Grid:           make([][]Cell, rows),
+		CursorRow:      0,
+		CursorCol:      0,
+		CursorVisible:  true,
+		SavedCursorRow: 0,
+		SavedCursorCol: 0,
+		CurrentStyle:   DefaultStyle(),
+		TabStops:       make(map[int]bool),
+		Version:        0,
+	}
+
+	// Initialize default tab stops (every 8 columns)
+	for i := 8; i < cols; i += 8 {
+		state.TabStops[i] = true
 	}
 
 	// Initialize grid with empty cells
@@ -155,9 +170,16 @@ func (ts *TerminalState) ProcessOutput(data []byte) error {
 			if ts.CursorCol > 0 {
 				ts.CursorCol--
 			}
-		case '\t': // Tab (advance to next tab stop, typically 8 columns)
-			ts.CursorCol = ((ts.CursorCol / 8) + 1) * 8
-			if ts.CursorCol >= ts.Cols {
+		case '\t': // Tab (advance to next tab stop)
+			found := false
+			for i := ts.CursorCol + 1; i < ts.Cols; i++ {
+				if ts.TabStops[i] {
+					ts.CursorCol = i
+					found = true
+					break
+				}
+			}
+			if !found {
 				ts.CursorCol = ts.Cols - 1
 			}
 		default:
@@ -279,6 +301,14 @@ func (ts *TerminalState) handleCSI(params string, command string) {
 		if params == "?25" {
 			ts.CursorVisible = false
 		}
+	case "g": // Clear tab stops
+		n := parseIntParam(params, 0)
+		switch n {
+		case 0: // Clear tab stop at current column
+			delete(ts.TabStops, ts.CursorCol)
+		case 3: // Clear all tab stops
+			ts.TabStops = make(map[int]bool)
+		}
 	}
 }
 
@@ -286,9 +316,24 @@ func (ts *TerminalState) handleCSI(params string, command string) {
 func (ts *TerminalState) handleSimpleEscape(command string) {
 	switch command {
 	case "7": // Save cursor position
-		// TODO: Implement cursor save if needed
+		ts.SavedCursorRow = ts.CursorRow
+		ts.SavedCursorCol = ts.CursorCol
 	case "8": // Restore cursor position
-		// TODO: Implement cursor restore if needed
+		ts.CursorRow = ts.SavedCursorRow
+		ts.CursorCol = ts.SavedCursorCol
+		// Clamp to valid range in case of resize
+		if ts.CursorRow >= ts.Rows {
+			ts.CursorRow = ts.Rows - 1
+		}
+		if ts.CursorCol >= ts.Cols {
+			ts.CursorCol = ts.Cols - 1
+		}
+		if ts.CursorRow < 0 {
+			ts.CursorRow = 0
+		}
+		if ts.CursorCol < 0 {
+			ts.CursorCol = 0
+		}
 	case "D": // Line feed
 		ts.CursorRow++
 		if ts.CursorRow >= ts.Rows {
@@ -303,7 +348,7 @@ func (ts *TerminalState) handleSimpleEscape(command string) {
 			ts.CursorRow = ts.Rows - 1
 		}
 	case "H": // Set tab stop
-		// TODO: Implement tab stops if needed
+		ts.TabStops[ts.CursorCol] = true
 	case "M": // Reverse line feed
 		ts.CursorRow--
 		if ts.CursorRow < 0 {
@@ -529,6 +574,17 @@ func (ts *TerminalState) Resize(rows, cols int) {
 		}
 	}
 
+	// Add default tab stops for new columns if terminal grew
+	if cols > ts.Cols {
+		startCol := ts.Cols
+		if startCol%8 != 0 {
+			startCol = ((ts.Cols / 8) + 1) * 8
+		}
+		for i := startCol; i < cols; i += 8 {
+			ts.TabStops[i] = true
+		}
+	}
+
 	ts.Grid = newGrid
 	ts.Rows = rows
 	ts.Cols = cols
@@ -665,6 +721,57 @@ func (ts *TerminalState) linesEqual(other *TerminalState, row int) bool {
 	return true
 }
 
+// writeColorCode parses the internal color string representation and writes
+// the appropriate ANSI escape sequence to the provided strings.Builder.
+func writeColorCode(sb *strings.Builder, colorStr string, isBg bool) {
+	if colorStr == "" {
+		return
+	}
+
+	baseCode := 30
+	if isBg {
+		baseCode = 40
+	}
+
+	if strings.HasPrefix(colorStr, "color") && !strings.HasPrefix(colorStr, "color-") {
+		// Standard colors: color0 to color7
+		var code int
+		if _, err := fmt.Sscanf(colorStr, "color%d", &code); err == nil {
+			fmt.Fprintf(sb, "\x1b[%dm", baseCode+code)
+		}
+	} else if strings.HasPrefix(colorStr, "bright-color") {
+		// Bright standard colors: bright-color0 to bright-color7
+		brightBaseCode := 90
+		if isBg {
+			brightBaseCode = 100
+		}
+		var code int
+		if _, err := fmt.Sscanf(colorStr, "bright-color%d", &code); err == nil {
+			fmt.Fprintf(sb, "\x1b[%dm", brightBaseCode+code)
+		}
+	} else if strings.HasPrefix(colorStr, "color-") {
+		// 256 colors: color-0 to color-255
+		var code int
+		if _, err := fmt.Sscanf(colorStr, "color-%d", &code); err == nil {
+			extendedCode := 38
+			if isBg {
+				extendedCode = 48
+			}
+			fmt.Fprintf(sb, "\x1b[%d;5;%dm", extendedCode, code)
+		}
+	} else if strings.HasPrefix(colorStr, "rgb(") {
+		// RGB colors: rgb(r,g,b)
+		var r, g, b int
+		if _, err := fmt.Sscanf(colorStr, "rgb(%d,%d,%d)", &r, &g, &b); err == nil {
+			extendedCode := 38
+			if isBg {
+				extendedCode = 48
+			}
+			fmt.Fprintf(sb, "\x1b[%d;2;%d;%d;%dm", extendedCode, r, g, b)
+		}
+	}
+}
+
 // getLineText returns the text content of a line with ANSI codes
 func (ts *TerminalState) getLineText(row int) string {
 	if row >= ts.Rows {
@@ -679,25 +786,41 @@ func (ts *TerminalState) getLineText(row int) string {
 
 		// Add style codes if style changed
 		if cell.Style != currentStyle {
-			// Reset if needed
-			if currentStyle.Bold || currentStyle.Italic || currentStyle.Underline {
+			// Determine if we need a full reset
+			needsReset := false
+
+			if (currentStyle.Bold && !cell.Style.Bold) ||
+				(currentStyle.Italic && !cell.Style.Italic) ||
+				(currentStyle.Underline && !cell.Style.Underline) ||
+				(currentStyle.Reverse && !cell.Style.Reverse) ||
+				(currentStyle.FgColor != "" && cell.Style.FgColor == "") ||
+				(currentStyle.BgColor != "" && cell.Style.BgColor == "") {
+				needsReset = true
+			}
+
+			if needsReset {
 				sb.WriteString("\x1b[0m")
 				currentStyle = DefaultStyle()
 			}
 
 			// Apply new style
-			if cell.Style.Bold {
+			if cell.Style.Bold && !currentStyle.Bold {
 				sb.WriteString("\x1b[1m")
 			}
-			if cell.Style.Italic {
+			if cell.Style.Italic && !currentStyle.Italic {
 				sb.WriteString("\x1b[3m")
 			}
-			if cell.Style.Underline {
+			if cell.Style.Underline && !currentStyle.Underline {
 				sb.WriteString("\x1b[4m")
 			}
-			if cell.Style.FgColor != "" {
-				// Simplified: just output color code
-				// TODO: Parse and output proper ANSI color codes
+			if cell.Style.Reverse && !currentStyle.Reverse {
+				sb.WriteString("\x1b[7m")
+			}
+			if cell.Style.FgColor != currentStyle.FgColor && cell.Style.FgColor != "" {
+				writeColorCode(&sb, cell.Style.FgColor, false)
+			}
+			if cell.Style.BgColor != currentStyle.BgColor && cell.Style.BgColor != "" {
+				writeColorCode(&sb, cell.Style.BgColor, true)
 			}
 
 			currentStyle = cell.Style
@@ -707,7 +830,8 @@ func (ts *TerminalState) getLineText(row int) string {
 	}
 
 	// Reset style at end of line
-	if currentStyle.Bold || currentStyle.Italic || currentStyle.Underline {
+	if currentStyle.Bold || currentStyle.Italic || currentStyle.Underline ||
+		currentStyle.Reverse || currentStyle.FgColor != "" || currentStyle.BgColor != "" {
 		sb.WriteString("\x1b[0m")
 	}
 
@@ -722,14 +846,21 @@ func (ts *TerminalState) Clone() *TerminalState {
 	defer ts.mu.RUnlock()
 
 	clone := &TerminalState{
-		Rows:          ts.Rows,
-		Cols:          ts.Cols,
-		Grid:          make([][]Cell, ts.Rows),
-		CursorRow:     ts.CursorRow,
-		CursorCol:     ts.CursorCol,
-		CursorVisible: ts.CursorVisible,
-		CurrentStyle:  ts.CurrentStyle,
-		Version:       ts.Version,
+		Rows:           ts.Rows,
+		Cols:           ts.Cols,
+		Grid:           make([][]Cell, ts.Rows),
+		CursorRow:      ts.CursorRow,
+		CursorCol:      ts.CursorCol,
+		CursorVisible:  ts.CursorVisible,
+		SavedCursorRow: ts.SavedCursorRow,
+		SavedCursorCol: ts.SavedCursorCol,
+		CurrentStyle:   ts.CurrentStyle,
+		TabStops:       make(map[int]bool, len(ts.TabStops)),
+		Version:        ts.Version,
+	}
+
+	for k, v := range ts.TabStops {
+		clone.TabStops[k] = v
 	}
 
 	// Deep copy grid
@@ -761,10 +892,8 @@ func CreateFullSyncDeltaFromRawContent(rawContent string, cursorRow, cursorCol, 
 	tempState := NewTerminalState(rows, cols)
 
 	// Process the raw ANSI content through our terminal parser
-	if err := tempState.ProcessOutput([]byte(rawContent)); err != nil {
-		// Log error but continue - we want to send whatever we can
-		// (logging happens in ProcessOutput)
-	}
+	// Log error but continue - we want to send whatever we can
+	_ = tempState.ProcessOutput([]byte(rawContent))
 
 	// Override cursor position with actual tmux cursor (our processing might differ)
 	tempState.CursorRow = cursorRow

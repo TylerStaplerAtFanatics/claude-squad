@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
@@ -294,38 +293,28 @@ func recordToProto(r *notifications.NotificationRecord) *sessionv1.NotificationH
 	return record
 }
 
-// validateLocalhostOrigin ensures the request comes from localhost.
-// This is a security measure to prevent external actors from sending notifications.
-func validateLocalhostOrigin(ctx context.Context, req *connect.Request[sessionv1.SendNotificationRequest]) error {
-	// Get peer address from request headers or context
-	// ConnectRPC provides X-Forwarded-For or we can check the connection directly
+// validateLocalhostOrigin ensures the request comes from localhost by checking
+// the actual network connection's remote address.
+func validateLocalhostOrigin(_ context.Context, req *connect.Request[sessionv1.SendNotificationRequest]) error {
+	return validateLocalhostAddr(req.Peer().Addr)
+}
 
-	// Check X-Real-IP header first (if behind a proxy)
-	realIP := req.Header().Get("X-Real-IP")
-	if realIP != "" {
-		if !isLocalhostIP(realIP) {
-			return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("notifications can only be sent from localhost"))
-		}
-		return nil
+// validateLocalhostAddr checks that the given address (host:port or bare IP)
+// belongs to localhost. Extracted for testability.
+func validateLocalhostAddr(addr string) error {
+	if addr == "" {
+		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("unable to determine client IP"))
 	}
 
-	// Check X-Forwarded-For header
-	forwardedFor := req.Header().Get("X-Forwarded-For")
-	if forwardedFor != "" {
-		// Take the first IP in the chain (original client)
-		ips := strings.Split(forwardedFor, ",")
-		if len(ips) > 0 {
-			clientIP := strings.TrimSpace(ips[0])
-			if !isLocalhostIP(clientIP) {
-				return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("notifications can only be sent from localhost"))
-			}
-			return nil
-		}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
 	}
 
-	// If no proxy headers, we're in direct connection mode
-	// The server already binds to localhost, so requests reaching here are local
-	// This is a defense-in-depth check
+	if !isLocalhostIP(host) {
+		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("notifications can only be sent from localhost"))
+	}
+
 	return nil
 }
 

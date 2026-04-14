@@ -58,7 +58,7 @@ type ClaudeSession struct {
 // DetectAvailableSessions scans for available Claude Code sessions
 func (csm *ClaudeSessionManager) DetectAvailableSessions() ([]ClaudeSession, error) {
 	if csm.sessionDir == "" {
-		return []ClaudeSession{}, fmt.Errorf("Claude Code session directory not found")
+		return []ClaudeSession{}, fmt.Errorf("claude Code session directory not found")
 	}
 
 	sessions := []ClaudeSession{}
@@ -198,7 +198,7 @@ func (csm *ClaudeSessionManager) FindSessionByProject(projectPath string) ([]Cla
 // GetSessionByID retrieves a specific Claude session by ID
 func (csm *ClaudeSessionManager) GetSessionByID(sessionID string) (*ClaudeSession, error) {
 	if csm.sessionDir == "" {
-		return nil, fmt.Errorf("Claude Code session directory not found")
+		return nil, fmt.Errorf("claude Code session directory not found")
 	}
 
 	sessionPath := filepath.Join(csm.sessionDir, sessionID)

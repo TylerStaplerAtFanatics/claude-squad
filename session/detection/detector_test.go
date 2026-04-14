@@ -200,7 +200,7 @@ func TestStatusDetector_DetectWithContext(t *testing.T) {
 func TestStatusDetector_DetectUnknown(t *testing.T) {
 	sd := NewStatusDetector()
 
-	// Remove the catch-all ready pattern for this test
+	// Remove the catch-all ready pattern for this test.
 	sd.readyRegexes = nil
 
 	output := []byte("Some random output that doesn't match any pattern xyz123")

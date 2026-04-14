@@ -73,6 +73,62 @@ type Repository interface {
 
 	// UpdateSession updates an existing session using the Session domain model.
 	UpdateSession(ctx context.Context, session *Session) error
+
+	// --- Permissions & Analytics ---
+
+	// AllRules returns all auto-approval rules.
+	AllRules(ctx context.Context) ([]ApprovalRuleData, error)
+	// UpsertRule creates or updates an auto-approval rule.
+	UpsertRule(ctx context.Context, rule ApprovalRuleData) error
+	// DeleteRule removes an auto-approval rule by ID.
+	DeleteRule(ctx context.Context, id string) error
+
+	// RecordAnalytics logs a classification decision.
+	RecordAnalytics(ctx context.Context, data AnalyticsData) error
+	// ListAnalytics retrieves recent classification decisions.
+	ListAnalytics(ctx context.Context, limit int) ([]AnalyticsData, error)
+}
+
+// ApprovalRuleData is the domain model for an auto-approval rule.
+type ApprovalRuleData struct {
+	ID             string
+	Name           string
+	ToolName       string
+	ToolPattern    string
+	ToolCategory   string
+	CommandPattern string
+	FilePattern    string
+	Decision       int
+	RiskLevel      int
+	Reason         string
+	Alternative    string
+	Priority       int
+	Enabled        bool
+	Source         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// AnalyticsData is the domain model for classification analytics.
+type AnalyticsData struct {
+	ID                 string
+	SessionID          string
+	ToolName           string
+	CommandPreview     string
+	Cwd                string
+	Decision           string
+	RiskLevel          string
+	RuleID             string
+	RuleName           string
+	Reason             string
+	Alternative        string
+	DurationMs         int64
+	ApprovalID         string
+	CommandProgram     string
+	CommandCategory    string
+	CommandSubcategory string
+	PythonImports      []string
+	CreatedAt          time.Time
 }
 
 // RepositoryOption is a function that configures a repository

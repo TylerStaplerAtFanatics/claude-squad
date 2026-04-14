@@ -3,6 +3,10 @@
 package ent
 
 import (
+	"time"
+
+	"github.com/tstapler/stapler-squad/session/ent/approvalrule"
+	"github.com/tstapler/stapler-squad/session/ent/classificationanalytics"
 	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
 	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 	"github.com/tstapler/stapler-squad/session/ent/diffstats"
@@ -10,13 +14,70 @@ import (
 	"github.com/tstapler/stapler-squad/session/ent/session"
 	"github.com/tstapler/stapler-squad/session/ent/tag"
 	"github.com/tstapler/stapler-squad/session/ent/worktree"
-	"time"
 )
 
 // The init function reads all schema descriptors with runtime code
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	approvalruleFields := schema.ApprovalRule{}.Fields()
+	_ = approvalruleFields
+	// approvalruleDescRuleID is the schema descriptor for rule_id field.
+	approvalruleDescRuleID := approvalruleFields[0].Descriptor()
+	// approvalrule.RuleIDValidator is a validator for the "rule_id" field. It is called by the builders before save.
+	approvalrule.RuleIDValidator = approvalruleDescRuleID.Validators[0].(func(string) error)
+	// approvalruleDescName is the schema descriptor for name field.
+	approvalruleDescName := approvalruleFields[1].Descriptor()
+	// approvalrule.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	approvalrule.NameValidator = approvalruleDescName.Validators[0].(func(string) error)
+	// approvalruleDescPriority is the schema descriptor for priority field.
+	approvalruleDescPriority := approvalruleFields[11].Descriptor()
+	// approvalrule.DefaultPriority holds the default value on creation for the priority field.
+	approvalrule.DefaultPriority = approvalruleDescPriority.Default.(int)
+	// approvalruleDescEnabled is the schema descriptor for enabled field.
+	approvalruleDescEnabled := approvalruleFields[12].Descriptor()
+	// approvalrule.DefaultEnabled holds the default value on creation for the enabled field.
+	approvalrule.DefaultEnabled = approvalruleDescEnabled.Default.(bool)
+	// approvalruleDescSource is the schema descriptor for source field.
+	approvalruleDescSource := approvalruleFields[13].Descriptor()
+	// approvalrule.DefaultSource holds the default value on creation for the source field.
+	approvalrule.DefaultSource = approvalruleDescSource.Default.(string)
+	// approvalruleDescCreatedAt is the schema descriptor for created_at field.
+	approvalruleDescCreatedAt := approvalruleFields[14].Descriptor()
+	// approvalrule.DefaultCreatedAt holds the default value on creation for the created_at field.
+	approvalrule.DefaultCreatedAt = approvalruleDescCreatedAt.Default.(func() time.Time)
+	// approvalruleDescUpdatedAt is the schema descriptor for updated_at field.
+	approvalruleDescUpdatedAt := approvalruleFields[15].Descriptor()
+	// approvalrule.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	approvalrule.DefaultUpdatedAt = approvalruleDescUpdatedAt.Default.(func() time.Time)
+	// approvalrule.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	approvalrule.UpdateDefaultUpdatedAt = approvalruleDescUpdatedAt.UpdateDefault.(func() time.Time)
+	classificationanalyticsFields := schema.ClassificationAnalytics{}.Fields()
+	_ = classificationanalyticsFields
+	// classificationanalyticsDescAnalyticsID is the schema descriptor for analytics_id field.
+	classificationanalyticsDescAnalyticsID := classificationanalyticsFields[0].Descriptor()
+	// classificationanalytics.AnalyticsIDValidator is a validator for the "analytics_id" field. It is called by the builders before save.
+	classificationanalytics.AnalyticsIDValidator = classificationanalyticsDescAnalyticsID.Validators[0].(func(string) error)
+	// classificationanalyticsDescToolName is the schema descriptor for tool_name field.
+	classificationanalyticsDescToolName := classificationanalyticsFields[2].Descriptor()
+	// classificationanalytics.ToolNameValidator is a validator for the "tool_name" field. It is called by the builders before save.
+	classificationanalytics.ToolNameValidator = classificationanalyticsDescToolName.Validators[0].(func(string) error)
+	// classificationanalyticsDescDecision is the schema descriptor for decision field.
+	classificationanalyticsDescDecision := classificationanalyticsFields[5].Descriptor()
+	// classificationanalytics.DecisionValidator is a validator for the "decision" field. It is called by the builders before save.
+	classificationanalytics.DecisionValidator = classificationanalyticsDescDecision.Validators[0].(func(string) error)
+	// classificationanalyticsDescRiskLevel is the schema descriptor for risk_level field.
+	classificationanalyticsDescRiskLevel := classificationanalyticsFields[6].Descriptor()
+	// classificationanalytics.RiskLevelValidator is a validator for the "risk_level" field. It is called by the builders before save.
+	classificationanalytics.RiskLevelValidator = classificationanalyticsDescRiskLevel.Validators[0].(func(string) error)
+	// classificationanalyticsDescDurationMs is the schema descriptor for duration_ms field.
+	classificationanalyticsDescDurationMs := classificationanalyticsFields[11].Descriptor()
+	// classificationanalytics.DefaultDurationMs holds the default value on creation for the duration_ms field.
+	classificationanalytics.DefaultDurationMs = classificationanalyticsDescDurationMs.Default.(int64)
+	// classificationanalyticsDescCreatedAt is the schema descriptor for created_at field.
+	classificationanalyticsDescCreatedAt := classificationanalyticsFields[17].Descriptor()
+	// classificationanalytics.DefaultCreatedAt holds the default value on creation for the created_at field.
+	classificationanalytics.DefaultCreatedAt = classificationanalyticsDescCreatedAt.Default.(func() time.Time)
 	claudemetadataFields := schema.ClaudeMetadata{}.Fields()
 	_ = claudemetadataFields
 	// claudemetadataDescKey is the schema descriptor for key field.

@@ -246,7 +246,7 @@ func (m *ScrollbackManager) flushLoop() {
 	for {
 		select {
 		case <-m.flushTicker.C:
-			m.FlushAll()
+			_ = m.FlushAll()
 		case <-m.stopChan:
 			return
 		}

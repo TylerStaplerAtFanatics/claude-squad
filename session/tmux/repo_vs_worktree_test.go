@@ -215,9 +215,9 @@ func TestSessionTypeClassification(t *testing.T) {
 			sessionName: "main-branch-work",
 			dirSetup: func() string {
 				dir := filepath.Join(tempDir, "main-project")
-				os.MkdirAll(dir, 0755)
+				_ = os.MkdirAll(dir, 0755)
 				// Simulate .git directory
-				os.MkdirAll(filepath.Join(dir, ".git"), 0755)
+				_ = os.MkdirAll(filepath.Join(dir, ".git"), 0755)
 				return dir
 			},
 		},
@@ -227,9 +227,9 @@ func TestSessionTypeClassification(t *testing.T) {
 			sessionName: "feature-auth-system",
 			dirSetup: func() string {
 				dir := filepath.Join(tempDir, "auth-feature-worktree")
-				os.MkdirAll(dir, 0755)
+				_ = os.MkdirAll(dir, 0755)
 				// Simulate .git file (pointing to main repo)
-				os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: ../main-project/.git/worktrees/auth"), 0644)
+				_ = os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: ../main-project/.git/worktrees/auth"), 0644)
 				return dir
 			},
 		},
@@ -239,7 +239,7 @@ func TestSessionTypeClassification(t *testing.T) {
 			sessionName: "bugfix-login-error",
 			dirSetup: func() string {
 				dir := filepath.Join(tempDir, "bugfix-worktree")
-				os.MkdirAll(dir, 0755)
+				_ = os.MkdirAll(dir, 0755)
 				// Different structure to test flexibility
 				return dir
 			},
@@ -304,11 +304,11 @@ func TestDirectoryPathEdgeCases(t *testing.T) {
 
 		// Test relative path
 		originalDir, _ := os.Getwd()
-		defer os.Chdir(originalDir)
-		os.Chdir(tempDir)
+		defer func() { _ = os.Chdir(originalDir) }()
+		_ = os.Chdir(tempDir)
 
 		relativeDir := "./relative-test"
-		os.MkdirAll(relativeDir, 0755)
+		_ = os.MkdirAll(relativeDir, 0755)
 
 		ptyFactory2 := NewMockPtyFactory(t)
 		cmdExec2, commandHistory2 := createMockExecutorForMissingSession()

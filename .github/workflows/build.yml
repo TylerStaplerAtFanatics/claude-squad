@@ -7,12 +7,12 @@ on:
       - '**.go'
       - 'go.mod'
       - 'go.sum'
+      - 'Makefile'
+      - 'install.sh'
       - 'proto/**'
       - 'web-app/src/**'
       - 'web-app/package.json'
       - 'web-app/package-lock.json'
-      - 'Makefile'
-      - 'install.sh'
       - '.github/workflows/build.yml'
       - '.github/actions/prepare/**'
   pull_request:
@@ -21,12 +21,12 @@ on:
       - '**.go'
       - 'go.mod'
       - 'go.sum'
+      - 'Makefile'
+      - 'install.sh'
       - 'proto/**'
       - 'web-app/src/**'
       - 'web-app/package.json'
       - 'web-app/package-lock.json'
-      - 'Makefile'
-      - 'install.sh'
       - '.github/workflows/build.yml'
       - '.github/actions/prepare/**'
 
@@ -66,9 +66,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25.0'
           cache: true
 
       - name: Download generated files
@@ -99,9 +99,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25.0'
           cache: true
 
       - name: Download generated files
@@ -114,13 +114,14 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
+          CGO_CFLAGS: "-Wno-discarded-qualifiers"
         run: |
           BINARY_NAME=stapler-squad
           if [ "${{ matrix.goos }}" = "windows" ]; then
             BINARY_NAME=$BINARY_NAME.exe
           fi
           VERSION=$(git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' || git rev-parse --short HEAD)
-          go build -v -ldflags "-X main.version=${VERSION}" -o build/${{ matrix.goos }}_${{ matrix.goarch }}/$BINARY_NAME
+          go build -v -ldflags "-X main.version=${VERSION}" -o build/${{ matrix.goos }}_${{ matrix.goarch }}/$BINARY_NAME .
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -141,9 +142,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25.0'
           cache: true
 
       - name: Download generated files

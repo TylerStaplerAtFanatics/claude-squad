@@ -145,6 +145,7 @@ export function useSessionService(
           prompt: request.prompt,
           autoYes: request.autoYes,
           existingWorktree: request.existingWorktree,
+          sessionType: request.sessionType,
         });
 
         // Add to store (with duplicate check handled by entity adapter upsertOne)

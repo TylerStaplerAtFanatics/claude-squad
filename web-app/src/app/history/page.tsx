@@ -21,6 +21,8 @@ export default function HistoryBrowserPage() {
 
   // Core state
   const [entries, setEntries] = useState<ClaudeHistoryEntry[]>([]);
+  const [nextPageToken, setNextPageToken] = useState<string>("");
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<ClaudeHistoryEntry | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [messages, setMessages] = useState<ClaudeMessage[]>([]);
@@ -33,6 +35,8 @@ export default function HistoryBrowserPage() {
   const [error, setError] = useState<string | null>(null);
   const [resuming, setResuming] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
+  const [resumeTarget, setResumeTarget] = useState<ClaudeHistoryEntry | null>(null);
+  const [resumeTitle, setResumeTitle] = useState("");
 
   // Hooks
   const { filterState, setters, derived, actions } = useHistoryFilters(entries);
@@ -60,11 +64,23 @@ export default function HistoryBrowserPage() {
     if (!clientRef.current) return;
     try {
       setLoading(true); setError(null);
-      const response = await clientRef.current.listClaudeHistory({ limit: 500, searchQuery: query });
+      const response = await clientRef.current.listClaudeHistory({ pageSize: 100, searchQuery: query });
       setEntries(response.entries);
+      setNextPageToken(response.nextPageToken);
     } catch (err) { setError(`Failed to load history: ${err}`); }
     finally { setLoading(false); }
   }, []);
+
+  const loadMoreHistory = useCallback(async () => {
+    if (!clientRef.current || !nextPageToken || loadingMore) return;
+    try {
+      setLoadingMore(true); setError(null);
+      const response = await clientRef.current.listClaudeHistory({ pageSize: 100, pageToken: nextPageToken });
+      setEntries(prev => [...prev, ...response.entries]);
+      setNextPageToken(response.nextPageToken);
+    } catch (err) { setError(`Failed to load more history: ${err}`); }
+    finally { setLoadingMore(false); }
+  }, [nextPageToken, loadingMore]);
 
   const loadEntryDetail = useCallback(async (id: string) => {
     if (!clientRef.current) return;
@@ -72,7 +88,7 @@ export default function HistoryBrowserPage() {
       setError(null); setLoadingPreview(true); setPreviewMessages([]);
       const [detailResponse, messagesResponse] = await Promise.all([
         clientRef.current.getClaudeHistoryDetail({ id }),
-        clientRef.current.getClaudeHistoryMessages({ id, limit: 5 }),
+        clientRef.current.getClaudeHistoryMessages({ id, limit: 5, tail: true }),
       ]);
       if (detailResponse.entry) setSelectedEntry(detailResponse.entry);
       if (messagesResponse.messages) setPreviewMessages([...messagesResponse.messages].reverse());
@@ -140,23 +156,34 @@ export default function HistoryBrowserPage() {
     } catch (err) { setError(`Failed to export: ${err}`); }
   }, []);
 
-  const handleResumeSession = useCallback(async (entry: ClaudeHistoryEntry) => {
-    if (!clientRef.current || !entry.project) { setError("Cannot resume: Project path is required"); return; }
+  const openResumeModal = useCallback((entry: ClaudeHistoryEntry) => {
+    if (!entry.project) { setError("Cannot resume: No project path recorded for this session"); return; }
+    setResumeTarget(entry);
+    setResumeTitle(entry.name.substring(0, 60));
+  }, []);
+
+  const handleResumeSession = useCallback(async () => {
+    if (!clientRef.current || !resumeTarget) return;
+    if (!resumeTarget.project) { setError("Cannot resume: Project path is required"); return; }
+    const title = resumeTitle.trim() || resumeTarget.name.substring(0, 60);
     try {
       setResuming(true); setError(null);
-      const sessionTitle = `Resumed: ${entry.name}`.substring(0, 50);
       const response = await clientRef.current.createSession({
-        title: sessionTitle, path: entry.project, resumeId: entry.id, category: "Resumed",
+        title, path: resumeTarget.project, resumeId: resumeTarget.id, category: "Resumed",
       });
-      if (response.session) router.push("/");
+      if (response.session) { setResumeTarget(null); router.push("/"); }
     } catch (err) { setError(`Failed to resume session: ${err}`); }
     finally { setResuming(false); }
-  }, [router]);
+  }, [router, resumeTarget, resumeTitle]);
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isInInput = document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA";
+      if (resumeTarget) {
+        if (e.key === "Escape") { e.preventDefault(); setResumeTarget(null); }
+        return;
+      }
       if (isMessagesOpen) {
         if (e.key === "Escape") { e.preventDefault(); setShowMessages(false); }
         return;
@@ -185,7 +212,7 @@ export default function HistoryBrowserPage() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isMessagesOpen, searchQuery, selectedIndex, selectedEntry, flatEntries, selectEntry, loadMessages, cycleGroupingStrategy, setSearchQuery]);
+  }, [resumeTarget, isMessagesOpen, searchQuery, selectedIndex, selectedEntry, flatEntries, selectEntry, loadMessages, cycleGroupingStrategy, setSearchQuery]);
 
   return (
     <main id="main-content" className={styles.container}>
@@ -235,19 +262,32 @@ export default function HistoryBrowserPage() {
             </>
           ) : (
             <>
-              <h2 className={styles.sectionTitle}>History ({filteredEntries.length} of {entries.length} entries)</h2>
+              <h2 className={styles.sectionTitle}>
+                History ({filteredEntries.length} of {entries.length} entries{nextPageToken ? "+" : ""})
+              </h2>
               <HistoryGroupView
                 groupedEntries={groupedEntries} flatEntries={flatEntries} selectedEntry={selectedEntry}
                 loading={loading} entriesCount={entries.length} filteredCount={filteredEntries.length}
                 hasActiveFilters={hasActiveFilters} groupingStrategy={groupingStrategy}
                 onSelectEntry={selectEntry} onClearFilters={clearFilters}
               />
+              {nextPageToken && (
+                <div className={styles.loadMoreContainer}>
+                  <button
+                    onClick={loadMoreHistory}
+                    disabled={loadingMore}
+                    className="btn btn-secondary"
+                  >
+                    {loadingMore ? "Loading..." : "Load more"}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
         <HistoryDetailPanel
           entry={selectedEntry} previewMessages={previewMessages} loadingPreview={loadingPreview}
-          loadingMessages={loadingMessages} resuming={resuming} onResume={handleResumeSession}
+          loadingMessages={loadingMessages} resuming={resuming} onResume={openResumeModal}
           onViewMessages={loadMessages} onExport={handleExportEntry} onCopyId={handleCopyId}
         />
       </div>
@@ -264,6 +304,44 @@ export default function HistoryBrowserPage() {
         open={isMessagesOpen} messages={messages} messageSearchQuery={messageSearchQuery}
         onSearchChange={setMessageSearchQuery} onClose={() => setShowMessages(false)}
       />
+
+      {resumeTarget && (
+        <div className={styles.modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) setResumeTarget(null); }}>
+          <div className={styles.resumeModal} role="dialog" aria-modal="true" aria-labelledby="resume-modal-title">
+            <h2 id="resume-modal-title" className={styles.resumeModalTitle}>Resume Session</h2>
+            <p className={styles.resumeModalSubtitle}>
+              This will start a new session continuing the conversation with Claude.
+            </p>
+            <div className={styles.resumeModalField}>
+              <label htmlFor="resume-title" className={styles.resumeModalLabel}>Session name</label>
+              <input
+                id="resume-title"
+                type="text"
+                className={styles.resumeModalInput}
+                value={resumeTitle}
+                onChange={(e) => setResumeTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleResumeSession(); if (e.key === "Escape") setResumeTarget(null); }}
+                autoFocus
+                maxLength={100}
+              />
+            </div>
+            <div className={styles.resumeModalField}>
+              <span className={styles.resumeModalLabel}>Directory</span>
+              <code className={styles.resumeModalPath}>{resumeTarget.project}</code>
+            </div>
+            <div className={styles.resumeModalActions}>
+              <button onClick={() => setResumeTarget(null)} className="btn btn-secondary">Cancel</button>
+              <button
+                onClick={handleResumeSession}
+                disabled={resuming || !resumeTitle.trim()}
+                className="btn btn-primary"
+              >
+                {resuming ? "Starting..." : "▶️ Resume"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

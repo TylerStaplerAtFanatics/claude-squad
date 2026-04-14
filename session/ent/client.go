@@ -11,17 +11,18 @@ import (
 
 	"github.com/tstapler/stapler-squad/session/ent/migrate"
 
+	"entgo.io/ent"
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/tstapler/stapler-squad/session/ent/approvalrule"
+	"github.com/tstapler/stapler-squad/session/ent/classificationanalytics"
 	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
 	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 	"github.com/tstapler/stapler-squad/session/ent/diffstats"
 	"github.com/tstapler/stapler-squad/session/ent/session"
 	"github.com/tstapler/stapler-squad/session/ent/tag"
 	"github.com/tstapler/stapler-squad/session/ent/worktree"
-
-	"entgo.io/ent"
-	"entgo.io/ent/dialect"
-	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 // Client is the client that holds all ent builders.
@@ -29,6 +30,10 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// ApprovalRule is the client for interacting with the ApprovalRule builders.
+	ApprovalRule *ApprovalRuleClient
+	// ClassificationAnalytics is the client for interacting with the ClassificationAnalytics builders.
+	ClassificationAnalytics *ClassificationAnalyticsClient
 	// ClaudeMetadata is the client for interacting with the ClaudeMetadata builders.
 	ClaudeMetadata *ClaudeMetadataClient
 	// ClaudeSession is the client for interacting with the ClaudeSession builders.
@@ -52,6 +57,8 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.ApprovalRule = NewApprovalRuleClient(c.config)
+	c.ClassificationAnalytics = NewClassificationAnalyticsClient(c.config)
 	c.ClaudeMetadata = NewClaudeMetadataClient(c.config)
 	c.ClaudeSession = NewClaudeSessionClient(c.config)
 	c.DiffStats = NewDiffStatsClient(c.config)
@@ -148,14 +155,16 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:            ctx,
-		config:         cfg,
-		ClaudeMetadata: NewClaudeMetadataClient(cfg),
-		ClaudeSession:  NewClaudeSessionClient(cfg),
-		DiffStats:      NewDiffStatsClient(cfg),
-		Session:        NewSessionClient(cfg),
-		Tag:            NewTagClient(cfg),
-		Worktree:       NewWorktreeClient(cfg),
+		ctx:                     ctx,
+		config:                  cfg,
+		ApprovalRule:            NewApprovalRuleClient(cfg),
+		ClassificationAnalytics: NewClassificationAnalyticsClient(cfg),
+		ClaudeMetadata:          NewClaudeMetadataClient(cfg),
+		ClaudeSession:           NewClaudeSessionClient(cfg),
+		DiffStats:               NewDiffStatsClient(cfg),
+		Session:                 NewSessionClient(cfg),
+		Tag:                     NewTagClient(cfg),
+		Worktree:                NewWorktreeClient(cfg),
 	}, nil
 }
 
@@ -173,21 +182,23 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:            ctx,
-		config:         cfg,
-		ClaudeMetadata: NewClaudeMetadataClient(cfg),
-		ClaudeSession:  NewClaudeSessionClient(cfg),
-		DiffStats:      NewDiffStatsClient(cfg),
-		Session:        NewSessionClient(cfg),
-		Tag:            NewTagClient(cfg),
-		Worktree:       NewWorktreeClient(cfg),
+		ctx:                     ctx,
+		config:                  cfg,
+		ApprovalRule:            NewApprovalRuleClient(cfg),
+		ClassificationAnalytics: NewClassificationAnalyticsClient(cfg),
+		ClaudeMetadata:          NewClaudeMetadataClient(cfg),
+		ClaudeSession:           NewClaudeSessionClient(cfg),
+		DiffStats:               NewDiffStatsClient(cfg),
+		Session:                 NewSessionClient(cfg),
+		Tag:                     NewTagClient(cfg),
+		Worktree:                NewWorktreeClient(cfg),
 	}, nil
 }
 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		ClaudeMetadata.
+//		ApprovalRule.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -210,7 +221,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.ClaudeMetadata, c.ClaudeSession, c.DiffStats, c.Session, c.Tag, c.Worktree,
+		c.ApprovalRule, c.ClassificationAnalytics, c.ClaudeMetadata, c.ClaudeSession,
+		c.DiffStats, c.Session, c.Tag, c.Worktree,
 	} {
 		n.Use(hooks...)
 	}
@@ -220,7 +232,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.ClaudeMetadata, c.ClaudeSession, c.DiffStats, c.Session, c.Tag, c.Worktree,
+		c.ApprovalRule, c.ClassificationAnalytics, c.ClaudeMetadata, c.ClaudeSession,
+		c.DiffStats, c.Session, c.Tag, c.Worktree,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -229,6 +242,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *ApprovalRuleMutation:
+		return c.ApprovalRule.mutate(ctx, m)
+	case *ClassificationAnalyticsMutation:
+		return c.ClassificationAnalytics.mutate(ctx, m)
 	case *ClaudeMetadataMutation:
 		return c.ClaudeMetadata.mutate(ctx, m)
 	case *ClaudeSessionMutation:
@@ -243,6 +260,272 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Worktree.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// ApprovalRuleClient is a client for the ApprovalRule schema.
+type ApprovalRuleClient struct {
+	config
+}
+
+// NewApprovalRuleClient returns a client for the ApprovalRule from the given config.
+func NewApprovalRuleClient(c config) *ApprovalRuleClient {
+	return &ApprovalRuleClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `approvalrule.Hooks(f(g(h())))`.
+func (c *ApprovalRuleClient) Use(hooks ...Hook) {
+	c.hooks.ApprovalRule = append(c.hooks.ApprovalRule, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `approvalrule.Intercept(f(g(h())))`.
+func (c *ApprovalRuleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ApprovalRule = append(c.inters.ApprovalRule, interceptors...)
+}
+
+// Create returns a builder for creating a ApprovalRule entity.
+func (c *ApprovalRuleClient) Create() *ApprovalRuleCreate {
+	mutation := newApprovalRuleMutation(c.config, OpCreate)
+	return &ApprovalRuleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ApprovalRule entities.
+func (c *ApprovalRuleClient) CreateBulk(builders ...*ApprovalRuleCreate) *ApprovalRuleCreateBulk {
+	return &ApprovalRuleCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ApprovalRuleClient) MapCreateBulk(slice any, setFunc func(*ApprovalRuleCreate, int)) *ApprovalRuleCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ApprovalRuleCreateBulk{err: fmt.Errorf("calling to ApprovalRuleClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ApprovalRuleCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ApprovalRuleCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ApprovalRule.
+func (c *ApprovalRuleClient) Update() *ApprovalRuleUpdate {
+	mutation := newApprovalRuleMutation(c.config, OpUpdate)
+	return &ApprovalRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ApprovalRuleClient) UpdateOne(_m *ApprovalRule) *ApprovalRuleUpdateOne {
+	mutation := newApprovalRuleMutation(c.config, OpUpdateOne, withApprovalRule(_m))
+	return &ApprovalRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ApprovalRuleClient) UpdateOneID(id int) *ApprovalRuleUpdateOne {
+	mutation := newApprovalRuleMutation(c.config, OpUpdateOne, withApprovalRuleID(id))
+	return &ApprovalRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ApprovalRule.
+func (c *ApprovalRuleClient) Delete() *ApprovalRuleDelete {
+	mutation := newApprovalRuleMutation(c.config, OpDelete)
+	return &ApprovalRuleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ApprovalRuleClient) DeleteOne(_m *ApprovalRule) *ApprovalRuleDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ApprovalRuleClient) DeleteOneID(id int) *ApprovalRuleDeleteOne {
+	builder := c.Delete().Where(approvalrule.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ApprovalRuleDeleteOne{builder}
+}
+
+// Query returns a query builder for ApprovalRule.
+func (c *ApprovalRuleClient) Query() *ApprovalRuleQuery {
+	return &ApprovalRuleQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeApprovalRule},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ApprovalRule entity by its id.
+func (c *ApprovalRuleClient) Get(ctx context.Context, id int) (*ApprovalRule, error) {
+	return c.Query().Where(approvalrule.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ApprovalRuleClient) GetX(ctx context.Context, id int) *ApprovalRule {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ApprovalRuleClient) Hooks() []Hook {
+	return c.hooks.ApprovalRule
+}
+
+// Interceptors returns the client interceptors.
+func (c *ApprovalRuleClient) Interceptors() []Interceptor {
+	return c.inters.ApprovalRule
+}
+
+func (c *ApprovalRuleClient) mutate(ctx context.Context, m *ApprovalRuleMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ApprovalRuleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ApprovalRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ApprovalRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ApprovalRuleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ApprovalRule mutation op: %q", m.Op())
+	}
+}
+
+// ClassificationAnalyticsClient is a client for the ClassificationAnalytics schema.
+type ClassificationAnalyticsClient struct {
+	config
+}
+
+// NewClassificationAnalyticsClient returns a client for the ClassificationAnalytics from the given config.
+func NewClassificationAnalyticsClient(c config) *ClassificationAnalyticsClient {
+	return &ClassificationAnalyticsClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `classificationanalytics.Hooks(f(g(h())))`.
+func (c *ClassificationAnalyticsClient) Use(hooks ...Hook) {
+	c.hooks.ClassificationAnalytics = append(c.hooks.ClassificationAnalytics, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `classificationanalytics.Intercept(f(g(h())))`.
+func (c *ClassificationAnalyticsClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ClassificationAnalytics = append(c.inters.ClassificationAnalytics, interceptors...)
+}
+
+// Create returns a builder for creating a ClassificationAnalytics entity.
+func (c *ClassificationAnalyticsClient) Create() *ClassificationAnalyticsCreate {
+	mutation := newClassificationAnalyticsMutation(c.config, OpCreate)
+	return &ClassificationAnalyticsCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ClassificationAnalytics entities.
+func (c *ClassificationAnalyticsClient) CreateBulk(builders ...*ClassificationAnalyticsCreate) *ClassificationAnalyticsCreateBulk {
+	return &ClassificationAnalyticsCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ClassificationAnalyticsClient) MapCreateBulk(slice any, setFunc func(*ClassificationAnalyticsCreate, int)) *ClassificationAnalyticsCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ClassificationAnalyticsCreateBulk{err: fmt.Errorf("calling to ClassificationAnalyticsClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ClassificationAnalyticsCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ClassificationAnalyticsCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ClassificationAnalytics.
+func (c *ClassificationAnalyticsClient) Update() *ClassificationAnalyticsUpdate {
+	mutation := newClassificationAnalyticsMutation(c.config, OpUpdate)
+	return &ClassificationAnalyticsUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ClassificationAnalyticsClient) UpdateOne(_m *ClassificationAnalytics) *ClassificationAnalyticsUpdateOne {
+	mutation := newClassificationAnalyticsMutation(c.config, OpUpdateOne, withClassificationAnalytics(_m))
+	return &ClassificationAnalyticsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ClassificationAnalyticsClient) UpdateOneID(id int) *ClassificationAnalyticsUpdateOne {
+	mutation := newClassificationAnalyticsMutation(c.config, OpUpdateOne, withClassificationAnalyticsID(id))
+	return &ClassificationAnalyticsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ClassificationAnalytics.
+func (c *ClassificationAnalyticsClient) Delete() *ClassificationAnalyticsDelete {
+	mutation := newClassificationAnalyticsMutation(c.config, OpDelete)
+	return &ClassificationAnalyticsDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ClassificationAnalyticsClient) DeleteOne(_m *ClassificationAnalytics) *ClassificationAnalyticsDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ClassificationAnalyticsClient) DeleteOneID(id int) *ClassificationAnalyticsDeleteOne {
+	builder := c.Delete().Where(classificationanalytics.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ClassificationAnalyticsDeleteOne{builder}
+}
+
+// Query returns a query builder for ClassificationAnalytics.
+func (c *ClassificationAnalyticsClient) Query() *ClassificationAnalyticsQuery {
+	return &ClassificationAnalyticsQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeClassificationAnalytics},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ClassificationAnalytics entity by its id.
+func (c *ClassificationAnalyticsClient) Get(ctx context.Context, id int) (*ClassificationAnalytics, error) {
+	return c.Query().Where(classificationanalytics.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ClassificationAnalyticsClient) GetX(ctx context.Context, id int) *ClassificationAnalytics {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ClassificationAnalyticsClient) Hooks() []Hook {
+	return c.hooks.ClassificationAnalytics
+}
+
+// Interceptors returns the client interceptors.
+func (c *ClassificationAnalyticsClient) Interceptors() []Interceptor {
+	return c.inters.ClassificationAnalytics
+}
+
+func (c *ClassificationAnalyticsClient) mutate(ctx context.Context, m *ClassificationAnalyticsMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ClassificationAnalyticsCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ClassificationAnalyticsUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ClassificationAnalyticsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ClassificationAnalyticsDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ClassificationAnalytics mutation op: %q", m.Op())
 	}
 }
 
@@ -1207,10 +1490,11 @@ func (c *WorktreeClient) mutate(ctx context.Context, m *WorktreeMutation) (Value
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		ClaudeMetadata, ClaudeSession, DiffStats, Session, Tag, Worktree []ent.Hook
+		ApprovalRule, ClassificationAnalytics, ClaudeMetadata, ClaudeSession, DiffStats,
+		Session, Tag, Worktree []ent.Hook
 	}
 	inters struct {
-		ClaudeMetadata, ClaudeSession, DiffStats, Session, Tag,
-		Worktree []ent.Interceptor
+		ApprovalRule, ClassificationAnalytics, ClaudeMetadata, ClaudeSession, DiffStats,
+		Session, Tag, Worktree []ent.Interceptor
 	}
 )
