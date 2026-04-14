@@ -35,7 +35,9 @@ function priorityClass(priority: string | undefined): string {
     case "pending":    return styles.prBadgePending;
     case "draft":      return styles.prBadgeDraft;
     case "complete":   return styles.prBadgeComplete;
-    default:           return ""; // fall back to base prBadge purple
+    case "auth_error":
+    case "error":      return styles.prBadgeError;
+    default:           return styles.prBadgeUnknown; // gray: not yet loaded
   }
 }
 
@@ -48,6 +50,8 @@ function priorityLabel(priority: string | undefined, isDraft?: boolean): string 
     case "pending":    return "Pending";
     case "draft":      return "Draft";
     case "complete":   return "Merged";
+    case "auth_error": return "Auth Error";
+    case "error":      return "Error";
     default:           return "";
   }
 }

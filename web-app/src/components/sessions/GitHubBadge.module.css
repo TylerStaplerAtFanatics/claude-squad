@@ -113,6 +113,32 @@
   opacity: 1;
 }
 
+/* error: auth_error or fetch error */
+.prBadgeError {
+  background: var(--text-muted, #6e7681);
+  color: #ffffff;
+  border-color: var(--text-muted, #6e7681);
+  opacity: 0.7;
+}
+
+.prBadgeError:hover {
+  opacity: 0.9;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* unknown: priority not yet loaded (brief state after server start) */
+.prBadgeUnknown {
+  background: var(--text-muted, #6e7681);
+  color: #ffffff;
+  border-color: var(--text-muted, #6e7681);
+  opacity: 0.6;
+}
+
+.prBadgeUnknown:hover {
+  opacity: 0.8;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
 /* Priority label displayed after PR number */
 .priorityLabel {
   font-size: 10px;
