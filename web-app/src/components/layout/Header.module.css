@@ -63,12 +63,12 @@
 
 .navLink:hover {
   color: var(--text-primary, #ffffff);
-  background: var(--hover-background));
+  background: var(--hover-background);
 }
 
 .navLink.active {
   color: var(--text-primary, #ffffff);
-  background: var(--primary-active));
+  background: var(--primary-active);
 }
 
 .navLink.active::after {
@@ -141,7 +141,7 @@
 
 .debugButton:hover {
   color: var(--text-primary, #ffffff);
-  background: var(--hover-background));
+  background: var(--hover-background);
   border-color: var(--border-hover, #555);
   transform: scale(1.05);
 }
@@ -168,7 +168,7 @@
 
 .helpButton:hover {
   color: var(--text-primary, #ffffff);
-  background: var(--hover-background));
+  background: var(--hover-background);
   border-color: var(--border-hover, #555);
 }
 
@@ -194,7 +194,7 @@
 
 .notificationButton:hover {
   color: var(--text-primary, #ffffff);
-  background: var(--hover-background));
+  background: var(--hover-background);
   border-color: var(--border-hover, #555);
   transform: scale(1.05);
 }
