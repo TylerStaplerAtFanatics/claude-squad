@@ -159,20 +159,27 @@ func (hl *HistoryLinker) correlateSession(inst *Instance) {
 		return
 	}
 
-	// Need an alive tmux session to inspect its foreground process.
+	var info *HistoryFileInfo
+
+	// Fast path: inspect open files of the live tmux pane process.
 	pid, err := inst.GetPanePID()
-	if err != nil {
-		// Session dead or not started yet — normal, not an error.
-		return
+	if err == nil {
+		info, err = hl.detector.Detect(pid)
+		if err != nil {
+			log.WarningLog.Printf("HistoryLinker: detect error for '%s' (pid=%d): %v", inst.Title, pid, err)
+		}
 	}
 
-	info, err := hl.detector.Detect(pid)
-	if err != nil {
-		log.WarningLog.Printf("HistoryLinker: detect error for '%s' (pid=%d): %v", inst.Title, pid, err)
-		return
+	// Fallback: scan the project directory by path (works after reboot / tmux kill).
+	if info == nil && inst.Path != "" {
+		info, err = hl.detector.DetectByPath(inst.Path)
+		if err != nil {
+			log.WarningLog.Printf("HistoryLinker: path-based detect error for '%s': %v", inst.Title, err)
+		}
 	}
+
 	if info == nil {
-		return // No JSONL open yet.
+		return // No JSONL found yet.
 	}
 
 	log.InfoLog.Printf("HistoryLinker: linked '%s' → conv UUID %s", inst.Title, info.ConversationUUID)
