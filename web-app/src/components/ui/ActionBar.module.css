@@ -50,6 +50,17 @@
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    /* Scroll affordance: fade right edge to hint at hidden controls.
+       Uses background-attachment local/scroll trick — local gradients scroll
+       with content (disappear when at the edge); scroll gradient stays fixed
+       at the viewport edge as a persistent shadow. */
+    background-image:
+      linear-gradient(to right, transparent, var(--card-background, #1a1a1a)),
+      linear-gradient(to right, transparent, var(--card-background, #1a1a1a));
+    background-position: right center, right center;
+    background-size: 2rem 100%, 2rem 100%;
+    background-repeat: no-repeat;
+    background-attachment: local, scroll;
   }
 
   .compact::-webkit-scrollbar {
