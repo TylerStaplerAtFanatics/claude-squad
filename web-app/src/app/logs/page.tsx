@@ -17,6 +17,7 @@ import { ExportButton } from "@/components/logs/ExportButton";
 import { SearchWithHistory } from "@/components/logs/SearchWithHistory";
 import { DensityToggle, type LogDensity } from "@/components/logs/DensityToggle";
 import { useLiveTail } from "@/lib/hooks/useLiveTail";
+import { ActionBar } from "@/components/ui/ActionBar";
 import styles from "./page.module.css";
 
 export default function LogsPage() {
@@ -325,7 +326,7 @@ export default function LogsPage() {
     <main id="main-content" className={styles.container}>
       <header className={styles.header}>
         <h1>Application Logs</h1>
-        <div className={styles.headerActions}>
+        <ActionBar scroll compact gap="md" className={styles.headerActions}>
           <LiveTailToggle
             isEnabled={liveTailEnabled}
             onToggle={() => setLiveTailEnabled(prev => !prev)}
@@ -351,10 +352,10 @@ export default function LogsPage() {
             🔄 Refresh
           </button>
           <ExportButton logs={logs} disabled={loading} />
-        </div>
+        </ActionBar>
       </header>
 
-      <div className={styles.filters}>
+      <ActionBar scroll compact gap="md" className={styles.filters}>
         <div className={styles.filterGroup}>
           <label htmlFor="search">Search:</label>
           <SearchWithHistory
@@ -395,7 +396,7 @@ export default function LogsPage() {
           <label>Density:</label>
           <DensityToggle value={density} onChange={setDensity} />
         </div>
-      </div>
+      </ActionBar>
 
       {/* Active Filter Pills */}
       {hasActiveFilters && (

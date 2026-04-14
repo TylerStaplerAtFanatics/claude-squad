@@ -6,6 +6,7 @@ import { Session, SessionStatus, CheckpointProto } from "@/gen/session/v1/types_
 import { SessionCard } from "./SessionCard";
 import { BulkActions } from "./BulkActions";
 import { GroupingStrategy, GroupingStrategyLabels, groupSessions, cycleGroupingStrategy } from "@/lib/grouping/strategies";
+import { ActionBar } from "@/components/ui/ActionBar";
 import styles from "./SessionList.module.css";
 
 interface SessionListProps {
@@ -359,7 +360,10 @@ export function SessionList({
           </div>
 
           {/* Collapsible filter controls */}
-          <div
+          <ActionBar
+            scroll
+            compact
+            gap="sm"
             id="session-filter-controls"
             className={`${styles.filterControls} ${filtersOpen ? styles.filterControlsOpen : ""}`}
           >
@@ -462,7 +466,7 @@ export function SessionList({
             >
               {sortDir === 'asc' ? '↑' : '↓'}
             </button>
-          </div>
+          </ActionBar>
         </div>
       </div>
 

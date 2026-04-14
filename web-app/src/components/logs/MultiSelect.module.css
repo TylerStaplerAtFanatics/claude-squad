@@ -123,3 +123,12 @@
   text-transform: uppercase;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
+
+@media (max-width: 768px) {
+  .dropdown {
+    left: auto;
+    right: 0;
+    max-width: calc(100vw - 2rem);
+    min-width: min(160px, calc(100vw - 2rem));
+  }
+}

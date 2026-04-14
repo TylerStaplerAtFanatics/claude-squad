@@ -82,3 +82,12 @@
   background-color: #333;
   margin: 0.25rem 0;
 }
+
+@media (max-width: 768px) {
+  .dropdown {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 2rem);
+  }
+}
