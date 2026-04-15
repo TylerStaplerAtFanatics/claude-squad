@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -170,9 +171,9 @@ func TestScheduler_ScheduleRecovery(t *testing.T) {
 	scheduler := NewScheduler("test-session")
 	scheduler.SetBuffer(1)
 
-	var executed bool
+	var executed atomic.Bool
 	scheduler.SetRecoveryCallback(func() error {
-		executed = true
+		executed.Store(true)
 		return nil
 	})
 
@@ -185,7 +186,7 @@ func TestScheduler_ScheduleRecovery(t *testing.T) {
 
 	time.Sleep(1500 * time.Millisecond)
 
-	if !executed {
+	if !executed.Load() {
 		t.Error("expected recovery callback to be executed")
 	}
 }
