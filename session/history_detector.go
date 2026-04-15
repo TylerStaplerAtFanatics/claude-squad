@@ -111,10 +111,21 @@ func (d *HistoryFileDetector) Detect(pid int32) (*HistoryFileInfo, error) {
 }
 
 // ClaudeProjectDirName returns the directory name Claude uses for a given
-// absolute project path. Claude encodes the path by replacing every '/' with '-'.
-// Example: "/Users/alice/myproject" → "-Users-alice-myproject"
+// absolute project path. Claude encodes the path by replacing every non-alphanumeric
+// character with '-'. This includes '/', '.', '_', and any other non-word characters.
+// Example: "/Users/alice/myproject"          → "-Users-alice-myproject"
+// Example: "/Users/alice/.hidden/my_project" → "-Users-alice--hidden-my-project"
 func ClaudeProjectDirName(projectPath string) string {
-	return strings.ReplaceAll(projectPath, "/", "-")
+	result := make([]byte, len(projectPath))
+	for i := 0; i < len(projectPath); i++ {
+		c := projectPath[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+			result[i] = c
+		} else {
+			result[i] = '-'
+		}
+	}
+	return string(result)
 }
 
 // DetectByPath scans ~/.claude/projects/<encoded-path>/ for the most recently
