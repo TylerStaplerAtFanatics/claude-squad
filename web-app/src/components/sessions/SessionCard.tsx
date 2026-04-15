@@ -380,9 +380,15 @@ export function SessionCard({
         </div>
       )}
       {isRestartConfirmOpen && (
-        <div className={styles.confirmDialog} onClick={(e) => e.stopPropagation()}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="restartDialogTitle"
+          className={styles.confirmDialog}
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className={styles.dialogContent}>
-            <h3>Restart Session</h3>
+            <h3 id="restartDialogTitle">Restart Session</h3>
             <p>Are you sure you want to restart &quot;{session.title}&quot;?</p>
             <p className={styles.warningText}>This will terminate the current process and start a new one.</p>
             <div className={styles.dialogActions}>
@@ -714,7 +720,7 @@ export function SessionCard({
               : moSecs >= tuSecs ? session.lastMeaningfulOutput : session.lastTerminalUpdate;
             return lastActivity ? (
               <span className={styles.timestamp} title="Last terminal activity">
-                Last Activity: <time dateTime={new Date(Number(lastActivity.seconds) * 1000).toISOString()}>{formatTimeAgo(lastActivity)}</time>
+                Last Activity: <time dateTime={new Date(Number(lastActivity.seconds) * 1000).toISOString()} title={new Date(Number(lastActivity.seconds) * 1000).toISOString()}>{formatTimeAgo(lastActivity)}</time>
               </span>
             ) : null;
           })()}
@@ -739,7 +745,7 @@ export function SessionCard({
               aria-label={`Resume session ${session.title}`}
               title="Resume this session"
             >
-              ▶️ Resume
+              <span aria-hidden="true">▶️</span> Resume
             </button>
           ) : (
             <button
@@ -751,7 +757,7 @@ export function SessionCard({
               aria-label={`Pause session ${session.title}`}
               title="Pause this session"
             >
-              ⏸️ Pause
+              <span aria-hidden="true">⏸️</span> Pause
             </button>
           )}
           <button
@@ -760,7 +766,7 @@ export function SessionCard({
             title="Rename this session"
             aria-label={`Rename session ${session.title}`}
           >
-            ✏️ Rename
+            <span aria-hidden="true">✏️</span> Rename
           </button>
           <button
             className={`${styles.actionButton} ${styles.restartButton}`}
@@ -768,7 +774,7 @@ export function SessionCard({
             title="Restart this session"
             aria-label={`Restart session ${session.title}`}
           >
-            🔄 Restart
+            <span aria-hidden="true">🔄</span> Restart
           </button>
           {onCreateCheckpoint && (
             <button
@@ -777,7 +783,7 @@ export function SessionCard({
               title="Save a named checkpoint of the current session state"
               aria-label={`Create checkpoint for session ${session.title}`}
             >
-              📍 Checkpoint
+              <span aria-hidden="true">📍</span> Checkpoint
             </button>
           )}
           {onForkFromCheckpoint && (
@@ -787,7 +793,7 @@ export function SessionCard({
               title="Fork this session from a checkpoint"
               aria-label={`Fork session ${session.title} from checkpoint`}
             >
-              🍴 Fork
+              <span aria-hidden="true">🍴</span> Fork
             </button>
           )}
           <button
@@ -799,7 +805,7 @@ export function SessionCard({
             title="New workspace on the same project (same path, fresh title and branch)"
             aria-label={`New workspace from ${session.title}`}
           >
-            ➕ New Workspace
+            <span aria-hidden="true">➕</span> New Workspace
           </button>
           <button
             className={styles.actionButton}
@@ -810,7 +816,7 @@ export function SessionCard({
             title="Duplicate this session with editable configuration"
             aria-label={`Duplicate session ${session.title}`}
           >
-            📋 Duplicate
+            <span aria-hidden="true">📋</span> Duplicate
           </button>
           <button
             className={`${styles.actionButton} ${styles.deleteButton}`}
@@ -827,7 +833,7 @@ export function SessionCard({
             aria-label={`Delete session ${session.title}`}
             title="Delete this session"
           >
-            {isDeleting ? "Deleting..." : "🗑️ Delete"}
+            {isDeleting ? "Deleting..." : <><span aria-hidden="true">🗑️</span> Delete</>}
           </button>
         </div>
       </div>

@@ -8,6 +8,7 @@ interface ApprovalCardProps {
   approval: PendingApprovalProto;
   onApprove: () => void;
   onDeny: () => void;
+  sessionTitle?: string; // Human-readable session name; falls back to approval.sessionId
 }
 
 /**
@@ -16,7 +17,7 @@ interface ApprovalCardProps {
  * Shows the tool name, relevant input preview, working directory,
  * and a live countdown timer. Provides Approve (green) and Deny (red) buttons.
  */
-export function ApprovalCard({ approval, onApprove, onDeny }: ApprovalCardProps) {
+export function ApprovalCard({ approval, onApprove, onDeny, sessionTitle }: ApprovalCardProps) {
   const [secondsLeft, setSecondsLeft] = useState(approval.secondsRemaining);
   const [showDetails, setShowDetails] = useState(false);
   const toggleDetails = useCallback(() => setShowDetails((v) => !v), []);
@@ -92,11 +93,11 @@ export function ApprovalCard({ approval, onApprove, onDeny }: ApprovalCardProps)
       </div>
 
       <div className={styles.body}>
-        {approval.sessionId && (
+        {(sessionTitle || approval.sessionId) && (
           <div className={styles.detail}>
             <span className={styles.detailLabel}>Session:</span>
             <span className={styles.detailValue} title={approval.sessionId}>
-              {approval.sessionId}
+              {sessionTitle || approval.sessionId}
             </span>
           </div>
         )}

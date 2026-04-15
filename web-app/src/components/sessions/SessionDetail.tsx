@@ -255,7 +255,7 @@ export function SessionDetail({
           className={styles.tabContent}
           style={{ display: activeTab === "terminal" ? undefined : 'none' }}
         >
-          <ApprovalPanel sessionId={session.id} onResolved={onApprovalResolved} />
+          <ApprovalPanel sessionId={session.id} sessionTitle={session.title} onResolved={onApprovalResolved} />
           {session.instanceType === InstanceType.EXTERNAL && !session.externalMetadata?.muxSocketPath ? (
             <div className={styles.noTerminalPlaceholder}>
               <span className={styles.noTerminalIcon}>⛓️</span>

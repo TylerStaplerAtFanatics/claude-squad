@@ -522,8 +522,6 @@ function HomeContent() {
                   { keys: "Escape", description: "Close modal / dialog" },
                   { keys: "R", description: "Refresh session list" },
                   { keys: "Enter", description: "Open selected session" },
-                  { keys: "/", description: "Focus search (coming soon)" },
-                  { keys: ["↑", "↓"], description: "Navigate sessions (coming soon)" },
                 ]}
               />
             </div>
@@ -531,15 +529,6 @@ function HomeContent() {
         </div>
       )}
 
-      {/* Floating help button */}
-      <button
-        className={styles.helpButton}
-        onClick={() => setShowHelp(true)}
-        aria-label="Show keyboard shortcuts"
-        title="Keyboard shortcuts (?)"
-      >
-        ?
-      </button>
     </div>
   );
 }

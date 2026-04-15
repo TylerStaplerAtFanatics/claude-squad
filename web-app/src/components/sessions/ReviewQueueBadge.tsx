@@ -34,6 +34,21 @@ export function ReviewQueueBadge({
     }
   };
 
+  const getPriorityAbbr = (p: Priority): string => {
+    switch (p) {
+      case Priority.URGENT:
+        return "URG";
+      case Priority.HIGH:
+        return "HIGH";
+      case Priority.MEDIUM:
+        return "MED";
+      case Priority.LOW:
+        return "LOW";
+      default:
+        return "";
+    }
+  };
+
   const getPriorityClass = (p: Priority): string => {
     switch (p) {
       case Priority.URGENT:
@@ -102,9 +117,9 @@ export function ReviewQueueBadge({
       case AttentionReason.TASK_COMPLETE:
         return styles.reasonComplete;
       case AttentionReason.UNCOMMITTED_CHANGES:
-        return styles.reasonUnspecified;
+        return styles.reasonUncommitted;
       case AttentionReason.STALE:
-        return styles.reasonUnspecified;
+        return styles.reasonStale;
       case AttentionReason.WAITING_FOR_USER:
         return styles.reasonInput;
       default:
@@ -113,13 +128,15 @@ export function ReviewQueueBadge({
   };
 
   if (compact) {
+    const abbr = getPriorityAbbr(priority);
     return (
       <span
         className={`${styles.badgeCompact} ${getPriorityClass(priority)}`}
         title={`${getPriorityText(priority)}: ${getReasonText(reason)}`}
         aria-label={`${getPriorityText(priority)} priority: ${getReasonText(reason)}`}
       >
-        {getPriorityEmoji(priority)}
+        <span aria-hidden="true">{getPriorityEmoji(priority)}</span>
+        {abbr && <span className={styles.priorityAbbr} aria-hidden="true">{abbr}</span>}
       </span>
     );
   }

@@ -7,6 +7,7 @@ import styles from "./ApprovalPanel.module.css";
 
 interface ApprovalPanelProps {
   sessionId?: string; // if provided, filter to this session
+  sessionTitle?: string; // human-readable session name to display in approval cards
   onResolved?: () => void; // fires when all approvals for this session are resolved
 }
 
@@ -25,7 +26,7 @@ interface ApprovalPanelProps {
  * <ApprovalPanel sessionId="session-123" />
  * ```
  */
-export function ApprovalPanel({ sessionId, onResolved }: ApprovalPanelProps) {
+export function ApprovalPanel({ sessionId, sessionTitle, onResolved }: ApprovalPanelProps) {
   const { approvals, loading, error, approve, deny, refresh } = useApprovals({
     sessionId,
   });
@@ -109,6 +110,7 @@ export function ApprovalPanel({ sessionId, onResolved }: ApprovalPanelProps) {
               approval={approval}
               onApprove={() => approve(approval.id)}
               onDeny={() => deny(approval.id)}
+              sessionTitle={sessionTitle}
             />
           ))
         )}

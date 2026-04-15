@@ -344,6 +344,14 @@ export function ReviewQueuePanel({
                 <div
                   className={`${styles.itemClickable} ${index === currentIndex ? styles.currentItem : ""}`}
                   onClick={() => onSessionClick?.(item.sessionId)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSessionClick?.(item.sessionId);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                   data-testid={`review-item-${item.sessionId}`}
                   data-current={index === currentIndex ? "true" : undefined}
                 >
