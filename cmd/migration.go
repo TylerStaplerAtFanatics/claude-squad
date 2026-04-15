@@ -44,9 +44,9 @@ func NewBridge() *Bridge {
 	log.InfoLog.Printf("Navigation commands - up: %v, down: %v", upCmd != nil, downCmd != nil)
 
 	bridge := &Bridge{
-		registry:           registry,
-		config:             cfg,
-		contextStack:       []ContextID{ContextGlobal}, // Start with global context
+		registry:     registry,
+		config:       cfg,
+		contextStack: []ContextID{ContextGlobal}, // Start with global context
 
 		keyCategoriesCache: make(map[ContextID]map[string][]string),
 	}
