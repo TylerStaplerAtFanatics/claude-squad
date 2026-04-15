@@ -1952,3 +1952,49 @@ func checkpointToProto(cp *session.Checkpoint) *sessionv1.CheckpointProto {
 		Timestamp:      timestamppb.New(cp.Timestamp),
 	}
 }
+
+// GetTerminalSnapshot returns the last N lines of terminal output for a session.
+// Uses inst.Preview() for a read-only snapshot without requiring an active stream.
+func (s *SessionService) GetTerminalSnapshot(
+	ctx context.Context,
+	req *connect.Request[sessionv1.GetTerminalSnapshotRequest],
+) (*connect.Response[sessionv1.GetTerminalSnapshotResponse], error) {
+	if req.Msg.SessionId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session_id is required"))
+	}
+
+	// Find the live instance via the poller (avoids loadInstancesWithWiring side effects)
+	var inst *session.Instance
+	if s.reviewQueuePoller != nil {
+		inst = s.reviewQueuePoller.FindInstance(req.Msg.SessionId)
+	}
+	if inst == nil && s.externalDiscovery != nil {
+		inst = s.externalDiscovery.GetSession(req.Msg.SessionId)
+	}
+	if inst == nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.SessionId))
+	}
+
+	content, err := inst.Preview()
+	if err != nil {
+		// Non-fatal: return empty snapshot rather than error
+		log.WarningLog.Printf("[GetTerminalSnapshot] Preview failed for session %s: %v", req.Msg.SessionId, err)
+		content = ""
+	}
+
+	// Trim to last N lines
+	lastN := int(req.Msg.LastNLines)
+	if lastN <= 0 {
+		lastN = 20
+	}
+	lines := strings.Split(content, "\n")
+	if len(lines) > lastN {
+		lines = lines[len(lines)-lastN:]
+	}
+	content = strings.Join(lines, "\n")
+
+	return connect.NewResponse(&sessionv1.GetTerminalSnapshotResponse{
+		Content: content,
+		IsEmpty: strings.TrimSpace(content) == "",
+	}), nil
+}

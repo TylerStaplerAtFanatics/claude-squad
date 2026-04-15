@@ -5,6 +5,8 @@ import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState, Check
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
 import { GitHubBadge } from "./GitHubBadge";
 import { TagEditor } from "./TagEditor";
+import { useTerminalSnapshot } from "@/lib/hooks/useTerminalSnapshot";
+import * as snapshotStyles from "./SessionCard.css";
 import styles from "./SessionCard.module.css";
 
 interface SessionCardProps {
@@ -69,6 +71,13 @@ export function SessionCard({
   const [renameError, setRenameError] = useState("");
   const [checkpointError, setCheckpointError] = useState("");
   const [forkError, setForkError] = useState("");
+  const [isSnapshotOpen, setIsSnapshotOpen] = useState(false);
+
+  // Only fetch snapshot for running sessions (paused/loading sessions have stale output)
+  const isSnapshotEnabled = session.status === SessionStatus.RUNNING && isSnapshotOpen;
+  const { html: snapshotHtml, isEmpty: snapshotIsEmpty, loading: snapshotLoading, error: snapshotError } =
+    useTerminalSnapshot(session.id, isSnapshotEnabled);
+
   const getStatusColor = (status: SessionStatus): string => {
     switch (status) {
       case SessionStatus.RUNNING:
@@ -711,6 +720,42 @@ export function SessionCard({
           <div className={styles.diffStats}>
             <span className={styles.diffAdded}>+{session.diffStats.added}</span>
             <span className={styles.diffRemoved}>-{session.diffStats.removed}</span>
+          </div>
+        )}
+
+        {/* Terminal snapshot preview — only for running sessions */}
+        {session.status === SessionStatus.RUNNING && (
+          <div className={snapshotStyles.snapshotSection} onClick={(e) => e.stopPropagation()}>
+            <button
+              className={snapshotStyles.snapshotToggle}
+              onClick={() => setIsSnapshotOpen((prev) => !prev)}
+              aria-expanded={isSnapshotOpen}
+              aria-label="Toggle terminal preview"
+            >
+              <span>Terminal Preview</span>
+              <span className={snapshotStyles.snapshotToggleIcon} aria-hidden="true">
+                {isSnapshotOpen ? "▲" : "▼"}
+              </span>
+            </button>
+            {isSnapshotOpen && (
+              snapshotLoading ? (
+                <div className={snapshotStyles.snapshotLoading}>Loading…</div>
+              ) : snapshotError ? (
+                <div className={snapshotStyles.snapshotError.base}>
+                  Failed to load preview
+                </div>
+              ) : snapshotIsEmpty ? (
+                <div className={snapshotStyles.snapshotEmpty}>No recent output</div>
+              ) : (
+                <div
+                  className={snapshotStyles.snapshotPane}
+                  // Safe: content is rendered by ansi-to-html with escapeXML enabled,
+                  // or escaped manually in the plain-text fallback path.
+                  dangerouslySetInnerHTML={{ __html: snapshotHtml }}
+                  aria-label="Terminal output preview"
+                />
+              )
+            )}
           </div>
         )}
       </div>
