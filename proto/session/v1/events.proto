@@ -47,6 +47,14 @@ message SessionStatusChangedEvent {
   string session_id = 1;
   SessionStatus old_status = 2;
   SessionStatus new_status = 3;
+  // Detected status from terminal pattern analysis (e.g. "StatusNeedsApproval", "StatusInputRequired").
+  // Populated when InstanceStatusManager has a registered controller for this session.
+  // Empty string when detection is unavailable or controller is inactive.
+  optional string detected_status = 4;
+  // Human-readable context string from the terminal pattern detector
+  // (e.g. "Waiting for tool approval", "Tests failing: 3 of 12").
+  // Empty when detected_status is empty.
+  optional string detected_context = 5;
 }
 
 // TerminalData represents terminal I/O for bidirectional streaming.

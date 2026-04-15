@@ -9,11 +9,14 @@ const sessionsAdapter = createEntityAdapter<Session, string>({
 interface SessionsExtraState {
   loading: boolean;
   error: string | null;
+  /** Per-session terminal-detected status from SessionStatusChangedEvent fields 4/5. */
+  detectedStatusMap: Record<string, { detectedStatus: string; detectedContext: string }>;
 }
 
 const initialState = sessionsAdapter.getInitialState<SessionsExtraState>({
   loading: false,
   error: null,
+  detectedStatusMap: {},
 });
 
 const sessionsSlice = createSlice({
@@ -39,14 +42,21 @@ const sessionsSlice = createSlice({
     // Runs inside the reducer where state is always current — no stale-closure risk.
     updateSessionStatus(
       state,
-      action: PayloadAction<{ sessionId: string; newStatus: SessionStatus }>
+      action: PayloadAction<{ sessionId: string; newStatus: SessionStatus; detectedStatus?: string; detectedContext?: string }>
     ) {
-      const { sessionId, newStatus } = action.payload;
+      const { sessionId, newStatus, detectedStatus, detectedContext } = action.payload;
       if (state.entities[sessionId]) {
         sessionsAdapter.updateOne(state, {
           id: sessionId,
           changes: { status: newStatus },
         });
+      }
+      // Update detected status map when the event carries detection info
+      if (detectedStatus) {
+        state.detectedStatusMap[sessionId] = {
+          detectedStatus,
+          detectedContext: detectedContext ?? "",
+        };
       }
     },
   },
@@ -72,5 +82,6 @@ export const selectSessionIds = adapterSelectors.selectIds;
 export const selectSessionsTotal = adapterSelectors.selectTotal;
 export const selectSessionsLoading = (state: RootState) => state.sessions.loading;
 export const selectSessionsError = (state: RootState) => state.sessions.error;
+export const selectDetectedStatusMap = (state: RootState) => state.sessions.detectedStatusMap;
 
 export default sessionsSlice.reducer;

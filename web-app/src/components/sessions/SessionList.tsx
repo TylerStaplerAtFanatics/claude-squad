@@ -7,6 +7,8 @@ import { SessionCard } from "./SessionCard";
 import { BulkActions } from "./BulkActions";
 import { GroupingStrategy, GroupingStrategyLabels, groupSessions, cycleGroupingStrategy } from "@/lib/grouping/strategies";
 import { useReviewQueueContext } from "@/lib/contexts/ReviewQueueContext";
+import { useAppSelector } from "@/lib/store";
+import { selectDetectedStatusMap } from "@/lib/store/sessionsSlice";
 import styles from "./SessionList.module.css";
 
 interface SessionListProps {
@@ -92,6 +94,9 @@ export function SessionList({
     const map = new Map(reviewItems.map(item => [item.sessionId, item]));
     return map;
   }, [reviewItems]);
+
+  // Terminal-detected status data from Redux store
+  const detectedStatusMap = useAppSelector(selectDetectedStatusMap);
 
   // Initialize state from local storage
   const [searchQuery, setSearchQuery] = useState(() => loadFromStorage(STORAGE_KEYS.SEARCH_QUERY, ""));
@@ -553,6 +558,8 @@ export function SessionList({
                       isSelected={selectedSessions.has(session.id)}
                       onToggleSelect={() => handleToggleSession(session.id)}
                       reviewItem={reviewItemBySessionId.get(session.id)}
+                      detectedStatus={detectedStatusMap[session.id]?.detectedStatus}
+                      detectedContext={detectedStatusMap[session.id]?.detectedContext}
                     />
                   </div>
                 ))}

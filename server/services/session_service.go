@@ -747,7 +747,16 @@ func (s *SessionService) UpdateSession(
 	if len(updatedFields) > 0 {
 		// Check if status changed specifically
 		if oldStatus != instance.Status && oldStatus != 0 {
-			s.eventBus.Publish(events.NewSessionStatusChangedEvent(instance, oldStatus, instance.Status))
+			statusEvent := events.NewSessionStatusChangedEvent(instance, oldStatus, instance.Status)
+			// Augment with terminal-detected status when a controller is active for this session
+			if s.statusManager != nil {
+				statusInfo := s.statusManager.GetStatus(instance)
+				if statusInfo.IsControllerActive {
+					statusEvent.DetectedStatus = statusInfo.ClaudeStatus.String()
+					statusEvent.DetectedContext = statusInfo.StatusContext
+				}
+			}
+			s.eventBus.Publish(statusEvent)
 		}
 		// Also publish general update event
 		s.eventBus.Publish(events.NewSessionUpdatedEvent(instance, updatedFields))

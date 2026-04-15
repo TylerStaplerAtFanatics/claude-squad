@@ -25,6 +25,8 @@ interface SessionCardProps {
   isSelected?: boolean;
   onToggleSelect?: () => void;
   reviewItem?: ReviewItem; // Optional review queue item if session needs attention
+  detectedStatus?: string; // Terminal-detected status from pattern analysis
+  detectedContext?: string; // Context string for the detected status
 }
 
 export function SessionCard({
@@ -45,6 +47,8 @@ export function SessionCard({
   isSelected = false,
   onToggleSelect,
   reviewItem,
+  detectedStatus,
+  detectedContext,
 }: SessionCardProps) {
   const [isTagEditorOpen, setIsTagEditorOpen] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
@@ -590,6 +594,16 @@ export function SessionCard({
                 aria-label={`Rate limit: ${getRateLimitStateText(session.rateLimitState)}`}
               >
                 {getRateLimitStateText(session.rateLimitState)}
+              </span>
+            )}
+            {detectedStatus && (
+              <span
+                className={`${styles.status} ${styles.statusDetected}`}
+                role="status"
+                aria-label={`Detected: ${detectedStatus}`}
+                title={detectedContext || detectedStatus}
+              >
+                {detectedStatus}
               </span>
             )}
           </div>
