@@ -102,7 +102,7 @@ func MigrateJSONToEnt(opts MigrationOptions) (*MigrationResult, error) {
 	log.InfoLog.Printf("Step 4/6: Checking Ent database...")
 	if _, err := os.Stat(opts.SQLitePath); err == nil {
 		if !opts.ForceOverwrite {
-			return nil, fmt.Errorf("Ent database already exists at %s (use ForceOverwrite to overwrite)", opts.SQLitePath)
+			return nil, fmt.Errorf("ent database already exists at %s (use ForceOverwrite to overwrite)", opts.SQLitePath)
 		}
 		log.WarningLog.Printf("Ent database exists, will be overwritten (ForceOverwrite=true)")
 

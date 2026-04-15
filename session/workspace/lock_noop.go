@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -14,10 +15,12 @@ type NoOpLock struct {
 	locks map[string]*noOpHandle
 }
 
-// noOpHandle represents an acquired no-op lock
+// noOpHandle represents an acquired no-op lock.
+// released is an atomic so tryAcquireInternal (holding parent mu) and
+// Release (holding handle mu) can both access it without a data race.
 type noOpHandle struct {
 	resource string
-	released bool
+	released atomic.Bool
 	mu       sync.Mutex
 	parent   *NoOpLock
 }
@@ -72,14 +75,13 @@ func (l *NoOpLock) tryAcquireInternal(resource string) (*noOpHandle, bool) {
 	defer l.mu.Unlock()
 
 	// Check if lock is already held
-	if existing, exists := l.locks[resource]; exists && !existing.released {
+	if existing, exists := l.locks[resource]; exists && !existing.released.Load() {
 		return nil, false
 	}
 
-	// Create new handle
+	// Create new handle (released starts false — zero value of atomic.Bool)
 	handle := &noOpHandle{
 		resource: resource,
-		released: false,
 		parent:   l,
 	}
 	l.locks[resource] = handle
@@ -101,11 +103,11 @@ func (h *noOpHandle) Release() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.released {
+	if h.released.Load() {
 		return nil // Already released, no-op
 	}
 
-	h.released = true
+	h.released.Store(true)
 
 	// Remove from parent
 	h.parent.mu.Lock()
@@ -124,7 +126,7 @@ func (h *noOpHandle) Extend(duration time.Duration) error {
 func (h *noOpHandle) IsValid() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return !h.released
+	return !h.released.Load()
 }
 
 // Resource returns the resource name this lock is for.

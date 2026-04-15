@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -183,6 +184,11 @@ func (r *WorkspaceRegistry) MarkOrphaned(ctx context.Context, path string) error
 	return nil
 }
 
+var (
+	// ErrNotFound is returned when a workspace is not found.
+	ErrNotFound = fmt.Errorf("workspace not found")
+)
+
 // Get retrieves a tracked workspace by path.
 func (r *WorkspaceRegistry) Get(ctx context.Context, path string) (*TrackedWorkspace, error) {
 	r.mu.RLock()
@@ -190,7 +196,7 @@ func (r *WorkspaceRegistry) Get(ctx context.Context, path string) (*TrackedWorks
 
 	workspace, exists := r.workspaces[path]
 	if !exists {
-		return nil, nil
+		return nil, ErrNotFound
 	}
 	return workspace, nil
 }
@@ -239,7 +245,7 @@ func (r *WorkspaceRegistry) GetStatus(ctx context.Context, path string, opts Sta
 		return nil, err
 	}
 	if len(statuses) == 0 {
-		return nil, nil
+		return nil, ErrNotFound
 	}
 	return statuses[0], nil
 }

@@ -39,7 +39,7 @@ func TestPTYAccess_Write(t *testing.T) {
 
 	// Read from the reader side to verify data was written
 	readBuf := make([]byte, len(testData))
-	n, err = reader.Read(readBuf)
+	_, err = reader.Read(readBuf)
 	if err != nil {
 		t.Errorf("Failed to read from PTY: %v", err)
 	}
@@ -256,7 +256,7 @@ func TestPTYAccess_UpdatePTY(t *testing.T) {
 
 	// Verify data goes to new PTY
 	readBuf := make([]byte, len(testData))
-	n, err = reader2.Read(readBuf)
+	_, err = reader2.Read(readBuf)
 	if err != nil {
 		t.Errorf("Failed to read from new PTY: %v", err)
 	}

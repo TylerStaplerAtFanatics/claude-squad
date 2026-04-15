@@ -6,15 +6,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/schema/field"
 	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 	"github.com/tstapler/stapler-squad/session/ent/diffstats"
 	"github.com/tstapler/stapler-squad/session/ent/session"
 	"github.com/tstapler/stapler-squad/session/ent/tag"
 	"github.com/tstapler/stapler-squad/session/ent/worktree"
-	"time"
-
-	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/schema/field"
 )
 
 // SessionCreate is the builder for creating a Session entity.
@@ -22,6 +23,7 @@ type SessionCreate struct {
 	config
 	mutation *SessionMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTitle sets the "title" field.
@@ -506,6 +508,7 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 		_node = &Session{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(session.Table, sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Title(); ok {
 		_spec.SetField(session.FieldTitle, field.TypeString, value)
 		_node.Title = value
@@ -665,11 +668,945 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Session.Create().
+//		SetTitle(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SessionUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SessionCreate) OnConflict(opts ...sql.ConflictOption) *SessionUpsertOne {
+	_c.conflict = opts
+	return &SessionUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Session.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SessionCreate) OnConflictColumns(columns ...string) *SessionUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SessionUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SessionUpsertOne is the builder for "upsert"-ing
+	//  one Session node.
+	SessionUpsertOne struct {
+		create *SessionCreate
+	}
+
+	// SessionUpsert is the "OnConflict" setter.
+	SessionUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTitle sets the "title" field.
+func (u *SessionUpsert) SetTitle(v string) *SessionUpsert {
+	u.Set(session.FieldTitle, v)
+	return u
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateTitle() *SessionUpsert {
+	u.SetExcluded(session.FieldTitle)
+	return u
+}
+
+// SetPath sets the "path" field.
+func (u *SessionUpsert) SetPath(v string) *SessionUpsert {
+	u.Set(session.FieldPath, v)
+	return u
+}
+
+// UpdatePath sets the "path" field to the value that was provided on create.
+func (u *SessionUpsert) UpdatePath() *SessionUpsert {
+	u.SetExcluded(session.FieldPath)
+	return u
+}
+
+// SetWorkingDir sets the "working_dir" field.
+func (u *SessionUpsert) SetWorkingDir(v string) *SessionUpsert {
+	u.Set(session.FieldWorkingDir, v)
+	return u
+}
+
+// UpdateWorkingDir sets the "working_dir" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateWorkingDir() *SessionUpsert {
+	u.SetExcluded(session.FieldWorkingDir)
+	return u
+}
+
+// ClearWorkingDir clears the value of the "working_dir" field.
+func (u *SessionUpsert) ClearWorkingDir() *SessionUpsert {
+	u.SetNull(session.FieldWorkingDir)
+	return u
+}
+
+// SetBranch sets the "branch" field.
+func (u *SessionUpsert) SetBranch(v string) *SessionUpsert {
+	u.Set(session.FieldBranch, v)
+	return u
+}
+
+// UpdateBranch sets the "branch" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateBranch() *SessionUpsert {
+	u.SetExcluded(session.FieldBranch)
+	return u
+}
+
+// ClearBranch clears the value of the "branch" field.
+func (u *SessionUpsert) ClearBranch() *SessionUpsert {
+	u.SetNull(session.FieldBranch)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *SessionUpsert) SetStatus(v int) *SessionUpsert {
+	u.Set(session.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateStatus() *SessionUpsert {
+	u.SetExcluded(session.FieldStatus)
+	return u
+}
+
+// AddStatus adds v to the "status" field.
+func (u *SessionUpsert) AddStatus(v int) *SessionUpsert {
+	u.Add(session.FieldStatus, v)
+	return u
+}
+
+// SetHeight sets the "height" field.
+func (u *SessionUpsert) SetHeight(v int) *SessionUpsert {
+	u.Set(session.FieldHeight, v)
+	return u
+}
+
+// UpdateHeight sets the "height" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateHeight() *SessionUpsert {
+	u.SetExcluded(session.FieldHeight)
+	return u
+}
+
+// AddHeight adds v to the "height" field.
+func (u *SessionUpsert) AddHeight(v int) *SessionUpsert {
+	u.Add(session.FieldHeight, v)
+	return u
+}
+
+// ClearHeight clears the value of the "height" field.
+func (u *SessionUpsert) ClearHeight() *SessionUpsert {
+	u.SetNull(session.FieldHeight)
+	return u
+}
+
+// SetWidth sets the "width" field.
+func (u *SessionUpsert) SetWidth(v int) *SessionUpsert {
+	u.Set(session.FieldWidth, v)
+	return u
+}
+
+// UpdateWidth sets the "width" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateWidth() *SessionUpsert {
+	u.SetExcluded(session.FieldWidth)
+	return u
+}
+
+// AddWidth adds v to the "width" field.
+func (u *SessionUpsert) AddWidth(v int) *SessionUpsert {
+	u.Add(session.FieldWidth, v)
+	return u
+}
+
+// ClearWidth clears the value of the "width" field.
+func (u *SessionUpsert) ClearWidth() *SessionUpsert {
+	u.SetNull(session.FieldWidth)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SessionUpsert) SetUpdatedAt(v time.Time) *SessionUpsert {
+	u.Set(session.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateUpdatedAt() *SessionUpsert {
+	u.SetExcluded(session.FieldUpdatedAt)
+	return u
+}
+
+// SetAutoYes sets the "auto_yes" field.
+func (u *SessionUpsert) SetAutoYes(v bool) *SessionUpsert {
+	u.Set(session.FieldAutoYes, v)
+	return u
+}
+
+// UpdateAutoYes sets the "auto_yes" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateAutoYes() *SessionUpsert {
+	u.SetExcluded(session.FieldAutoYes)
+	return u
+}
+
+// SetPrompt sets the "prompt" field.
+func (u *SessionUpsert) SetPrompt(v string) *SessionUpsert {
+	u.Set(session.FieldPrompt, v)
+	return u
+}
+
+// UpdatePrompt sets the "prompt" field to the value that was provided on create.
+func (u *SessionUpsert) UpdatePrompt() *SessionUpsert {
+	u.SetExcluded(session.FieldPrompt)
+	return u
+}
+
+// ClearPrompt clears the value of the "prompt" field.
+func (u *SessionUpsert) ClearPrompt() *SessionUpsert {
+	u.SetNull(session.FieldPrompt)
+	return u
+}
+
+// SetProgram sets the "program" field.
+func (u *SessionUpsert) SetProgram(v string) *SessionUpsert {
+	u.Set(session.FieldProgram, v)
+	return u
+}
+
+// UpdateProgram sets the "program" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateProgram() *SessionUpsert {
+	u.SetExcluded(session.FieldProgram)
+	return u
+}
+
+// SetExistingWorktree sets the "existing_worktree" field.
+func (u *SessionUpsert) SetExistingWorktree(v string) *SessionUpsert {
+	u.Set(session.FieldExistingWorktree, v)
+	return u
+}
+
+// UpdateExistingWorktree sets the "existing_worktree" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateExistingWorktree() *SessionUpsert {
+	u.SetExcluded(session.FieldExistingWorktree)
+	return u
+}
+
+// ClearExistingWorktree clears the value of the "existing_worktree" field.
+func (u *SessionUpsert) ClearExistingWorktree() *SessionUpsert {
+	u.SetNull(session.FieldExistingWorktree)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *SessionUpsert) SetCategory(v string) *SessionUpsert {
+	u.Set(session.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateCategory() *SessionUpsert {
+	u.SetExcluded(session.FieldCategory)
+	return u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *SessionUpsert) ClearCategory() *SessionUpsert {
+	u.SetNull(session.FieldCategory)
+	return u
+}
+
+// SetIsExpanded sets the "is_expanded" field.
+func (u *SessionUpsert) SetIsExpanded(v bool) *SessionUpsert {
+	u.Set(session.FieldIsExpanded, v)
+	return u
+}
+
+// UpdateIsExpanded sets the "is_expanded" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateIsExpanded() *SessionUpsert {
+	u.SetExcluded(session.FieldIsExpanded)
+	return u
+}
+
+// SetSessionType sets the "session_type" field.
+func (u *SessionUpsert) SetSessionType(v string) *SessionUpsert {
+	u.Set(session.FieldSessionType, v)
+	return u
+}
+
+// UpdateSessionType sets the "session_type" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateSessionType() *SessionUpsert {
+	u.SetExcluded(session.FieldSessionType)
+	return u
+}
+
+// ClearSessionType clears the value of the "session_type" field.
+func (u *SessionUpsert) ClearSessionType() *SessionUpsert {
+	u.SetNull(session.FieldSessionType)
+	return u
+}
+
+// SetTmuxPrefix sets the "tmux_prefix" field.
+func (u *SessionUpsert) SetTmuxPrefix(v string) *SessionUpsert {
+	u.Set(session.FieldTmuxPrefix, v)
+	return u
+}
+
+// UpdateTmuxPrefix sets the "tmux_prefix" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateTmuxPrefix() *SessionUpsert {
+	u.SetExcluded(session.FieldTmuxPrefix)
+	return u
+}
+
+// ClearTmuxPrefix clears the value of the "tmux_prefix" field.
+func (u *SessionUpsert) ClearTmuxPrefix() *SessionUpsert {
+	u.SetNull(session.FieldTmuxPrefix)
+	return u
+}
+
+// SetLastTerminalUpdate sets the "last_terminal_update" field.
+func (u *SessionUpsert) SetLastTerminalUpdate(v time.Time) *SessionUpsert {
+	u.Set(session.FieldLastTerminalUpdate, v)
+	return u
+}
+
+// UpdateLastTerminalUpdate sets the "last_terminal_update" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateLastTerminalUpdate() *SessionUpsert {
+	u.SetExcluded(session.FieldLastTerminalUpdate)
+	return u
+}
+
+// ClearLastTerminalUpdate clears the value of the "last_terminal_update" field.
+func (u *SessionUpsert) ClearLastTerminalUpdate() *SessionUpsert {
+	u.SetNull(session.FieldLastTerminalUpdate)
+	return u
+}
+
+// SetLastMeaningfulOutput sets the "last_meaningful_output" field.
+func (u *SessionUpsert) SetLastMeaningfulOutput(v time.Time) *SessionUpsert {
+	u.Set(session.FieldLastMeaningfulOutput, v)
+	return u
+}
+
+// UpdateLastMeaningfulOutput sets the "last_meaningful_output" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateLastMeaningfulOutput() *SessionUpsert {
+	u.SetExcluded(session.FieldLastMeaningfulOutput)
+	return u
+}
+
+// ClearLastMeaningfulOutput clears the value of the "last_meaningful_output" field.
+func (u *SessionUpsert) ClearLastMeaningfulOutput() *SessionUpsert {
+	u.SetNull(session.FieldLastMeaningfulOutput)
+	return u
+}
+
+// SetLastOutputSignature sets the "last_output_signature" field.
+func (u *SessionUpsert) SetLastOutputSignature(v string) *SessionUpsert {
+	u.Set(session.FieldLastOutputSignature, v)
+	return u
+}
+
+// UpdateLastOutputSignature sets the "last_output_signature" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateLastOutputSignature() *SessionUpsert {
+	u.SetExcluded(session.FieldLastOutputSignature)
+	return u
+}
+
+// ClearLastOutputSignature clears the value of the "last_output_signature" field.
+func (u *SessionUpsert) ClearLastOutputSignature() *SessionUpsert {
+	u.SetNull(session.FieldLastOutputSignature)
+	return u
+}
+
+// SetLastAddedToQueue sets the "last_added_to_queue" field.
+func (u *SessionUpsert) SetLastAddedToQueue(v time.Time) *SessionUpsert {
+	u.Set(session.FieldLastAddedToQueue, v)
+	return u
+}
+
+// UpdateLastAddedToQueue sets the "last_added_to_queue" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateLastAddedToQueue() *SessionUpsert {
+	u.SetExcluded(session.FieldLastAddedToQueue)
+	return u
+}
+
+// ClearLastAddedToQueue clears the value of the "last_added_to_queue" field.
+func (u *SessionUpsert) ClearLastAddedToQueue() *SessionUpsert {
+	u.SetNull(session.FieldLastAddedToQueue)
+	return u
+}
+
+// SetLastViewed sets the "last_viewed" field.
+func (u *SessionUpsert) SetLastViewed(v time.Time) *SessionUpsert {
+	u.Set(session.FieldLastViewed, v)
+	return u
+}
+
+// UpdateLastViewed sets the "last_viewed" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateLastViewed() *SessionUpsert {
+	u.SetExcluded(session.FieldLastViewed)
+	return u
+}
+
+// ClearLastViewed clears the value of the "last_viewed" field.
+func (u *SessionUpsert) ClearLastViewed() *SessionUpsert {
+	u.SetNull(session.FieldLastViewed)
+	return u
+}
+
+// SetLastAcknowledged sets the "last_acknowledged" field.
+func (u *SessionUpsert) SetLastAcknowledged(v time.Time) *SessionUpsert {
+	u.Set(session.FieldLastAcknowledged, v)
+	return u
+}
+
+// UpdateLastAcknowledged sets the "last_acknowledged" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateLastAcknowledged() *SessionUpsert {
+	u.SetExcluded(session.FieldLastAcknowledged)
+	return u
+}
+
+// ClearLastAcknowledged clears the value of the "last_acknowledged" field.
+func (u *SessionUpsert) ClearLastAcknowledged() *SessionUpsert {
+	u.SetNull(session.FieldLastAcknowledged)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Session.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SessionUpsertOne) UpdateNewValues() *SessionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.CreatedAt(); exists {
+			s.SetIgnore(session.FieldCreatedAt)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Session.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SessionUpsertOne) Ignore() *SessionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SessionUpsertOne) DoNothing() *SessionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SessionCreate.OnConflict
+// documentation for more info.
+func (u *SessionUpsertOne) Update(set func(*SessionUpsert)) *SessionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SessionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *SessionUpsertOne) SetTitle(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateTitle() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetPath sets the "path" field.
+func (u *SessionUpsertOne) SetPath(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetPath(v)
+	})
+}
+
+// UpdatePath sets the "path" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdatePath() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdatePath()
+	})
+}
+
+// SetWorkingDir sets the "working_dir" field.
+func (u *SessionUpsertOne) SetWorkingDir(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetWorkingDir(v)
+	})
+}
+
+// UpdateWorkingDir sets the "working_dir" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateWorkingDir() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateWorkingDir()
+	})
+}
+
+// ClearWorkingDir clears the value of the "working_dir" field.
+func (u *SessionUpsertOne) ClearWorkingDir() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearWorkingDir()
+	})
+}
+
+// SetBranch sets the "branch" field.
+func (u *SessionUpsertOne) SetBranch(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetBranch(v)
+	})
+}
+
+// UpdateBranch sets the "branch" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateBranch() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateBranch()
+	})
+}
+
+// ClearBranch clears the value of the "branch" field.
+func (u *SessionUpsertOne) ClearBranch() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearBranch()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *SessionUpsertOne) SetStatus(v int) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// AddStatus adds v to the "status" field.
+func (u *SessionUpsertOne) AddStatus(v int) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.AddStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateStatus() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetHeight sets the "height" field.
+func (u *SessionUpsertOne) SetHeight(v int) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetHeight(v)
+	})
+}
+
+// AddHeight adds v to the "height" field.
+func (u *SessionUpsertOne) AddHeight(v int) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.AddHeight(v)
+	})
+}
+
+// UpdateHeight sets the "height" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateHeight() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateHeight()
+	})
+}
+
+// ClearHeight clears the value of the "height" field.
+func (u *SessionUpsertOne) ClearHeight() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearHeight()
+	})
+}
+
+// SetWidth sets the "width" field.
+func (u *SessionUpsertOne) SetWidth(v int) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetWidth(v)
+	})
+}
+
+// AddWidth adds v to the "width" field.
+func (u *SessionUpsertOne) AddWidth(v int) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.AddWidth(v)
+	})
+}
+
+// UpdateWidth sets the "width" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateWidth() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateWidth()
+	})
+}
+
+// ClearWidth clears the value of the "width" field.
+func (u *SessionUpsertOne) ClearWidth() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearWidth()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SessionUpsertOne) SetUpdatedAt(v time.Time) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateUpdatedAt() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetAutoYes sets the "auto_yes" field.
+func (u *SessionUpsertOne) SetAutoYes(v bool) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetAutoYes(v)
+	})
+}
+
+// UpdateAutoYes sets the "auto_yes" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateAutoYes() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateAutoYes()
+	})
+}
+
+// SetPrompt sets the "prompt" field.
+func (u *SessionUpsertOne) SetPrompt(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetPrompt(v)
+	})
+}
+
+// UpdatePrompt sets the "prompt" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdatePrompt() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdatePrompt()
+	})
+}
+
+// ClearPrompt clears the value of the "prompt" field.
+func (u *SessionUpsertOne) ClearPrompt() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearPrompt()
+	})
+}
+
+// SetProgram sets the "program" field.
+func (u *SessionUpsertOne) SetProgram(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetProgram(v)
+	})
+}
+
+// UpdateProgram sets the "program" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateProgram() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateProgram()
+	})
+}
+
+// SetExistingWorktree sets the "existing_worktree" field.
+func (u *SessionUpsertOne) SetExistingWorktree(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetExistingWorktree(v)
+	})
+}
+
+// UpdateExistingWorktree sets the "existing_worktree" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateExistingWorktree() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateExistingWorktree()
+	})
+}
+
+// ClearExistingWorktree clears the value of the "existing_worktree" field.
+func (u *SessionUpsertOne) ClearExistingWorktree() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearExistingWorktree()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *SessionUpsertOne) SetCategory(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateCategory() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *SessionUpsertOne) ClearCategory() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetIsExpanded sets the "is_expanded" field.
+func (u *SessionUpsertOne) SetIsExpanded(v bool) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetIsExpanded(v)
+	})
+}
+
+// UpdateIsExpanded sets the "is_expanded" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateIsExpanded() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateIsExpanded()
+	})
+}
+
+// SetSessionType sets the "session_type" field.
+func (u *SessionUpsertOne) SetSessionType(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetSessionType(v)
+	})
+}
+
+// UpdateSessionType sets the "session_type" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateSessionType() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateSessionType()
+	})
+}
+
+// ClearSessionType clears the value of the "session_type" field.
+func (u *SessionUpsertOne) ClearSessionType() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearSessionType()
+	})
+}
+
+// SetTmuxPrefix sets the "tmux_prefix" field.
+func (u *SessionUpsertOne) SetTmuxPrefix(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetTmuxPrefix(v)
+	})
+}
+
+// UpdateTmuxPrefix sets the "tmux_prefix" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateTmuxPrefix() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateTmuxPrefix()
+	})
+}
+
+// ClearTmuxPrefix clears the value of the "tmux_prefix" field.
+func (u *SessionUpsertOne) ClearTmuxPrefix() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearTmuxPrefix()
+	})
+}
+
+// SetLastTerminalUpdate sets the "last_terminal_update" field.
+func (u *SessionUpsertOne) SetLastTerminalUpdate(v time.Time) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastTerminalUpdate(v)
+	})
+}
+
+// UpdateLastTerminalUpdate sets the "last_terminal_update" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateLastTerminalUpdate() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastTerminalUpdate()
+	})
+}
+
+// ClearLastTerminalUpdate clears the value of the "last_terminal_update" field.
+func (u *SessionUpsertOne) ClearLastTerminalUpdate() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastTerminalUpdate()
+	})
+}
+
+// SetLastMeaningfulOutput sets the "last_meaningful_output" field.
+func (u *SessionUpsertOne) SetLastMeaningfulOutput(v time.Time) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastMeaningfulOutput(v)
+	})
+}
+
+// UpdateLastMeaningfulOutput sets the "last_meaningful_output" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateLastMeaningfulOutput() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastMeaningfulOutput()
+	})
+}
+
+// ClearLastMeaningfulOutput clears the value of the "last_meaningful_output" field.
+func (u *SessionUpsertOne) ClearLastMeaningfulOutput() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastMeaningfulOutput()
+	})
+}
+
+// SetLastOutputSignature sets the "last_output_signature" field.
+func (u *SessionUpsertOne) SetLastOutputSignature(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastOutputSignature(v)
+	})
+}
+
+// UpdateLastOutputSignature sets the "last_output_signature" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateLastOutputSignature() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastOutputSignature()
+	})
+}
+
+// ClearLastOutputSignature clears the value of the "last_output_signature" field.
+func (u *SessionUpsertOne) ClearLastOutputSignature() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastOutputSignature()
+	})
+}
+
+// SetLastAddedToQueue sets the "last_added_to_queue" field.
+func (u *SessionUpsertOne) SetLastAddedToQueue(v time.Time) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastAddedToQueue(v)
+	})
+}
+
+// UpdateLastAddedToQueue sets the "last_added_to_queue" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateLastAddedToQueue() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastAddedToQueue()
+	})
+}
+
+// ClearLastAddedToQueue clears the value of the "last_added_to_queue" field.
+func (u *SessionUpsertOne) ClearLastAddedToQueue() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastAddedToQueue()
+	})
+}
+
+// SetLastViewed sets the "last_viewed" field.
+func (u *SessionUpsertOne) SetLastViewed(v time.Time) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastViewed(v)
+	})
+}
+
+// UpdateLastViewed sets the "last_viewed" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateLastViewed() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastViewed()
+	})
+}
+
+// ClearLastViewed clears the value of the "last_viewed" field.
+func (u *SessionUpsertOne) ClearLastViewed() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastViewed()
+	})
+}
+
+// SetLastAcknowledged sets the "last_acknowledged" field.
+func (u *SessionUpsertOne) SetLastAcknowledged(v time.Time) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastAcknowledged(v)
+	})
+}
+
+// UpdateLastAcknowledged sets the "last_acknowledged" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateLastAcknowledged() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastAcknowledged()
+	})
+}
+
+// ClearLastAcknowledged clears the value of the "last_acknowledged" field.
+func (u *SessionUpsertOne) ClearLastAcknowledged() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastAcknowledged()
+	})
+}
+
+// Exec executes the query.
+func (u *SessionUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SessionCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SessionUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SessionUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SessionUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SessionCreateBulk is the builder for creating many Session entities in bulk.
 type SessionCreateBulk struct {
 	config
 	err      error
 	builders []*SessionCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Session entities in the database.
@@ -699,6 +1636,7 @@ func (_c *SessionCreateBulk) Save(ctx context.Context) ([]*Session, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -749,6 +1687,551 @@ func (_c *SessionCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SessionCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Session.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SessionUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SessionCreateBulk) OnConflict(opts ...sql.ConflictOption) *SessionUpsertBulk {
+	_c.conflict = opts
+	return &SessionUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Session.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SessionCreateBulk) OnConflictColumns(columns ...string) *SessionUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SessionUpsertBulk{
+		create: _c,
+	}
+}
+
+// SessionUpsertBulk is the builder for "upsert"-ing
+// a bulk of Session nodes.
+type SessionUpsertBulk struct {
+	create *SessionCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Session.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SessionUpsertBulk) UpdateNewValues() *SessionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.CreatedAt(); exists {
+				s.SetIgnore(session.FieldCreatedAt)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Session.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SessionUpsertBulk) Ignore() *SessionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SessionUpsertBulk) DoNothing() *SessionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SessionCreateBulk.OnConflict
+// documentation for more info.
+func (u *SessionUpsertBulk) Update(set func(*SessionUpsert)) *SessionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SessionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *SessionUpsertBulk) SetTitle(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateTitle() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetPath sets the "path" field.
+func (u *SessionUpsertBulk) SetPath(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetPath(v)
+	})
+}
+
+// UpdatePath sets the "path" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdatePath() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdatePath()
+	})
+}
+
+// SetWorkingDir sets the "working_dir" field.
+func (u *SessionUpsertBulk) SetWorkingDir(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetWorkingDir(v)
+	})
+}
+
+// UpdateWorkingDir sets the "working_dir" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateWorkingDir() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateWorkingDir()
+	})
+}
+
+// ClearWorkingDir clears the value of the "working_dir" field.
+func (u *SessionUpsertBulk) ClearWorkingDir() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearWorkingDir()
+	})
+}
+
+// SetBranch sets the "branch" field.
+func (u *SessionUpsertBulk) SetBranch(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetBranch(v)
+	})
+}
+
+// UpdateBranch sets the "branch" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateBranch() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateBranch()
+	})
+}
+
+// ClearBranch clears the value of the "branch" field.
+func (u *SessionUpsertBulk) ClearBranch() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearBranch()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *SessionUpsertBulk) SetStatus(v int) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// AddStatus adds v to the "status" field.
+func (u *SessionUpsertBulk) AddStatus(v int) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.AddStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateStatus() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetHeight sets the "height" field.
+func (u *SessionUpsertBulk) SetHeight(v int) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetHeight(v)
+	})
+}
+
+// AddHeight adds v to the "height" field.
+func (u *SessionUpsertBulk) AddHeight(v int) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.AddHeight(v)
+	})
+}
+
+// UpdateHeight sets the "height" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateHeight() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateHeight()
+	})
+}
+
+// ClearHeight clears the value of the "height" field.
+func (u *SessionUpsertBulk) ClearHeight() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearHeight()
+	})
+}
+
+// SetWidth sets the "width" field.
+func (u *SessionUpsertBulk) SetWidth(v int) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetWidth(v)
+	})
+}
+
+// AddWidth adds v to the "width" field.
+func (u *SessionUpsertBulk) AddWidth(v int) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.AddWidth(v)
+	})
+}
+
+// UpdateWidth sets the "width" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateWidth() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateWidth()
+	})
+}
+
+// ClearWidth clears the value of the "width" field.
+func (u *SessionUpsertBulk) ClearWidth() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearWidth()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SessionUpsertBulk) SetUpdatedAt(v time.Time) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateUpdatedAt() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetAutoYes sets the "auto_yes" field.
+func (u *SessionUpsertBulk) SetAutoYes(v bool) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetAutoYes(v)
+	})
+}
+
+// UpdateAutoYes sets the "auto_yes" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateAutoYes() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateAutoYes()
+	})
+}
+
+// SetPrompt sets the "prompt" field.
+func (u *SessionUpsertBulk) SetPrompt(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetPrompt(v)
+	})
+}
+
+// UpdatePrompt sets the "prompt" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdatePrompt() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdatePrompt()
+	})
+}
+
+// ClearPrompt clears the value of the "prompt" field.
+func (u *SessionUpsertBulk) ClearPrompt() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearPrompt()
+	})
+}
+
+// SetProgram sets the "program" field.
+func (u *SessionUpsertBulk) SetProgram(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetProgram(v)
+	})
+}
+
+// UpdateProgram sets the "program" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateProgram() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateProgram()
+	})
+}
+
+// SetExistingWorktree sets the "existing_worktree" field.
+func (u *SessionUpsertBulk) SetExistingWorktree(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetExistingWorktree(v)
+	})
+}
+
+// UpdateExistingWorktree sets the "existing_worktree" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateExistingWorktree() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateExistingWorktree()
+	})
+}
+
+// ClearExistingWorktree clears the value of the "existing_worktree" field.
+func (u *SessionUpsertBulk) ClearExistingWorktree() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearExistingWorktree()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *SessionUpsertBulk) SetCategory(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateCategory() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *SessionUpsertBulk) ClearCategory() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetIsExpanded sets the "is_expanded" field.
+func (u *SessionUpsertBulk) SetIsExpanded(v bool) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetIsExpanded(v)
+	})
+}
+
+// UpdateIsExpanded sets the "is_expanded" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateIsExpanded() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateIsExpanded()
+	})
+}
+
+// SetSessionType sets the "session_type" field.
+func (u *SessionUpsertBulk) SetSessionType(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetSessionType(v)
+	})
+}
+
+// UpdateSessionType sets the "session_type" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateSessionType() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateSessionType()
+	})
+}
+
+// ClearSessionType clears the value of the "session_type" field.
+func (u *SessionUpsertBulk) ClearSessionType() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearSessionType()
+	})
+}
+
+// SetTmuxPrefix sets the "tmux_prefix" field.
+func (u *SessionUpsertBulk) SetTmuxPrefix(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetTmuxPrefix(v)
+	})
+}
+
+// UpdateTmuxPrefix sets the "tmux_prefix" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateTmuxPrefix() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateTmuxPrefix()
+	})
+}
+
+// ClearTmuxPrefix clears the value of the "tmux_prefix" field.
+func (u *SessionUpsertBulk) ClearTmuxPrefix() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearTmuxPrefix()
+	})
+}
+
+// SetLastTerminalUpdate sets the "last_terminal_update" field.
+func (u *SessionUpsertBulk) SetLastTerminalUpdate(v time.Time) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastTerminalUpdate(v)
+	})
+}
+
+// UpdateLastTerminalUpdate sets the "last_terminal_update" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateLastTerminalUpdate() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastTerminalUpdate()
+	})
+}
+
+// ClearLastTerminalUpdate clears the value of the "last_terminal_update" field.
+func (u *SessionUpsertBulk) ClearLastTerminalUpdate() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastTerminalUpdate()
+	})
+}
+
+// SetLastMeaningfulOutput sets the "last_meaningful_output" field.
+func (u *SessionUpsertBulk) SetLastMeaningfulOutput(v time.Time) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastMeaningfulOutput(v)
+	})
+}
+
+// UpdateLastMeaningfulOutput sets the "last_meaningful_output" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateLastMeaningfulOutput() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastMeaningfulOutput()
+	})
+}
+
+// ClearLastMeaningfulOutput clears the value of the "last_meaningful_output" field.
+func (u *SessionUpsertBulk) ClearLastMeaningfulOutput() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastMeaningfulOutput()
+	})
+}
+
+// SetLastOutputSignature sets the "last_output_signature" field.
+func (u *SessionUpsertBulk) SetLastOutputSignature(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastOutputSignature(v)
+	})
+}
+
+// UpdateLastOutputSignature sets the "last_output_signature" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateLastOutputSignature() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastOutputSignature()
+	})
+}
+
+// ClearLastOutputSignature clears the value of the "last_output_signature" field.
+func (u *SessionUpsertBulk) ClearLastOutputSignature() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastOutputSignature()
+	})
+}
+
+// SetLastAddedToQueue sets the "last_added_to_queue" field.
+func (u *SessionUpsertBulk) SetLastAddedToQueue(v time.Time) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastAddedToQueue(v)
+	})
+}
+
+// UpdateLastAddedToQueue sets the "last_added_to_queue" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateLastAddedToQueue() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastAddedToQueue()
+	})
+}
+
+// ClearLastAddedToQueue clears the value of the "last_added_to_queue" field.
+func (u *SessionUpsertBulk) ClearLastAddedToQueue() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastAddedToQueue()
+	})
+}
+
+// SetLastViewed sets the "last_viewed" field.
+func (u *SessionUpsertBulk) SetLastViewed(v time.Time) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastViewed(v)
+	})
+}
+
+// UpdateLastViewed sets the "last_viewed" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateLastViewed() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastViewed()
+	})
+}
+
+// ClearLastViewed clears the value of the "last_viewed" field.
+func (u *SessionUpsertBulk) ClearLastViewed() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastViewed()
+	})
+}
+
+// SetLastAcknowledged sets the "last_acknowledged" field.
+func (u *SessionUpsertBulk) SetLastAcknowledged(v time.Time) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastAcknowledged(v)
+	})
+}
+
+// UpdateLastAcknowledged sets the "last_acknowledged" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateLastAcknowledged() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastAcknowledged()
+	})
+}
+
+// ClearLastAcknowledged clears the value of the "last_acknowledged" field.
+func (u *SessionUpsertBulk) ClearLastAcknowledged() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastAcknowledged()
+	})
+}
+
+// Exec executes the query.
+func (u *SessionUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SessionCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SessionCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SessionUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

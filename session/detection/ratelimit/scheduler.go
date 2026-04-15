@@ -1,0 +1,119 @@
+package ratelimit
+
+import (
+	"sync"
+	"time"
+
+	"github.com/tstapler/stapler-squad/log"
+)
+
+type Scheduler struct {
+	mu sync.Mutex
+
+	sessionID     string
+	timer         *time.Timer
+	resetTime     time.Time
+	bufferSeconds int
+
+	onRecovery func() error
+
+	sessionRunning func() bool
+}
+
+func NewScheduler(sessionID string) *Scheduler {
+	return &Scheduler{
+		sessionID:     sessionID,
+		bufferSeconds: DefaultResetBuffer,
+	}
+}
+
+func (s *Scheduler) SetRecoveryCallback(callback func() error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onRecovery = callback
+}
+
+func (s *Scheduler) SetSessionStatusCheck(callback func() bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessionRunning = callback
+}
+
+func (s *Scheduler) SetBuffer(seconds int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.bufferSeconds = seconds
+}
+
+func (s *Scheduler) ScheduleRecovery(resetTime time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.timer != nil {
+		s.timer.Stop()
+	}
+
+	var waitDuration time.Duration
+	if resetTime.IsZero() {
+		waitDuration = time.Duration(s.bufferSeconds) * time.Second
+	} else {
+		waitDuration = time.Until(resetTime)
+		if waitDuration < 0 {
+			waitDuration = 0
+		}
+	}
+
+	waitDuration += time.Duration(s.bufferSeconds) * time.Second
+
+	log.InfoLog.Printf("[RateLimit] Scheduling recovery for session %s in %v", s.sessionID, waitDuration)
+
+	s.resetTime = resetTime
+	s.timer = time.AfterFunc(waitDuration, func() {
+		s.executeRecovery()
+	})
+}
+
+func (s *Scheduler) CancelRecovery() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.timer != nil {
+		s.timer.Stop()
+		s.timer = nil
+		log.InfoLog.Printf("[RateLimit] Cancelled recovery for session %s", s.sessionID)
+	}
+}
+
+func (s *Scheduler) executeRecovery() {
+	s.mu.Lock()
+	callback := s.onRecovery
+	sessionCheck := s.sessionRunning
+	s.mu.Unlock()
+
+	if sessionCheck != nil && !sessionCheck() {
+		log.InfoLog.Printf("[RateLimit] Session %s not running, skipping recovery", s.sessionID)
+		return
+	}
+
+	if callback != nil {
+		log.InfoLog.Printf("[RateLimit] Executing recovery for session %s", s.sessionID)
+		if err := callback(); err != nil {
+			log.WarningLog.Printf("[RateLimit] Recovery failed for session %s: %v", s.sessionID, err)
+		}
+	}
+}
+
+func (s *Scheduler) GetScheduledTime() (time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.timer != nil {
+		return s.resetTime, true
+	}
+	return time.Time{}, false
+}
+
+func (s *Scheduler) IsScheduled() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.timer != nil
+}

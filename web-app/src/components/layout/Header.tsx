@@ -115,6 +115,12 @@ export function Header() {
           >
             Config
           </AppLink>
+          <AppLink
+            href={routes.settings}
+            className={`${styles.navLink} ${pathname?.startsWith(routes.settings) ? styles.active : ""}`}
+          >
+            Settings
+          </AppLink>
         </nav>
 
         <div className={styles.actions}>

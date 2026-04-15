@@ -3,8 +3,6 @@ package testutil
 import (
 	"strings"
 	"testing"
-
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // TestCreateMinimalApp tests that our minimal app model works
@@ -12,7 +10,7 @@ func TestCreateMinimalApp(t *testing.T) {
 	model := CreateMinimalApp(t)
 
 	// Test that it implements tea.Model interface
-	var _ tea.Model = model
+	var _ = model
 
 	// Test that Init() returns nil (no initial commands)
 	cmd := model.Init()

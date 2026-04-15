@@ -69,21 +69,6 @@ func TestKeyConflictDetection(t *testing.T) {
 	}
 }
 
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && s[len(s)-len(substr):] == substr ||
-		(len(s) > len(substr) && findSubstring(s, substr))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
 func TestValidateAllContexts(t *testing.T) {
 	bridge := NewBridge()
 
@@ -151,7 +136,7 @@ func TestBridgeValidationIntegration(t *testing.T) {
 	}
 
 	// Initialize bridge (simplified - in real app this sets up handlers)
-	bridge.initialized = true
+	bridge.initialized.Store(true)
 
 	// Test validation after initialization with no conflicts
 	issues = bridge.ValidateSetup()

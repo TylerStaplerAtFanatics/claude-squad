@@ -81,7 +81,7 @@ func (h *TerminalWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *htt
 	ptyReader, err := instance.GetPTYReader()
 	if err != nil {
 		log.ErrorLog.Printf("Failed to get PTY reader: %v", err)
-		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("Error: %v", err)))
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("Error: %v", err)))
 		return
 	}
 
@@ -119,7 +119,7 @@ func (h *TerminalWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *htt
 				if err != nil {
 					if err != io.EOF {
 						log.ErrorLog.Printf("Error reading from PTY: %v", err)
-						conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("PTY error: %v", err)))
+						_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("PTY error: %v", err)))
 					}
 					return
 				}
@@ -161,7 +161,7 @@ func (h *TerminalWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *htt
 					_, err := instance.WriteToPTY(message)
 					if err != nil {
 						log.ErrorLog.Printf("Error writing to PTY: %v", err)
-						conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("Input error: %v", err)))
+						_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("Input error: %v", err)))
 					} else {
 						// Publish user interaction event for immediate review queue reactivity
 						if h.eventBus != nil {

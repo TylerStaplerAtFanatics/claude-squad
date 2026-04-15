@@ -6,13 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/schema/field"
 	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
 	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 	"github.com/tstapler/stapler-squad/session/ent/session"
-	"time"
-
-	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/schema/field"
 )
 
 // ClaudeSessionCreate is the builder for creating a ClaudeSession entity.
@@ -20,6 +21,7 @@ type ClaudeSessionCreate struct {
 	config
 	mutation *ClaudeSessionMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetClaudeSessionID sets the "claude_session_id" field.
@@ -270,6 +272,7 @@ func (_c *ClaudeSessionCreate) createSpec() (*ClaudeSession, *sqlgraph.CreateSpe
 		_node = &ClaudeSession{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(claudesession.Table, sqlgraph.NewFieldSpec(claudesession.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.ClaudeSessionID(); ok {
 		_spec.SetField(claudesession.FieldClaudeSessionID, field.TypeString, value)
 		_node.ClaudeSessionID = value
@@ -342,11 +345,433 @@ func (_c *ClaudeSessionCreate) createSpec() (*ClaudeSession, *sqlgraph.CreateSpe
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ClaudeSession.Create().
+//		SetClaudeSessionID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ClaudeSessionUpsert) {
+//			SetClaudeSessionID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ClaudeSessionCreate) OnConflict(opts ...sql.ConflictOption) *ClaudeSessionUpsertOne {
+	_c.conflict = opts
+	return &ClaudeSessionUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ClaudeSession.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ClaudeSessionCreate) OnConflictColumns(columns ...string) *ClaudeSessionUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ClaudeSessionUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ClaudeSessionUpsertOne is the builder for "upsert"-ing
+	//  one ClaudeSession node.
+	ClaudeSessionUpsertOne struct {
+		create *ClaudeSessionCreate
+	}
+
+	// ClaudeSessionUpsert is the "OnConflict" setter.
+	ClaudeSessionUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetClaudeSessionID sets the "claude_session_id" field.
+func (u *ClaudeSessionUpsert) SetClaudeSessionID(v string) *ClaudeSessionUpsert {
+	u.Set(claudesession.FieldClaudeSessionID, v)
+	return u
+}
+
+// UpdateClaudeSessionID sets the "claude_session_id" field to the value that was provided on create.
+func (u *ClaudeSessionUpsert) UpdateClaudeSessionID() *ClaudeSessionUpsert {
+	u.SetExcluded(claudesession.FieldClaudeSessionID)
+	return u
+}
+
+// SetConversationID sets the "conversation_id" field.
+func (u *ClaudeSessionUpsert) SetConversationID(v string) *ClaudeSessionUpsert {
+	u.Set(claudesession.FieldConversationID, v)
+	return u
+}
+
+// UpdateConversationID sets the "conversation_id" field to the value that was provided on create.
+func (u *ClaudeSessionUpsert) UpdateConversationID() *ClaudeSessionUpsert {
+	u.SetExcluded(claudesession.FieldConversationID)
+	return u
+}
+
+// ClearConversationID clears the value of the "conversation_id" field.
+func (u *ClaudeSessionUpsert) ClearConversationID() *ClaudeSessionUpsert {
+	u.SetNull(claudesession.FieldConversationID)
+	return u
+}
+
+// SetProjectName sets the "project_name" field.
+func (u *ClaudeSessionUpsert) SetProjectName(v string) *ClaudeSessionUpsert {
+	u.Set(claudesession.FieldProjectName, v)
+	return u
+}
+
+// UpdateProjectName sets the "project_name" field to the value that was provided on create.
+func (u *ClaudeSessionUpsert) UpdateProjectName() *ClaudeSessionUpsert {
+	u.SetExcluded(claudesession.FieldProjectName)
+	return u
+}
+
+// ClearProjectName clears the value of the "project_name" field.
+func (u *ClaudeSessionUpsert) ClearProjectName() *ClaudeSessionUpsert {
+	u.SetNull(claudesession.FieldProjectName)
+	return u
+}
+
+// SetLastAttached sets the "last_attached" field.
+func (u *ClaudeSessionUpsert) SetLastAttached(v time.Time) *ClaudeSessionUpsert {
+	u.Set(claudesession.FieldLastAttached, v)
+	return u
+}
+
+// UpdateLastAttached sets the "last_attached" field to the value that was provided on create.
+func (u *ClaudeSessionUpsert) UpdateLastAttached() *ClaudeSessionUpsert {
+	u.SetExcluded(claudesession.FieldLastAttached)
+	return u
+}
+
+// ClearLastAttached clears the value of the "last_attached" field.
+func (u *ClaudeSessionUpsert) ClearLastAttached() *ClaudeSessionUpsert {
+	u.SetNull(claudesession.FieldLastAttached)
+	return u
+}
+
+// SetAutoReattach sets the "auto_reattach" field.
+func (u *ClaudeSessionUpsert) SetAutoReattach(v bool) *ClaudeSessionUpsert {
+	u.Set(claudesession.FieldAutoReattach, v)
+	return u
+}
+
+// UpdateAutoReattach sets the "auto_reattach" field to the value that was provided on create.
+func (u *ClaudeSessionUpsert) UpdateAutoReattach() *ClaudeSessionUpsert {
+	u.SetExcluded(claudesession.FieldAutoReattach)
+	return u
+}
+
+// SetPreferredSessionName sets the "preferred_session_name" field.
+func (u *ClaudeSessionUpsert) SetPreferredSessionName(v string) *ClaudeSessionUpsert {
+	u.Set(claudesession.FieldPreferredSessionName, v)
+	return u
+}
+
+// UpdatePreferredSessionName sets the "preferred_session_name" field to the value that was provided on create.
+func (u *ClaudeSessionUpsert) UpdatePreferredSessionName() *ClaudeSessionUpsert {
+	u.SetExcluded(claudesession.FieldPreferredSessionName)
+	return u
+}
+
+// ClearPreferredSessionName clears the value of the "preferred_session_name" field.
+func (u *ClaudeSessionUpsert) ClearPreferredSessionName() *ClaudeSessionUpsert {
+	u.SetNull(claudesession.FieldPreferredSessionName)
+	return u
+}
+
+// SetCreateNewOnMissing sets the "create_new_on_missing" field.
+func (u *ClaudeSessionUpsert) SetCreateNewOnMissing(v bool) *ClaudeSessionUpsert {
+	u.Set(claudesession.FieldCreateNewOnMissing, v)
+	return u
+}
+
+// UpdateCreateNewOnMissing sets the "create_new_on_missing" field to the value that was provided on create.
+func (u *ClaudeSessionUpsert) UpdateCreateNewOnMissing() *ClaudeSessionUpsert {
+	u.SetExcluded(claudesession.FieldCreateNewOnMissing)
+	return u
+}
+
+// SetShowSessionSelector sets the "show_session_selector" field.
+func (u *ClaudeSessionUpsert) SetShowSessionSelector(v bool) *ClaudeSessionUpsert {
+	u.Set(claudesession.FieldShowSessionSelector, v)
+	return u
+}
+
+// UpdateShowSessionSelector sets the "show_session_selector" field to the value that was provided on create.
+func (u *ClaudeSessionUpsert) UpdateShowSessionSelector() *ClaudeSessionUpsert {
+	u.SetExcluded(claudesession.FieldShowSessionSelector)
+	return u
+}
+
+// SetSessionTimeoutMinutes sets the "session_timeout_minutes" field.
+func (u *ClaudeSessionUpsert) SetSessionTimeoutMinutes(v int) *ClaudeSessionUpsert {
+	u.Set(claudesession.FieldSessionTimeoutMinutes, v)
+	return u
+}
+
+// UpdateSessionTimeoutMinutes sets the "session_timeout_minutes" field to the value that was provided on create.
+func (u *ClaudeSessionUpsert) UpdateSessionTimeoutMinutes() *ClaudeSessionUpsert {
+	u.SetExcluded(claudesession.FieldSessionTimeoutMinutes)
+	return u
+}
+
+// AddSessionTimeoutMinutes adds v to the "session_timeout_minutes" field.
+func (u *ClaudeSessionUpsert) AddSessionTimeoutMinutes(v int) *ClaudeSessionUpsert {
+	u.Add(claudesession.FieldSessionTimeoutMinutes, v)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ClaudeSession.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ClaudeSessionUpsertOne) UpdateNewValues() *ClaudeSessionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ClaudeSession.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ClaudeSessionUpsertOne) Ignore() *ClaudeSessionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ClaudeSessionUpsertOne) DoNothing() *ClaudeSessionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ClaudeSessionCreate.OnConflict
+// documentation for more info.
+func (u *ClaudeSessionUpsertOne) Update(set func(*ClaudeSessionUpsert)) *ClaudeSessionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ClaudeSessionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetClaudeSessionID sets the "claude_session_id" field.
+func (u *ClaudeSessionUpsertOne) SetClaudeSessionID(v string) *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetClaudeSessionID(v)
+	})
+}
+
+// UpdateClaudeSessionID sets the "claude_session_id" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertOne) UpdateClaudeSessionID() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateClaudeSessionID()
+	})
+}
+
+// SetConversationID sets the "conversation_id" field.
+func (u *ClaudeSessionUpsertOne) SetConversationID(v string) *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetConversationID(v)
+	})
+}
+
+// UpdateConversationID sets the "conversation_id" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertOne) UpdateConversationID() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateConversationID()
+	})
+}
+
+// ClearConversationID clears the value of the "conversation_id" field.
+func (u *ClaudeSessionUpsertOne) ClearConversationID() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.ClearConversationID()
+	})
+}
+
+// SetProjectName sets the "project_name" field.
+func (u *ClaudeSessionUpsertOne) SetProjectName(v string) *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetProjectName(v)
+	})
+}
+
+// UpdateProjectName sets the "project_name" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertOne) UpdateProjectName() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateProjectName()
+	})
+}
+
+// ClearProjectName clears the value of the "project_name" field.
+func (u *ClaudeSessionUpsertOne) ClearProjectName() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.ClearProjectName()
+	})
+}
+
+// SetLastAttached sets the "last_attached" field.
+func (u *ClaudeSessionUpsertOne) SetLastAttached(v time.Time) *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetLastAttached(v)
+	})
+}
+
+// UpdateLastAttached sets the "last_attached" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertOne) UpdateLastAttached() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateLastAttached()
+	})
+}
+
+// ClearLastAttached clears the value of the "last_attached" field.
+func (u *ClaudeSessionUpsertOne) ClearLastAttached() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.ClearLastAttached()
+	})
+}
+
+// SetAutoReattach sets the "auto_reattach" field.
+func (u *ClaudeSessionUpsertOne) SetAutoReattach(v bool) *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetAutoReattach(v)
+	})
+}
+
+// UpdateAutoReattach sets the "auto_reattach" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertOne) UpdateAutoReattach() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateAutoReattach()
+	})
+}
+
+// SetPreferredSessionName sets the "preferred_session_name" field.
+func (u *ClaudeSessionUpsertOne) SetPreferredSessionName(v string) *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetPreferredSessionName(v)
+	})
+}
+
+// UpdatePreferredSessionName sets the "preferred_session_name" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertOne) UpdatePreferredSessionName() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdatePreferredSessionName()
+	})
+}
+
+// ClearPreferredSessionName clears the value of the "preferred_session_name" field.
+func (u *ClaudeSessionUpsertOne) ClearPreferredSessionName() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.ClearPreferredSessionName()
+	})
+}
+
+// SetCreateNewOnMissing sets the "create_new_on_missing" field.
+func (u *ClaudeSessionUpsertOne) SetCreateNewOnMissing(v bool) *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetCreateNewOnMissing(v)
+	})
+}
+
+// UpdateCreateNewOnMissing sets the "create_new_on_missing" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertOne) UpdateCreateNewOnMissing() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateCreateNewOnMissing()
+	})
+}
+
+// SetShowSessionSelector sets the "show_session_selector" field.
+func (u *ClaudeSessionUpsertOne) SetShowSessionSelector(v bool) *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetShowSessionSelector(v)
+	})
+}
+
+// UpdateShowSessionSelector sets the "show_session_selector" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertOne) UpdateShowSessionSelector() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateShowSessionSelector()
+	})
+}
+
+// SetSessionTimeoutMinutes sets the "session_timeout_minutes" field.
+func (u *ClaudeSessionUpsertOne) SetSessionTimeoutMinutes(v int) *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetSessionTimeoutMinutes(v)
+	})
+}
+
+// AddSessionTimeoutMinutes adds v to the "session_timeout_minutes" field.
+func (u *ClaudeSessionUpsertOne) AddSessionTimeoutMinutes(v int) *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.AddSessionTimeoutMinutes(v)
+	})
+}
+
+// UpdateSessionTimeoutMinutes sets the "session_timeout_minutes" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertOne) UpdateSessionTimeoutMinutes() *ClaudeSessionUpsertOne {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateSessionTimeoutMinutes()
+	})
+}
+
+// Exec executes the query.
+func (u *ClaudeSessionUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ClaudeSessionCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ClaudeSessionUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ClaudeSessionUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ClaudeSessionUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ClaudeSessionCreateBulk is the builder for creating many ClaudeSession entities in bulk.
 type ClaudeSessionCreateBulk struct {
 	config
 	err      error
 	builders []*ClaudeSessionCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ClaudeSession entities in the database.
@@ -376,6 +801,7 @@ func (_c *ClaudeSessionCreateBulk) Save(ctx context.Context) ([]*ClaudeSession, 
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -426,6 +852,271 @@ func (_c *ClaudeSessionCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ClaudeSessionCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ClaudeSession.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ClaudeSessionUpsert) {
+//			SetClaudeSessionID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ClaudeSessionCreateBulk) OnConflict(opts ...sql.ConflictOption) *ClaudeSessionUpsertBulk {
+	_c.conflict = opts
+	return &ClaudeSessionUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ClaudeSession.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ClaudeSessionCreateBulk) OnConflictColumns(columns ...string) *ClaudeSessionUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ClaudeSessionUpsertBulk{
+		create: _c,
+	}
+}
+
+// ClaudeSessionUpsertBulk is the builder for "upsert"-ing
+// a bulk of ClaudeSession nodes.
+type ClaudeSessionUpsertBulk struct {
+	create *ClaudeSessionCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ClaudeSession.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ClaudeSessionUpsertBulk) UpdateNewValues() *ClaudeSessionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ClaudeSession.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ClaudeSessionUpsertBulk) Ignore() *ClaudeSessionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ClaudeSessionUpsertBulk) DoNothing() *ClaudeSessionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ClaudeSessionCreateBulk.OnConflict
+// documentation for more info.
+func (u *ClaudeSessionUpsertBulk) Update(set func(*ClaudeSessionUpsert)) *ClaudeSessionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ClaudeSessionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetClaudeSessionID sets the "claude_session_id" field.
+func (u *ClaudeSessionUpsertBulk) SetClaudeSessionID(v string) *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetClaudeSessionID(v)
+	})
+}
+
+// UpdateClaudeSessionID sets the "claude_session_id" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertBulk) UpdateClaudeSessionID() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateClaudeSessionID()
+	})
+}
+
+// SetConversationID sets the "conversation_id" field.
+func (u *ClaudeSessionUpsertBulk) SetConversationID(v string) *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetConversationID(v)
+	})
+}
+
+// UpdateConversationID sets the "conversation_id" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertBulk) UpdateConversationID() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateConversationID()
+	})
+}
+
+// ClearConversationID clears the value of the "conversation_id" field.
+func (u *ClaudeSessionUpsertBulk) ClearConversationID() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.ClearConversationID()
+	})
+}
+
+// SetProjectName sets the "project_name" field.
+func (u *ClaudeSessionUpsertBulk) SetProjectName(v string) *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetProjectName(v)
+	})
+}
+
+// UpdateProjectName sets the "project_name" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertBulk) UpdateProjectName() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateProjectName()
+	})
+}
+
+// ClearProjectName clears the value of the "project_name" field.
+func (u *ClaudeSessionUpsertBulk) ClearProjectName() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.ClearProjectName()
+	})
+}
+
+// SetLastAttached sets the "last_attached" field.
+func (u *ClaudeSessionUpsertBulk) SetLastAttached(v time.Time) *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetLastAttached(v)
+	})
+}
+
+// UpdateLastAttached sets the "last_attached" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertBulk) UpdateLastAttached() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateLastAttached()
+	})
+}
+
+// ClearLastAttached clears the value of the "last_attached" field.
+func (u *ClaudeSessionUpsertBulk) ClearLastAttached() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.ClearLastAttached()
+	})
+}
+
+// SetAutoReattach sets the "auto_reattach" field.
+func (u *ClaudeSessionUpsertBulk) SetAutoReattach(v bool) *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetAutoReattach(v)
+	})
+}
+
+// UpdateAutoReattach sets the "auto_reattach" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertBulk) UpdateAutoReattach() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateAutoReattach()
+	})
+}
+
+// SetPreferredSessionName sets the "preferred_session_name" field.
+func (u *ClaudeSessionUpsertBulk) SetPreferredSessionName(v string) *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetPreferredSessionName(v)
+	})
+}
+
+// UpdatePreferredSessionName sets the "preferred_session_name" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertBulk) UpdatePreferredSessionName() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdatePreferredSessionName()
+	})
+}
+
+// ClearPreferredSessionName clears the value of the "preferred_session_name" field.
+func (u *ClaudeSessionUpsertBulk) ClearPreferredSessionName() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.ClearPreferredSessionName()
+	})
+}
+
+// SetCreateNewOnMissing sets the "create_new_on_missing" field.
+func (u *ClaudeSessionUpsertBulk) SetCreateNewOnMissing(v bool) *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetCreateNewOnMissing(v)
+	})
+}
+
+// UpdateCreateNewOnMissing sets the "create_new_on_missing" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertBulk) UpdateCreateNewOnMissing() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateCreateNewOnMissing()
+	})
+}
+
+// SetShowSessionSelector sets the "show_session_selector" field.
+func (u *ClaudeSessionUpsertBulk) SetShowSessionSelector(v bool) *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetShowSessionSelector(v)
+	})
+}
+
+// UpdateShowSessionSelector sets the "show_session_selector" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertBulk) UpdateShowSessionSelector() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateShowSessionSelector()
+	})
+}
+
+// SetSessionTimeoutMinutes sets the "session_timeout_minutes" field.
+func (u *ClaudeSessionUpsertBulk) SetSessionTimeoutMinutes(v int) *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.SetSessionTimeoutMinutes(v)
+	})
+}
+
+// AddSessionTimeoutMinutes adds v to the "session_timeout_minutes" field.
+func (u *ClaudeSessionUpsertBulk) AddSessionTimeoutMinutes(v int) *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.AddSessionTimeoutMinutes(v)
+	})
+}
+
+// UpdateSessionTimeoutMinutes sets the "session_timeout_minutes" field to the value that was provided on create.
+func (u *ClaudeSessionUpsertBulk) UpdateSessionTimeoutMinutes() *ClaudeSessionUpsertBulk {
+	return u.Update(func(s *ClaudeSessionUpsert) {
+		s.UpdateSessionTimeoutMinutes()
+	})
+}
+
+// Exec executes the query.
+func (u *ClaudeSessionUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ClaudeSessionCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ClaudeSessionCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ClaudeSessionUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

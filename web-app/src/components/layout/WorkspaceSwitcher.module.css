@@ -23,7 +23,7 @@
 
 .trigger:hover {
   color: var(--text-primary, #ffffff);
-  background: var(--hover-background));
+  background: var(--hover-background);
   border-color: var(--border-hover, #555);
 }
 
@@ -100,7 +100,7 @@
 }
 
 .workspaceItem:hover:not(.workspaceItemCurrent):not(.workspaceItemLoading) {
-  background: var(--hover-background));
+  background: var(--hover-background);
 }
 
 .workspaceItem:hover:not(.workspaceItemCurrent):not(.workspaceItemLoading) .mergeButton {
@@ -108,7 +108,7 @@
 }
 
 .workspaceItemCurrent {
-  background: var(--primary-active));
+  background: var(--primary-active);
 }
 
 .workspaceItemLoading {
@@ -157,7 +157,7 @@
 .mergeButton:hover:not(:disabled) {
   color: var(--text-primary, #ffffff);
   border-color: var(--border-hover, #555);
-  background: var(--hover-background));
+  background: var(--hover-background);
 }
 
 .mergeButton:disabled {

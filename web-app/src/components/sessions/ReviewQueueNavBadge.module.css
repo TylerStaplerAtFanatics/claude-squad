@@ -48,3 +48,9 @@
     animation: none;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .badge:not(:empty) {
+    animation: none;
+  }
+}

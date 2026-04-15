@@ -106,23 +106,24 @@ func (rqs *ReviewQueueService) GetReviewQueue(
 		queue.Add(item)
 	}
 
-	protoQueue := adapters.ReviewQueueToProto(queue)
-
-	// Enrich APPROVAL_PENDING items with their pending_approval_id so the
-	// frontend can show Approve/Deny buttons directly in the review queue.
-	if rqs.approvalStore != nil && protoQueue != nil {
-		for _, item := range protoQueue.Items {
-			if item.Reason == sessionv1.AttentionReason_ATTENTION_REASON_APPROVAL_PENDING {
-				approvals := rqs.approvalStore.GetBySession(item.SessionId)
-				if len(approvals) > 0 {
-					if item.Metadata == nil {
-						item.Metadata = make(map[string]string)
+	// Build approvalID enrichment map before converting so the adapter can
+	// inject pending_approval_id at construction time — no post-conversion
+	// mutation needed (which would race across concurrent RPC calls).
+	var approvalIDs map[string]string
+	if rqs.approvalStore != nil {
+		for _, item := range filteredItems {
+			if item.Reason == session.ReasonApprovalPending {
+				if pending := rqs.approvalStore.GetBySession(item.SessionID); len(pending) > 0 {
+					if approvalIDs == nil {
+						approvalIDs = make(map[string]string)
 					}
-					item.Metadata["pending_approval_id"] = approvals[0].ID
+					approvalIDs[item.SessionID] = pending[0].ID
 				}
 			}
 		}
 	}
+
+	protoQueue := adapters.ReviewQueueToProto(queue, approvalIDs)
 
 	return connect.NewResponse(&sessionv1.GetReviewQueueResponse{
 		ReviewQueue: protoQueue,
@@ -349,28 +350,4 @@ func convertProtoReasons(protoReasons []sessionv1.AttentionReason) []session.Att
 		}
 	}
 	return result
-}
-
-// formatDuration formats a time.Duration in a human-readable way.
-func formatDuration(d time.Duration) string {
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	}
-	if d < time.Hour {
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	}
-	if d < 24*time.Hour {
-		hours := int(d.Hours())
-		minutes := int(d.Minutes()) % 60
-		if minutes == 0 {
-			return fmt.Sprintf("%dh", hours)
-		}
-		return fmt.Sprintf("%dh%dm", hours, minutes)
-	}
-	days := int(d.Hours()) / 24
-	hours := int(d.Hours()) % 24
-	if hours == 0 {
-		return fmt.Sprintf("%dd", days)
-	}
-	return fmt.Sprintf("%dd%dh", days, hours)
 }

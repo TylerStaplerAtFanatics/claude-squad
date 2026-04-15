@@ -115,6 +115,7 @@ func TestPolicyEngine_GetPolicy(t *testing.T) {
 	found := engine.GetPolicy(policy.ID)
 	if found == nil {
 		t.Error("GetPolicy() returned nil for existing policy")
+		return
 	}
 
 	if found.ID != policy.ID {

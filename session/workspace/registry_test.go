@@ -193,8 +193,8 @@ func TestRegistryUnregister(t *testing.T) {
 
 	// Should not be found
 	retrieved, err := registry.Get(ctx, "/test/workspace")
-	if err != nil {
-		t.Fatalf("get failed: %v", err)
+	if err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 
 	if retrieved != nil {

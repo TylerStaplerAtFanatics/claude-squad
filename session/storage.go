@@ -342,3 +342,30 @@ func (s *Storage) SaveSession(ctx context.Context, session *Session) error {
 	}
 	return nil
 }
+
+// --- Permissions & Analytics --------------------------------------------------
+
+// AllRules returns all auto-approval rules from the repository.
+func (s *Storage) AllRules(ctx context.Context) ([]ApprovalRuleData, error) {
+	return s.repo.AllRules(ctx)
+}
+
+// UpsertRule creates or updates an auto-approval rule in the repository.
+func (s *Storage) UpsertRule(ctx context.Context, rule ApprovalRuleData) error {
+	return s.repo.UpsertRule(ctx, rule)
+}
+
+// DeleteRule removes an auto-approval rule from the repository.
+func (s *Storage) DeleteRule(ctx context.Context, id string) error {
+	return s.repo.DeleteRule(ctx, id)
+}
+
+// RecordAnalytics logs a classification decision to the repository.
+func (s *Storage) RecordAnalytics(ctx context.Context, data AnalyticsData) error {
+	return s.repo.RecordAnalytics(ctx, data)
+}
+
+// ListAnalytics retrieves recent classification decisions from the repository.
+func (s *Storage) ListAnalytics(ctx context.Context, limit int) ([]AnalyticsData, error) {
+	return s.repo.ListAnalytics(ctx, limit)
+}

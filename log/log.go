@@ -209,12 +209,12 @@ func (sl *StructuredLogger) Log(level LogLevel, message string, fields map[strin
 
 	if err != nil {
 		// Fallback to simple text logging if JSON marshaling fails
-		fmt.Fprintf(sl.writer, "%s [%s] %s\n", entry.Timestamp.Format(time.RFC3339), entry.Level, entry.Message)
+		_, _ = fmt.Fprintf(sl.writer, "%s [%s] %s\n", entry.Timestamp.Format(time.RFC3339), entry.Level, entry.Message)
 		return
 	}
 
-	sl.writer.Write(output)
-	sl.writer.Write([]byte("\n"))
+	_, _ = sl.writer.Write(output)
+	_, _ = sl.writer.Write([]byte("\n"))
 }
 
 // LogWithFields logs a message with additional fields
@@ -350,6 +350,11 @@ func GetSessionLogFilePath(cfg *LogConfig, sessionID string) (string, error) {
 	return filepath.Join(logDir, fmt.Sprintf("session_%s.log", safeSessionID)), nil
 }
 
+var (
+	// ErrSessionLogsDisabled is returned when session logs are disabled in config
+	ErrSessionLogsDisabled = fmt.Errorf("session logs disabled in config")
+)
+
 // GetSessionLoggers creates or retrieves loggers for a specific session
 func GetSessionLoggers(sessionID string) (*SessionLoggers, error) {
 	sessionMutex.RLock()
@@ -360,9 +365,9 @@ func GetSessionLoggers(sessionID string) (*SessionLoggers, error) {
 	}
 	sessionMutex.RUnlock()
 
-	// If session logs are disabled in config, return nil
+	// If session logs are disabled in config, return an error
 	if globalConfig != nil && !globalConfig.UseSessionLogs {
-		return nil, nil
+		return nil, ErrSessionLogsDisabled
 	}
 
 	sessionMutex.Lock()

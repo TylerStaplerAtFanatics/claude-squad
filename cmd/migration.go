@@ -2,13 +2,15 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+	"sync/atomic"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tstapler/stapler-squad/cmd/commands"
 	"github.com/tstapler/stapler-squad/cmd/interfaces"
 	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/log"
-	"strings"
-	"sync"
 )
 
 // Bridge provides compatibility between old and new command systems
@@ -20,7 +22,7 @@ type Bridge struct {
 	contextStack []ContextID
 
 	// Legacy mappings - disabled since keys package is removed
-	initialized bool
+	initialized atomic.Bool
 
 	// Performance optimization: cache expensive help generation per context
 	cacheMutex         sync.RWMutex
@@ -45,7 +47,7 @@ func NewBridge() *Bridge {
 		registry:           registry,
 		config:             cfg,
 		contextStack:       []ContextID{ContextGlobal}, // Start with global context
-		initialized:        false,
+
 		keyCategoriesCache: make(map[ContextID]map[string][]string),
 	}
 
@@ -63,7 +65,7 @@ func (b *Bridge) Initialize(
 	organizationHandlers *commands.OrganizationHandlers,
 	systemHandlers *commands.SystemHandlers,
 ) {
-	if b.initialized {
+	if b.initialized.Load() {
 		log.InfoLog.Printf("Bridge.Initialize: already initialized, skipping")
 		return
 	}
@@ -78,7 +80,7 @@ func (b *Bridge) Initialize(
 	commands.SetOrganizationHandlers(organizationHandlers)
 	commands.SetSystemHandlers(systemHandlers)
 
-	b.initialized = true
+	b.initialized.Store(true)
 	log.InfoLog.Printf("Bridge.Initialize: completed successfully")
 
 	// Now that we're initialized, pre-warm cache in background
@@ -194,7 +196,7 @@ func (b *Bridge) PopContext() ContextID {
 func (b *Bridge) ValidateSetup() []string {
 	var issues []string
 
-	if !b.initialized {
+	if !b.initialized.Load() {
 		issues = append(issues, "Bridge not initialized - call Initialize() first")
 	}
 
@@ -318,14 +320,16 @@ func (b *Bridge) ReloadConfig() {
 
 // invalidateKeyCategories clears all cached key categories
 func (b *Bridge) invalidateKeyCategories() {
+	b.cacheMutex.Lock()
 	b.keyCategoriesCache = make(map[ContextID]map[string][]string)
+	b.cacheMutex.Unlock()
 }
 
 // prewarmKeyCategories populates the key categories cache in background during startup
 func (b *Bridge) prewarmKeyCategories() {
 	// Wait for registry to be fully initialized
 	// This ensures all commands and contexts are registered before we cache
-	if !b.initialized {
+	if !b.initialized.Load() {
 		// If not initialized yet, we'll cache after Initialize() is called
 		return
 	}

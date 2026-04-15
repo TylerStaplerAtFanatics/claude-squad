@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -17,6 +19,37 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// historyCursor is the opaque token encoded into page_token / next_page_token.
+// It records the UpdatedAt timestamp (nanoseconds) and ID of the last entry on
+// the current page so the next request can resume from that position.
+type historyCursor struct {
+	UpdatedAtNs int64  `json:"u"`
+	ID          string `json:"i"`
+}
+
+// encodeHistoryCursor encodes a cursor to an opaque base64url string.
+func encodeHistoryCursor(c historyCursor) string {
+	b, _ := json.Marshal(c)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// decodeHistoryCursor decodes an opaque page_token string back to a cursor.
+// Returns the zero value and false if the token is empty or malformed.
+func decodeHistoryCursor(token string) (historyCursor, bool) {
+	if token == "" {
+		return historyCursor{}, false
+	}
+	b, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return historyCursor{}, false
+	}
+	var c historyCursor
+	if err := json.Unmarshal(b, &c); err != nil {
+		return historyCursor{}, false
+	}
+	return c, true
+}
 
 // SearchService handles all Claude history and full-text search RPC methods.
 //
@@ -108,7 +141,18 @@ func (ss *SearchService) getOrRefreshHistoryCache(ctx context.Context) (*session
 	return hist, nil
 }
 
-// ListClaudeHistory returns Claude session history entries with optional filtering.
+// ListClaudeHistory returns Claude session history entries with optional filtering
+// and cursor-based pagination.
+//
+// Pagination rules:
+//   - page_size controls how many entries are returned per page (default 100, max 500).
+//   - page_token, when set, resumes from the position after the last entry on the
+//     previous page.  Leave it empty for the first page.
+//   - next_page_token in the response is non-empty when more pages exist; pass it
+//     as page_token in the next request.
+//   - The legacy limit field is honoured when page_size is zero.
+//   - Filters (project, search_query) must be identical across all pages of a
+//     paginated sequence.
 func (ss *SearchService) ListClaudeHistory(
 	ctx context.Context,
 	req *connect.Request[sessionv1.ListClaudeHistoryRequest],
@@ -129,9 +173,53 @@ func (ss *SearchService) ListClaudeHistory(
 	}
 
 	totalCount := len(entries)
-	if req.Msg.Limit > 0 && int(req.Msg.Limit) < len(entries) {
-		entries = entries[:req.Msg.Limit]
+
+	// --- Cursor pagination ---------------------------------------------------
+	// Resolve effective page size: page_size takes precedence over limit.
+	const defaultPageSize = 100
+	const maxPageSize = 500
+
+	pageSize := int(req.Msg.PageSize)
+	if pageSize <= 0 {
+		pageSize = int(req.Msg.Limit) //nolint:staticcheck // legacy fallback: callers may still send limit
 	}
+	if pageSize <= 0 {
+		pageSize = defaultPageSize
+	}
+	if pageSize > maxPageSize {
+		pageSize = maxPageSize
+	}
+
+	// Apply cursor: skip entries up to and including the cursor position.
+	if cursor, ok := decodeHistoryCursor(req.Msg.PageToken); ok {
+		startIdx := -1
+		for i, e := range entries {
+			if e.UpdatedAt.UnixNano() == cursor.UpdatedAtNs && e.ID == cursor.ID {
+				startIdx = i + 1 // first entry of the next page
+				break
+			}
+		}
+		if startIdx > 0 && startIdx < len(entries) {
+			entries = entries[startIdx:]
+		} else if startIdx >= len(entries) {
+			// Cursor points past the last entry — return empty last page.
+			entries = nil
+		}
+		// If startIdx == -1 the cursor wasn't found (cache refreshed) — return
+		// from the beginning so the caller can recover gracefully.
+	}
+
+	// Slice to page size and build next_page_token if there are more pages.
+	var nextPageToken string
+	if pageSize > 0 && len(entries) > pageSize {
+		lastOnPage := entries[pageSize-1]
+		nextPageToken = encodeHistoryCursor(historyCursor{
+			UpdatedAtNs: lastOnPage.UpdatedAt.UnixNano(),
+			ID:          lastOnPage.ID,
+		})
+		entries = entries[:pageSize]
+	}
+	// -------------------------------------------------------------------------
 
 	protoEntries := make([]*sessionv1.ClaudeHistoryEntry, 0, len(entries))
 	for _, entry := range entries {
@@ -147,8 +235,9 @@ func (ss *SearchService) ListClaudeHistory(
 	}
 
 	return connect.NewResponse(&sessionv1.ListClaudeHistoryResponse{
-		Entries:    protoEntries,
-		TotalCount: int32(totalCount),
+		Entries:       protoEntries,
+		TotalCount:    int32(totalCount),
+		NextPageToken: nextPageToken,
 	}), nil
 }
 
@@ -195,7 +284,14 @@ func (ss *SearchService) GetClaudeHistoryMessages(
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %w", err))
 	}
 
-	messages, err := hist.GetMessagesFromConversationFile(req.Msg.Id)
+	// Use the reverse tail reader only when explicitly requested via tail=true.
+	// Standard limit/offset reads always scan from the start so offset semantics
+	// remain correct and total_count reflects the full conversation length.
+	fileLimit := 0
+	if req.Msg.Tail && req.Msg.Limit > 0 && req.Msg.Offset == 0 {
+		fileLimit = int(req.Msg.Limit)
+	}
+	messages, err := hist.GetMessagesFromConversationFile(req.Msg.Id, fileLimit)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load messages: %w", err))
 	}

@@ -108,6 +108,79 @@ func TestProcessOutput_Tab(t *testing.T) {
 	}
 }
 
+func TestProcessOutput_SetTabStop(t *testing.T) {
+	state := NewTerminalState(25, 80)
+
+	// Move to col 4 and set tab stop
+	// \x1b[1;5H moves the cursor
+	// \x1bH sets the tab stop
+	state.ProcessOutput([]byte("\x1b[1;5H\x1bH"))
+
+	if !state.TabStops[4] {
+		t.Errorf("Expected tab stop at column 4 to be set")
+	}
+}
+
+func TestProcessOutput_ClearTabStop(t *testing.T) {
+	state := NewTerminalState(25, 80)
+
+	// Default tab stop at 8 should exist
+	if !state.TabStops[8] {
+		t.Errorf("Expected default tab stop at 8")
+	}
+
+	// Move to col 8 and clear tab stop
+	state.ProcessOutput([]byte("\x1b[1;9H\x1b[0g"))
+
+	if state.TabStops[8] {
+		t.Errorf("Expected tab stop at column 8 to be cleared")
+	}
+}
+
+func TestProcessOutput_ClearAllTabStops(t *testing.T) {
+	state := NewTerminalState(25, 80)
+
+	// Default tab stops should exist
+	if len(state.TabStops) == 0 {
+		t.Errorf("Expected default tab stops")
+	}
+
+	// Clear all tab stops
+	state.ProcessOutput([]byte("\x1b[3g"))
+
+	if len(state.TabStops) != 0 {
+		t.Errorf("Expected all tab stops to be cleared, got %d", len(state.TabStops))
+	}
+}
+
+func TestProcessOutput_TabWithCustomStops(t *testing.T) {
+	state := NewTerminalState(25, 80)
+
+	// Clear all tab stops
+	state.ProcessOutput([]byte("\x1b[3g"))
+
+	// Set custom tab stops at 4 and 12
+	state.ProcessOutput([]byte("\x1b[1;5H\x1bH"))
+	state.ProcessOutput([]byte("\x1b[1;13H\x1bH"))
+
+	// Go to origin and print A \t B \t C \t D
+	state.ProcessOutput([]byte("\x1b[1;1HA\tB\tC\tD"))
+
+	if state.Grid[0][0].Char != 'A' {
+		t.Errorf("Expected 'A' at column 0, got %c", state.Grid[0][0].Char)
+	}
+	if state.Grid[0][4].Char != 'B' {
+		t.Errorf("Expected 'B' at column 4, got %c", state.Grid[0][4].Char)
+	}
+	if state.Grid[0][12].Char != 'C' {
+		t.Errorf("Expected 'C' at column 12, got %c", state.Grid[0][12].Char)
+	}
+	// No more tab stops, D should be at the end of the line
+	if state.Grid[0][79].Char != 'D' {
+		t.Errorf("Expected 'D' at column 79, got %c", state.Grid[0][79].Char)
+	}
+}
+
 func TestProcessOutput_CursorMovement(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -337,6 +410,15 @@ func TestClone(t *testing.T) {
 		t.Errorf("Clone version doesn't match: %d vs %d", clone.Version, state.Version)
 	}
 
+	// Check saved cursor matches
+	state.SavedCursorRow = 2
+	state.SavedCursorCol = 4
+	cloneWithSaved := state.Clone()
+	if cloneWithSaved.SavedCursorRow != state.SavedCursorRow || cloneWithSaved.SavedCursorCol != state.SavedCursorCol {
+		t.Errorf("Clone saved cursor doesn't match: expected (%d,%d), got (%d,%d)",
+			state.SavedCursorRow, state.SavedCursorCol, cloneWithSaved.SavedCursorRow, cloneWithSaved.SavedCursorCol)
+	}
+
 	// Verify it's a deep copy - modifying clone shouldn't affect original
 	clone.Grid[0][0].Char = 'X'
 	if state.Grid[0][0].Char != 'T' {
@@ -469,6 +551,91 @@ func TestGetLineText_WithStyles(t *testing.T) {
 
 	if !containsString(lineText, "\x1b[0m") {
 		t.Error("Expected reset ANSI code in line text")
+	}
+}
+
+func TestCursorSaveRestore(t *testing.T) {
+	state := NewTerminalState(25, 80)
+
+	// Move cursor to a specific position
+	state.ProcessOutput([]byte("\x1b[5;10H"))
+
+	if state.CursorRow != 4 || state.CursorCol != 9 {
+		t.Fatalf("Failed to move cursor initially, got (%d,%d)", state.CursorRow, state.CursorCol)
+	}
+
+	// Save cursor
+	state.ProcessOutput([]byte("\x1b7"))
+
+	if state.SavedCursorRow != 4 || state.SavedCursorCol != 9 {
+		t.Errorf("Expected saved cursor at (4,9), got (%d,%d)", state.SavedCursorRow, state.SavedCursorCol)
+	}
+
+	// Move cursor away
+	state.ProcessOutput([]byte("\x1b[10;20H"))
+
+	// Restore cursor
+	state.ProcessOutput([]byte("\x1b8"))
+
+	if state.CursorRow != 4 || state.CursorCol != 9 {
+		t.Errorf("Expected cursor restored to (4,9), got (%d,%d)", state.CursorRow, state.CursorCol)
+	}
+}
+
+func TestCursorSaveRestore_WithResize(t *testing.T) {
+	state := NewTerminalState(25, 80)
+
+	// Move cursor and save
+	state.ProcessOutput([]byte("\x1b[20;50H\x1b7"))
+
+	// Resize terminal to be smaller than the saved position
+	state.Resize(10, 40)
+
+	// Restore cursor
+	state.ProcessOutput([]byte("\x1b8"))
+
+	// The restored cursor should be clamped to the new dimensions
+	if state.CursorRow != 9 {
+		t.Errorf("Expected cursor row clamped to 9, got %d", state.CursorRow)
+	}
+	if state.CursorCol != 39 {
+		t.Errorf("Expected cursor col clamped to 39, got %d", state.CursorCol)
+	}
+}
+
+func TestGetLineText_ComplexColorsAndStyles(t *testing.T) {
+	state := NewTerminalState(25, 80)
+
+	// Test case: bold -> bold + red fg -> bold + red fg + green bg -> yellow fg
+	// Note: 31 is red, 42 is green bg, 33 is yellow
+	input := "\x1b[1mA\x1b[31mB\x1b[42mC\x1b[33mD"
+	err := state.ProcessOutput([]byte(input))
+	if err != nil {
+		t.Fatalf("ProcessOutput failed: %v", err)
+	}
+
+	lineText := state.getLineText(0)
+
+	// Check if all output sequences are properly formatted
+	// Note: output may differ slightly from input since we normalize it
+	if !containsString(lineText, "\x1b[1mA") {
+		t.Errorf("Expected bold 'A', got %q", lineText)
+	}
+	// It should just add the red foreground color (31)
+	if !containsString(lineText, "\x1b[31mB") {
+		t.Errorf("Expected red 'B', got %q", lineText)
+	}
+	// It should just add the green background color (42)
+	if !containsString(lineText, "\x1b[42mC") {
+		t.Errorf("Expected green background 'C', got %q", lineText)
+	}
+	// It should change to yellow foreground (33)
+	if !containsString(lineText, "\x1b[33mD") {
+		t.Errorf("Expected yellow foreground 'D', got %q", lineText)
+	}
+	// Must end with reset
+	if !strings.HasSuffix(lineText, "\x1b[0m") {
+		t.Errorf("Expected line to end with reset, got %q", lineText)
 	}
 }
 

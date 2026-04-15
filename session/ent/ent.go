@@ -6,18 +6,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
-	"github.com/tstapler/stapler-squad/session/ent/claudesession"
-	"github.com/tstapler/stapler-squad/session/ent/diffstats"
-	"github.com/tstapler/stapler-squad/session/ent/session"
-	"github.com/tstapler/stapler-squad/session/ent/tag"
-	"github.com/tstapler/stapler-squad/session/ent/worktree"
 	"reflect"
 	"sync"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/tstapler/stapler-squad/session/ent/approvalrule"
+	"github.com/tstapler/stapler-squad/session/ent/classificationanalytics"
+	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
+	"github.com/tstapler/stapler-squad/session/ent/claudesession"
+	"github.com/tstapler/stapler-squad/session/ent/diffstats"
+	"github.com/tstapler/stapler-squad/session/ent/session"
+	"github.com/tstapler/stapler-squad/session/ent/tag"
+	"github.com/tstapler/stapler-squad/session/ent/worktree"
 )
 
 // ent aliases to avoid import conflicts in user's code.
@@ -78,12 +80,14 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			claudemetadata.Table: claudemetadata.ValidColumn,
-			claudesession.Table:  claudesession.ValidColumn,
-			diffstats.Table:      diffstats.ValidColumn,
-			session.Table:        session.ValidColumn,
-			tag.Table:            tag.ValidColumn,
-			worktree.Table:       worktree.ValidColumn,
+			approvalrule.Table:            approvalrule.ValidColumn,
+			classificationanalytics.Table: classificationanalytics.ValidColumn,
+			claudemetadata.Table:          claudemetadata.ValidColumn,
+			claudesession.Table:           claudesession.ValidColumn,
+			diffstats.Table:               diffstats.ValidColumn,
+			session.Table:                 session.ValidColumn,
+			tag.Table:                     tag.ValidColumn,
+			worktree.Table:                worktree.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

@@ -334,20 +334,20 @@ func (g *DiffGenerator) moveCursorTo(row, col int) {
 	// Use the cheaper option
 	if absCost <= relCost || (deltaRow != 0 && deltaCol != 0) {
 		// Absolute positioning (1-indexed)
-		g.output.WriteString(fmt.Sprintf("\x1b[%d;%dH", row+1, col+1))
+		fmt.Fprintf(&g.output, "\x1b[%d;%dH", row+1, col+1)
 	} else {
 		// Relative positioning
 		if deltaRow > 0 {
 			if deltaRow == 1 {
 				g.output.WriteString("\x1b[B")
 			} else {
-				g.output.WriteString(fmt.Sprintf("\x1b[%dB", deltaRow))
+				fmt.Fprintf(&g.output, "\x1b[%dB", deltaRow)
 			}
 		} else if deltaRow < 0 {
 			if deltaRow == -1 {
 				g.output.WriteString("\x1b[A")
 			} else {
-				g.output.WriteString(fmt.Sprintf("\x1b[%dA", -deltaRow))
+				fmt.Fprintf(&g.output, "\x1b[%dA", -deltaRow)
 			}
 		}
 
@@ -358,13 +358,13 @@ func (g *DiffGenerator) moveCursorTo(row, col int) {
 				if deltaCol == 1 {
 					g.output.WriteString("\x1b[C")
 				} else {
-					g.output.WriteString(fmt.Sprintf("\x1b[%dC", deltaCol))
+					fmt.Fprintf(&g.output, "\x1b[%dC", deltaCol)
 				}
 			} else {
 				if deltaCol == -1 {
 					g.output.WriteString("\x1b[D")
 				} else {
-					g.output.WriteString(fmt.Sprintf("\x1b[%dD", -deltaCol))
+					fmt.Fprintf(&g.output, "\x1b[%dD", -deltaCol)
 				}
 			}
 		}
@@ -387,10 +387,7 @@ func (g *DiffGenerator) emitStyleTransition(target session.CellStyle) {
 	var codes []string
 
 	// Check if we need to reset first
-	needsReset := false
-	if g.currentStyle.Bold && !target.Bold {
-		needsReset = true
-	}
+	needsReset := g.currentStyle.Bold && !target.Bold
 	if g.currentStyle.Italic && !target.Italic {
 		needsReset = true
 	}

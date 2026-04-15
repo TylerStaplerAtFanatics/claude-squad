@@ -6,6 +6,12 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// ApprovalRule is the predicate function for approvalrule builders.
+type ApprovalRule func(*sql.Selector)
+
+// ClassificationAnalytics is the predicate function for classificationanalytics builders.
+type ClassificationAnalytics func(*sql.Selector)
+
 // ClaudeMetadata is the predicate function for claudemetadata builders.
 type ClaudeMetadata func(*sql.Selector)
 

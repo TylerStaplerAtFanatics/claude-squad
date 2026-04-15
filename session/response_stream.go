@@ -156,9 +156,11 @@ func (rs *ResponseStream) streamLoop() {
 					// Timeout is expected, continue loop
 					continue
 				}
-				// Check for "file already closed" errors which indicate EOF
+				// Check for "file already closed" or Linux PTY "input/output error" which indicate EOF
 				errMsg := err.Error()
-				if strings.Contains(errMsg, "file already closed") || strings.Contains(errMsg, "bad file descriptor") {
+				if strings.Contains(errMsg, "file already closed") ||
+					strings.Contains(errMsg, "bad file descriptor") ||
+					strings.Contains(errMsg, "input/output error") {
 					// PTY has been closed, stop streaming
 					rs.closeAllSubscribers()
 					return

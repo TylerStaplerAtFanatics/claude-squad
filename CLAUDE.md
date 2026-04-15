@@ -209,7 +209,7 @@ make analyze
 make nil-safety     # Comprehensive nil safety analysis
 make staticcheck    # Advanced static analysis
 make security       # Security vulnerability scanning
-make lint          # Comprehensive linting
+make lint          # Comprehensive linting (REQUIRED for build to pass)
 
 # Pre-commit validation
 make pre-commit
@@ -218,6 +218,9 @@ make pre-commit
 make deadcode       # Find unreachable code
 deadcode -test ./...  # Include test files in analysis
 ```
+
+**CRITICAL: Linting is now part of the build process.**
+If `make lint` fails, `make build` will also fail. Always ensure your changes are lint-free and properly formatted using `gofmt -w .`.
 
 **Manual Commands:**
 ```bash

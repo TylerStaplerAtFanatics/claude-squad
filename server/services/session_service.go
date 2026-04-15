@@ -12,6 +12,7 @@ import (
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/pkg/classifier"
 	"github.com/tstapler/stapler-squad/server/adapters"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/server/notifications"
@@ -64,6 +65,9 @@ type SessionService struct {
 
 	// pathCompletionSvc handles filesystem path completion RPCs.
 	pathCompletionSvc *PathCompletionService
+
+	// defaultsSvc handles session defaults configuration RPCs.
+	defaultsSvc *DefaultsService
 
 	// scrollbackMgr provides access to per-session scrollback sequence numbers
 	// for checkpoint creation. May be nil if not wired (seq defaults to 0).
@@ -123,25 +127,19 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 	utilitySvc := NewUtilityService(approvalStore)
 
 	// Build rules store, analytics store, and classifier for approval rules service.
-	rulesFilePath := ""
-	analyticsFilePath := ""
-	if configErr == nil {
-		rulesFilePath = configDir + "/auto_approve_rules.json"
-		analyticsFilePath = configDir + "/approval_analytics.jsonl"
-	}
-	rulesStore, rulesErr := NewRulesStore(rulesFilePath)
+	rulesStore, rulesErr := NewRulesStore(concStorage)
 	if rulesErr != nil {
 		log.WarningLog.Printf("Failed to load rules store, using empty store: %v", rulesErr)
-		rulesStore = &RulesStore{}
+		rulesStore = &RulesStore{storage: concStorage}
 	}
-	analyticsStore := NewAnalyticsStore(analyticsFilePath)
+	analyticsStore := NewAnalyticsStore(concStorage)
 	analyticsStore.Start(context.Background())
-	classifier := NewRuleBasedClassifier()
+	classifierObj := classifier.NewRuleBasedClassifier()
 	// Merge user rules into the classifier.
 	if userRules := rulesStore.ToRules(); len(userRules) > 0 {
-		classifier.AddRules(userRules)
+		classifierObj.AddRules(userRules)
 	}
-	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifier)
+	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifierObj)
 
 	workspaceSvc := NewWorkspaceService(concStorage, eventBus)
 
@@ -161,6 +159,7 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 		databaseSvc:       NewDatabaseService(),
 		fileSvc:           NewFileService(workspaceSvc),
 		pathCompletionSvc: NewPathCompletionService(),
+		defaultsSvc:       NewDefaultsService(),
 	}
 }
 
@@ -236,7 +235,7 @@ func (s *SessionService) GetApprovalStore() *ApprovalStore {
 }
 
 // GetClassifier returns the rule-based classifier for wiring up the ApprovalHandler.
-func (s *SessionService) GetClassifier() *RuleBasedClassifier {
+func (s *SessionService) GetClassifier() *classifier.RuleBasedClassifier {
 	if s.rulesSvc == nil {
 		return nil
 	}
@@ -517,20 +516,48 @@ func (s *SessionService) CreateSession(
 		log.InfoLog.Printf("[CreateSession] Resolved to local path: %s (branch: %s)", resolvedPath, branch)
 	}
 
-	// Set default program if not specified
+	// Resolve session defaults (global → directory → profile), then apply explicit request fields on top.
+	// skip_defaults bypasses this for scripted or explicit-empty sessions.
 	program := req.Msg.Program
-	if program == "" {
+	autoYes := req.Msg.AutoYes
+	if !req.Msg.SkipDefaults {
 		cfg := config.LoadConfig()
-		program = cfg.DefaultProgram
+		workingDir := req.Msg.WorkingDir
+		if workingDir == "" {
+			workingDir = resolvedPath
+		}
+		resolved := config.ResolveDefaults(cfg, workingDir, req.Msg.Profile)
+		// Apply resolved defaults only for fields not explicitly set in the request.
+		if program == "" {
+			program = resolved.Program
+		}
+		if !autoYes && resolved.AutoYes {
+			autoYes = true
+		}
 	}
 
-	// Determine session type based on ExistingWorktree field
-	sessionType := session.SessionTypeDirectory
-	if req.Msg.ExistingWorktree != "" {
-		sessionType = session.SessionTypeExistingWorktree
-	} else if branch != "" {
-		// If branch is specified, create a new worktree
-		sessionType = session.SessionTypeNewWorktree
+	// Determine session type - use explicit session_type if provided, otherwise infer from fields
+	var sessionType session.SessionType
+	if req.Msg.SessionType != sessionv1.SessionType_SESSION_TYPE_UNSPECIFIED {
+		// Use explicit session_type from request
+		switch req.Msg.SessionType {
+		case sessionv1.SessionType_SESSION_TYPE_DIRECTORY:
+			sessionType = session.SessionTypeDirectory
+		case sessionv1.SessionType_SESSION_TYPE_NEW_WORKTREE:
+			sessionType = session.SessionTypeNewWorktree
+		case sessionv1.SessionType_SESSION_TYPE_EXISTING_WORKTREE:
+			sessionType = session.SessionTypeExistingWorktree
+		default:
+			sessionType = session.SessionTypeDirectory
+		}
+	} else {
+		// Fall back to inference logic for backward compatibility
+		sessionType = session.SessionTypeDirectory
+		if req.Msg.ExistingWorktree != "" {
+			sessionType = session.SessionTypeExistingWorktree
+		} else if branch != "" {
+			sessionType = session.SessionTypeNewWorktree
+		}
 	}
 
 	// Build instance options
@@ -540,7 +567,7 @@ func (s *SessionService) CreateSession(
 		WorkingDir:       req.Msg.WorkingDir,
 		Branch:           branch,
 		Program:          program,
-		AutoYes:          req.Msg.AutoYes,
+		AutoYes:          autoYes,
 		Prompt:           req.Msg.Prompt,
 		ExistingWorktree: req.Msg.ExistingWorktree,
 		Category:         req.Msg.Category,
@@ -656,18 +683,31 @@ func (s *SessionService) UpdateSession(
 		updatedFields = append(updatedFields, "category")
 	}
 
-	// Handle tags update
+	// Handle tags update.
+	// In proto3, an empty repeated field is indistinguishable from "not provided",
+	// so clients send tags=[""] to clear all tags.
 	if len(req.Msg.Tags) > 0 {
-		if err := instance.SetTags(req.Msg.Tags); err != nil {
+		tags := req.Msg.Tags
+		if len(tags) == 1 && tags[0] == "" {
+			tags = nil // Clear all tags
+		}
+		if err := instance.SetTags(tags); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update tags: %w", err))
 		}
 		updatedFields = append(updatedFields, "tags")
 	}
 
 	// Handle program update
-	if req.Msg.Program != nil && *req.Msg.Program != "" {
+	if req.Msg.Program != nil && *req.Msg.Program != "" && instance.Program != *req.Msg.Program {
 		instance.Program = *req.Msg.Program
 		updatedFields = append(updatedFields, "program")
+
+		// If the session is running, restart it with the new program
+		if instance.Status == session.Running {
+			if err := instance.Restart(true); err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart session after program change: %w", err))
+			}
+		}
 	}
 
 	// Handle status change (pause/resume) LAST - after all metadata updates.
@@ -754,6 +794,12 @@ func (s *SessionService) DeleteSession(
 	// Delete from storage
 	if err := s.storage.DeleteInstance(req.Msg.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete instance from storage: %w", err))
+	}
+
+	// Remove from review queue immediately
+	if s.reviewQueueSvc != nil {
+		s.reviewQueueSvc.GetQueue().Remove(req.Msg.Id)
+		log.InfoLog.Printf("[ReviewQueue] Removed deleted session '%s' from review queue", req.Msg.Id)
 	}
 
 	// CRITICAL: Update the ReviewQueuePoller's instance references after deletion
@@ -1833,6 +1879,43 @@ func (s *SessionService) GetFileContent(
 	req *connect.Request[sessionv1.GetFileContentRequest],
 ) (*connect.Response[sessionv1.GetFileContentResponse], error) {
 	return s.fileSvc.GetFileContent(ctx, req)
+}
+
+// ─── Session Defaults delegates ──────────────────────────────────────────────
+
+// GetSessionDefaults returns the full session defaults configuration.
+func (s *SessionService) GetSessionDefaults(ctx context.Context, req *connect.Request[sessionv1.GetSessionDefaultsRequest]) (*connect.Response[sessionv1.GetSessionDefaultsResponse], error) {
+	return s.defaultsSvc.GetSessionDefaults(ctx, req)
+}
+
+// ResolveDefaults merges all default layers for the given working directory and profile.
+func (s *SessionService) ResolveDefaults(ctx context.Context, req *connect.Request[sessionv1.ResolveDefaultsRequest]) (*connect.Response[sessionv1.ResolveDefaultsResponse], error) {
+	return s.defaultsSvc.ResolveDefaults(ctx, req)
+}
+
+// UpdateGlobalDefaults replaces the global default fields.
+func (s *SessionService) UpdateGlobalDefaults(ctx context.Context, req *connect.Request[sessionv1.UpdateGlobalDefaultsRequest]) (*connect.Response[sessionv1.UpdateGlobalDefaultsResponse], error) {
+	return s.defaultsSvc.UpdateGlobalDefaults(ctx, req)
+}
+
+// UpsertProfile creates or updates a named profile.
+func (s *SessionService) UpsertProfile(ctx context.Context, req *connect.Request[sessionv1.UpsertProfileRequest]) (*connect.Response[sessionv1.UpsertProfileResponse], error) {
+	return s.defaultsSvc.UpsertProfile(ctx, req)
+}
+
+// DeleteProfile removes a named profile by name.
+func (s *SessionService) DeleteProfile(ctx context.Context, req *connect.Request[sessionv1.DeleteProfileRequest]) (*connect.Response[sessionv1.DeleteProfileResponse], error) {
+	return s.defaultsSvc.DeleteProfile(ctx, req)
+}
+
+// UpsertDirectoryRule creates or updates a directory rule.
+func (s *SessionService) UpsertDirectoryRule(ctx context.Context, req *connect.Request[sessionv1.UpsertDirectoryRuleRequest]) (*connect.Response[sessionv1.UpsertDirectoryRuleResponse], error) {
+	return s.defaultsSvc.UpsertDirectoryRule(ctx, req)
+}
+
+// DeleteDirectoryRule removes a directory rule by path.
+func (s *SessionService) DeleteDirectoryRule(ctx context.Context, req *connect.Request[sessionv1.DeleteDirectoryRuleRequest]) (*connect.Response[sessionv1.DeleteDirectoryRuleResponse], error) {
+	return s.defaultsSvc.DeleteDirectoryRule(ctx, req)
 }
 
 // SearchFiles performs a recursive name-substring search in a session's worktree.
