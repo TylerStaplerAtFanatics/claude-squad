@@ -1065,6 +1065,20 @@ func SeedRules() []Rule {
 			Source:    "seed",
 		},
 		{
+			ID:       "seed-allow-bash-gofmt",
+			Name:     "Allow gofmt (Go code formatter)",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"gofmt"},
+			},
+			Decision:  AutoAllow,
+			RiskLevel: RiskLow,
+			Reason:    "gofmt is a read-only code formatter equivalent to go fmt.",
+			Priority:  100,
+			Enabled:   true,
+			Source:    "seed",
+		},
+		{
 			// Matches python/python3/python3.11/pypy/pypy3 running a script, module, or version check.
 			// python -c "..." (inline) is intentionally excluded → escalates for review.
 			ID:       "seed-allow-bash-python-run",
@@ -1401,6 +1415,39 @@ func SeedRules() []Rule {
 			RiskLevel:   RiskMedium,
 			Reason:      "Homebrew operations install or modify system-level packages.",
 			Alternative: "Review the package and its dependencies before installing.",
+			Priority:    50,
+			Enabled:     true,
+			Source:      "seed",
+		},
+		{
+			// . (dot-source) is matched as a program name by the AST parser when it appears
+			// as a command (e.g., `. ~/.bashrc`). This is distinct from . as an argument to
+			// find or other programs, which would have Program: "find", not ".".
+			ID:       "seed-escalate-source",
+			Name:     "Escalate source/dot-source (shell script sourcing)",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"source", "."},
+			},
+			Decision:    Escalate,
+			RiskLevel:   RiskMedium,
+			Reason:      "Sourcing shell scripts executes arbitrary code in the current shell and modifies the environment.",
+			Alternative: "For Python virtualenvs, use 'python -m venv .venv && .venv/bin/python' directly instead of sourcing activate scripts.",
+			Priority:    50,
+			Enabled:     true,
+			Source:      "seed",
+		},
+		{
+			ID:       "seed-escalate-asdf",
+			Name:     "Escalate asdf (runtime version manager)",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"asdf"},
+			},
+			Decision:    Escalate,
+			RiskLevel:   RiskMedium,
+			Reason:      "asdf installs and activates language runtimes, modifying system-level tool state.",
+			Alternative: "Review the asdf command and plugin before proceeding. Consider using project-local .tool-versions.",
 			Priority:    50,
 			Enabled:     true,
 			Source:      "seed",
