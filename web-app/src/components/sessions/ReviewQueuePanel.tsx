@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useReviewQueueContext } from "@/lib/contexts/ReviewQueueContext";
 import { useApprovalsContext } from "@/lib/contexts/ApprovalsContext";
 import { useReviewQueueNavigation } from "@/lib/hooks/useReviewQueueNavigation";
@@ -69,8 +69,37 @@ export function ReviewQueuePanel({
     acknowledgeSession,
   } = useReviewQueueContext();
 
-  // Apply client-side filtering
-  const items = useMemo(() => {
+  // ─── Snapshot-on-enter pattern ────────────────────────────────────────────
+  // Captures the session IDs present when the user enters the queue.
+  // New items arriving while reviewing appear in a banner rather than being
+  // injected mid-list, preventing queue jumps during triage (Twitter-style).
+  const [reviewingIdsSnapshot, setReviewingIdsSnapshot] = useState<Set<string> | null>(null);
+
+  // Initialize snapshot when the queue first loads with items
+  useEffect(() => {
+    if (reviewingIdsSnapshot === null && allItems.length > 0) {
+      setReviewingIdsSnapshot(new Set(allItems.map((item) => item.sessionId)));
+    }
+  }, [allItems, reviewingIdsSnapshot]);
+
+  // Remove acknowledged/resolved items from snapshot (forward-only — no re-injection)
+  useEffect(() => {
+    if (reviewingIdsSnapshot === null) return;
+    const liveIds = new Set(allItems.map((item) => item.sessionId));
+    const pruned = new Set([...reviewingIdsSnapshot].filter((id) => liveIds.has(id)));
+    if (pruned.size !== reviewingIdsSnapshot.size) {
+      setReviewingIdsSnapshot(pruned);
+    }
+  }, [allItems, reviewingIdsSnapshot]);
+
+  const refreshSnapshot = useCallback(() => {
+    setReviewingIdsSnapshot(new Set(allItems.map((item) => item.sessionId)));
+    refresh();
+  }, [allItems, refresh]);
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Apply client-side filtering to all live items
+  const allFilteredItems = useMemo(() => {
     let filtered = allItems;
     if (priorityFilter !== undefined) {
       filtered = filtered.filter((item) => item.priority === priorityFilter);
@@ -80,6 +109,18 @@ export function ReviewQueuePanel({
     }
     return filtered;
   }, [allItems, priorityFilter, reasonFilter]);
+
+  // Items that are in the snapshot (stable ordered list for the main queue)
+  const items = useMemo(() => {
+    if (reviewingIdsSnapshot === null) return allFilteredItems;
+    return allFilteredItems.filter((item) => reviewingIdsSnapshot.has(item.sessionId));
+  }, [allFilteredItems, reviewingIdsSnapshot]);
+
+  // New items not yet in snapshot — shown in the refresh banner
+  const newItemsCount = useMemo(() => {
+    if (reviewingIdsSnapshot === null) return 0;
+    return allFilteredItems.filter((item) => !reviewingIdsSnapshot.has(item.sessionId)).length;
+  }, [allFilteredItems, reviewingIdsSnapshot]);
 
   // Approval actions for APPROVAL_PENDING items
   const { approve: approveRequest, deny: denyRequest } = useApprovalsContext();
@@ -220,7 +261,7 @@ export function ReviewQueuePanel({
             )}
           </h2>
           <button
-            onClick={refresh}
+            onClick={refreshSnapshot}
             className={styles.refreshButton}
             disabled={loading}
             aria-label="Refresh review queue"
@@ -243,6 +284,17 @@ export function ReviewQueuePanel({
               </span>
             )}
           </div>
+        )}
+
+        {/* New-items banner: shows when items arrive after snapshot was taken */}
+        {newItemsCount > 0 && (
+          <button
+            className={styles.newItemsBanner}
+            onClick={refreshSnapshot}
+            aria-label={`${newItemsCount} new item${newItemsCount !== 1 ? "s" : ""} added. Click to refresh the list.`}
+          >
+            {newItemsCount} new item{newItemsCount !== 1 ? "s" : ""} added — click to refresh
+          </button>
         )}
       </div>
 

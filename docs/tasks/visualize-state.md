@@ -13,7 +13,7 @@ This feature wires the already-built `DetectedStatus` detection infrastructure t
 
 Key insight from research: the scope is primarily wiring and UX fixes, not building new infrastructure. `DetectedStatus`, `CurrentPaneRequest`, `ansi-to-html`, and `is_snapshot` event handling are all already in the codebase. The two P0 streaming bugs (stale sessions after WatchSessions reconnect, unstable React keys) need fixing alongside the feature work.
 
-Progress: 19 / 32 tasks complete (Phase 0 done; TASK-013–019 complete).
+Progress: 20 / 32 tasks complete (Phase 0 done; TASK-013–020 complete).
 
 ---
 
