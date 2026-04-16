@@ -254,6 +254,30 @@ class LocalPathDetector implements Detector {
 }
 
 /**
+ * Session Search detector — catch-all for bare-text queries.
+ * Fires for any non-empty input that no other detector claimed.
+ * Priority 200 ensures it runs last (after LocalPath at priority 100).
+ */
+class SessionSearchDetector implements Detector {
+  name = "SessionSearch";
+  priority = 200;
+
+  detect(input: string): DetectionResult | null {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+    // All inputs that reach this point have already been rejected by
+    // GitHub URL detectors (priorities 10-40), PathWithBranch (50),
+    // and LocalPath (100). They are bare-text session search queries.
+    return {
+      type: InputType.SessionSearch,
+      confidence: 0.5,
+      parsedValue: trimmed,
+      suggestedName: "",
+    };
+  }
+}
+
+/**
  * DetectorRegistry manages detectors and orchestrates detection
  */
 export class DetectorRegistry {
@@ -302,6 +326,7 @@ export function createDefaultRegistry(): DetectorRegistry {
   registry.register(new GitHubShorthandDetector());
   registry.register(new PathWithBranchDetector());
   registry.register(new LocalPathDetector());
+  registry.register(new SessionSearchDetector());
   return registry;
 }
 

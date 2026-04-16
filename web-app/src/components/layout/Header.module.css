@@ -276,6 +276,34 @@
   display: inline;
 }
 
+/* Intermediate breakpoint: compress header for tablets/narrow windows */
+@media (max-width: 1024px) {
+  .container {
+    gap: 1rem; /* down from 2rem — prevents actions from competing with nav */
+  }
+
+  .navLink {
+    padding: 0.5rem 0.5rem; /* narrower horizontal padding */
+    font-size: 0.8125rem;
+  }
+
+  .newSessionLabel {
+    display: none; /* hide "New Session" text, keep + icon */
+  }
+
+  .newSessionButton {
+    padding: 0.5rem 0.625rem;
+  }
+
+  .actions {
+    gap: 0.5rem; /* down from 0.75rem */
+  }
+
+  .subtitle {
+    display: none; /* hide "Session Manager" earlier */
+  }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .container {

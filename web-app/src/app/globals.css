@@ -128,8 +128,8 @@
   --card-index: 0;
 }
 
-/* Mobile header height override */
-@media (max-width: 768px) {
+/* Header height override — aligns with compact breakpoint so height change and nav compression happen together */
+@media (max-width: 1024px) {
   :root {
     --header-height: 3.5rem;
   }

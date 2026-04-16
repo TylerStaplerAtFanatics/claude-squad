@@ -28,6 +28,24 @@ jest.mock("@/lib/hooks/usePathHistory", () => ({
   clearPathHistory: jest.fn(),
 }));
 
+jest.mock("@/lib/hooks/useSessionSearch", () => ({
+  useSessionSearch: jest.fn(() => []),
+}));
+
+jest.mock("@/lib/store", () => ({
+  useAppSelector: jest.fn(() => []),
+}));
+
+jest.mock("@/lib/store/sessionsSlice", () => ({
+  selectAllSessions: jest.fn(),
+}));
+
+jest.mock("@/components/sessions/OmnibarResultList", () => ({
+  OmnibarResultList: () => null,
+  getResultListItemCount: jest.fn(() => 1),
+  getHighlightedItemId: jest.fn(() => undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -43,6 +61,7 @@ const defaultCompletions = {
 
 const defaultHistory = {
   getMatching: jest.fn((): PathHistoryEntry[] => []),
+  getAll: jest.fn((): PathHistoryEntry[] => []),
   save: jest.fn(),
 };
 
@@ -53,15 +72,16 @@ const dir = (name: string, base = "/home/user"): PathEntry => ({
 });
 
 function renderOmnibar(
-  props: { onClose?: jest.Mock; onCreateSession?: jest.Mock } = {}
+  props: { onClose?: jest.Mock; onCreateSession?: jest.Mock; onNavigateToSession?: jest.Mock } = {}
 ) {
   const onClose = props.onClose ?? jest.fn();
   const onCreateSession = props.onCreateSession ?? jest.fn().mockResolvedValue(undefined);
+  const onNavigateToSession = props.onNavigateToSession ?? jest.fn();
   const utils = render(
-    <Omnibar isOpen={true} onClose={onClose} onCreateSession={onCreateSession} />
+    <Omnibar isOpen={true} onClose={onClose} onCreateSession={onCreateSession} onNavigateToSession={onNavigateToSession} />
   );
   const input = screen.getByRole("textbox", { name: /session source input/i });
-  return { ...utils, input, onClose, onCreateSession };
+  return { ...utils, input, onClose, onCreateSession, onNavigateToSession };
 }
 
 /** Type a value into the omnibar input and wait for the 150ms detect debounce. */
@@ -238,14 +258,17 @@ describe("Omnibar path completion", () => {
       expect((input as HTMLInputElement).value).toBe("/home/user/projects/");
     });
 
-    it("Escape dismisses dropdown before closing modal", async () => {
+    it("Escape dismisses dropdown, then returns to discovery mode, then closes modal", async () => {
       const { onClose } = await setupWithDropdown();
       const input = screen.getByRole("textbox", { name: /session source input/i });
-      // First Escape: dismisses dropdown.
+      // First Escape: dismisses the path completion dropdown, stays in creation mode.
       fireEvent.keyDown(input, { key: "Escape" });
       expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
       expect(onClose).not.toHaveBeenCalled();
-      // Second Escape: closes modal.
+      // Second Escape: returns to discovery mode (creation → discovery transition).
+      fireEvent.keyDown(input, { key: "Escape" });
+      expect(onClose).not.toHaveBeenCalled();
+      // Third Escape: closes modal (now in discovery mode with no selection).
       fireEvent.keyDown(input, { key: "Escape" });
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -306,6 +329,7 @@ describe("Omnibar path completion", () => {
         getMatching: jest.fn(() => [
           { path: historyPath, count: 3, lastUsed: Date.now() },
         ]),
+        getAll: jest.fn((): PathHistoryEntry[] => []),
         save: jest.fn(),
       });
       mockUsePathCompletions.mockReturnValue({
@@ -329,6 +353,7 @@ describe("Omnibar path completion", () => {
         getMatching: jest.fn(() => [
           { path: sharedPath, count: 1, lastUsed: Date.now() },
         ]),
+        getAll: jest.fn((): PathHistoryEntry[] => []),
         save: jest.fn(),
       });
       mockUsePathCompletions.mockReturnValue({
@@ -354,6 +379,7 @@ describe("Omnibar path completion", () => {
         getMatching: jest.fn(() => [
           { path: "/home/user/projects", count: 1, lastUsed: Date.now() },
         ]),
+        getAll: jest.fn((): PathHistoryEntry[] => []),
         save: jest.fn(),
       });
       mockUsePathCompletions.mockReturnValue({

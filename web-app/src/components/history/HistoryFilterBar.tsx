@@ -12,6 +12,7 @@ import type {
   SearchMode,
 } from "@/lib/hooks/useHistoryFilters";
 import type { useHistoryFullTextSearch } from "@/lib/hooks/useHistoryFullTextSearch";
+import { ActionBar } from "@/components/ui/ActionBar";
 import styles from "./HistoryFilterBar.module.css";
 
 // ============================================================================
@@ -147,7 +148,7 @@ export function HistoryFilterBar({
       )}
 
       {/* Filters */}
-      <div className={styles.filters}>
+      <ActionBar scroll compact gap="sm" className={styles.filters}>
         <select
           value={selectedModel}
           onChange={(e) => setSelectedModel(e.target.value)}
@@ -200,7 +201,7 @@ export function HistoryFilterBar({
             <option key={value} value={value}>Group: {label}</option>
           ))}
         </select>
-      </div>
+      </ActionBar>
     </div>
   );
 }

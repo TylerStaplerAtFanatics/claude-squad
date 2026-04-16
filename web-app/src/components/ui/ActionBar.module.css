@@ -34,3 +34,29 @@
     flex-shrink: 0;
   }
 }
+
+/* Compact variant: tighter gap at tablet widths, horizontal scroll at mobile.
+   Use compact without scroll for toolbars that need the 768px scroll breakpoint.
+   Use scroll alone for toolbars that only need 640px scroll. */
+@media (max-width: 1024px) {
+  .compact {
+    gap: 0.25rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .compact {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .compact::-webkit-scrollbar {
+    display: none;
+  }
+
+  .compact > * {
+    flex-shrink: 0;
+  }
+}

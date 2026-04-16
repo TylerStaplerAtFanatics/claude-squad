@@ -53,12 +53,6 @@
   }
 }
 
-.filters {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-}
 
 .select {
   padding: 8px 12px;
@@ -154,5 +148,11 @@
   .select {
     min-width: 120px;
     font-size: 12px;
+    min-height: 44px; /* touch target */
+  }
+
+  .sortOrderButton {
+    min-width: 44px;
+    min-height: 44px; /* touch target */
   }
 }

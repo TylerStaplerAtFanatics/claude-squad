@@ -127,10 +127,6 @@
   flex-shrink: 0;
 }
 
-/* Collapsible filter controls container */
-.filterControls {
-  display: contents; /* on desktop, children participate in the parent flex */
-}
 
 .searchInput {
   flex: 1;
@@ -373,13 +369,13 @@
   /* Hide all filter controls by default on mobile; show when toggled */
   .filterControls {
     display: none;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
   }
 
   .filterControlsOpen {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
   }
 
   /* Stack the whole filters section vertically */
