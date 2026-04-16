@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { Session, InstanceType } from "@/gen/session/v1/types_pb";
-import { DiffViewer, prefetchDiff } from "./DiffViewer";
+import { DiffViewer } from "./DiffViewer";
 import { VcsPanel } from "./VcsPanel";
 import { prefetchVcsStatus } from "@/lib/hooks/useVcsStatus";
 import { WorkspaceSwitchModal } from "./WorkspaceSwitchModal";
@@ -93,10 +93,9 @@ export function SessionDetail({
     });
   }, [session.externalMetadata?.muxSocketPath]);
 
-  // Prefetch diff and VCS data as soon as a session is selected so tabs load instantly.
+  // Prefetch VCS data as soon as a session is selected so tabs load instantly.
   useEffect(() => {
     const baseUrl = getApiBaseUrl();
-    prefetchDiff(session.id, baseUrl);
     prefetchVcsStatus(session.id, baseUrl);
   }, [session.id]);
 
