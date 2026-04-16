@@ -1617,3 +1617,614 @@ func TestExtractAllCommands_Subshell(t *testing.T) {
 		t.Errorf("expected 'rm' in extracted commands, got programs: %v", programs)
 	}
 }
+
+// ── Additional command coverage ───────────────────────────────────────────────
+
+func TestClassify_Mkdir_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"mkdir /tmp/work",
+		"mkdir -p /tmp/a/b/c",
+		"mkdir src/components",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_FileInspection_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"less README.md",
+		"more file.txt",
+		"file binary.out",
+		"stat src/main.go",
+		"md5sum archive.tar.gz",
+		"sha256sum release.zip",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_InspectionCommands_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"printenv PATH",
+		"type go",
+		"hostname",
+		"id",
+		"id -u",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_GrepVariants_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"egrep 'pattern' file.txt",
+		"fgrep 'literal' file.txt",
+		"rg 'pattern' src/",
+		"ag 'pattern' .",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_Python2Pypy_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"python2 script.py",
+		"pypy script.py",
+		"pypy3 script.py",
+		"pypy3 -m pytest",
+		"python2 --version",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_TextProcAdditional_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"paste file1.txt file2.txt",
+		"column -t data.tsv",
+		"column -s, -t file.csv",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_Tsx_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"tsx src/main.ts",
+		"tsx scripts/seed.ts",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_McpListReadTools_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	tools := []string{"ListMcpResourcesTool", "ReadMcpResourceTool"}
+	for _, tool := range tools {
+		payload := PermissionRequestPayload{ToolName: tool, ToolInput: map[string]interface{}{}}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("tool %q: expected AutoAllow, got %v (rule=%s, reason=%s)", tool, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_GitReadAdditional_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"git tag",
+		"git tag -l 'v1.*'",
+		"git describe --tags",
+		"git rev-parse HEAD",
+		"git rev-parse --short HEAD",
+		"git ls-files",
+		"git ls-files --others",
+		"git shortlog -s",
+		"git blame src/main.go",
+		"git worktree list",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_GhRepoWorkflow_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"gh repo view",
+		"gh repo view owner/repo",
+		"gh repo list",
+		"gh workflow view ci.yml",
+		"gh workflow list",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_PipAdditional_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"pip uninstall requests",
+		"pip check",
+		"pip download requests",
+		"pip cache list",
+		"pip3 hash archive.whl",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_UvAdditional_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"uv remove requests",
+		"uv init myproject",
+		"uv venv .venv",
+		"uv export --format requirements-txt",
+		"uv tree",
+		"uv cache clean",
+		"uv build",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_CargoAdditional_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"cargo doc",
+		"cargo doc --no-deps",
+		"cargo bench",
+		"cargo fetch",
+		"cargo vendor",
+		"cargo metadata",
+		"cargo install cargo-edit",
+		"cargo uninstall cargo-edit",
+		"cargo generate-lockfile",
+		"cargo verify-project",
+		"cargo fix",
+		"cargo search serde",
+		"cargo tree",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_GoAdditional_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"go generate ./...",
+		"go tool cover -html=coverage.out",
+		"go clean -testcache",
+		"go list ./...",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_WgetOutput_Escalate(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"wget -O /tmp/file.tar.gz https://example.com/archive.tar.gz",
+		"wget --output https://example.com/script.sh",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision == AutoAllow {
+			t.Errorf("cmd %q: expected non-AutoAllow for wget with output flag, got AutoAllow (rule=%s)", cmd, result.RuleID)
+		}
+	}
+}
+
+// ── Story 2: New seed rule tests ───────────────────────────────────────────────
+
+func TestClassify_Gofmt_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"gofmt file.go",
+		"gofmt -e -l server/",
+		"gofmt -w file.go",
+		"gofmt -d .",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_Source_Escalate(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"source ~/.bashrc",
+		"source .venv/bin/activate",
+		". ~/.profile",
+		". /etc/environment",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != Escalate {
+			t.Errorf("cmd %q: expected Escalate, got %v (rule=%s)", cmd, result.Decision, result.RuleID)
+		}
+		if result.Alternative == "" {
+			t.Errorf("cmd %q: expected non-empty Alternative for source escalation", cmd)
+		}
+	}
+}
+
+func TestClassify_Asdf_Escalate(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"asdf install python 3.11.0",
+		"asdf global python 3.11.0",
+		"asdf list",
+		"asdf plugin add nodejs",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != Escalate {
+			t.Errorf("cmd %q: expected Escalate, got %v (rule=%s)", cmd, result.Decision, result.RuleID)
+		}
+	}
+}
+
+// ── Story 3: splitCommandParts hardening tests ─────────────────────────────────
+
+func TestSplitCommandParts_BackgroundOperator(t *testing.T) {
+	cases := []struct {
+		input string
+		want  []string
+	}{
+		{"make build &", []string{"make build"}},
+		{"make build 2>&1", []string{"make build 2>&1"}},
+		{"make build 2>&1 &", []string{"make build 2>&1"}},
+		{"cmd1 & cmd2", []string{"cmd1", "cmd2"}},
+		{"go test ./... &>/dev/null", []string{"go test ./... &>/dev/null"}},
+	}
+	for _, tc := range cases {
+		got := splitCommandParts(tc.input)
+		if len(got) != len(tc.want) {
+			t.Errorf("splitCommandParts(%q): got %v, want %v", tc.input, got, tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("splitCommandParts(%q)[%d]: got %q, want %q", tc.input, i, got[i], tc.want[i])
+			}
+		}
+	}
+}
+
+func TestSplitCommandParts_LineContinuation(t *testing.T) {
+	input := "git commit \\\n  -m 'message'"
+	parts := splitCommandParts(input)
+	// The continuation is joined into a single part; git is the program.
+	if len(parts) != 1 {
+		t.Fatalf("expected 1 part after continuation join, got %d: %v", len(parts), parts)
+	}
+	prog, _ := extractProgramAndSubcommand(parts[0])
+	if prog != "git" {
+		t.Errorf("expected prog \"git\" after continuation join, got %q (part: %q)", prog, parts[0])
+	}
+}
+
+func TestExtractProgramAndSubcommand_SkipsKeywords(t *testing.T) {
+	cases := []struct {
+		input    string
+		wantProg string
+	}{
+		// for is a keyword; next token f is the loop variable (not ideal but not "for")
+		{"for f in *.go", "f"},
+		// while skipped, true is a valid program
+		{"while true", "true"},
+		// if skipped, [ is the next program
+		{"if [ -f x ]", "["},
+		// function skipped, foo is the name
+		{"function foo", "foo"},
+	}
+	for _, tc := range cases {
+		prog, _ := extractProgramAndSubcommand(tc.input)
+		if prog != tc.wantProg {
+			t.Errorf("extractProgramAndSubcommand(%q): prog=%q, want %q", tc.input, prog, tc.wantProg)
+		}
+	}
+}
+
+// ── Story 3 Task 3.4: rtk wrapper transparency tests ──────────────────────────
+
+func TestClassify_Rtk_WrapperTransparency(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cases := []struct {
+		cmd          string
+		wantDecision ClassificationDecision
+		wantRule     string // substring match; empty = skip rule check
+	}{
+		// rtk is stripped; git read rule fires
+		{"rtk git status", AutoAllow, "seed-allow-git-read"},
+		// rtk stripped; deny rule fires on unwrapped rm -rf /
+		{"rtk rm -rf /", AutoDeny, "seed-deny-rm-rf-root"},
+		// rtk stripped; git push escalates
+		{"rtk git push origin main", Escalate, "seed-escalate-git-push"},
+		// chained wrappers both unwrapped
+		{"sudo rtk git status", AutoAllow, "seed-allow-git-read"},
+		// bare rtk with no subcommand → escalate (no matching rule)
+		{"rtk", Escalate, ""},
+		// rtk gain → no seed rule for gain → escalate
+		{"rtk gain", Escalate, ""},
+	}
+
+	for _, tc := range cases {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": tc.cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != tc.wantDecision {
+			t.Errorf("cmd %q: expected %v, got %v (rule=%s, reason=%s)", tc.cmd, tc.wantDecision, result.Decision, result.RuleID, result.Reason)
+		}
+		if tc.wantRule != "" && result.RuleID != tc.wantRule {
+			t.Errorf("cmd %q: expected ruleID=%q, got %q", tc.cmd, tc.wantRule, result.RuleID)
+		}
+	}
+}
+
+// ── Story 1: ParseBashCommand AST consistency tests ───────────────────────────
+
+func TestParseBashCommand_ASTConsistency(t *testing.T) {
+	cases := []struct {
+		cmd         string
+		wantProgram string
+	}{
+		{"git status", "git"},
+		{"ls -la", "ls"},
+		{"make build", "make"},
+		{"cd /tmp && git status", "cd"},
+		{"go build && go test", "go"},
+		{"cat file.txt | grep pattern | wc -l", "cat"},
+		{"make restart-web 2>&1 &", "make"},
+		{`CONFLUENCE_BASE_URL="https://example.com" actual-command arg1`, "actual-command"},
+		{"echo $(git rev-parse HEAD)", "echo"},
+		{"for f in *.go; do gofmt \"$f\"; done", "gofmt"},
+		{"node_modules/.bin/stylelint 'src/**/*.css'", "stylelint"},
+		{"gofmt -e file.go > /dev/null", "gofmt"},
+	}
+
+	for _, tc := range cases {
+		astCmds := ExtractAllCommands(tc.cmd)
+		parsed := ParseBashCommand(tc.cmd)
+
+		if len(astCmds) > 0 && parsed.Program != tc.wantProgram {
+			t.Errorf("ParseBashCommand(%q).Program=%q, want %q", tc.cmd, parsed.Program, tc.wantProgram)
+		}
+		if len(astCmds) > 0 && parsed.Program != astCmds[0].Program {
+			t.Errorf("ParseBashCommand(%q) inconsistency: ParseBashCommand=%q, ExtractAllCommands[0]=%q",
+				tc.cmd, parsed.Program, astCmds[0].Program)
+		}
+	}
+}
+
+func TestParseBashCommand_NoPhantomPrograms(t *testing.T) {
+	phantoms := map[string]bool{
+		"#": true, "for": true, "while": true, "if": true,
+		"then": true, "do": true, "done": true, "fi": true,
+		"elif": true, "else": true, "function": true, `\`: true,
+	}
+
+	inputs := []string{
+		"# this is a comment",
+		"for f in *.go; do echo \"$f\"; done",
+		"while true; do sleep 1; done",
+		"if [ -f file ]; then echo yes; fi",
+		"function foo() { echo bar; }",
+	}
+
+	for _, cmd := range inputs {
+		result := ParseBashCommand(cmd)
+		if phantoms[result.Program] {
+			t.Errorf("ParseBashCommand(%q).Program=%q is a phantom program", cmd, result.Program)
+		}
+	}
+}
+
+func TestParseBashCommand_AllPrograms(t *testing.T) {
+	cmd := "git add . && go test ./... | tee output.log"
+	result := ParseBashCommand(cmd)
+
+	want := map[string]bool{"git": true, "go": true, "tee": true}
+	got := make(map[string]bool)
+	for _, p := range result.AllPrograms {
+		got[p] = true
+	}
+	for p := range want {
+		if !got[p] {
+			t.Errorf("AllPrograms for %q missing %q; got %v", cmd, p, result.AllPrograms)
+		}
+	}
+}
+
+func TestParseBashCommand_FallbackPath(t *testing.T) {
+	// Intentionally unparseable input should not panic and should return something sensible.
+	inputs := []string{
+		"}}}",
+		"(((",
+		"<<<<<",
+	}
+	for _, cmd := range inputs {
+		// Should not panic.
+		result := ParseBashCommand(cmd)
+		_ = result // result may be empty; that's fine
+	}
+}
+
+func TestParseBashCommand_ForLoop(t *testing.T) {
+	cmd := `for f in *.go; do gofmt $f; done`
+	result := ParseBashCommand(cmd)
+	if result.Program != "gofmt" {
+		t.Errorf("ParseBashCommand(%q).Program=%q, want \"gofmt\"", cmd, result.Program)
+	}
+}

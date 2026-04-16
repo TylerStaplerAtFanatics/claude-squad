@@ -19,15 +19,21 @@ const (
 	pathCompletionDefaultMax = 100
 	pathCompletionHardMax    = 500
 	pathCompletionTimeout    = 2 * time.Second
+	dirCacheMaxSize          = 256
+	dirCacheTTL              = 60 * time.Second
 )
 
 // PathCompletionService handles RPC methods for filesystem path completion.
-// It is stateless; each call performs a fresh directory listing.
-type PathCompletionService struct{}
+// It caches directory listings in a DirCache to avoid repeated os.ReadDir calls.
+type PathCompletionService struct {
+	cache *DirCache
+}
 
-// NewPathCompletionService creates a PathCompletionService.
+// NewPathCompletionService creates a PathCompletionService with a DirCache.
 func NewPathCompletionService() *PathCompletionService {
-	return &PathCompletionService{}
+	return &PathCompletionService{
+		cache: NewDirCache(dirCacheMaxSize, dirCacheTTL),
+	}
 }
 
 // ListPathCompletions returns filesystem entries matching the given path prefix.
@@ -75,40 +81,49 @@ func (p *PathCompletionService) ListPathCompletions(
 		}), nil
 	}
 
-	// Read the directory with a timeout to guard against slow/network filesystems.
-	type dirResult struct {
-		entries []os.DirEntry
-		err     error
-	}
-	resultCh := make(chan dirResult, 1)
+	// Capture directory mtime from the already-computed baseDirInfo for cache keying.
+	dirMtime := baseDirInfo.ModTime()
 
-	listCtx, cancel := context.WithTimeout(ctx, pathCompletionTimeout)
-	defer cancel()
-
-	go func() {
-		entries, readErr := os.ReadDir(baseDir)
-		resultCh <- dirResult{entries: entries, err: readErr}
-	}()
-
+	// Check the cache before hitting the filesystem.
 	var dirEntries []os.DirEntry
-	select {
-	case result := <-resultCh:
-		if result.err != nil {
-			if os.IsPermission(result.err) {
-				return nil, connect.NewError(connect.CodePermissionDenied, result.err)
-			}
-			if os.IsNotExist(result.err) {
-				return connect.NewResponse(&sessionv1.ListPathCompletionsResponse{
-					BaseDir:       baseDir,
-					BaseDirExists: false,
-					PathExists:    pathExists,
-				}), nil
-			}
-			return nil, connect.NewError(connect.CodeInternal, result.err)
+	if cached, ok := p.cache.Get(baseDir); ok {
+		dirEntries = cached
+	} else {
+		// Cache miss: read the directory with a timeout to guard against slow/network filesystems.
+		type dirResult struct {
+			entries []os.DirEntry
+			err     error
 		}
-		dirEntries = result.entries
-	case <-listCtx.Done():
-		return nil, connect.NewError(connect.CodeDeadlineExceeded, fmt.Errorf("directory listing timed out"))
+		resultCh := make(chan dirResult, 1)
+
+		listCtx, cancel := context.WithTimeout(ctx, pathCompletionTimeout)
+		defer cancel()
+
+		go func() {
+			entries, readErr := os.ReadDir(baseDir)
+			resultCh <- dirResult{entries: entries, err: readErr}
+		}()
+
+		select {
+		case result := <-resultCh:
+			if result.err != nil {
+				if os.IsPermission(result.err) {
+					return nil, connect.NewError(connect.CodePermissionDenied, result.err)
+				}
+				if os.IsNotExist(result.err) {
+					return connect.NewResponse(&sessionv1.ListPathCompletionsResponse{
+						BaseDir:       baseDir,
+						BaseDirExists: false,
+						PathExists:    pathExists,
+					}), nil
+				}
+				return nil, connect.NewError(connect.CodeInternal, result.err)
+			}
+			dirEntries = result.entries
+			p.cache.Put(baseDir, dirEntries, dirMtime)
+		case <-listCtx.Done():
+			return nil, connect.NewError(connect.CodeDeadlineExceeded, fmt.Errorf("directory listing timed out"))
+		}
 	}
 
 	// Filter entries and build the response.

@@ -171,9 +171,9 @@ func TestScheduler_ScheduleRecovery(t *testing.T) {
 	scheduler := NewScheduler("test-session")
 	scheduler.SetBuffer(1)
 
-	var executed atomic.Bool
+	done := make(chan struct{})
 	scheduler.SetRecoveryCallback(func() error {
-		executed.Store(true)
+		close(done)
 		return nil
 	})
 
@@ -184,19 +184,20 @@ func TestScheduler_ScheduleRecovery(t *testing.T) {
 		t.Error("expected scheduler to be scheduled")
 	}
 
-	time.Sleep(1500 * time.Millisecond)
-
-	if !executed.Load() {
-		t.Error("expected recovery callback to be executed")
+	select {
+	case <-done:
+		// success
+	case <-time.After(3 * time.Second):
+		t.Error("expected recovery callback to be executed within 3s")
 	}
 }
 
 func TestScheduler_CancelRecovery(t *testing.T) {
 	scheduler := NewScheduler("test-session")
 
-	var executed bool
+	var executed atomic.Bool
 	scheduler.SetRecoveryCallback(func() error {
-		executed = true
+		executed.Store(true)
 		return nil
 	})
 
@@ -207,7 +208,7 @@ func TestScheduler_CancelRecovery(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	if executed {
+	if executed.Load() {
 		t.Error("expected recovery callback to NOT be executed after cancel")
 	}
 }

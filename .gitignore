@@ -23,6 +23,7 @@ worktrees/
 
 # outputs
 coverage.out
+coverage.html
 web-app/tsconfig.tsbuildinfo
 test-results/
 tests/playwright-report/

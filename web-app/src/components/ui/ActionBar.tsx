@@ -8,7 +8,10 @@ interface ActionBarProps {
   justify?: "start" | "end" | "between" | "center";
   /** On small screens, keep items in one row and allow horizontal scroll instead of wrapping */
   scroll?: boolean;
+  /** Reduces gap at 1024px and enables horizontal scroll at 768px. Subsumes scroll at the wider breakpoint. */
+  compact?: boolean;
   className?: string;
+  id?: string;
 }
 
 const gapClass = {
@@ -24,16 +27,17 @@ const justifyClass = {
   center: styles.justifyCenter,
 } as const;
 
-export function ActionBar({ children, gap = "md", justify = "start", scroll, className }: ActionBarProps) {
+export function ActionBar({ children, gap = "md", justify = "start", scroll, compact, className, id }: ActionBarProps) {
   const classes = [
     styles.actionBar,
     gapClass[gap],
     justifyClass[justify],
     scroll ? styles.scroll : undefined,
+    compact ? styles.compact : undefined,
     className,
   ]
     .filter(Boolean)
     .join(" ");
 
-  return <div className={classes}>{children}</div>;
+  return <div id={id} className={classes}>{children}</div>;
 }
