@@ -1,21 +1,23 @@
-import { Session, SessionStatus } from "@/gen/session/v1/types_pb";
+import { create } from "@bufbuild/protobuf";
+import { SessionSchema, SessionStatus } from "@/gen/session/v1/types_pb";
+import type { Session } from "@/gen/session/v1/types_pb";
 import { groupSessions, GroupingStrategy } from "./strategies";
 
 describe("groupSessions", () => {
   const mockSessions: Session[] = [
-    new Session({
+    create(SessionSchema, {
       title: "session1",
       category: "Work",
       tags: ["urgent", "frontend"],
       status: SessionStatus.RUNNING,
     }),
-    new Session({
+    create(SessionSchema, {
       title: "session2",
       category: "Personal",
       tags: ["frontend"],
       status: SessionStatus.PAUSED,
     }),
-    new Session({
+    create(SessionSchema, {
       title: "session3",
       category: "Work",
       tags: [],
@@ -58,7 +60,7 @@ describe("groupSessions", () => {
   it("should handle sessions with missing categories", () => {
     const sessionsWithMissing = [
       ...mockSessions,
-      new Session({ title: "session4", category: "" })
+      create(SessionSchema, { title: "session4", category: "" })
     ];
     const result = groupSessions(sessionsWithMissing, GroupingStrategy.Category);
     const uncategorizedGroup = result.find(g => g.groupKey === "Uncategorized");
