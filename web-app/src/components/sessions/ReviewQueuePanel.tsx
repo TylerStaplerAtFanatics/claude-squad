@@ -48,6 +48,7 @@ export function ReviewQueuePanel({
   const [reasonFilter, setReasonFilter] = useState<AttentionReason | undefined>(
     undefined
   );
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   // Track whether queue ever had items so we can show "all done" vs generic empty state
   const [hadItems, setHadItems] = useState(false);
 
@@ -233,6 +234,32 @@ export function ReviewQueuePanel({
     setPriorityFilter(undefined); // Clear priority filter when changing reason
   };
 
+  const summaryCount = useMemo(() => {
+    const parts: string[] = [];
+    const reasonEntries: [AttentionReason, string][] = [
+      [AttentionReason.APPROVAL_PENDING, "approval"],
+      [AttentionReason.INPUT_REQUIRED, "input needed"],
+      [AttentionReason.ERROR_STATE, "error"],
+      [AttentionReason.IDLE_TIMEOUT, "timed out"],
+      [AttentionReason.IDLE, "idle"],
+      [AttentionReason.STALE, "stale"],
+      [AttentionReason.TASK_COMPLETE, "complete"],
+    ];
+    for (const [reason, label] of reasonEntries) {
+      const count = byReason.get(reason) ?? 0;
+      if (count > 0) parts.push(`${count} ${label}${count !== 1 ? "s" : ""}`);
+    }
+    return parts.join(", ");
+  }, [byReason]);
+
+  const activeFilterLabel = useMemo(() => {
+    if (priorityFilter !== undefined) return `Filter: ${getPriorityLabel(priorityFilter)}`;
+    if (reasonFilter !== undefined) return `Filter: ${getReasonLabel(reasonFilter)}`;
+    return "Filter";
+  }, [priorityFilter, reasonFilter]);
+
+  const hasActiveFilter = priorityFilter !== undefined || reasonFilter !== undefined;
+
   if (error) {
     return (
       <div className={styles.error}>
@@ -273,16 +300,15 @@ export function ReviewQueuePanel({
         {totalItems > 0 && (
           <div className={styles.stats} data-testid="queue-statistics">
             <span className={styles.stat} data-testid="total-items">
-              {totalItems} {totalItems === 1 ? "item" : "items"} need attention
+              {summaryCount || `${totalItems} ${totalItems === 1 ? "item" : "items"}`}
             </span>
-            <span className={styles.stat}>
-              Avg age: {formatDuration(averageAgeSeconds)}
-            </span>
-            {oldestAgeSeconds > BigInt(0) && (
-              <span className={styles.stat}>
-                Oldest: {formatDuration(oldestAgeSeconds)}
-              </span>
-            )}
+          </div>
+        )}
+
+        {/* Heads-up callout when oldest item is over 5 minutes old */}
+        {oldestAgeSeconds > BigInt(300) && (
+          <div className={styles.oldestCallout} role="status">
+            Oldest item: {formatDuration(oldestAgeSeconds)}
           </div>
         )}
 
@@ -298,71 +324,95 @@ export function ReviewQueuePanel({
         )}
       </div>
 
-      <div className={styles.filters}>
-        <div className={styles.filterGroup}>
-          <label className={styles.filterLabel}>Priority:</label>
-          <div className={styles.filterButtons}>
+      {totalItems > 0 && (
+        <div className={styles.filterToggleRow}>
+          <button
+            className={`${styles.filterToggle} ${hasActiveFilter ? styles.filterToggleActive : ""}`}
+            onClick={() => setIsFiltersOpen((o) => !o)}
+            aria-expanded={isFiltersOpen}
+            aria-controls="review-queue-filters"
+          >
+            {activeFilterLabel} {isFiltersOpen ? "▲" : "▼"}
+          </button>
+          {hasActiveFilter && (
             <button
-              className={`${styles.filterButton} ${priorityFilter === undefined ? styles.active : ""}`}
-              onClick={() => handleFilterByPriority(undefined)}
-              aria-pressed={priorityFilter === undefined}
+              className={styles.filterClear}
+              onClick={() => { setPriorityFilter(undefined); setReasonFilter(undefined); }}
+              aria-label="Clear active filter"
             >
-              All ({totalItems})
+              ✕ Clear
             </button>
-            {[Priority.URGENT, Priority.HIGH, Priority.MEDIUM, Priority.LOW].map(
-              (priority) => {
-                const count = byPriority.get(priority) ?? 0;
+          )}
+        </div>
+      )}
+
+      {isFiltersOpen && (
+        <div id="review-queue-filters" className={styles.filters}>
+          <div className={styles.filterGroup}>
+            <label className={styles.filterLabel}>Priority:</label>
+            <div className={styles.filterButtons}>
+              <button
+                className={`${styles.filterButton} ${priorityFilter === undefined ? styles.active : ""}`}
+                onClick={() => handleFilterByPriority(undefined)}
+                aria-pressed={priorityFilter === undefined}
+              >
+                All ({totalItems})
+              </button>
+              {[Priority.URGENT, Priority.HIGH, Priority.MEDIUM, Priority.LOW].map(
+                (priority) => {
+                  const count = byPriority.get(priority) ?? 0;
+                  return (
+                    <button
+                      key={priority}
+                      className={`${styles.filterButton} ${priorityFilter === priority ? styles.active : ""}`}
+                      onClick={() => handleFilterByPriority(priority)}
+                      disabled={count === 0}
+                      aria-pressed={priorityFilter === priority}
+                    >
+                      {getPriorityLabel(priority)} ({count})
+                    </button>
+                  );
+                }
+              )}
+            </div>
+          </div>
+
+          <div className={styles.filterGroup}>
+            <label className={styles.filterLabel}>Reason:</label>
+            <div className={styles.filterButtons}>
+              <button
+                className={`${styles.filterButton} ${reasonFilter === undefined ? styles.active : ""}`}
+                onClick={() => handleFilterByReason(undefined)}
+                aria-pressed={reasonFilter === undefined}
+              >
+                All ({totalItems})
+              </button>
+              {[
+                AttentionReason.APPROVAL_PENDING,
+                AttentionReason.INPUT_REQUIRED,
+                AttentionReason.ERROR_STATE,
+                AttentionReason.IDLE_TIMEOUT,
+                AttentionReason.IDLE,
+                AttentionReason.STALE,
+                AttentionReason.TASK_COMPLETE,
+              ].map((reason) => {
+                const count = byReason.get(reason) ?? 0;
                 return (
                   <button
-                    key={priority}
-                    className={`${styles.filterButton} ${priorityFilter === priority ? styles.active : ""}`}
-                    onClick={() => handleFilterByPriority(priority)}
+                    key={reason}
+                    className={`${styles.filterButton} ${reasonFilter === reason ? styles.active : ""}`}
+                    onClick={() => handleFilterByReason(reason)}
                     disabled={count === 0}
-                    aria-pressed={priorityFilter === priority}
+                    aria-pressed={reasonFilter === reason}
                   >
-                    {getPriorityLabel(priority)} ({count})
+                    {getReasonLabel(reason)} ({count})
                   </button>
                 );
-              }
-            )}
+              })}
+            </div>
           </div>
         </div>
-
-        <div className={styles.filterGroup}>
-          <label className={styles.filterLabel}>Reason:</label>
-          <div className={styles.filterButtons}>
-            <button
-              className={`${styles.filterButton} ${reasonFilter === undefined ? styles.active : ""}`}
-              onClick={() => handleFilterByReason(undefined)}
-              aria-pressed={reasonFilter === undefined}
-            >
-              All ({totalItems})
-            </button>
-            {[
-              AttentionReason.APPROVAL_PENDING,
-              AttentionReason.INPUT_REQUIRED,
-              AttentionReason.ERROR_STATE,
-              AttentionReason.IDLE_TIMEOUT,
-              AttentionReason.IDLE,
-              AttentionReason.STALE,
-              AttentionReason.TASK_COMPLETE,
-            ].map((reason) => {
-              const count = byReason.get(reason) ?? 0;
-              return (
-                <button
-                  key={reason}
-                  className={`${styles.filterButton} ${reasonFilter === reason ? styles.active : ""}`}
-                  onClick={() => handleFilterByReason(reason)}
-                  disabled={count === 0}
-                  aria-pressed={reasonFilter === reason}
-                >
-                  {getReasonLabel(reason)} ({count})
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      )}
 
       <div className={styles.items}>
         {loading && items.length === 0 ? (
