@@ -7,7 +7,6 @@ import { DiffViewer, prefetchDiff } from "./DiffViewer";
 import { VcsPanel } from "./VcsPanel";
 import { prefetchVcsStatus } from "@/lib/hooks/useVcsStatus";
 import { WorkspaceSwitchModal } from "./WorkspaceSwitchModal";
-import { ApprovalPanel } from "./ApprovalPanel";
 import { SessionLogsTab } from "./SessionLogsTab";
 import { FilesTab } from "./FilesTab";
 import { ActionBar } from "@/components/ui/ActionBar";
@@ -255,7 +254,7 @@ export function SessionDetail({
           className={styles.tabContent}
           style={{ display: activeTab === "terminal" ? undefined : 'none' }}
         >
-          <ApprovalPanel sessionId={session.id} sessionTitle={session.title} onResolved={onApprovalResolved} />
+          {/* ApprovalPanel removed — approvals now handled in the global ApprovalDrawer in Header */}
           {session.instanceType === InstanceType.EXTERNAL && !session.externalMetadata?.muxSocketPath ? (
             <div className={styles.noTerminalPlaceholder}>
               <span className={styles.noTerminalIcon}>⛓️</span>
