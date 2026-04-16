@@ -24,7 +24,7 @@ type testFileService struct {
 
 func newTestFileService(root string) *testFileService {
 	return &testFileService{
-		FileService: FileService{storage: nil},
+		FileService: FileService{workspace: nil},
 		testRoot:    root,
 	}
 }
@@ -220,6 +220,32 @@ func (t *testFileService) getFileContent(ctx context.Context, req *connect.Reque
 		Encoding:    "utf-8",
 		Size:        size,
 		IsTruncated: isTruncated,
+	}), nil
+}
+
+// searchFilesTest is a testable version of SearchFiles using testRoot directly.
+func (t *testFileService) searchFiles(ctx context.Context, req *connect.Request[sessionv1.SearchFilesRequest]) (*connect.Response[sessionv1.SearchFilesResponse], error) {
+	if req.Msg.SessionId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, nil)
+	}
+	if _, err := t.findInstance(req.Msg.SessionId); err != nil {
+		return nil, err
+	}
+	if len(req.Msg.Query) < 2 {
+		return connect.NewResponse(&sessionv1.SearchFilesResponse{}), nil
+	}
+	maxResults := int(req.Msg.MaxResults)
+	if maxResults <= 0 {
+		maxResults = maxSearchResults
+	}
+	files, truncated, totalMatches, err := searchFilesInWorktree(ctx, t.testRoot, req.Msg.Query, req.Msg.IncludeIgnored, maxResults)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&sessionv1.SearchFilesResponse{
+		Files:        files,
+		Truncated:    truncated,
+		TotalMatches: totalMatches,
 	}), nil
 }
 
@@ -553,5 +579,240 @@ func TestGetFileContent_Truncation(t *testing.T) {
 	}
 	if int64(len(resp.Msg.Content)) != truncateSize {
 		t.Errorf("expected content length %d, got %d", truncateSize, len(resp.Msg.Content))
+	}
+}
+
+// ---- Tests for SearchFiles ----
+
+func TestSearchFiles_NestedMatch(t *testing.T) {
+	root := t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(root, "a", "b", "c"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "a", "b", "c", "target.go"), []byte("package c"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "other.go"), []byte("package main"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+	resp, err := svc.searchFiles(context.Background(), connect.NewRequest(&sessionv1.SearchFilesRequest{
+		SessionId: "test-session",
+		Query:     "target",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resp.Msg.Files) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Msg.Files))
+	}
+	if resp.Msg.Files[0].Name != "target.go" {
+		t.Errorf("expected target.go, got %q", resp.Msg.Files[0].Name)
+	}
+	if resp.Msg.Files[0].Path != "a/b/c/target.go" {
+		t.Errorf("expected path a/b/c/target.go, got %q", resp.Msg.Files[0].Path)
+	}
+}
+
+func TestSearchFiles_HardSkipDirs(t *testing.T) {
+	root := t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(root, "node_modules"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "node_modules", "foo.js"), []byte("module"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "real_foo.go"), []byte("package main"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+	resp, err := svc.searchFiles(context.Background(), connect.NewRequest(&sessionv1.SearchFilesRequest{
+		SessionId: "test-session",
+		Query:     "foo",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, f := range resp.Msg.Files {
+		if strings.Contains(f.Path, "node_modules") {
+			t.Errorf("expected node_modules to be skipped, got %q", f.Path)
+		}
+	}
+	found := false
+	for _, f := range resp.Msg.Files {
+		if f.Name == "real_foo.go" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected real_foo.go in results")
+	}
+}
+
+func TestSearchFiles_GitignoreFiltering(t *testing.T) {
+	root := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("*.tmp\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "x.tmp"), []byte("ignored"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "x.go"), []byte("package main"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+
+	// Without include_ignored: x.tmp should not appear.
+	resp, err := svc.searchFiles(context.Background(), connect.NewRequest(&sessionv1.SearchFilesRequest{
+		SessionId:      "test-session",
+		Query:          "x.",
+		IncludeIgnored: false,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, f := range resp.Msg.Files {
+		if strings.HasSuffix(f.Name, ".tmp") {
+			t.Errorf("expected .tmp to be filtered, got %q", f.Name)
+		}
+	}
+
+	// With include_ignored: x.tmp should appear.
+	resp2, err := svc.searchFiles(context.Background(), connect.NewRequest(&sessionv1.SearchFilesRequest{
+		SessionId:      "test-session",
+		Query:          "x.tmp",
+		IncludeIgnored: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, f := range resp2.Msg.Files {
+		if f.Name == "x.tmp" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected x.tmp when include_ignored=true")
+	}
+}
+
+func TestSearchFiles_ShortQueryReturnsEmpty(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+	resp, err := svc.searchFiles(context.Background(), connect.NewRequest(&sessionv1.SearchFilesRequest{
+		SessionId: "test-session",
+		Query:     "a",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Msg.Files) != 0 {
+		t.Errorf("expected 0 results for short query, got %d", len(resp.Msg.Files))
+	}
+}
+
+func TestSearchFiles_MaxResultsCap(t *testing.T) {
+	root := t.TempDir()
+
+	for i := 0; i < 10; i++ {
+		name := filepath.Join(root, fmt.Sprintf("match%02d.go", i))
+		if err := os.WriteFile(name, []byte(""), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	svc := newTestFileService(root)
+	resp, err := svc.searchFiles(context.Background(), connect.NewRequest(&sessionv1.SearchFilesRequest{
+		SessionId:  "test-session",
+		Query:      "match",
+		MaxResults: 3,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Msg.Files) != 3 {
+		t.Errorf("expected 3 results (capped), got %d", len(resp.Msg.Files))
+	}
+	if !resp.Msg.Truncated {
+		t.Error("expected truncated=true when results capped")
+	}
+	if resp.Msg.TotalMatches < 10 {
+		t.Errorf("expected total_matches >= 10, got %d", resp.Msg.TotalMatches)
+	}
+}
+
+func TestSearchFiles_NoMatchReturnsEmpty(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+	resp, err := svc.searchFiles(context.Background(), connect.NewRequest(&sessionv1.SearchFilesRequest{
+		SessionId: "test-session",
+		Query:     "zzznomatch",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Msg.Files) != 0 {
+		t.Errorf("expected 0 results, got %d", len(resp.Msg.Files))
+	}
+	if resp.Msg.Truncated {
+		t.Error("expected truncated=false for empty results")
+	}
+}
+
+func TestSearchFiles_PathTraversalRejected(t *testing.T) {
+	root := t.TempDir()
+	svc := newTestFileService(root)
+
+	// Use unknown session ID to trigger not-found (path traversal is in session ID).
+	_, err := svc.searchFiles(context.Background(), connect.NewRequest(&sessionv1.SearchFilesRequest{
+		SessionId: "../../etc",
+		Query:     "passwd",
+	}))
+	if err == nil {
+		t.Fatal("expected error for unknown session ID")
+	}
+}
+
+func TestSearchFiles_PathMatchOnFullPath(t *testing.T) {
+	root := t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(root, "src", "cmd"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "cmd", "run.go"), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := newTestFileService(root)
+	// Query matches the path "src/cmd" but not the filename "run.go".
+	resp, err := svc.searchFiles(context.Background(), connect.NewRequest(&sessionv1.SearchFilesRequest{
+		SessionId: "test-session",
+		Query:     "src/cmd",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Msg.Files) != 1 {
+		t.Fatalf("expected 1 result for path match, got %d", len(resp.Msg.Files))
+	}
+	if resp.Msg.Files[0].Name != "run.go" {
+		t.Errorf("expected run.go, got %q", resp.Msg.Files[0].Name)
 	}
 }

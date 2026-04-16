@@ -5,7 +5,8 @@
 PROFILE_FLAGS ?=
 PROFILE_PORT ?= 6060
 SERVER_FLAGS ?= --remote-access
-export CGO_CFLAGS := -Wno-discarded-qualifiers
+export CGO_CFLAGS := -Wno-discarded-qualifiers -Wno-ignored-qualifiers
+export CGO_ENABLED := 1
 
 # File dependencies
 GO_FILES := $(shell find . -maxdepth 3 -name "*.go" -not -path "./vendor/*" -not -path "./node_modules/*")
@@ -170,6 +171,9 @@ test-coverage: ensure-tools proto-gen ## Run tests with coverage report
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
+test-race: ensure-tools proto-gen ## Run tests with race detector enabled
+	go test -race ./...
+
 # Performance benchmarks
 benchmark: ensure-tools proto-gen ## Run all benchmarks
 	@echo "Running comprehensive benchmarks..."
@@ -268,13 +272,13 @@ dev-setup: install-tools ## Set up development environment
 	@echo "Development environment setup complete!"
 	@echo "Run 'make help' to see available commands"
 
-ci: build test vet lint ## Continuous integration workflow
+ci: build test test-race vet lint ## Continuous integration workflow
 
 # Quick development workflows
-quick-check: build test-coverage lint ## Quick development validation
+quick-check: build test-coverage test-race lint ## Quick development validation
 	@echo "✅ Quick validation complete"
 
-pre-commit: format vet test lint ## Pre-commit validation
+pre-commit: format vet test test-race lint ## Pre-commit validation
 	@echo "✅ Pre-commit checks passed"
 
 # Debugging and profiling

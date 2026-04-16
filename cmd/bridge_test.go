@@ -136,7 +136,7 @@ func TestBridgeValidationIntegration(t *testing.T) {
 	}
 
 	// Initialize bridge (simplified - in real app this sets up handlers)
-	bridge.initialized = true
+	bridge.initialized.Store(true)
 
 	// Test validation after initialization with no conflicts
 	issues = bridge.ValidateSetup()

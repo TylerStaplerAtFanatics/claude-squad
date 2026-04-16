@@ -66,6 +66,9 @@ type SessionService struct {
 	// pathCompletionSvc handles filesystem path completion RPCs.
 	pathCompletionSvc *PathCompletionService
 
+	// defaultsSvc handles session defaults configuration RPCs.
+	defaultsSvc *DefaultsService
+
 	// scrollbackMgr provides access to per-session scrollback sequence numbers
 	// for checkpoint creation. May be nil if not wired (seq defaults to 0).
 	scrollbackMgr scrollbackSequencer
@@ -138,13 +141,15 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 	}
 	rulesSvc := NewRulesService(rulesStore, analyticsStore, classifierObj)
 
+	workspaceSvc := NewWorkspaceService(concStorage, eventBus)
+
 	return &SessionService{
 		storage:           storage,
 		eventBus:          eventBus,
 		reviewQueueSvc:    reviewQueueSvc,
 		searchSvc:         NewSearchService(searchEngine, search.NewSnippetGenerator(), 5*time.Minute),
 		githubSvc:         NewGitHubService(concStorage),
-		workspaceSvc:      NewWorkspaceService(concStorage, eventBus),
+		workspaceSvc:      workspaceSvc,
 		configSvc:         NewConfigService(),
 		notificationSvc:   notificationSvc,
 		approvalSvc:       approvalSvc,
@@ -152,8 +157,9 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 		rulesSvc:          rulesSvc,
 		approvalStore:     approvalStore,
 		databaseSvc:       NewDatabaseService(),
-		fileSvc:           NewFileService(concStorage),
+		fileSvc:           NewFileService(workspaceSvc),
 		pathCompletionSvc: NewPathCompletionService(),
+		defaultsSvc:       NewDefaultsService(),
 	}
 }
 
@@ -510,11 +516,24 @@ func (s *SessionService) CreateSession(
 		log.InfoLog.Printf("[CreateSession] Resolved to local path: %s (branch: %s)", resolvedPath, branch)
 	}
 
-	// Set default program if not specified
+	// Resolve session defaults (global → directory → profile), then apply explicit request fields on top.
+	// skip_defaults bypasses this for scripted or explicit-empty sessions.
 	program := req.Msg.Program
-	if program == "" {
+	autoYes := req.Msg.AutoYes
+	if !req.Msg.SkipDefaults {
 		cfg := config.LoadConfig()
-		program = cfg.DefaultProgram
+		workingDir := req.Msg.WorkingDir
+		if workingDir == "" {
+			workingDir = resolvedPath
+		}
+		resolved := config.ResolveDefaults(cfg, workingDir, req.Msg.Profile)
+		// Apply resolved defaults only for fields not explicitly set in the request.
+		if program == "" {
+			program = resolved.Program
+		}
+		if !autoYes && resolved.AutoYes {
+			autoYes = true
+		}
 	}
 
 	// Determine session type - use explicit session_type if provided, otherwise infer from fields
@@ -548,7 +567,7 @@ func (s *SessionService) CreateSession(
 		WorkingDir:       req.Msg.WorkingDir,
 		Branch:           branch,
 		Program:          program,
-		AutoYes:          req.Msg.AutoYes,
+		AutoYes:          autoYes,
 		Prompt:           req.Msg.Prompt,
 		ExistingWorktree: req.Msg.ExistingWorktree,
 		Category:         req.Msg.Category,
@@ -1811,6 +1830,14 @@ func (s *SessionService) ListPathCompletions(
 	return s.pathCompletionSvc.ListPathCompletions(ctx, req)
 }
 
+// ListWorktrees returns the git worktrees for a given repository path.
+func (s *SessionService) ListWorktrees(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ListWorktreesRequest],
+) (*connect.Response[sessionv1.ListWorktreesResponse], error) {
+	return s.pathCompletionSvc.ListWorktrees(ctx, req)
+}
+
 // findInstance finds an instance by title using the live in-memory poller.
 func (s *SessionService) findInstance(id string) *session.Instance {
 	if s.reviewQueuePoller != nil {
@@ -1852,6 +1879,51 @@ func (s *SessionService) GetFileContent(
 	req *connect.Request[sessionv1.GetFileContentRequest],
 ) (*connect.Response[sessionv1.GetFileContentResponse], error) {
 	return s.fileSvc.GetFileContent(ctx, req)
+}
+
+// ─── Session Defaults delegates ──────────────────────────────────────────────
+
+// GetSessionDefaults returns the full session defaults configuration.
+func (s *SessionService) GetSessionDefaults(ctx context.Context, req *connect.Request[sessionv1.GetSessionDefaultsRequest]) (*connect.Response[sessionv1.GetSessionDefaultsResponse], error) {
+	return s.defaultsSvc.GetSessionDefaults(ctx, req)
+}
+
+// ResolveDefaults merges all default layers for the given working directory and profile.
+func (s *SessionService) ResolveDefaults(ctx context.Context, req *connect.Request[sessionv1.ResolveDefaultsRequest]) (*connect.Response[sessionv1.ResolveDefaultsResponse], error) {
+	return s.defaultsSvc.ResolveDefaults(ctx, req)
+}
+
+// UpdateGlobalDefaults replaces the global default fields.
+func (s *SessionService) UpdateGlobalDefaults(ctx context.Context, req *connect.Request[sessionv1.UpdateGlobalDefaultsRequest]) (*connect.Response[sessionv1.UpdateGlobalDefaultsResponse], error) {
+	return s.defaultsSvc.UpdateGlobalDefaults(ctx, req)
+}
+
+// UpsertProfile creates or updates a named profile.
+func (s *SessionService) UpsertProfile(ctx context.Context, req *connect.Request[sessionv1.UpsertProfileRequest]) (*connect.Response[sessionv1.UpsertProfileResponse], error) {
+	return s.defaultsSvc.UpsertProfile(ctx, req)
+}
+
+// DeleteProfile removes a named profile by name.
+func (s *SessionService) DeleteProfile(ctx context.Context, req *connect.Request[sessionv1.DeleteProfileRequest]) (*connect.Response[sessionv1.DeleteProfileResponse], error) {
+	return s.defaultsSvc.DeleteProfile(ctx, req)
+}
+
+// UpsertDirectoryRule creates or updates a directory rule.
+func (s *SessionService) UpsertDirectoryRule(ctx context.Context, req *connect.Request[sessionv1.UpsertDirectoryRuleRequest]) (*connect.Response[sessionv1.UpsertDirectoryRuleResponse], error) {
+	return s.defaultsSvc.UpsertDirectoryRule(ctx, req)
+}
+
+// DeleteDirectoryRule removes a directory rule by path.
+func (s *SessionService) DeleteDirectoryRule(ctx context.Context, req *connect.Request[sessionv1.DeleteDirectoryRuleRequest]) (*connect.Response[sessionv1.DeleteDirectoryRuleResponse], error) {
+	return s.defaultsSvc.DeleteDirectoryRule(ctx, req)
+}
+
+// SearchFiles performs a recursive name-substring search in a session's worktree.
+func (s *SessionService) SearchFiles(
+	ctx context.Context,
+	req *connect.Request[sessionv1.SearchFilesRequest],
+) (*connect.Response[sessionv1.SearchFilesResponse], error) {
+	return s.fileSvc.SearchFiles(ctx, req)
 }
 
 // checkpointToProto converts a session.Checkpoint to a proto CheckpointProto.

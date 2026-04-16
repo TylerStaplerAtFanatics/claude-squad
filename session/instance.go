@@ -158,6 +158,10 @@ type Instance struct {
 	// Set by HistoryLinker when it correlates this session to an open JSONL file.
 	HistoryFilePath string
 
+	// historyDetector is used by tryExtractConversationUUID. When nil the
+	// production inspector is used. Set in tests to inject a fake home dir.
+	historyDetector *HistoryFileDetector
+
 	// Claude Code session information for persistence and re-attachment
 	claudeSession *ClaudeSessionData
 
@@ -962,6 +966,16 @@ func (i *Instance) GetEffectiveRootDir() string {
 		}
 	}
 	return i.Path
+}
+
+// Workspace returns where this session is operating.
+// Use this as the single source of truth for path resolution instead of
+// accessing inst.Path directly, which is wrong for worktree sessions.
+func (i *Instance) Workspace() Workspace {
+	return Workspace{
+		EffectivePath: i.GetEffectiveRootDir(),
+		RepoRoot:      i.Path,
+	}
 }
 
 // Kill terminates the instance and cleans up all resources
@@ -1921,26 +1935,39 @@ func (i *Instance) tryExtractConversationUUID() {
 		return
 	}
 
-	// Need an alive tmux session to get the pane PID.
-	if !i.tmuxManager.DoesSessionExist() {
-		log.DebugLog.Printf("tryExtractConversationUUID: tmux session not alive for '%s'", i.Title)
-		return
+	detector := i.historyDetector
+	if detector == nil {
+		detector = NewHistoryFileDetectorWithRealInspector()
+	}
+	var info *HistoryFileInfo
+
+	// Fast path: inspect open files of the live tmux pane process.
+	if i.tmuxManager.DoesSessionExist() {
+		pid, err := i.tmuxManager.GetPanePID()
+		if err != nil {
+			log.DebugLog.Printf("tryExtractConversationUUID: could not get pane PID for '%s': %v", i.Title, err)
+		} else {
+			info, err = detector.Detect(pid)
+			if err != nil {
+				log.WarningLog.Printf("tryExtractConversationUUID: detect error for '%s' (pid=%d): %v", i.Title, pid, err)
+			}
+		}
 	}
 
-	pid, err := i.tmuxManager.GetPanePID()
-	if err != nil {
-		log.DebugLog.Printf("tryExtractConversationUUID: could not get pane PID for '%s': %v", i.Title, err)
-		return
+	// Fallback: scan the project directory by path (works after reboot / tmux kill).
+	if info == nil && i.Path != "" {
+		var err error
+		info, err = detector.DetectByPath(i.Path)
+		if err != nil {
+			log.WarningLog.Printf("tryExtractConversationUUID: path-based detect error for '%s': %v", i.Title, err)
+		}
+		if info != nil {
+			log.InfoLog.Printf("tryExtractConversationUUID: found conversation via path fallback for '%s'", i.Title)
+		}
 	}
 
-	detector := NewHistoryFileDetectorWithRealInspector()
-	info, err := detector.Detect(pid)
-	if err != nil {
-		log.WarningLog.Printf("tryExtractConversationUUID: detect error for '%s' (pid=%d): %v", i.Title, pid, err)
-		return
-	}
 	if info == nil {
-		log.DebugLog.Printf("tryExtractConversationUUID: no JSONL file found for '%s' (pid=%d)", i.Title, pid)
+		log.DebugLog.Printf("tryExtractConversationUUID: no JSONL file found for '%s'", i.Title)
 		return
 	}
 

@@ -8,6 +8,46 @@ interface DiffViewerProps {
   // Props kept for backward compatibility but data now comes from SessionVcsContext.
 }
 
+// ---- Module-level diff cache ----
+
+interface DiffCacheEntry {
+  files: DiffFile[];
+  additions: number;
+  deletions: number;
+  rawContent: string;
+  timestamp: number;
+}
+
+const diffCache = new Map<string, DiffCacheEntry>();
+const DIFF_CACHE_TTL_MS = 30_000;
+
+function getDiffCached(sessionId: string): DiffCacheEntry | null {
+  const entry = diffCache.get(sessionId);
+  if (entry && Date.now() - entry.timestamp < DIFF_CACHE_TTL_MS) return entry;
+  return null;
+}
+
+/**
+ * Warm the diff cache for a session without rendering anything.
+ * Call from SessionDetail when a session is selected.
+ */
+export async function prefetchDiff(sessionId: string, baseUrl: string): Promise<void> {
+  if (getDiffCached(sessionId)) return;
+  try {
+    const client = createClient(SessionService, createConnectTransport({ baseUrl }));
+    const response = await client.getSessionDiff({ id: sessionId });
+    diffCache.set(sessionId, {
+      files: parseDiff(response.diffStats?.content ?? ""),
+      additions: response.diffStats?.added ?? 0,
+      deletions: response.diffStats?.removed ?? 0,
+      rawContent: response.diffStats?.content ?? "",
+      timestamp: Date.now(),
+    });
+  } catch {
+    // Prefetch failures are silent – the component will retry on mount.
+  }
+}
+
 interface DiffFile {
   filename: string;
   additions: number;

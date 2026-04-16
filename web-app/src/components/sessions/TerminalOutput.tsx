@@ -12,9 +12,10 @@ interface TerminalOutputProps {
   baseUrl: string;
   isExternal?: boolean;
   tmuxSessionName?: string; // For external sessions, the tmux session name
+  isVisible?: boolean; // When provided, triggers fit+focus on visibility change
 }
 
-export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSessionName }: TerminalOutputProps) {
+export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSessionName, isVisible }: TerminalOutputProps) {
   const xtermRef = useRef<XtermTerminalHandle | null>(null);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
   const [showReconnectButton, setShowReconnectButton] = useState(false);
@@ -434,6 +435,16 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     }
   }, [sessionId]);
 
+  // When terminal becomes visible (e.g. session switch in pool), trigger fit+focus
+  useEffect(() => {
+    if (isVisible && xtermRef.current) {
+      setTimeout(() => {
+        xtermRef.current?.fit();
+        xtermRef.current?.terminal?.focus();
+      }, 50);
+    }
+  }, [isVisible]);
+
   // Reset loading state when switching sessions and trigger reconnect
   useEffect(() => {
     setIsLoadingInitialContent(true);
@@ -711,7 +722,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
         </div>
       </div>
       <div className={styles.terminal}>
-        {isLoadingInitialContent && (
+        {isVisible !== false && isLoadingInitialContent && (
           <div className={styles.loadingOverlay}>
             <div className={styles.loadingSpinner} />
             <div className={styles.loadingText}>

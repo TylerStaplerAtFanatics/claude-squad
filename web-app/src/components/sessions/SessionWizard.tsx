@@ -1,14 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { createClient } from "@connectrpc/connect";
+import { createConnectTransport } from "@connectrpc/connect-web";
+import { create } from "@bufbuild/protobuf";
 import { Wizard, WizardActions } from "@/components/ui/Wizard";
 import { AutocompleteInput } from "@/components/ui/AutocompleteInput";
 import { useRepositorySuggestions } from "@/lib/hooks/useRepositorySuggestions";
 import { useBranchSuggestions } from "@/lib/hooks/useBranchSuggestions";
+import { useSessionDefaults } from "@/lib/hooks/useSessionDefaults";
 import { sessionSchema, SessionFormData, defaultValues } from "@/lib/validation/sessionSchema";
 import { getProgramDisplay, PROGRAMS, DEFAULT_PROGRAM } from "@/lib/constants/programs";
+import { SourceBadge } from "./SourceBadge";
+import {
+  SessionService,
+  ProfileDefaultsProtoSchema,
+} from "@/gen/session/v1/session_pb";
+import { getApiBaseUrl } from "@/lib/config";
 import styles from "./SessionWizard.module.css";
 
 interface SessionWizardProps {
@@ -22,6 +32,20 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Profile selector state
+  const [selectedProfile, setSelectedProfile] = useState<string>("");
+
+  // Save-as-profile modal state (Task 3.4)
+  const [showSaveProfileModal, setShowSaveProfileModal] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [profileDescription, setProfileDescription] = useState("");
+  const [saveProfileError, setSaveProfileError] = useState<string | null>(null);
+  const [saveProfileSuccess, setSaveProfileSuccess] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Track which fields the user has manually edited
+  const editedFieldsRef = useRef<Set<keyof SessionFormData>>(new Set());
+
   const {
     register,
     handleSubmit,
@@ -29,6 +53,7 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
     trigger,
     watch,
     control,
+    reset,
     setValue,
     getValues,
     setError,
@@ -44,7 +69,7 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
   // Watch the program field to show/hide custom command input
   const selectedProgram = watch("program");
 
-  // Watch the repository path to update branch suggestions
+  // Watch the repository path to update branch suggestions and defaults
   const repositoryPath = watch("path");
 
   // Watch session type to show/hide conditional fields
@@ -59,6 +84,44 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
   const { suggestions: branchSuggestions, isLoading: isLoadingBranches } = useBranchSuggestions({
     repositoryPath,
   });
+
+  // Fetch session defaults based on repository path and selected profile
+  const {
+    defaults: resolvedDefaults,
+    fieldSources,
+    loading: defaultsLoading,
+    profiles: availableProfiles,
+  } = useSessionDefaults(repositoryPath || "", selectedProfile || undefined);
+
+  // Track field edits via onChange wrapper
+  const trackEdit = useCallback((fieldName: keyof SessionFormData) => {
+    editedFieldsRef.current.add(fieldName);
+  }, []);
+
+  // Apply resolved defaults to form, preserving user-edited fields
+  useEffect(() => {
+    if (!resolvedDefaults) return;
+
+    const currentValues = getValues();
+    const edited = editedFieldsRef.current;
+
+    const newValues: Partial<SessionFormData> = { ...currentValues };
+
+    if (!edited.has("program") && resolvedDefaults.program) {
+      newValues.program = resolvedDefaults.program;
+    }
+    if (!edited.has("autoYes")) {
+      newValues.autoYes = resolvedDefaults.autoYes;
+    }
+
+    reset({ ...defaultValues, ...newValues }, { keepDirty: true });
+  }, [resolvedDefaults, reset, getValues]);
+
+  // Clear edited fields tracking when profile changes
+  const handleProfileChange = useCallback((newProfile: string) => {
+    editedFieldsRef.current.clear();
+    setSelectedProfile(newProfile);
+  }, []);
 
   const steps = ["Basic Info", "Repository", "Configuration", "Review"];
 
@@ -119,6 +182,51 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
     }
   };
 
+  // Save as profile handler (Task 3.4)
+  const handleSaveProfile = async () => {
+    if (!profileName.trim()) {
+      setSaveProfileError("Profile name is required");
+      return;
+    }
+
+    setIsSavingProfile(true);
+    setSaveProfileError(null);
+
+    try {
+      const transport = createConnectTransport({ baseUrl: getApiBaseUrl() });
+      const client = createClient(SessionService, transport);
+
+      const profile = create(ProfileDefaultsProtoSchema, {
+        name: profileName.trim(),
+        description: profileDescription.trim(),
+        program: formValues.program || "",
+        autoYes: formValues.autoYes || false,
+        tags: [],
+        envVars: {},
+        cliFlags: "",
+      });
+
+      await client.upsertProfile({ profile });
+
+      setShowSaveProfileModal(false);
+      setProfileName("");
+      setProfileDescription("");
+      setSaveProfileSuccess(`Profile "${profileName.trim()}" saved`);
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSaveProfileSuccess(null), 3000);
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+      setSaveProfileError(
+        err instanceof Error ? err.message : "Failed to save profile",
+      );
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const hasDefaults = resolvedDefaults !== null && !defaultsLoading;
+
   return (
     <Wizard currentStep={step} steps={steps}>
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -137,7 +245,9 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
                 id="title"
                 type="text"
                 data-testid="session-title"
-                {...register("title")}
+                {...register("title", {
+                  onChange: () => trackEdit("title"),
+                })}
                 placeholder="feature-user-auth"
                 className={errors.title ? styles.error : ""}
               />
@@ -154,7 +264,9 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
               <input
                 id="category"
                 type="text"
-                {...register("category")}
+                {...register("category", {
+                  onChange: () => trackEdit("category"),
+                })}
                 placeholder="e.g., Features, Bugfixes, Experiments"
               />
               <span className={styles.hint}>
@@ -182,7 +294,10 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
                   <AutocompleteInput
                     id="path"
                     value={field.value || ""}
-                    onChange={field.onChange}
+                    onChange={(value) => {
+                      trackEdit("path");
+                      field.onChange(value);
+                    }}
                     onBlur={field.onBlur}
                     placeholder="/Users/username/projects/my-repo or https://github.com/owner/repo"
                     suggestions={repositorySuggestions}
@@ -205,7 +320,9 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
               <input
                 id="workingDir"
                 type="text"
-                {...register("workingDir")}
+                {...register("workingDir", {
+                  onChange: () => trackEdit("workingDir"),
+                })}
                 placeholder="src/api (optional)"
               />
               {errors.workingDir && (
@@ -218,7 +335,9 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
 
             <div className={styles.field}>
               <label htmlFor="sessionType">Session Type</label>
-              <select id="sessionType" {...register("sessionType")}>
+              <select id="sessionType" {...register("sessionType", {
+                onChange: () => trackEdit("sessionType"),
+              })}>
                 <option value="new_worktree">Create New Worktree</option>
                 <option value="existing_worktree">Use Existing Worktree</option>
                 <option value="directory">Directory Only (No Worktree)</option>
@@ -295,7 +414,9 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
                 <input
                   id="existingWorktree"
                   type="text"
-                  {...register("existingWorktree")}
+                  {...register("existingWorktree", {
+                    onChange: () => trackEdit("existingWorktree"),
+                  })}
                   placeholder="/path/to/existing/worktree"
                   className={errors.existingWorktree ? styles.error : ""}
                 />
@@ -312,14 +433,46 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
 
         {step === 2 && (
           <div className={styles.step}>
-            <h2>Configuration</h2>
+            <h2>
+              Configuration
+              {hasDefaults && (
+                <span className={styles.defaultsNotice}>Pre-filled from defaults</span>
+              )}
+            </h2>
             <p className={styles.description}>
               Configure the AI assistant program and optional startup settings.
             </p>
 
+            {availableProfiles.length > 0 && (
+              <div className={styles.field}>
+                <label htmlFor="profile">Profile (optional)</label>
+                <select
+                  id="profile"
+                  value={selectedProfile}
+                  onChange={(e) => handleProfileChange(e.target.value)}
+                >
+                  <option value="">None</option>
+                  {availableProfiles.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+                <span className={styles.hint}>
+                  Apply a saved configuration profile
+                </span>
+              </div>
+            )}
+
             <div className={styles.field}>
-              <label htmlFor="program">Program</label>
-              <select id="program" {...register("program")}>
+              <label htmlFor="program">
+                Program
+                <SourceBadge
+                  source={fieldSources.program}
+                  detail={selectedProfile || undefined}
+                />
+              </label>
+              <select id="program" {...register("program", {
+                onChange: () => trackEdit("program"),
+              })}>
                 {PROGRAMS.map((p) => (
                   <option key={p.value} value={p.value}>{p.label}</option>
                 ))}
@@ -338,7 +491,9 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
                 <input
                   id="customCommand"
                   type="text"
-                  {...register("program")}
+                  {...register("program", {
+                    onChange: () => trackEdit("program"),
+                  })}
                   placeholder="Enter custom command (e.g., aider --model gpt-4)"
                   className={errors.program ? styles.error : ""}
                 />
@@ -355,7 +510,9 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
               <label htmlFor="prompt">Initial Prompt</label>
               <textarea
                 id="prompt"
-                {...register("prompt")}
+                {...register("prompt", {
+                  onChange: () => trackEdit("prompt"),
+                })}
                 placeholder="Optional: Initial message to send to the AI"
                 rows={3}
               />
@@ -366,7 +523,13 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
 
             <div className={styles.field}>
               <label className={styles.checkbox}>
-                <input type="checkbox" data-testid="auto-yes-checkbox" {...register("autoYes")} />
+                <input
+                  type="checkbox"
+                  data-testid="auto-yes-checkbox"
+                  {...register("autoYes", {
+                    onChange: () => trackEdit("autoYes"),
+                  })}
+                />
                 <span>Auto-approve prompts (experimental mode)</span>
               </label>
               <span className={styles.hint}>
@@ -453,6 +616,10 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
                 <span className={styles.reviewValue}>{formValues.autoYes ? "Yes" : "No"}</span>
               </div>
             </div>
+
+            {saveProfileSuccess && (
+              <div className={styles.successMessage}>{saveProfileSuccess}</div>
+            )}
           </div>
         )}
 
@@ -481,6 +648,16 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
           >
             Cancel
           </button>
+          {step === 3 && (
+            <button
+              type="button"
+              onClick={() => setShowSaveProfileModal(true)}
+              className={styles.buttonSecondary}
+              disabled={isSubmitting}
+            >
+              Save as Profile...
+            </button>
+          )}
           {step < steps.length - 1 ? (
             <button
               type="button"
@@ -501,6 +678,73 @@ export function SessionWizard({ onComplete, onCancel, initialData }: SessionWiza
           )}
         </WizardActions>
       </form>
+
+      {/* Save as Profile Modal (Task 3.4) */}
+      {showSaveProfileModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowSaveProfileModal(false)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <h3>Save as Profile</h3>
+            <p className={styles.description}>
+              Save the current configuration as a reusable profile.
+            </p>
+
+            <div className={styles.field}>
+              <label htmlFor="profileName">
+                Profile Name <span className={styles.required}>*</span>
+              </label>
+              <input
+                id="profileName"
+                type="text"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                placeholder="e.g., my-work-defaults"
+                autoFocus
+              />
+            </div>
+
+            <div className={styles.field}>
+              <label htmlFor="profileDescription">Description</label>
+              <textarea
+                id="profileDescription"
+                value={profileDescription}
+                onChange={(e) => setProfileDescription(e.target.value)}
+                placeholder="Optional description for this profile"
+                rows={2}
+              />
+            </div>
+
+            {saveProfileError && (
+              <div className={styles.submitError}>
+                {saveProfileError}
+              </div>
+            )}
+
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSaveProfileModal(false);
+                  setSaveProfileError(null);
+                  setProfileName("");
+                  setProfileDescription("");
+                }}
+                className={styles.buttonSecondary}
+                disabled={isSavingProfile}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveProfile}
+                className={styles.buttonPrimary}
+                disabled={isSavingProfile || !profileName.trim()}
+              >
+                {isSavingProfile ? "Saving..." : "Save Profile"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Wizard>
   );
 }

@@ -267,4 +267,54 @@ describe('EscapeSequenceParser', () => {
       expect(fullOutput).toContain('\x1b[2C'); // Cursor forward
     });
   });
+
+  describe('ED3 (Erase Scrollback) Filter', () => {
+    test('strips ED3 when immediately preceded by ED2 in same chunk', () => {
+      // [2J[3J is the paired clear-screen+scrollback sequence that
+      // causes xterm.js flicker; the filter collapses it to just ED2.
+      const result = parser.processChunk('[2J[3J');
+      expect(result).toBe('[2J');
+    });
+
+    test('preserves standalone ED3 with no preceding ED2', () => {
+      // A lone ED3 should not be removed.
+      const result = parser.processChunk('[3J');
+      expect(result).toBe('[3J');
+    });
+
+    test('preserves standalone ED2 with no following ED3', () => {
+      // A lone ED2 should pass through unmodified.
+      const result = parser.processChunk('[2J');
+      expect(result).toBe('[2J');
+    });
+
+    test('filters multiple ED2+ED3 pairs in one chunk', () => {
+      const input = 'a[2J[3Jb[2J[3Jc';
+      const result = parser.processChunk(input);
+      expect(result).toBe('a[2Jb[2Jc');
+    });
+
+    test('ED2+ED3 split across chunk boundary: ED3 preserved (regex does not span calls)', () => {
+      // The ED3 filter operates only within a single processChunk call (after
+      // prepending buffered data). When ED2 ends one chunk and ED3 starts the
+      // next, the regex has no opportunity to match across the boundary, so the
+      // standalone ED3 that arrives in the second chunk is NOT stripped.
+      // This is the documented expected behavior for cross-boundary pairs.
+      const result1 = parser.processChunk('text[2J');
+      // [2J is a complete CSI sequence; nothing buffered
+      expect(result1).toBe('text[2J');
+      expect(parser.getBuffered()).toBe('');
+
+      const result2 = parser.processChunk('[3J');
+      // Arrives as a standalone ED3 in its own chunk - filter does not fire
+      expect(result2).toBe('[3J');
+    });
+
+    test('normal text passes through unmodified', () => {
+      const input = 'Hello, World!';
+      const result = parser.processChunk(input);
+      expect(result).toBe('Hello, World!');
+    });
+  });
+
 });

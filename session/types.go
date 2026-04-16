@@ -323,6 +323,19 @@ func isValidTitle(title string) bool {
 	return true
 }
 
+// Workspace describes where a session is operating.
+// Use Instance.Workspace() to obtain this value; do not construct directly.
+type Workspace struct {
+	// EffectivePath is the directory where the session process runs.
+	// For worktree sessions: the worktree directory.
+	// For directory sessions: the session's Path field.
+	EffectivePath string
+
+	// RepoRoot is the git repository root (the main checkout, not the worktree).
+	// For directory sessions, this is the same as EffectivePath.
+	RepoRoot string
+}
+
 // RestartState holds the state needed to restart a session
 type RestartState struct {
 	// Working directory to restore

@@ -82,6 +82,7 @@ func (g *GitWorktree) setupFromExistingBranch() error {
 			if found {
 				log.InfoLog.Printf("Found existing worktree for branch '%s' at '%s', using it instead", g.branchName, existingPath)
 				g.worktreePath = existingPath
+				g.initBaseCommitSHA()
 				return nil
 			}
 
@@ -92,7 +93,27 @@ func (g *GitWorktree) setupFromExistingBranch() error {
 		return fmt.Errorf("failed to create worktree from branch %s: %w", g.branchName, err)
 	}
 
+	// Worktree created successfully — record the base commit for diff tracking.
+	g.initBaseCommitSHA()
+
 	return nil
+}
+
+// initBaseCommitSHA finds the merge-base of HEAD with common default branches and
+// stores it in g.baseCommitSHA. Non-fatal: if no default branch is found the field
+// remains empty and Diff() will fall back to its own resolution.
+func (g *GitWorktree) initBaseCommitSHA() {
+	for _, branch := range []string{"main", "master", "develop", "trunk"} {
+		output, err := g.runGitCommand(g.repoPath, "merge-base", "HEAD", branch)
+		if err == nil {
+			if sha := strings.TrimSpace(output); sha != "" {
+				g.baseCommitSHA = sha
+				log.InfoLog.Printf("Set base commit SHA for branch '%s' to merge-base with '%s': %s", g.branchName, branch, sha[:min(8, len(sha))])
+				return
+			}
+		}
+	}
+	log.WarningLog.Printf("Could not find merge-base for branch '%s' with any default branch (main/master/develop/trunk)", g.branchName)
 }
 
 // findWorktreeForBranch parses the output of 'git worktree list --porcelain'

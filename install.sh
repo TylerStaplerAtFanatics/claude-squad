@@ -181,6 +181,14 @@ extract_and_install() {
 
     # Install binary with desired name
     mv "${tmp_dir}/stapler-squad${extension}" "$bin_dir/$INSTALL_NAME${extension}"
+
+    # Install claude-mux if present in the archive
+    if [ -f "${tmp_dir}/claude-mux${extension}" ]; then
+        mv "${tmp_dir}/claude-mux${extension}" "$bin_dir/claude-mux${extension}"
+        chmod +x "$bin_dir/claude-mux${extension}"
+        echo "Installed claude-mux to $bin_dir/claude-mux${extension}"
+    fi
+
     rm -rf "$tmp_dir"
 
     if [ ! -f "$bin_dir/$INSTALL_NAME${extension}" ]; then
@@ -189,7 +197,7 @@ extract_and_install() {
     fi
 
     chmod +x "$bin_dir/$INSTALL_NAME${extension}"
-    
+
     echo ""
     if [ "$UPGRADE_MODE" = true ]; then
         echo "Successfully upgraded '$INSTALL_NAME' to:"
@@ -255,6 +263,10 @@ build_from_source() {
     # make build handles proto generation, Next.js web UI build, and Go compilation.
     (cd "$tmp_dir/stapler-squad" && ensure make build)
 
+    # Also build claude-mux
+    echo "Building claude-mux..."
+    (cd "$tmp_dir/stapler-squad" && ensure go build -o claude-mux ./cmd/claude-mux)
+
     if [ ! -d "$bin_dir" ]; then
         mkdir -p "$bin_dir"
     fi
@@ -266,6 +278,11 @@ build_from_source() {
 
     mv "$tmp_dir/stapler-squad/stapler-squad" "$bin_dir/$INSTALL_NAME"
     chmod +x "$bin_dir/$INSTALL_NAME"
+
+    mv "$tmp_dir/stapler-squad/claude-mux" "$bin_dir/claude-mux"
+    chmod +x "$bin_dir/claude-mux"
+    echo "Installed claude-mux to $bin_dir/claude-mux"
+
     rm -rf "$tmp_dir"
 
     if [ ! -f "$bin_dir/$INSTALL_NAME" ]; then

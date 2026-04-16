@@ -18,6 +18,7 @@ This file serves as a lightweight index of all feature plans in `docs/tasks/`.
 | [Frontend Quick Wins](frontend-quick-wins.md) | Draft | 5 atomic tasks | Low |
 | [Backlog Pipeline](worktrees/feat/backlog-pipeline-planning/docs/tasks/backlog-pipeline.md) | Planning - Phase 3 Complete | TBD | High |
 | [Mobile UX Improvements](mobile-ux-improvements.md) | Ready for Implementation | 3 stories, 11 tasks | Medium |
+| [Session Defaults & Profiles](session-defaults.md) | 10/11 Tasks Complete — Task 4.4 Blocking Build | 4 stories, 11 tasks | High |
 | [AskUserQuestion Rich UI](askuserquestion-ui.md) | Draft | 3 stories | Low |
 | [History Page Revamp](history-page-revamp.md) | Ready for Implementation | 5 stories, 13 tasks | High |
 | [System Service Auto-Start](system-service-autostart.md) | Draft | 4 stories, 12 tasks | Medium |
@@ -62,6 +63,8 @@ This file serves as a lightweight index of all feature plans in `docs/tasks/`.
 
 ## Notes
 
-- No critical bugs blocking active feature work as of 2026-04-08.
-- BUG-010 and BUG-012 are test-infrastructure issues; they do not affect production runtime.
+- Session Defaults feature (branch: claude-squad-session-default-configuration) is 10/11 tasks complete as of 2026-04-13.
+  The only remaining task is Task 4.4 (DirectoryRulesManager component). The web build is blocked until this is created.
+  `web-app/src/app/settings/defaults/page.tsx` imports `DirectoryRulesManager` which does not yet exist.
+- No critical bugs blocking active feature work (BUG-010 and BUG-012 are test-infrastructure issues only).
 - BUG-008, BUG-009, BUG-011 referenced a `ui/` Go package (TUI era) that no longer exists. Move to `docs/bugs/obsolete/` when that directory is created.

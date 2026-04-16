@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Tree } from "react-arborist";
 import type { NodeApi, TreeApi } from "react-arborist";
 import type { FileNode } from "@/gen/session/v1/types_pb";
-import { fetchDirectoryFiles } from "@/lib/hooks/useFileService";
+import { fetchDirectoryFiles, searchFiles } from "@/lib/hooks/useFileService";
 import styles from "./FileTree.module.css";
 
 // ---- Data model ----
@@ -48,6 +48,8 @@ interface FileTreeProps {
   searchTerm?: string;
   /** Called with a collapseAll function so parents can trigger collapse. */
   onCollapseAllRef?: (fn: () => void) => void;
+  /** Called when search results change (count, truncated). null = browse mode. */
+  onSearchResults?: (count: number | null, truncated: boolean) => void;
 }
 
 // ---- Helpers ----
@@ -112,6 +114,69 @@ function computeDirStatuses(
     }
   }
   return anyStatus;
+}
+
+/**
+ * Build a nested TreeNode tree from a flat list of FileNode search results.
+ * Ancestor directories are synthesised from file path segments.
+ */
+function buildSearchTree(files: FileNode[]): TreeNode[] {
+  const nodeMap = new Map<string, TreeNode>();
+
+  for (const file of files) {
+    const filePath = file.path || file.name;
+    const parts = filePath.split("/");
+
+    // Create ancestor directory nodes for each path segment.
+    for (let i = 1; i < parts.length; i++) {
+      const dirPath = parts.slice(0, i).join("/");
+      if (!nodeMap.has(dirPath)) {
+        nodeMap.set(dirPath, {
+          id: dirPath,
+          name: parts[i - 1],
+          isDir: true,
+          size: BigInt(0),
+          gitStatus: "",
+          isSymlink: false,
+          symlinkTarget: "",
+          isIgnored: false,
+          children: [],
+        });
+      }
+    }
+
+    // Create the file node (reuse existing converter for consistency).
+    nodeMap.set(filePath, fileNodeToTreeNode(file));
+  }
+
+  // Wire children into parents.
+  const roots: TreeNode[] = [];
+  for (const [path, node] of nodeMap) {
+    const lastSlash = path.lastIndexOf("/");
+    if (lastSlash === -1) {
+      roots.push(node);
+    } else {
+      const parentPath = path.slice(0, lastSlash);
+      const parent = nodeMap.get(parentPath);
+      if (parent?.children) {
+        parent.children.push(node);
+      }
+    }
+  }
+
+  // Sort recursively: directories first, then alphabetical.
+  function sortNodes(nodes: TreeNode[]): TreeNode[] {
+    nodes.sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    });
+    for (const node of nodes) {
+      if (node.children) sortNodes(node.children);
+    }
+    return nodes;
+  }
+
+  return sortNodes(roots);
 }
 
 // ---- Node renderer ----
@@ -241,6 +306,7 @@ export function FileTree({
   includeIgnored = false,
   searchTerm = "",
   onCollapseAllRef,
+  onSearchResults,
 }: FileTreeProps) {
   // Map of directory path → loaded TreeNode children.
   const [dirContents, setDirContents] = useState<Map<string, TreeNode[]>>(new Map());
@@ -251,6 +317,20 @@ export function FileTree({
   // Root loading/error state.
   const [rootLoading, setRootLoading] = useState(true);
   const [rootError, setRootError] = useState<string | null>(null);
+
+  // Search mode state. null = browse mode, array = search mode.
+  const [searchResults, setSearchResults] = useState<TreeNode[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchTruncated, setSearchTruncated] = useState(false);
+
+  // Request ID ref prevents stale search responses from overwriting newer results.
+  const searchRequestIdRef = useRef(0);
+  // Timer ref for debouncing search input.
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track whether we were in search mode to trigger closeAll on exit.
+  const wasInSearchModeRef = useRef(false);
+  // Snapshot of open node IDs taken just before entering search mode.
+  const savedOpenStateRef = useRef<Record<string, boolean>>({});
 
   const treeRef = useRef<TreeApi<TreeNode> | undefined>(undefined);
 
@@ -341,11 +421,79 @@ export function FileTree({
       });
   }, [includeIgnored]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Debounced backend search: fires when searchTerm changes.
+  useEffect(() => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+
+    if (!searchTerm || searchTerm.length < 2) {
+      // Exit search mode.
+      setSearchResults(null);
+      setSearchLoading(false);
+      setSearchTruncated(false);
+      onSearchResults?.(null, false);
+      return;
+    }
+
+    setSearchLoading(true);
+
+    searchTimerRef.current = setTimeout(async () => {
+      const requestId = ++searchRequestIdRef.current;
+
+      try {
+        const response = await searchFiles(sessionId, searchTerm, includeIgnored, baseUrl);
+        if (requestId !== searchRequestIdRef.current) return; // stale response
+
+        const tree = buildSearchTree(response.files || []);
+        setSearchResults(tree);
+        setSearchTruncated(response.truncated);
+        setSearchLoading(false);
+        onSearchResults?.(response.totalMatches, response.truncated);
+      } catch {
+        if (requestId !== searchRequestIdRef.current) return;
+        setSearchResults([]);
+        setSearchLoading(false);
+        onSearchResults?.(0, false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchTerm, sessionId, includeIgnored, baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Open all tree nodes when entering search mode; restore prior state when leaving.
+  useEffect(() => {
+    if (searchResults !== null) {
+      if (!wasInSearchModeRef.current) {
+        // Snapshot expanded state before entering search for restoration on exit.
+        savedOpenStateRef.current = { ...(treeRef.current?.openState ?? {}) };
+        wasInSearchModeRef.current = true;
+      }
+      // Delay to allow react-arborist to render the new data before calling openAll.
+      const timer = setTimeout(() => {
+        treeRef.current?.openAll();
+      }, 0);
+      return () => clearTimeout(timer);
+    } else if (wasInSearchModeRef.current) {
+      wasInSearchModeRef.current = false;
+      // Restore the browse-mode open state instead of collapsing everything.
+      const saved = savedOpenStateRef.current;
+      treeRef.current?.closeAll();
+      for (const [id, isOpen] of Object.entries(saved)) {
+        if (isOpen) treeRef.current?.open(id);
+      }
+      savedOpenStateRef.current = {};
+    }
+  }, [searchResults]);
+
   // Build dirStatusMap for directory-level git status propagation.
   const rootNodes = dirContents.get(".") ?? [];
   const treeData = buildTreeData(rootNodes, dirContents);
+  const displayedData = searchResults ?? treeData;
   const dirStatusMap = new Map<string, string>();
-  computeDirStatuses(treeData, gitStatusMap, dirStatusMap);
+  computeDirStatuses(displayedData, gitStatusMap, dirStatusMap);
 
   const handleActivate = useCallback(
     (node: NodeApi<TreeNode>) => {
@@ -359,6 +507,9 @@ export function FileTree({
 
   const handleToggle = useCallback(
     (id: string) => {
+      // In search mode all data is already present; no lazy loading needed.
+      if (searchResults !== null) return;
+
       // Find the node and load its children if it's a directory not yet loaded.
       const findNode = (nodes: TreeNode[]): TreeNode | undefined => {
         for (const n of nodes) {
@@ -377,7 +528,7 @@ export function FileTree({
         loadDirectory(id);
       }
     },
-    [rootNodes, dirContents, loadDirectory]
+    [rootNodes, dirContents, loadDirectory, searchResults]
   );
 
   if (rootLoading) {
@@ -419,7 +570,28 @@ export function FileTree({
     );
   }
 
-  if (treeData.length === 0) {
+  // Search loading overlay.
+  if (searchLoading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loading}>
+          <span className={styles.spinner} />
+          Searching…
+        </div>
+      </div>
+    );
+  }
+
+  // Search empty state.
+  if (searchResults !== null && searchResults.length === 0) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.searchEmpty}>No files match &ldquo;{searchTerm}&rdquo;</div>
+      </div>
+    );
+  }
+
+  if (treeData.length === 0 && searchResults === null) {
     return (
       <div className={styles.container}>
         <div className={styles.empty}>This directory is empty.</div>
@@ -429,9 +601,14 @@ export function FileTree({
 
   return (
     <div className={styles.container}>
+      {searchTruncated && (
+        <div className={styles.searchTruncated}>
+          Showing first 500 results — refine your search for more specific matches.
+        </div>
+      )}
       <Tree<TreeNode>
         ref={treeRef}
-        data={treeData}
+        data={displayedData}
         idAccessor={(node) => node.id}
         childrenAccessor={(node) => {
           if (!node.isDir) return null;
@@ -445,7 +622,7 @@ export function FileTree({
         openByDefault={false}
         width="100%"
         height={600}
-        searchTerm={searchTerm || undefined}
+        searchTerm={searchResults === null ? (searchTerm || undefined) : undefined}
         searchMatch={(node, term) => {
           const t = term.toLowerCase();
           return (

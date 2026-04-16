@@ -49,7 +49,21 @@ var (
 		Use:   "stapler-squad",
 		Short: "Stapler Squad - Manage multiple AI agents like Claude Code, Aider, Codex, and Amp (Web Mode)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Graceful shutdown on SIGTERM (pkill from Makefile) and SIGINT (Ctrl+C).
+			// cancel() triggers srv.Shutdown() which runs the shutdown hooks that persist
+			// session state (including Claude session IDs for --resume on next start).
+			sigChan := make(chan os.Signal, 1)
+			signal.Notify(sigChan, syscall.SIGTERM, os.Interrupt)
+			defer signal.Stop(sigChan)
+			go func() {
+				sig := <-sigChan
+				log.InfoLog.Printf("Received signal %v, initiating graceful shutdown", sig)
+				log.LogSessionPathsToStderr()
+				cancel()
+			}()
 
 			// Enable test mode if flag is set
 			if testModeFlag {
@@ -878,18 +892,6 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 }
 
 func main() {
-	// Set up signal handling for SIGTERM only (not SIGINT/Ctrl+C)
-	// We only intercept SIGTERM for forced termination (e.g., systemd, docker)
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGTERM) // Only SIGTERM, not os.Interrupt
-
-	go func() {
-		<-c
-		log.InfoLog.Printf("Received SIGTERM, forcing exit")
-		log.LogSessionPathsToStderr()
-		os.Exit(1)
-	}()
-
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 	}

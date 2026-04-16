@@ -2,6 +2,8 @@ package terminal
 
 import (
 	"bytes"
+	"sync"
+
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/log"
 )
@@ -9,7 +11,9 @@ import (
 // DeltaGenerator generates MOSH-style delta compression for terminal output.
 // Tracks terminal state and produces TerminalDelta messages containing only changed lines.
 // Reduces bandwidth by 70-90% for typical terminal usage (especially animations).
+// All exported methods are safe for concurrent use.
 type DeltaGenerator struct {
+	mu                  sync.Mutex
 	lastLines           *LineRingBuffer // Previous terminal state (ring buffer for O(1) operations)
 	version             uint64          // State version counter for synchronization
 	cols                int             // Terminal columns (for line wrapping)
@@ -33,6 +37,8 @@ func NewDeltaGenerator(cols, rows int) *DeltaGenerator {
 // GenerateDelta compares new output with previous state and generates a delta.
 // Returns TerminalDelta protobuf message with only changed lines.
 func (dg *DeltaGenerator) GenerateDelta(output []byte) *sessionv1.TerminalDelta {
+	dg.mu.Lock()
+	defer dg.mu.Unlock()
 	// Split output into lines (preserving ANSI escape sequences)
 	newLines := splitIntoBytesLines(output)
 
@@ -57,7 +63,7 @@ func (dg *DeltaGenerator) GenerateDelta(output []byte) *sessionv1.TerminalDelta 
 
 	if shouldSendFullSync {
 		log.InfoLog.Printf("[DeltaGenerator] Sending periodic full sync (after %d deltas)", dg.deltasSinceFullSync)
-		return dg.GenerateFullSync(output, dg.cols, dg.rows)
+		return dg.generateFullSync(output, dg.cols, dg.rows)
 	}
 
 	// Generate line deltas
@@ -138,6 +144,13 @@ func (dg *DeltaGenerator) GenerateDelta(output []byte) *sessionv1.TerminalDelta 
 // GenerateFullSync generates a full state sync (used for initial load or recovery).
 // Sends complete terminal state as a delta with full_sync=true.
 func (dg *DeltaGenerator) GenerateFullSync(output []byte, cols, rows int) *sessionv1.TerminalDelta {
+	dg.mu.Lock()
+	defer dg.mu.Unlock()
+	return dg.generateFullSync(output, cols, rows)
+}
+
+// generateFullSync is the internal implementation called with mu already held.
+func (dg *DeltaGenerator) generateFullSync(output []byte, cols, rows int) *sessionv1.TerminalDelta {
 	// Update dimensions
 	dg.cols = cols
 	dg.rows = rows
@@ -205,6 +218,8 @@ func (dg *DeltaGenerator) GenerateFullSync(output []byte, cols, rows int) *sessi
 
 // UpdateDimensions updates terminal dimensions (called on resize).
 func (dg *DeltaGenerator) UpdateDimensions(cols, rows int) {
+	dg.mu.Lock()
+	defer dg.mu.Unlock()
 	oldCols, oldRows := dg.cols, dg.rows
 	dg.cols = cols
 	dg.rows = rows
@@ -218,6 +233,8 @@ func (dg *DeltaGenerator) UpdateDimensions(cols, rows int) {
 
 // Reset resets the delta generator state (called on reconnect).
 func (dg *DeltaGenerator) Reset() {
+	dg.mu.Lock()
+	defer dg.mu.Unlock()
 	dg.lastLines.Clear()
 	dg.version = 0
 	dg.deltasSinceFullSync = 0 // Reset full sync counter on reconnect
