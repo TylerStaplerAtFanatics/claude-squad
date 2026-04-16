@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { Omnibar, OmnibarSessionData } from "@/components/sessions/Omnibar";
 import { useSessionService } from "@/lib/hooks/useSessionService";
 import { useAuth } from "@/lib/contexts/AuthContext";
+import { SessionType } from "@/gen/session/v1/types_pb";
+
+const sessionTypeMap: Record<string, SessionType> = {
+  directory: SessionType.DIRECTORY,
+  new_worktree: SessionType.NEW_WORKTREE,
+  existing_worktree: SessionType.EXISTING_WORKTREE,
+};
 
 interface OmnibarContextValue {
   isOpen: boolean;
@@ -73,6 +80,7 @@ export function OmnibarProvider({ children }: OmnibarProviderProps) {
         autoYes: data.autoYes,
         workingDir: data.workingDir,
         existingWorktree: data.existingWorktree,
+        sessionType: data.sessionType ? sessionTypeMap[data.sessionType] : undefined,
       });
 
       if (session) {

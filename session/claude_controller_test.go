@@ -2,37 +2,9 @@ package session
 
 import (
 	"github.com/tstapler/stapler-squad/session/detection"
-	"github.com/tstapler/stapler-squad/session/tmux"
 	"testing"
 	"time"
 )
-
-// Mock instance for testing
-func createMockInstance(t *testing.T) *Instance {
-	reader, writer, err := mockPTY()
-	if err != nil {
-		t.Fatalf("Failed to create mock PTY: %v", err)
-	}
-
-	// Create a basic instance
-	instance := &Instance{
-		Title:   "test-session",
-		Status:  Running,
-		started: true,
-	}
-
-	// Create tmux session mock
-	tmuxSession := &tmux.TmuxSession{}
-	instance.SetTmuxSession(tmuxSession)
-
-	// Store PTY for later access
-	t.Cleanup(func() {
-		reader.Close()
-		writer.Close()
-	})
-
-	return instance
-}
 
 func TestNewClaudeController(t *testing.T) {
 	instance := &Instance{
@@ -338,7 +310,7 @@ func TestClaudeController_CancelCommandWithoutInit(t *testing.T) {
 	}
 
 	// Should handle nil queue gracefully
-	err = controller.CancelCommand("test-cmd")
+	_ = controller.CancelCommand("test-cmd")
 	// May panic or return error depending on implementation
 }
 

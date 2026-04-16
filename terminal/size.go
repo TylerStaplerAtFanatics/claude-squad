@@ -5,9 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/tstapler/stapler-squad/log"
 
@@ -17,9 +15,7 @@ import (
 
 // Rate limiting for terminal size logging to prevent spam
 var (
-	lastLoggedSize    string
-	lastLogTime       time.Time
-	logCooldownPeriod = 10 * time.Second // Only log if size changes or 10 seconds have passed
+	lastLoggedSize string
 )
 
 // SizeInfo contains comprehensive terminal size information
@@ -114,7 +110,6 @@ func (m *Manager) DetectSize() *SizeInfo {
 		}
 
 		lastLoggedSize = currentSize
-		lastLogTime = time.Now()
 	}
 
 	// Update tracking
@@ -143,29 +138,6 @@ func (m *Manager) CreateWindowSizeMsg() tea.WindowSizeMsg {
 	return tea.WindowSizeMsg{Width: width, Height: height}
 }
 
-// getTerminalSizeIOCTL uses direct ioctl syscall to get terminal size
-func getTerminalSizeIOCTL() (int, int) {
-	type winsize struct {
-		Row    uint16
-		Col    uint16
-		Xpixel uint16
-		Ypixel uint16
-	}
-
-	ws := &winsize{}
-	retCode, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(syscall.Stdin),
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(ws)))
-
-	if int(retCode) == -1 {
-		log.WarningLog.Printf("IOCTL terminal size detection failed: %v", errno)
-		return 0, 0
-	}
-
-	return int(ws.Col), int(ws.Row)
-}
-
 // queryTerminalSizeEscape queries the terminal directly using escape sequences
 // This technique moves cursor to extreme position and queries actual position
 // to determine the real visible terminal area (not PTY size)
@@ -184,7 +156,9 @@ func queryTerminalSizeEscape() (int, int) {
 		log.WarningLog.Printf("Failed to set terminal to raw mode: %v", err)
 		return 0, 0
 	}
-	defer term.Restore(stdinFd, oldState)
+	defer func() {
+		_ = term.Restore(stdinFd, oldState)
+	}()
 
 	// Move cursor to extreme position (bottom-right corner)
 	_, err = os.Stdout.Write([]byte("\033[9999;9999H"))

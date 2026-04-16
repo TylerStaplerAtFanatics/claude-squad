@@ -16,6 +16,10 @@ import (
 	"github.com/tstapler/stapler-squad/session"
 )
 
+// benchEventBusBufferSize is the channel capacity for the EventBus used in benchmarks.
+// Matches the capacity used in production to keep benchmark conditions realistic.
+const benchEventBusBufferSize = 64
+
 // benchServiceFixture holds the live server, client, and cleanup function for
 // a single benchmark setup. The server is started once and reused across all
 // iterations to measure pure RPC overhead rather than startup cost.
@@ -58,7 +62,7 @@ func benchmarkServiceSetup(b *testing.B) *benchServiceFixture {
 		b.Fatalf("failed to create storage: %v", err)
 	}
 
-	bus := events.NewEventBus(64)
+	bus := events.NewEventBus(benchEventBusBufferSize)
 	svc := NewSessionService(storage, bus)
 
 	// Register handler on an HTTP mux.
@@ -195,6 +199,82 @@ func BenchmarkSessionService_GetSession(b *testing.B) {
 			b.Fatalf("GetSession failed: %v", err)
 		}
 		_ = resp.Msg.Session
+	}
+
+	b.StopTimer()
+	b.Cleanup(func() {
+		b.ReportMetric(float64(runtime.NumGoroutine()), "goroutines")
+	})
+}
+
+// BenchmarkSessionService_StreamTerminal_NotFound measures the round-trip
+// overhead of the StreamTerminal bidi-streaming RPC when the requested session
+// does not exist. Since creating a real PTY requires a live tmux session
+// (unavailable in benchmarks), this benchmark measures ConnectRPC streaming
+// infrastructure overhead: connection setup, initial message framing, session
+// lookup, and error response serialization.
+func BenchmarkSessionService_StreamTerminal_NotFound(b *testing.B) {
+	fix := benchmarkServiceSetup(b)
+	b.Cleanup(fix.cleanup)
+
+	ctx := context.Background()
+
+	runtime.GC()
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		stream := fix.client.StreamTerminal(ctx)
+		_ = stream.Send(&sessionv1.TerminalData{SessionId: "nonexistent-bench-session"})
+		_ = stream.CloseRequest()
+		for {
+			_, err := stream.Receive()
+			if err != nil {
+				break
+			}
+		}
+	}
+
+	b.StopTimer()
+	b.Cleanup(func() {
+		b.ReportMetric(float64(runtime.NumGoroutine()), "goroutines")
+	})
+}
+
+// BenchmarkSessionService_StreamTerminal_NotStarted measures StreamTerminal
+// RPC overhead when a session exists in storage but has not been started
+// (no PTY allocated). This exercises the session lookup and pre-condition
+// check paths without requiring a real tmux session.
+func BenchmarkSessionService_StreamTerminal_NotStarted(b *testing.B) {
+	fix := benchmarkServiceSetup(b)
+	b.Cleanup(fix.cleanup)
+
+	const targetTitle = "bench-stream-target"
+	ctx := context.Background()
+	if err := fix.repo.Create(ctx, session.InstanceData{
+		Title:   targetTitle,
+		Path:    "/tmp/bench",
+		Branch:  "main",
+		Status:  session.Running,
+		Program: "claude",
+	}); err != nil {
+		b.Fatalf("failed to create target session: %v", err)
+	}
+
+	runtime.GC()
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		stream := fix.client.StreamTerminal(ctx)
+		_ = stream.Send(&sessionv1.TerminalData{SessionId: targetTitle})
+		_ = stream.CloseRequest()
+		for {
+			_, err := stream.Receive()
+			if err != nil {
+				break
+			}
+		}
 	}
 
 	b.StopTimer()

@@ -15,7 +15,7 @@ func TestAutoDiscoveryCreation(t *testing.T) {
 		t.Logf("Filesystem watcher not available: %v (expected on some systems)", err)
 	}
 	if ad != nil {
-		defer ad.Stop()
+		defer func() { _ = ad.Stop() }()
 	}
 
 	// Test creation with fallback
@@ -23,7 +23,7 @@ func TestAutoDiscoveryCreation(t *testing.T) {
 	if adFallback == nil {
 		t.Fatal("NewAutoDiscoveryWithFallback returned nil")
 	}
-	defer adFallback.Stop()
+	defer func() { _ = adFallback.Stop() }()
 
 	if !adFallback.IsUsingFallback() && adFallback.watcher == nil {
 		t.Error("Expected fallback mode or watcher available")
@@ -61,7 +61,7 @@ func TestIsClaudeMuxSocket(t *testing.T) {
 
 func TestAutoDiscoveryStartStop(t *testing.T) {
 	ad := NewAutoDiscoveryWithFallback()
-	defer ad.Stop()
+	defer func() { _ = ad.Stop() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -88,7 +88,7 @@ func TestAutoDiscoveryStartStop(t *testing.T) {
 
 func TestAutoDiscoverySocketHandling(t *testing.T) {
 	ad := NewAutoDiscoveryWithFallback()
-	defer ad.Stop()
+	defer func() { _ = ad.Stop() }()
 
 	// Create a temporary socket file for testing
 	tmpDir := t.TempDir()
@@ -116,7 +116,7 @@ func TestAutoDiscoverySocketHandling(t *testing.T) {
 
 func TestWatcherActiveStatus(t *testing.T) {
 	ad := NewAutoDiscoveryWithFallback()
-	defer ad.Stop()
+	defer func() { _ = ad.Stop() }()
 
 	// Check status methods
 	isActive := ad.WatcherActive()
@@ -135,7 +135,7 @@ func TestWatcherActiveStatus(t *testing.T) {
 
 func TestAutoDiscoveryCallbacks(t *testing.T) {
 	ad := NewAutoDiscoveryWithFallback()
-	defer ad.Stop()
+	defer func() { _ = ad.Stop() }()
 
 	callbackCalled := false
 	ad.OnSessionChange(func(session *DiscoveredSession, isNew bool) {

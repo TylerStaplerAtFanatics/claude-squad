@@ -532,7 +532,7 @@ func (rqm *ReactiveQueueManager) generateClientID() string {
 // Helper methods to convert between internal types and proto types
 
 func (rqm *ReactiveQueueManager) reviewItemToProto(item *session.ReviewItem) *sessionv1.ReviewItem {
-	return adapters.ReviewItemToProto(item)
+	return adapters.ReviewItemToProto(item, nil)
 }
 
 func (rqm *ReactiveQueueManager) priorityToProto(p session.Priority) sessionv1.Priority {

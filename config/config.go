@@ -22,21 +22,6 @@ type CommandExecutor interface {
 	LookPath(file string) (string, error)
 }
 
-// realCommandExecutor implements CommandExecutor using actual system commands
-type realCommandExecutor struct{}
-
-func (r *realCommandExecutor) Command(name string, args ...string) *exec.Cmd {
-	return exec.Command(name, args...)
-}
-
-func (r *realCommandExecutor) Output(cmd *exec.Cmd) ([]byte, error) {
-	return cmd.Output()
-}
-
-func (r *realCommandExecutor) LookPath(file string) (string, error) {
-	return exec.LookPath(file)
-}
-
 // timeoutCommandExecutor wraps command execution with timeout protection
 // This prevents commands from hanging indefinitely, which is critical for
 // preventing hangs on external commands like 'which claude'
@@ -87,9 +72,9 @@ const (
 
 // isTestMode detects if the application is running in test/benchmark mode
 func isTestMode() bool {
+
 	// Check command line arguments for test/benchmark indicators
 	for _, arg := range os.Args {
-		// Match test binary names and flags
 		if strings.Contains(arg, ".test") ||
 			strings.Contains(arg, "-test.") ||
 			strings.HasSuffix(arg, ".test.exe") ||
@@ -131,7 +116,7 @@ func GetConfigDir() (string, error) {
 		legacyDir := filepath.Join(homeDir, ".claude-squad")
 		if _, legacyErr := os.Stat(legacyDir); legacyErr == nil {
 			if migrateErr := os.Rename(legacyDir, baseDir); migrateErr == nil {
-				fmt.Printf("Migrated data directory: %s → %s\n", legacyDir, baseDir)
+				log.InfoLog.Printf("Migrated data directory: %s → %s\n", legacyDir, baseDir)
 			}
 		}
 	}
@@ -239,6 +224,51 @@ type Config struct {
 	VCSPreference string `json:"vcs_preference"`
 	// AvailablePrograms is a list of detected CLI programs
 	AvailablePrograms []string `json:"available_programs"`
+	// ConfigVersion tracks the schema version for future migrations (1 = session_defaults added)
+	ConfigVersion int `json:"config_version,omitempty"`
+	// SessionDefaults holds named profiles, directory rules, and global defaults for new sessions.
+	SessionDefaults SessionDefaults `json:"session_defaults,omitempty"`
+}
+
+// SessionDefaults is the top-level container for all session default configuration.
+type SessionDefaults struct {
+	// Program is the default AI program (e.g., "claude", "aider").
+	Program string `json:"program,omitempty"`
+	// AutoYes auto-approves prompts in new sessions.
+	AutoYes bool `json:"auto_yes,omitempty"`
+	// Tags are pre-applied to every new session.
+	Tags []string `json:"tags,omitempty"`
+	// EnvVars are environment variables passed to new sessions.
+	EnvVars map[string]string `json:"env_vars,omitempty"`
+	// CLIFlags are additional CLI flags for the program.
+	CLIFlags string `json:"cli_flags,omitempty"`
+	// Profiles maps profile name → profile configuration.
+	Profiles map[string]ProfileDefaults `json:"profiles,omitempty"`
+	// DirectoryRules are path-based rules matched against the session's working directory.
+	DirectoryRules []DirectoryRule `json:"directory_rules,omitempty"`
+}
+
+// ProfileDefaults holds the configurable fields for a named profile.
+type ProfileDefaults struct {
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Program     string            `json:"program,omitempty"`
+	AutoYes     bool              `json:"auto_yes,omitempty"`
+	Tags        []string          `json:"tags,omitempty"`
+	EnvVars     map[string]string `json:"env_vars,omitempty"`
+	CLIFlags    string            `json:"cli_flags,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
+}
+
+// DirectoryRule associates a working-directory path prefix with profile defaults.
+type DirectoryRule struct {
+	// Path is the absolute path prefix to match (longest match wins).
+	Path string `json:"path"`
+	// Profile is the optional named profile to apply when this rule matches.
+	Profile string `json:"profile,omitempty"`
+	// Overrides are field-level overrides applied after the profile (if any).
+	Overrides ProfileDefaults `json:"overrides,omitempty"`
 }
 
 // DefaultConfig returns the default configuration
@@ -430,6 +460,23 @@ func LoadConfig() *Config {
 	// Apply defaults for fields that might not be in saved config (e.g., newly added fields)
 	if config.KeyCategories == nil {
 		config.KeyCategories = getDefaultKeyCategories()
+	}
+
+	// Initialize SessionDefaults collections to avoid nil-panic at call sites.
+	if config.SessionDefaults.Profiles == nil {
+		config.SessionDefaults.Profiles = make(map[string]ProfileDefaults)
+	}
+	if config.SessionDefaults.EnvVars == nil {
+		config.SessionDefaults.EnvVars = make(map[string]string)
+	}
+	if config.SessionDefaults.Tags == nil {
+		config.SessionDefaults.Tags = []string{}
+	}
+	if config.SessionDefaults.DirectoryRules == nil {
+		config.SessionDefaults.DirectoryRules = []DirectoryRule{}
+	}
+	if config.ConfigVersion == 0 {
+		config.ConfigVersion = 1
 	}
 
 	return &config

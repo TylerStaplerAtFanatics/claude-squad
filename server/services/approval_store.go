@@ -11,17 +11,6 @@ import (
 	"time"
 )
 
-// PermissionRequestPayload is the JSON payload from Claude Code's PermissionRequest HTTP hook.
-type PermissionRequestPayload struct {
-	SessionID      string                 `json:"session_id"`
-	TranscriptPath string                 `json:"transcript_path"`
-	Cwd            string                 `json:"cwd"`
-	PermissionMode string                 `json:"permission_mode"`
-	HookEventName  string                 `json:"hook_event_name"`
-	ToolName       string                 `json:"tool_name"`
-	ToolInput      map[string]interface{} `json:"tool_input"`
-}
-
 // ApprovalDecision is the user's response to a pending approval.
 type ApprovalDecision struct {
 	Behavior string // "allow" or "deny"

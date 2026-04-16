@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Session, SessionStatus, ReviewItem, InstanceType, CheckpointProto } from "@/gen/session/v1/types_pb";
+import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState, CheckpointProto } from "@/gen/session/v1/types_pb";
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
 import { GitHubBadge } from "./GitHubBadge";
 import { TagEditor } from "./TagEditor";
@@ -14,6 +14,7 @@ interface SessionCardProps {
   onPause?: () => void;
   onResume?: () => void;
   onDuplicate?: () => void;
+  onNewWorkspace?: () => void;
   onRename?: (sessionId: string, newTitle: string) => Promise<boolean>;
   onRestart?: (sessionId: string) => Promise<boolean>;
   onUpdateTags?: (sessionId: string, tags: string[]) => void;
@@ -33,6 +34,7 @@ export function SessionCard({
   onPause,
   onResume,
   onDuplicate,
+  onNewWorkspace,
   onRename,
   onRestart,
   onUpdateTags,
@@ -94,6 +96,40 @@ export function SessionCard({
         return "Needs Approval";
       default:
         return "Unknown";
+    }
+  };
+
+  const getRateLimitStateText = (state: RateLimitState): string => {
+    switch (state) {
+      case RateLimitState.NONE:
+        return "";
+      case RateLimitState.WAITING:
+        return "Rate Limited";
+      case RateLimitState.RECOVERING:
+        return "Recovering...";
+      case RateLimitState.RECOVERED:
+        return "Recovered";
+      case RateLimitState.FAILED:
+        return "Recovery Failed";
+      default:
+        return "";
+    }
+  };
+
+  const getRateLimitStateColor = (state: RateLimitState): string => {
+    switch (state) {
+      case RateLimitState.NONE:
+        return "";
+      case RateLimitState.WAITING:
+        return styles.statusNeedsApproval;
+      case RateLimitState.RECOVERING:
+        return styles.statusLoading;
+      case RateLimitState.RECOVERED:
+        return styles.statusReady;
+      case RateLimitState.FAILED:
+        return styles.statusPaused;
+      default:
+        return "";
     }
   };
 
@@ -541,6 +577,15 @@ export function SessionCard({
             >
               {getStatusText(session.status)}
             </span>
+            {session.rateLimitState && session.rateLimitState !== RateLimitState.NONE && (
+              <span
+                className={`${styles.status} ${getRateLimitStateColor(session.rateLimitState)}`}
+                role="status"
+                aria-label={`Rate limit: ${getRateLimitStateText(session.rateLimitState)}`}
+              >
+                {getRateLimitStateText(session.rateLimitState)}
+              </span>
+            )}
           </div>
         </div>
         {session.category && (
@@ -745,6 +790,17 @@ export function SessionCard({
               🍴 Fork
             </button>
           )}
+          <button
+            className={styles.actionButton}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNewWorkspace?.();
+            }}
+            title="New workspace on the same project (same path, fresh title and branch)"
+            aria-label={`New workspace from ${session.title}`}
+          >
+            ➕ New Workspace
+          </button>
           <button
             className={styles.actionButton}
             onClick={(e) => {

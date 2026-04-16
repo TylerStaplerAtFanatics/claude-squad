@@ -38,7 +38,10 @@ func NewHistoryLinkerFromRealInspector() *HistoryLinker {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.WarningLog.Printf("HistoryLinker: failed to get home dir, watcher disabled: %v", err)
-		homeDir = ""
+		return &HistoryLinker{
+			detector:  detector,
+			instances: make([]*Instance, 0),
+		}
 	}
 	watchDir := filepath.Join(homeDir, ".claude", "projects")
 
@@ -159,20 +162,28 @@ func (hl *HistoryLinker) correlateSession(inst *Instance) {
 		return
 	}
 
-	// Need an alive tmux session to inspect its foreground process.
+	var info *HistoryFileInfo
+
+	// Fast path: inspect open files of the live tmux pane process.
 	pid, err := inst.GetPanePID()
-	if err != nil {
-		// Session dead or not started yet — normal, not an error.
-		return
+	if err == nil {
+		info, err = hl.detector.Detect(pid)
+		if err != nil {
+			log.WarningLog.Printf("HistoryLinker: detect error for '%s' (pid=%d): %v", inst.Title, pid, err)
+		}
 	}
 
-	info, err := hl.detector.Detect(pid)
-	if err != nil {
-		log.WarningLog.Printf("HistoryLinker: detect error for '%s' (pid=%d): %v", inst.Title, pid, err)
-		return
+	// Fallback: scan the project directory by path (works after reboot / tmux kill).
+	if info == nil && inst.Path != "" {
+		info, err = hl.detector.DetectByPath(inst.Path)
+		if err != nil {
+			log.WarningLog.Printf("HistoryLinker: path-based detect error for '%s': %v", inst.Title, err)
+		}
 	}
+
 	if info == nil {
-		return // No JSONL open yet.
+		log.DebugLog.Printf("HistoryLinker: no JSONL found for '%s' (path=%q)", inst.Title, inst.Path)
+		return
 	}
 
 	log.InfoLog.Printf("HistoryLinker: linked '%s' → conv UUID %s", inst.Title, info.ConversationUUID)

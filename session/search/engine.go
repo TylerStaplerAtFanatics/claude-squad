@@ -94,7 +94,7 @@ func (e *SearchEngine) BuildIndex(history *session.ClaudeSessionHistory) error {
 
 	for _, entry := range entries {
 		// Load messages for this conversation
-		messages, err := history.GetMessagesFromConversationFile(entry.ID)
+		messages, err := history.GetMessagesFromConversationFile(entry.ID, 0)
 		if err != nil {
 			// Log and continue - don't fail entire index build
 			continue
@@ -535,7 +535,7 @@ func (e *SearchEngine) computeChangesLocked(history *session.ClaudeSessionHistor
 // indexSessionLocked indexes all messages from a single session.
 // Must be called with lock held.
 func (e *SearchEngine) indexSessionLocked(history *session.ClaudeSessionHistory, entry session.ClaudeHistoryEntry) (int, error) {
-	messages, err := history.GetMessagesFromConversationFile(entry.ID)
+	messages, err := history.GetMessagesFromConversationFile(entry.ID, 0)
 	if err != nil {
 		return 0, err
 	}

@@ -137,7 +137,7 @@ func (c *Coordinator) ProcessPTYOutput(data []byte) map[string]*framebuffer.Diff
 	oldState := c.framebuffer.Clone()
 
 	// Process the PTY output through the ANSI parser
-	c.framebuffer.ProcessOutput(data)
+	_ = c.framebuffer.ProcessOutput(data)
 
 	// Check frame rate throttling
 	now := time.Now()

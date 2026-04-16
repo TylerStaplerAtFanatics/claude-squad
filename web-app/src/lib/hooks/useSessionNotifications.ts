@@ -262,12 +262,6 @@ export function useSessionNotifications(options: UseSessionNotificationsOptions 
     const sourceWorkingDir = event.metadata?.["cwd"];
     const sourceProject = event.metadata?.["source_project"];
 
-    // Check if this is an external session (has source app info)
-    const isExternal = sourceApp !== undefined || sourceBundleId !== undefined;
-
-    // Detect approval requests (have an approval_id in metadata)
-    const approvalId = event.metadata?.["approval_id"];
-
     // Build the notification data with all available fields
     const notificationData: Omit<NotificationData, "id" | "timestamp"> = {
       sessionId: event.sessionId,
@@ -285,12 +279,12 @@ export function useSessionNotifications(options: UseSessionNotificationsOptions 
         ? () => onViewSessionRef.current?.(event.sessionId)
         : undefined,
       // Add focus window handler if we have source app info
-      onFocusWindow: isExternal
+      onFocusWindow: (sourceApp || sourceBundleId)
         ? () => focusWindow(sourceBundleId, sourceApp)
         : undefined,
       // Attach approve/deny callbacks for tool-use approval requests
-      onApprove: approvalId ? () => resolveApproval(approvalId, "allow") : undefined,
-      onDeny: approvalId ? () => resolveApproval(approvalId, "deny") : undefined,
+      onApprove: event.metadata?.["approval_id"] ? () => resolveApproval(event.metadata?.["approval_id"]!, "allow") : undefined,
+      onDeny: event.metadata?.["approval_id"] ? () => resolveApproval(event.metadata?.["approval_id"]!, "deny") : undefined,
     };
 
     // Add visual notification

@@ -1,0 +1,198 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.heading {
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.loadingText {
+  color: var(--text-muted);
+}
+
+.emptyText {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.ruleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.75rem;
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.ruleInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.rulePath {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.ruleMeta {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.ruleActions {
+  display: flex;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+.formCard {
+  padding: 1rem;
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.formTitle {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem 0;
+}
+
+.formFields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.label {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.input {
+  padding: 0.5rem 0.75rem;
+  background-color: var(--input-background);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  color: var(--input-text);
+  font-size: 0.875rem;
+  flex: 1;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--input-focus-border);
+}
+
+.inputError {
+  border-color: var(--error);
+}
+
+.fieldError {
+  color: var(--error);
+  font-size: 0.75rem;
+}
+
+.select {
+  padding: 0.5rem 0.75rem;
+  background-color: var(--input-background);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  color: var(--input-text);
+  font-size: 0.875rem;
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--input-focus-border);
+}
+
+.overridesSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background-color: var(--hover-background);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background-color: var(--accent-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+}
+
+.tagRemove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0 0.125rem;
+  line-height: 1;
+}
+
+.tagRemove:hover {
+  color: var(--error);
+}
+
+.tagInputRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.formActions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+}

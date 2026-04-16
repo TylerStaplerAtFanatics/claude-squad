@@ -347,12 +347,12 @@ func (r *CommandRegistry) String() string {
 
 	sb.WriteString("  Contexts:\n")
 	for id, ctx := range r.contexts {
-		sb.WriteString(fmt.Sprintf("    %s: %s\n", id, ctx.Name))
+		fmt.Fprintf(&sb, "    %s: %s\n", id, ctx.Name)
 	}
 
 	sb.WriteString("  Commands:\n")
 	for id, cmd := range r.commands {
-		sb.WriteString(fmt.Sprintf("    %s: %s (%v)\n", id, cmd.Name, cmd.keys))
+		fmt.Fprintf(&sb, "    %s: %s (%v)\n", id, cmd.Name, cmd.keys)
 	}
 
 	return sb.String()

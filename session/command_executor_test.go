@@ -258,9 +258,7 @@ func TestCommandExecutor_SetResultCallback(t *testing.T) {
 	})
 
 	// Callback should be set (we'll verify it gets called in integration test)
-	if !callbackCalled {
-		// Expected - callback not called yet
-	}
+	_ = callbackCalled
 }
 
 func TestCommandExecutor_SetOptions(t *testing.T) {
@@ -429,9 +427,7 @@ func TestCommandExecutor_Timeout(t *testing.T) {
 		t.Error("Expected timeout error")
 	}
 
-	if !executionResult.Success {
-		// Expected - command timed out
-	}
+	_ = executionResult.Success
 }
 
 func TestCommandExecutor_GetSessionName(t *testing.T) {
@@ -614,10 +610,8 @@ func TestCommandExecutor_ContextCancellation(t *testing.T) {
 	// Should stop gracefully
 	time.Sleep(200 * time.Millisecond)
 
-	// Should be able to stop without error
-	if err := executor.Stop(); err != nil {
-		// May already be stopped due to context cancellation
-	}
+	// Should be able to stop without error (may already be stopped due to context cancellation)
+	_ = executor.Stop()
 }
 
 func Benchmark_CommandExecutor_Execution(b *testing.B) {

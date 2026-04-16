@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -149,6 +150,81 @@ func TestHistoryFileDetector_ProcessDeadReturnsNilNil(t *testing.T) {
 	// Dead process: no error propagated, nil info
 	require.NoError(t, err)
 	assert.Nil(t, info)
+}
+
+func TestClaudeProjectDirName(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"/Users/alice/myproject", "-Users-alice-myproject"},
+		{"/Users/alice/my-project", "-Users-alice-my-project"},
+		{"/home/bob/work/stapler", "-home-bob-work-stapler"},
+		// Dots must be replaced (e.g. hidden dirs like .stapler-squad)
+		{"/Users/alice/.hidden/project", "-Users-alice--hidden-project"},
+		// Underscores must be replaced (e.g. worktree suffix like _18a6509d1eaa86b8)
+		{"/Users/alice/my_project", "-Users-alice-my-project"},
+		// Real-world worktree path: both dot and underscore in same path
+		{"/Users/tylerstapler/.stapler-squad/workspaces/a21d754799a5c839/worktrees/claude-squad-resume-not-working_18a6509d1eaa86b8",
+			"-Users-tylerstapler--stapler-squad-workspaces-a21d754799a5c839-worktrees-claude-squad-resume-not-working-18a6509d1eaa86b8"},
+	}
+	for _, c := range cases {
+		got := ClaudeProjectDirName(c.path)
+		assert.Equal(t, c.want, got, "path: %s", c.path)
+	}
+}
+
+func TestHistoryFileDetector_DetectByPath_MissingDirReturnsNil(t *testing.T) {
+	tmpHome := t.TempDir()
+	detector := NewHistoryFileDetectorWithHomeDir(nil, tmpHome)
+	info, err := detector.DetectByPath("/nonexistent/path/xyz123abc")
+	require.NoError(t, err)
+	assert.Nil(t, info)
+}
+
+func TestHistoryFileDetector_DetectByPath_FiltersAgentFiles(t *testing.T) {
+	tmpHome := t.TempDir()
+	projectPath := "/Users/alice/agenttest"
+	projectDir := ClaudeProjectDirName(projectPath)
+	dir := filepath.Join(tmpHome, ".claude", "projects", projectDir)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+
+	// Only an agent file — should be filtered.
+	agentFile := filepath.Join(dir, "agent-abc123.jsonl")
+	require.NoError(t, os.WriteFile(agentFile, []byte("{}"), 0o644))
+
+	detector := NewHistoryFileDetectorWithHomeDir(nil, tmpHome)
+	info, err := detector.DetectByPath(projectPath)
+	require.NoError(t, err)
+	assert.Nil(t, info, "agent-*.jsonl files should be excluded")
+}
+
+func TestHistoryFileDetector_DetectByPath_PicksMostRecentWhenMultiple(t *testing.T) {
+	tmpHome := t.TempDir()
+	projectPath := "/Users/alice/multitest"
+	projectDir := ClaudeProjectDirName(projectPath)
+	dir := filepath.Join(tmpHome, ".claude", "projects", projectDir)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+
+	uuid1 := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	uuid2 := "11111111-2222-3333-4444-555555555555"
+	p1 := filepath.Join(dir, uuid1+".jsonl")
+	p2 := filepath.Join(dir, uuid2+".jsonl")
+
+	require.NoError(t, os.WriteFile(p1, []byte("{}"), 0o644))
+	require.NoError(t, os.WriteFile(p2, []byte("{}"), 0o644))
+
+	// Make p2 strictly newer using os.Chtimes with explicit times.
+	past := time.Now().Add(-1 * time.Hour)
+	future := time.Now()
+	require.NoError(t, os.Chtimes(p1, past, past))
+	require.NoError(t, os.Chtimes(p2, future, future))
+
+	detector := NewHistoryFileDetectorWithHomeDir(nil, tmpHome)
+	info, err := detector.DetectByPath(projectPath)
+	require.NoError(t, err)
+	require.NotNil(t, info)
+	assert.Equal(t, uuid2, info.ConversationUUID, "should return most recently modified file")
 }
 
 func TestHistoryFileDetector_Detect_ReturnsFirstMatch(t *testing.T) {

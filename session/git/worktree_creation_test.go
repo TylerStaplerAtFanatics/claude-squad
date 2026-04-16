@@ -39,21 +39,6 @@ func setupTestRepo(t *testing.T) string {
 	return dir
 }
 
-// addCommit creates a file and commits it in the given repo/worktree directory.
-func addCommit(t *testing.T, dir, filename, content, message string) {
-	t.Helper()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, filename), []byte(content), 0644))
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, err, "git %s failed: %s", strings.Join(args, " "), out)
-	}
-	run("add", ".")
-	run("commit", "-m", message)
-}
-
 // TestNewWorktreeSetup_SetsBaseCommitSHA verifies that Setup() on a brand-new worktree
 // records the HEAD SHA as baseCommitSHA so Diff() can work immediately.
 func TestNewWorktreeSetup_SetsBaseCommitSHA(t *testing.T) {

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/tstapler/stapler-squad/pkg/classifier"
 )
 
 // PathClassification is a bitmask that categorises a resolved filesystem path.
@@ -24,10 +26,10 @@ const (
 	// (/tmp, /var/tmp, or the value of $TMPDIR).
 	PathTempDir
 	// PathCwd matches a path that is, or is inside, the current working directory
-	// as reported by ClassificationContext.Cwd.
+	// as reported by classifier.ClassificationContext.Cwd.
 	PathCwd
 	// PathGitRepo matches a path that is, or is inside, the git repository root
-	// as reported by ClassificationContext.RepoRoot.
+	// as reported by classifier.ClassificationContext.RepoRoot.
 	PathGitRepo
 )
 
@@ -69,7 +71,7 @@ func ExpandPath(arg string) string {
 
 // ClassifyPath returns a PathClassification bitmask for path.
 // path should already be expanded (via ExpandPath) before calling this function.
-func ClassifyPath(path string, ctx ClassificationContext) PathClassification {
+func ClassifyPath(path string, ctx classifier.ClassificationContext) PathClassification {
 	var c PathClassification
 
 	homeDir, _ := os.UserHomeDir()
@@ -174,7 +176,7 @@ func nonFlagArgs(args []string) []string {
 
 // Matches returns true when the path arguments in expandedArgs satisfy the
 // PathMatcher criteria against ctx.
-func (pm *PathMatcher) Matches(expandedArgs []string, ctx ClassificationContext) bool {
+func (pm *PathMatcher) Matches(expandedArgs []string, ctx classifier.ClassificationContext) bool {
 	pathArgs := nonFlagArgs(expandedArgs)
 
 	// Select the candidate(s) to inspect.

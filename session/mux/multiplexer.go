@@ -245,7 +245,7 @@ func (m *Multiplexer) Start() error {
 		if err := startCmd.Run(); err != nil {
 			// Clean up hooks file on failure
 			if m.hooksPath != "" {
-				CleanupHooksFile(m.hooksPath)
+				_ = CleanupHooksFile(m.hooksPath)
 			}
 			m.listener.Close()
 			os.Remove(m.socketPath)
@@ -261,7 +261,7 @@ func (m *Multiplexer) Start() error {
 	if err != nil {
 		// Clean up tmux session if attach fails (but not in attach-only mode)
 		if !m.attachOnly {
-			exec.Command("tmux", "kill-session", "-t", m.tmuxSession).Run()
+			_ = exec.Command("tmux", "kill-session", "-t", m.tmuxSession).Run()
 		}
 		m.listener.Close()
 		os.Remove(m.socketPath)
@@ -351,7 +351,7 @@ func (m *Multiplexer) Wait() (int, error) {
 
 	// Clean up hooks file
 	if m.hooksPath != "" {
-		CleanupHooksFile(m.hooksPath)
+		_ = CleanupHooksFile(m.hooksPath)
 		m.hooksPath = ""
 	}
 
@@ -367,21 +367,21 @@ func (m *Multiplexer) Shutdown() {
 
 	// Kill the process if it's still running
 	if m.cmd != nil && m.cmd.Process != nil {
-		m.cmd.Process.Signal(syscall.SIGTERM)
+		_ = m.cmd.Process.Signal(syscall.SIGTERM)
 		// Give it a moment to exit gracefully
 		time.Sleep(100 * time.Millisecond)
-		m.cmd.Process.Kill()
+		_ = m.cmd.Process.Kill()
 	}
 
 	// Kill tmux session on cleanup (user closed their terminal)
 	// In attach-only mode, preserve the session so it can be reattached later
 	if m.tmuxSession != "" && !m.attachOnly {
-		exec.Command("tmux", "kill-session", "-t", m.tmuxSession).Run()
+		_ = exec.Command("tmux", "kill-session", "-t", m.tmuxSession).Run()
 	}
 
 	// Clean up hooks file
 	if m.hooksPath != "" {
-		CleanupHooksFile(m.hooksPath)
+		_ = CleanupHooksFile(m.hooksPath)
 		m.hooksPath = ""
 	}
 }
@@ -456,7 +456,7 @@ func (m *Multiplexer) handleClient(conn net.Conn) {
 	// Send metadata to client
 	metaMsg, err := NewMetadataMessage(m.metadata)
 	if err == nil {
-		WriteMessage(conn, metaMsg)
+		_ = WriteMessage(conn, metaMsg)
 	}
 
 	// Read messages from client
@@ -468,7 +468,7 @@ func (m *Multiplexer) handleClient(conn net.Conn) {
 		}
 
 		// Set read deadline to allow checking context
-		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 
 		msg, err := DecodeMessage(conn)
 		if err != nil {
@@ -501,26 +501,26 @@ func (m *Multiplexer) handleClient(conn net.Conn) {
 		case MessageTypeInput:
 			// Forward input to PTY
 			if m.ptmx != nil {
-				m.ptmx.Write(msg.Data)
+				_, _ = m.ptmx.Write(msg.Data)
 			}
 
 		case MessageTypeResize:
 			// Resize PTY
 			if resize, err := ParseResizeMessage(msg); err == nil {
-				m.SetWindowSize(resize.Cols, resize.Rows)
+				_ = m.SetWindowSize(resize.Cols, resize.Rows)
 			}
 
 		case MessageTypePing:
 			// Respond with pong
-			WriteMessage(conn, NewPongMessage())
+			_ = WriteMessage(conn, NewPongMessage())
 
 		case MessageTypeSnapshot:
 			// Client requests clean screen snapshot
 			content, err := m.CapturePane()
 			if err != nil {
-				WriteMessage(conn, NewSnapshotReplyMessage(nil))
+				_ = WriteMessage(conn, NewSnapshotReplyMessage(nil))
 			} else {
-				WriteMessage(conn, NewSnapshotReplyMessage(content))
+				_ = WriteMessage(conn, NewSnapshotReplyMessage(content))
 			}
 
 		case MessageTypeClose:
@@ -544,9 +544,6 @@ func (m *Multiplexer) forwardPTYOutput() {
 
 		n, err := m.ptmx.Read(buf)
 		if err != nil {
-			if err != io.EOF {
-				// Log error if not expected EOF
-			}
 			return
 		}
 
@@ -577,14 +574,11 @@ func (m *Multiplexer) forwardStdinToPTY() {
 
 		n, err := os.Stdin.Read(buf)
 		if err != nil {
-			if err != io.EOF {
-				// Log error if not expected EOF
-			}
 			return
 		}
 
 		if n > 0 {
-			m.ptmx.Write(buf[:n])
+			_, _ = m.ptmx.Write(buf[:n])
 		}
 	}
 }
@@ -651,8 +645,8 @@ func (m *Multiplexer) broadcastToClients(msg *Message) {
 
 	for conn := range m.clients {
 		// Non-blocking write with timeout
-		conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
-		conn.Write(encoded)
+		_ = conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
+		_, _ = conn.Write(encoded)
 	}
 }
 
@@ -701,7 +695,7 @@ func RunWithName(command string, args []string, sessionName string) (int, error)
 
 	// Set initial window size from terminal
 	if size, err := pty.GetsizeFull(os.Stdin); err == nil {
-		m.SetWindowSize(uint16(size.Cols), uint16(size.Rows))
+		_ = m.SetWindowSize(uint16(size.Cols), uint16(size.Rows))
 	}
 
 	// Start signal handlers
@@ -713,7 +707,7 @@ func RunWithName(command string, args []string, sessionName string) (int, error)
 				return
 			case <-sigwinch:
 				if size, err := pty.GetsizeFull(os.Stdin); err == nil {
-					m.SetWindowSize(uint16(size.Cols), uint16(size.Rows))
+					_ = m.SetWindowSize(uint16(size.Cols), uint16(size.Rows))
 				}
 			case <-sigterm:
 				m.Shutdown()
@@ -748,7 +742,7 @@ func RunAttach(tmuxSession string) (int, error) {
 
 	// Set initial window size from terminal
 	if size, err := pty.GetsizeFull(os.Stdin); err == nil {
-		m.SetWindowSize(uint16(size.Cols), uint16(size.Rows))
+		_ = m.SetWindowSize(uint16(size.Cols), uint16(size.Rows))
 	}
 
 	// Start signal handlers
@@ -760,7 +754,7 @@ func RunAttach(tmuxSession string) (int, error) {
 				return
 			case <-sigwinch:
 				if size, err := pty.GetsizeFull(os.Stdin); err == nil {
-					m.SetWindowSize(uint16(size.Cols), uint16(size.Rows))
+					_ = m.SetWindowSize(uint16(size.Cols), uint16(size.Rows))
 				}
 			case <-sigterm:
 				m.Shutdown()

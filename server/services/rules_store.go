@@ -10,8 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/pkg/classifier"
+	"github.com/tstapler/stapler-squad/session"
 )
 
 // RuleSpec is the JSON-serializable form of a Rule.
@@ -21,6 +22,7 @@ type RuleSpec struct {
 	Name           string    `json:"name"`
 	ToolName       string    `json:"tool_name,omitempty"`
 	ToolPattern    string    `json:"tool_pattern,omitempty"`
+	ToolCategory   string    `json:"tool_category,omitempty"`
 	CommandPattern string    `json:"command_pattern,omitempty"`
 	FilePattern    string    `json:"file_pattern,omitempty"`
 	Decision       string    `json:"decision"`   // "auto_allow" | "auto_deny" | "escalate"
@@ -39,20 +41,19 @@ type RulesFile struct {
 	Rules   []RuleSpec `json:"rules"`
 }
 
-// RulesStore manages user-defined rules persisted to disk.
+// RulesStore manages user-defined rules persisted to SQLite.
 // Thread-safe for concurrent reads.
 type RulesStore struct {
-	mu       sync.RWMutex
-	filePath string
-	specs    []RuleSpec
+	mu      sync.RWMutex
+	storage *session.Storage
+	specs   []RuleSpec
 }
 
-// NewRulesStore creates a RulesStore backed by the given file path.
-// If the file does not exist, an empty store is returned (no error).
-func NewRulesStore(filePath string) (*RulesStore, error) {
-	s := &RulesStore{filePath: filePath}
-	if err := s.reload(); err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("rules_store: load %s: %w", filePath, err)
+// NewRulesStore creates a RulesStore backed by the given storage.
+func NewRulesStore(storage *session.Storage) (*RulesStore, error) {
+	s := &RulesStore{storage: storage}
+	if err := s.reload(); err != nil {
+		return nil, fmt.Errorf("rules_store: load from storage: %w", err)
 	}
 	return s, nil
 }
@@ -67,7 +68,7 @@ func (s *RulesStore) All() []RuleSpec {
 }
 
 // ToRules converts specs to compiled Rules, skipping specs with invalid regex.
-func (s *RulesStore) ToRules() []Rule {
+func (s *RulesStore) ToRules() []classifier.Rule {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return specsToRules(s.specs)
@@ -108,9 +109,32 @@ func (s *RulesStore) Upsert(spec RuleSpec) (RuleSpec, error) {
 		}
 		s.specs = append(s.specs, spec)
 	}
-	if err := s.saveLocked(); err != nil {
-		return RuleSpec{}, fmt.Errorf("save rules: %w", err)
+
+	// Persist to SQLite via Storage.
+	ruleData := session.ApprovalRuleData{
+		ID:             spec.ID,
+		Name:           spec.Name,
+		ToolName:       spec.ToolName,
+		ToolPattern:    spec.ToolPattern,
+		ToolCategory:   spec.ToolCategory,
+		CommandPattern: spec.CommandPattern,
+		FilePattern:    spec.FilePattern,
+		Decision:       decisionToInt(spec.Decision),
+		RiskLevel:      riskLevelToInt(spec.RiskLevel),
+		Reason:         spec.Reason,
+		Alternative:    spec.Alternative,
+		Priority:       spec.Priority,
+		Enabled:        spec.Enabled,
+		Source:         spec.Source,
+		CreatedAt:      spec.CreatedAt,
+		UpdatedAt:      time.Now(),
 	}
+
+	if err := s.storage.UpsertRule(context.Background(), ruleData); err != nil {
+		return RuleSpec{}, fmt.Errorf("save rule to DB: %w", err)
+	}
+
+	s.exportRulesLocked()
 	return spec, nil
 }
 
@@ -124,112 +148,91 @@ func (s *RulesStore) Delete(id string) error {
 			if r.Source != "user" {
 				return fmt.Errorf("cannot delete %q rule %q; only user rules can be deleted", r.Source, id)
 			}
+
+			if err := s.storage.DeleteRule(context.Background(), id); err != nil {
+				return fmt.Errorf("delete rule from DB: %w", err)
+			}
+
 			s.specs = append(s.specs[:i], s.specs[i+1:]...)
-			return s.saveLocked()
+			s.exportRulesLocked()
+			return nil
 		}
 	}
 	return fmt.Errorf("rule %q not found", id)
 }
 
-// WatchAndReload starts a goroutine that reloads rules when the file changes.
-// The goroutine exits when ctx is canceled.
+// WatchAndReload is now a no-op as we use shared DB.
 func (s *RulesStore) WatchAndReload(ctx context.Context) {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.WarningLog.Printf("[RulesStore] Failed to create watcher: %v", err)
-		return
-	}
-
-	// Watch parent directory so we catch atomic renames.
-	dir := filepath.Dir(s.filePath)
-	if err := watcher.Add(dir); err != nil {
-		log.WarningLog.Printf("[RulesStore] Failed to watch %s: %v", dir, err)
-		watcher.Close()
-		return
-	}
-
-	go func() {
-		defer watcher.Close()
-		debounce := time.NewTimer(0)
-		if !debounce.Stop() {
-			<-debounce.C
-		}
-		pending := false
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Name == s.filePath {
-					if !pending {
-						debounce.Reset(100 * time.Millisecond)
-						pending = true
-					}
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.WarningLog.Printf("[RulesStore] Watcher error: %v", err)
-			case <-debounce.C:
-				pending = false
-				before := len(s.All())
-				if err := s.reload(); err != nil {
-					log.WarningLog.Printf("[RulesStore] Reload failed, keeping previous rules: %v", err)
-				} else {
-					after := len(s.All())
-					log.InfoLog.Printf("[RulesStore] Reloaded rules from %s (%d → %d rules)", s.filePath, before, after)
-				}
-			}
-		}
-	}()
 }
 
-// reload reads the rules file and updates the in-memory slice.
-// Caller must NOT hold mu; reload acquires a write lock internally.
+// reload reads rules from DB and updates the in-memory slice.
 func (s *RulesStore) reload() error {
-	data, err := os.ReadFile(s.filePath)
+	rules, err := s.storage.AllRules(context.Background())
 	if err != nil {
 		return err
 	}
-	var rf RulesFile
-	if err := json.Unmarshal(data, &rf); err != nil {
-		return fmt.Errorf("parse %s: %w", s.filePath, err)
+
+	specs := make([]RuleSpec, len(rules))
+	for i, r := range rules {
+		specs[i] = RuleSpec{
+			ID:             r.ID,
+			Name:           r.Name,
+			ToolName:       r.ToolName,
+			ToolPattern:    r.ToolPattern,
+			ToolCategory:   r.ToolCategory,
+			CommandPattern: r.CommandPattern,
+			FilePattern:    r.FilePattern,
+			Decision:       decisionStringFromInt(r.Decision),
+			RiskLevel:      riskLevelStringFromInt(r.RiskLevel),
+			Reason:         r.Reason,
+			Alternative:    r.Alternative,
+			Priority:       r.Priority,
+			Enabled:        r.Enabled,
+			Source:         r.Source,
+			CreatedAt:      r.CreatedAt,
+		}
 	}
+
 	s.mu.Lock()
-	s.specs = rf.Rules
+	s.specs = specs
 	s.mu.Unlock()
 	return nil
 }
 
-// saveLocked writes specs to disk with an atomic rename. Must be called with mu held (write lock).
-func (s *RulesStore) saveLocked() error {
-	rf := RulesFile{Version: 1, Rules: s.specs}
-	data, err := json.MarshalIndent(rf, "", "  ")
+// exportRulesLocked writes rule specs to ~/.config/stapler-squad/rules.json
+// for use by standalone hooks. Exports the serializable RuleSpec structs
+// (not compiled Rules, which contain *regexp.Regexp that won't round-trip
+// through JSON). Errors are logged but not returned to avoid blocking
+// main application storage.
+func (s *RulesStore) exportRulesLocked() {
+	home, _ := os.UserHomeDir()
+	exportPath := filepath.Join(home, ".config", "stapler-squad", "rules.json")
+
+	data, err := json.MarshalIndent(s.specs, "", "  ")
 	if err != nil {
-		return err
+		return
 	}
-	dir := filepath.Dir(s.filePath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+
+	exportDir := filepath.Dir(exportPath)
+	if err := os.MkdirAll(exportDir, 0755); err != nil {
+		return
 	}
-	tmp := s.filePath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return err
+
+	tmp := exportPath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return
 	}
-	return os.Rename(tmp, s.filePath)
+	if err := os.Rename(tmp, exportPath); err != nil {
+		os.Remove(tmp)
+	}
 }
 
 // specsToRules compiles RuleSpec patterns into Rule structs.
 // Specs with invalid regex are skipped with a warning log.
-func specsToRules(specs []RuleSpec) []Rule {
-	rules := make([]Rule, 0, len(specs))
+func specsToRules(specs []RuleSpec) []classifier.Rule {
+	rules := make([]classifier.Rule, 0, len(specs))
 	for _, spec := range specs {
-		r := Rule{
+		r := classifier.Rule{
 			ID:          spec.ID,
 			Name:        spec.Name,
 			ToolName:    spec.ToolName,
@@ -270,28 +273,80 @@ func specsToRules(specs []RuleSpec) []Rule {
 	return rules
 }
 
-func parseDecision(s string) ClassificationDecision {
+func parseDecision(s string) classifier.ClassificationDecision {
 	switch s {
 	case "auto_allow":
-		return AutoAllow
+		return classifier.AutoAllow
 	case "auto_deny":
-		return AutoDeny
+		return classifier.AutoDeny
 	default:
-		return Escalate
+		return classifier.Escalate
 	}
 }
 
-func parseRiskLevel(s string) RiskLevel {
+func parseRiskLevel(s string) classifier.RiskLevel {
 	switch s {
 	case "low":
-		return RiskLow
+		return classifier.RiskLow
 	case "medium":
-		return RiskMedium
+		return classifier.RiskMedium
 	case "high":
-		return RiskHigh
+		return classifier.RiskHigh
 	case "critical":
-		return RiskCritical
+		return classifier.RiskCritical
 	default:
-		return RiskMedium
+		return classifier.RiskMedium
+	}
+}
+
+func decisionToInt(s string) int {
+	switch s {
+	case "auto_allow":
+		return int(classifier.AutoAllow)
+	case "auto_deny":
+		return int(classifier.AutoDeny)
+	default:
+		return int(classifier.Escalate)
+	}
+}
+
+func riskLevelToInt(s string) int {
+	switch s {
+	case "low":
+		return int(classifier.RiskLow)
+	case "medium":
+		return int(classifier.RiskMedium)
+	case "high":
+		return int(classifier.RiskHigh)
+	case "critical":
+		return int(classifier.RiskCritical)
+	default:
+		return int(classifier.RiskMedium)
+	}
+}
+
+func decisionStringFromInt(d int) string {
+	switch classifier.ClassificationDecision(d) {
+	case classifier.AutoAllow:
+		return "auto_allow"
+	case classifier.AutoDeny:
+		return "auto_deny"
+	default:
+		return "escalate"
+	}
+}
+
+func riskLevelStringFromInt(r int) string {
+	switch classifier.RiskLevel(r) {
+	case classifier.RiskLow:
+		return "low"
+	case classifier.RiskMedium:
+		return "medium"
+	case classifier.RiskHigh:
+		return "high"
+	case classifier.RiskCritical:
+		return "critical"
+	default:
+		return "medium"
 	}
 }

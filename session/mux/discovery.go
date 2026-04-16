@@ -195,14 +195,14 @@ func (d *Discovery) StartPolling(ctx context.Context, interval time.Duration) <-
 		defer ticker.Stop()
 
 		// Initial scan
-		d.Scan()
+		_, _ = d.Scan()
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				d.Scan()
+				_, _ = d.Scan()
 			}
 		}
 	}()
@@ -220,7 +220,7 @@ func probeSocket(socketPath string) (*SessionMetadata, error) {
 	defer conn.Close()
 
 	// Set read timeout
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 
 	// Read the initial metadata message
 	msg, err := DecodeMessage(conn)
@@ -262,7 +262,7 @@ func CleanAllStaleSockets() error {
 	}
 
 	for _, socketPath := range matches {
-		CleanStaleSocket(socketPath)
+		_ = CleanStaleSocket(socketPath)
 	}
 	return nil
 }

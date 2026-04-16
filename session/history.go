@@ -2,8 +2,10 @@ package session
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -74,7 +76,7 @@ func NewClaudeSessionHistoryFromClaudeDir() (*ClaudeSessionHistory, error) {
 	return NewClaudeSessionHistory(historyPath)
 }
 
-// conversationMessage represents a single message in a Claude conversation file
+// conversationMessage represents a single message in a Claude conversation file (per-session JSONL).
 type conversationMessage struct {
 	Type      string `json:"type"`
 	UUID      string `json:"uuid"`
@@ -88,188 +90,137 @@ type conversationMessage struct {
 	} `json:"message"`
 }
 
-// Reload reloads the history by scanning all conversation files in ~/.claude/projects/
+// historyJSONLEntry represents a single line in ~/.claude/history.jsonl.
+// Each line records one user message sent to Claude across all sessions.
+type historyJSONLEntry struct {
+	Display   string `json:"display"`   // first ~200 chars of the user message
+	Timestamp int64  `json:"timestamp"` // Unix ms since epoch
+	Project   string `json:"project"`   // working directory at time of message
+	SessionID string `json:"sessionId"` // conversation UUID
+}
+
+// Reload loads history from ~/.claude/history.jsonl, which Claude maintains as a
+// compact index of all conversations. Each line is one user message; we aggregate
+// by sessionId to reconstruct per-session metadata (name, timestamps, message count).
 func (sh *ClaudeSessionHistory) Reload() error {
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 
-	// Clear existing data
 	sh.entries = make([]ClaudeHistoryEntry, 0)
 	sh.projectIndex = make(map[string][]int)
 
-	// Get projects directory
-	home, err := os.UserHomeDir()
+	histFile, err := os.Open(sh.historyPath)
 	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
+		if os.IsNotExist(err) {
+			sh.lastLoad = time.Now()
+			return nil
+		}
+		return fmt.Errorf("failed to open history file: %w", err)
+	}
+	defer histFile.Close()
+
+	type sessionAgg struct {
+		firstDisplay string
+		project      string
+		firstTs      int64
+		lastTs       int64
+		msgCount     int
 	}
 
-	projectsDir := filepath.Join(home, ".claude", "projects")
+	sessionMap := make(map[string]*sessionAgg)
+	// Track insertion order so we can sort stably later.
+	var sessionOrder []string
 
-	// Check if projects directory exists
-	if _, err := os.Stat(projectsDir); os.IsNotExist(err) {
-		// No projects yet - return empty history
-		sh.lastLoad = time.Now()
-		return nil
-	}
+	scanner := bufio.NewScanner(histFile)
+	const maxLine = 1024 * 1024
+	scanner.Buffer(make([]byte, 64*1024), maxLine)
 
-	// Walk through all project directories
-	err = filepath.Walk(projectsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Skip errors
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var entry historyJSONLEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			continue
+		}
+		if entry.SessionID == "" {
+			continue
 		}
 
-		// Only process .jsonl files (but not agent files)
-		if !info.IsDir() && filepath.Ext(path) == ".jsonl" && !strings.Contains(filepath.Base(path), "agent-") {
-			entry, err := sh.parseConversationFile(path)
-			if err != nil {
-				// Skip invalid files
-				return nil
+		agg, exists := sessionMap[entry.SessionID]
+		if !exists {
+			agg = &sessionAgg{
+				firstDisplay: entry.Display,
+				project:      entry.Project,
+				firstTs:      entry.Timestamp,
+				lastTs:       entry.Timestamp,
 			}
-
-			// Add to entries list
-			idx := len(sh.entries)
-			sh.entries = append(sh.entries, *entry)
-
-			// Index by project
-			if entry.Project != "" {
-				sh.projectIndex[entry.Project] = append(sh.projectIndex[entry.Project], idx)
+			sessionMap[entry.SessionID] = agg
+			sessionOrder = append(sessionOrder, entry.SessionID)
+		} else {
+			if entry.Timestamp < agg.firstTs {
+				agg.firstTs = entry.Timestamp
+				agg.firstDisplay = entry.Display
+				if entry.Project != "" {
+					agg.project = entry.Project
+				}
+			}
+			if entry.Timestamp > agg.lastTs {
+				agg.lastTs = entry.Timestamp
 			}
 		}
-
-		return nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("error scanning projects directory: %w", err)
+		agg.msgCount++
 	}
 
-	// Sort entries by UpdatedAt descending (most recent first)
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading history file: %w", err)
+	}
+
+	for _, sessionID := range sessionOrder {
+		agg := sessionMap[sessionID]
+		name := cleanDisplayName(agg.firstDisplay)
+		if name == "" {
+			name = filepath.Base(agg.project)
+		}
+		if name == "" || name == "." {
+			name = "Unknown"
+		}
+
+		sh.entries = append(sh.entries, ClaudeHistoryEntry{
+			ID:           sessionID,
+			Name:         name,
+			Project:      agg.project,
+			CreatedAt:    time.UnixMilli(agg.firstTs),
+			UpdatedAt:    time.UnixMilli(agg.lastTs),
+			MessageCount: agg.msgCount,
+		})
+	}
+
+	// Sort before indexing so projectIndex holds post-sort positions.
 	sort.Slice(sh.entries, func(i, j int) bool {
 		return sh.entries[i].UpdatedAt.After(sh.entries[j].UpdatedAt)
 	})
+
+	for idx, entry := range sh.entries {
+		if entry.Project != "" {
+			sh.projectIndex[entry.Project] = append(sh.projectIndex[entry.Project], idx)
+		}
+	}
 
 	sh.lastLoad = time.Now()
 	return nil
 }
 
-// parseConversationFile extracts metadata from a Claude conversation file
-// Optimized to parse only what's needed for listing (fast preview mode)
-func (sh *ClaudeSessionHistory) parseConversationFile(filePath string) (*ClaudeHistoryEntry, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
+// cleanDisplayName truncates a raw user message for use as a session name.
+func cleanDisplayName(display string) string {
+	// Trim leading slash (skill/command invocations like "/quality:review")
+	display = strings.TrimLeft(display, "/")
+	display = strings.TrimSpace(display)
+	if len(display) > 100 {
+		display = display[:97] + "..."
 	}
-	defer file.Close()
-
-	// Check file size - skip files larger than 50MB (likely corrupted or test data)
-	fileInfo, err := file.Stat()
-	if err == nil && fileInfo.Size() > 50*1024*1024 {
-		return nil, fmt.Errorf("file too large: %d bytes", fileInfo.Size())
-	}
-
-	var entry ClaudeHistoryEntry
-	var messageCount int
-	var model string
-	var firstTimestamp, lastTimestamp time.Time
-
-	scanner := bufio.NewScanner(file)
-	const maxCapacity = 1024 * 1024 // 1MB per line
-	buf := make([]byte, maxCapacity)
-	scanner.Buffer(buf, maxCapacity)
-
-	lineNum := 0
-	const maxLinesToScan = 1000 // Optimization: Only scan first 1000 lines for preview
-
-	for scanner.Scan() && lineNum < maxLinesToScan {
-		lineNum++
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-
-		var msg conversationMessage
-		if err := json.Unmarshal(line, &msg); err != nil {
-			continue
-		}
-
-		// Count messages (skip file-history-snapshot entries)
-		if msg.Type == "user" || msg.Type == "assistant" {
-			messageCount++
-
-			// Extract model from first assistant message
-			if model == "" && msg.Message.Model != "" {
-				model = msg.Message.Model
-			}
-
-			// Parse timestamp
-			if ts, err := time.Parse(time.RFC3339, msg.Timestamp); err == nil {
-				if firstTimestamp.IsZero() || ts.Before(firstTimestamp) {
-					firstTimestamp = ts
-				}
-				if lastTimestamp.IsZero() || ts.After(lastTimestamp) {
-					lastTimestamp = ts
-				}
-			}
-
-			// Extract session ID and project path
-			if entry.ID == "" && msg.SessionID != "" {
-				entry.ID = msg.SessionID
-			}
-			if entry.Project == "" && msg.CWD != "" {
-				entry.Project = msg.CWD
-			}
-
-		}
-	}
-
-	// If we hit the line limit, continue counting only (faster - no JSON parsing)
-	if lineNum >= maxLinesToScan && scanner.Scan() {
-		remainingCount := 0
-		for scanner.Scan() {
-			line := scanner.Bytes()
-			// Quick heuristic: lines with "type":"user" or "type":"assistant"
-			if strings.Contains(string(line), `"type":"user"`) ||
-				strings.Contains(string(line), `"type":"assistant"`) {
-				remainingCount++
-
-				// Update lastTimestamp from last few messages
-				if remainingCount > 0 && strings.Contains(string(line), `"timestamp"`) {
-					var msg conversationMessage
-					if err := json.Unmarshal(line, &msg); err == nil {
-						if ts, err := time.Parse(time.RFC3339, msg.Timestamp); err == nil {
-							if lastTimestamp.IsZero() || ts.After(lastTimestamp) {
-								lastTimestamp = ts
-							}
-						}
-					}
-				}
-			}
-		}
-		messageCount += remainingCount
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading file: %w", err)
-	}
-
-	// Skip entries with no messages or no session ID
-	if messageCount == 0 || entry.ID == "" {
-		return nil, fmt.Errorf("invalid conversation file: no messages or session ID")
-	}
-
-	// Generate a name from the project path
-	if entry.Project != "" {
-		entry.Name = filepath.Base(entry.Project)
-	} else {
-		entry.Name = "Unknown"
-	}
-
-	entry.MessageCount = messageCount
-	entry.Model = model
-	entry.CreatedAt = firstTimestamp
-	entry.UpdatedAt = lastTimestamp
-
-	return &entry, nil
+	return display
 }
 
 // GetAll returns all history entries, sorted by UpdatedAt descending
@@ -379,61 +330,96 @@ type ClaudeConversationMessage struct {
 	Model     string
 }
 
-// GetMessagesFromConversationFile reads all messages from a conversation file
-func (sh *ClaudeSessionHistory) GetMessagesFromConversationFile(sessionID string) ([]ClaudeConversationMessage, error) {
-	// Find the conversation file for this session ID
+// findConversationFilePath searches ~/.claude/projects/ for the JSONL file that
+// contains the given sessionID. It checks the first 5 lines of each file for a
+// reference to the sessionID, then stops the walk as soon as it finds a match.
+func findConversationFilePath(sessionID string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user home directory: %w", err)
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
 	projectsDir := filepath.Join(home, ".claude", "projects")
 	var conversationFile string
 
-	// Search for the conversation file with this session ID
 	err = filepath.Walk(projectsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			return nil // skip unreadable entries
+		}
+		if info.IsDir() || filepath.Ext(path) != ".jsonl" || strings.Contains(filepath.Base(path), "agent-") {
 			return nil
 		}
 
-		// Check if this is a conversation file (not agent file)
-		if !info.IsDir() && filepath.Ext(path) == ".jsonl" && !strings.Contains(filepath.Base(path), "agent-") {
-			// Quick check if this file contains our session ID
-			file, err := os.Open(path)
-			if err != nil {
-				return nil
+		file, err := os.Open(path)
+		if err != nil {
+			return nil
+		}
+		defer file.Close() //nolint:errcheck
+
+		scanner := bufio.NewScanner(file)
+		scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+
+		for i := 0; i < 5 && scanner.Scan(); i++ {
+			if strings.Contains(string(scanner.Bytes()), sessionID) {
+				conversationFile = path
+				return filepath.SkipAll // stop the entire walk
 			}
-			defer file.Close()
+		}
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("error searching for conversation file: %w", err)
+	}
+	if conversationFile == "" {
+		return "", fmt.Errorf("conversation file not found for session ID: %s", sessionID)
+	}
+	return conversationFile, nil
+}
 
-			scanner := bufio.NewScanner(file)
-			scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+// extractMsgContent converts a raw conversationMessage into a ClaudeConversationMessage.
+// Returns (msg, true) when the raw entry represents a user or assistant turn;
+// (zero, false) for tool-use, metadata, and other entry types.
+func extractMsgContent(raw conversationMessage) (ClaudeConversationMessage, bool) {
+	if raw.Type != "user" && raw.Type != "assistant" {
+		return ClaudeConversationMessage{}, false
+	}
 
-			// Check first few lines for session ID
-			for i := 0; i < 5 && scanner.Scan(); i++ {
-				if strings.Contains(string(scanner.Bytes()), sessionID) {
-					conversationFile = path
-					return filepath.SkipDir // Found it, stop walking
+	var content string
+	switch v := raw.Message.Content.(type) {
+	case string:
+		content = v
+	case []interface{}:
+		for _, item := range v {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				if itemType, ok := itemMap["type"].(string); ok && itemType == "text" {
+					if text, ok := itemMap["text"].(string); ok {
+						content += text + "\n"
+					}
 				}
 			}
 		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("error searching for conversation file: %w", err)
+	default:
+		contentJSON, _ := json.Marshal(raw.Message)
+		content = string(contentJSON)
 	}
 
-	if conversationFile == "" {
-		return nil, fmt.Errorf("conversation file not found for session ID: %s", sessionID)
-	}
+	ts, _ := time.Parse(time.RFC3339, raw.Timestamp)
+	return ClaudeConversationMessage{
+		Role:      raw.Message.Role,
+		Content:   content,
+		Timestamp: ts,
+		Model:     raw.Message.Model,
+	}, true
+}
 
-	// Parse the conversation file
-	file, err := os.Open(conversationFile)
+// readAllMessagesFromFile reads every user/assistant message from the JSONL file
+// at path in chronological order (oldest first).
+func readAllMessagesFromFile(path string) ([]ClaudeConversationMessage, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open conversation file: %w", err)
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck
 
 	var messages []ClaudeConversationMessage
 	scanner := bufio.NewScanner(file)
@@ -444,54 +430,133 @@ func (sh *ClaudeSessionHistory) GetMessagesFromConversationFile(sessionID string
 		if len(line) == 0 {
 			continue
 		}
-
-		var msg conversationMessage
-		if err := json.Unmarshal(line, &msg); err != nil {
+		var raw conversationMessage
+		if err := json.Unmarshal(line, &raw); err != nil {
 			continue
 		}
-
-		// Extract user and assistant messages
-		if msg.Type == "user" || msg.Type == "assistant" {
-			var content string
-
-			// Extract content directly from the parsed struct
-			switch v := msg.Message.Content.(type) {
-			case string:
-				// Simple string content (typically user messages)
-				content = v
-			case []interface{}:
-				// Content is an array (tool use, text, etc. - typically assistant messages)
-				for _, item := range v {
-					if itemMap, ok := item.(map[string]interface{}); ok {
-						if itemType, ok := itemMap["type"].(string); ok {
-							if itemType == "text" {
-								if text, ok := itemMap["text"].(string); ok {
-									content += text + "\n"
-								}
-							}
-						}
-					}
-				}
-			default:
-				// Fallback: stringify the entire message
-				contentJSON, _ := json.Marshal(msg.Message)
-				content = string(contentJSON)
-			}
-
-			ts, _ := time.Parse(time.RFC3339, msg.Timestamp)
-
-			messages = append(messages, ClaudeConversationMessage{
-				Role:      msg.Message.Role,
-				Content:   content,
-				Timestamp: ts,
-				Model:     msg.Message.Model,
-			})
+		if msg, ok := extractMsgContent(raw); ok {
+			messages = append(messages, msg)
 		}
 	}
-
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading conversation file: %w", err)
 	}
-
 	return messages, nil
+}
+
+// readLastNMessagesFromFile returns the last n user/assistant messages from the
+// JSONL file at path without loading the whole file into memory. It reads the file
+// in 64 KiB chunks from the end, parses lines as it goes, and stops as soon as it
+// has collected n messages. Results are returned in chronological order (oldest first).
+//
+// If the file has fewer than n qualifying messages, all of them are returned.
+func readLastNMessagesFromFile(path string, n int) ([]ClaudeConversationMessage, error) {
+	if n <= 0 {
+		return readAllMessagesFromFile(path)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open conversation file: %w", err)
+	}
+	defer f.Close() //nolint:errcheck
+
+	stat, err := f.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat conversation file: %w", err)
+	}
+	fileSize := stat.Size()
+
+	const chunkSize = int64(64 * 1024) // 64 KiB
+
+	// messages accumulates entries newest-first; we reverse before returning.
+	messages := make([]ClaudeConversationMessage, 0, n)
+
+	pos := fileSize
+	var tail []byte // partial line bytes from the right edge of the previous chunk
+
+	for pos > 0 && len(messages) < n {
+		readLen := chunkSize
+		if pos < readLen {
+			readLen = pos
+		}
+		pos -= readLen
+
+		buf := make([]byte, readLen)
+		nr, err := f.ReadAt(buf, pos)
+		if err != nil && !isEOFErr(err) {
+			return nil, fmt.Errorf("error reading conversation file: %w", err)
+		}
+		buf = buf[:nr]
+
+		// combined = current chunk (left/older) + tail (right/newer)
+		combined := append(buf, tail...) //nolint:gocritic
+
+		// Walk from the right of combined, extracting complete lines.
+		for len(messages) < n {
+			idx := bytes.LastIndexByte(combined, '\n')
+			if idx < 0 {
+				// No newline in combined — the entire thing is a partial line.
+				tail = combined
+				combined = nil
+				break
+			}
+			line := bytes.TrimSpace(combined[idx+1:])
+			combined = combined[:idx]
+
+			if len(line) == 0 {
+				continue
+			}
+			var raw conversationMessage
+			if err := json.Unmarshal(line, &raw); err != nil {
+				continue
+			}
+			if msg, ok := extractMsgContent(raw); ok {
+				messages = append(messages, msg)
+			}
+		}
+		if combined != nil {
+			// whatever remains is the partial left edge — save for next iteration
+			tail = combined
+		}
+	}
+
+	// Process any remaining tail (the very first line of the file)
+	if len(messages) < n && len(bytes.TrimSpace(tail)) > 0 {
+		var raw conversationMessage
+		if err := json.Unmarshal(bytes.TrimSpace(tail), &raw); err == nil {
+			if msg, ok := extractMsgContent(raw); ok {
+				messages = append(messages, msg)
+			}
+		}
+	}
+
+	// messages is newest-first; reverse to chronological order.
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+	return messages, nil
+}
+
+// isEOFErr reports whether err represents an end-of-file condition.
+func isEOFErr(err error) bool {
+	return err == io.EOF || err == io.ErrUnexpectedEOF
+}
+
+// GetMessagesFromConversationFile reads messages from the conversation file for
+// the given sessionID. When limit > 0 only the last limit messages are returned
+// (using an efficient reverse-read that avoids loading the full file). When
+// limit == 0 all messages are returned.
+//
+// Results are always in chronological order (oldest first).
+func (sh *ClaudeSessionHistory) GetMessagesFromConversationFile(sessionID string, limit int) ([]ClaudeConversationMessage, error) {
+	conversationFile, err := findConversationFilePath(sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	if limit > 0 {
+		return readLastNMessagesFromFile(conversationFile, limit)
+	}
+	return readAllMessagesFromFile(conversationFile)
 }

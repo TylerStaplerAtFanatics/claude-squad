@@ -6,6 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
+	"entgo.io/ent"
+	"entgo.io/ent/dialect/sql"
+	"github.com/tstapler/stapler-squad/session/ent/approvalrule"
+	"github.com/tstapler/stapler-squad/session/ent/classificationanalytics"
 	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
 	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 	"github.com/tstapler/stapler-squad/session/ent/diffstats"
@@ -13,11 +20,6 @@ import (
 	"github.com/tstapler/stapler-squad/session/ent/session"
 	"github.com/tstapler/stapler-squad/session/ent/tag"
 	"github.com/tstapler/stapler-squad/session/ent/worktree"
-	"sync"
-	"time"
-
-	"entgo.io/ent"
-	"entgo.io/ent/dialect/sql"
 )
 
 const (
@@ -29,13 +31,2917 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeClaudeMetadata = "ClaudeMetadata"
-	TypeClaudeSession  = "ClaudeSession"
-	TypeDiffStats      = "DiffStats"
-	TypeSession        = "Session"
-	TypeTag            = "Tag"
-	TypeWorktree       = "Worktree"
+	TypeApprovalRule            = "ApprovalRule"
+	TypeClassificationAnalytics = "ClassificationAnalytics"
+	TypeClaudeMetadata          = "ClaudeMetadata"
+	TypeClaudeSession           = "ClaudeSession"
+	TypeDiffStats               = "DiffStats"
+	TypeSession                 = "Session"
+	TypeTag                     = "Tag"
+	TypeWorktree                = "Worktree"
 )
+
+// ApprovalRuleMutation represents an operation that mutates the ApprovalRule nodes in the graph.
+type ApprovalRuleMutation struct {
+	config
+	op              Op
+	typ             string
+	id              *int
+	rule_id         *string
+	name            *string
+	tool_name       *string
+	tool_pattern    *string
+	tool_category   *string
+	command_pattern *string
+	file_pattern    *string
+	decision        *int
+	adddecision     *int
+	risk_level      *int
+	addrisk_level   *int
+	reason          *string
+	alternative     *string
+	priority        *int
+	addpriority     *int
+	enabled         *bool
+	source          *string
+	created_at      *time.Time
+	updated_at      *time.Time
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*ApprovalRule, error)
+	predicates      []predicate.ApprovalRule
+}
+
+var _ ent.Mutation = (*ApprovalRuleMutation)(nil)
+
+// approvalruleOption allows management of the mutation configuration using functional options.
+type approvalruleOption func(*ApprovalRuleMutation)
+
+// newApprovalRuleMutation creates new mutation for the ApprovalRule entity.
+func newApprovalRuleMutation(c config, op Op, opts ...approvalruleOption) *ApprovalRuleMutation {
+	m := &ApprovalRuleMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeApprovalRule,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withApprovalRuleID sets the ID field of the mutation.
+func withApprovalRuleID(id int) approvalruleOption {
+	return func(m *ApprovalRuleMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ApprovalRule
+		)
+		m.oldValue = func(ctx context.Context) (*ApprovalRule, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ApprovalRule.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withApprovalRule sets the old ApprovalRule of the mutation.
+func withApprovalRule(node *ApprovalRule) approvalruleOption {
+	return func(m *ApprovalRuleMutation) {
+		m.oldValue = func(context.Context) (*ApprovalRule, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ApprovalRuleMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ApprovalRuleMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ApprovalRuleMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ApprovalRuleMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ApprovalRule.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetRuleID sets the "rule_id" field.
+func (m *ApprovalRuleMutation) SetRuleID(s string) {
+	m.rule_id = &s
+}
+
+// RuleID returns the value of the "rule_id" field in the mutation.
+func (m *ApprovalRuleMutation) RuleID() (r string, exists bool) {
+	v := m.rule_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRuleID returns the old "rule_id" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldRuleID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRuleID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRuleID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRuleID: %w", err)
+	}
+	return oldValue.RuleID, nil
+}
+
+// ResetRuleID resets all changes to the "rule_id" field.
+func (m *ApprovalRuleMutation) ResetRuleID() {
+	m.rule_id = nil
+}
+
+// SetName sets the "name" field.
+func (m *ApprovalRuleMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *ApprovalRuleMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *ApprovalRuleMutation) ResetName() {
+	m.name = nil
+}
+
+// SetToolName sets the "tool_name" field.
+func (m *ApprovalRuleMutation) SetToolName(s string) {
+	m.tool_name = &s
+}
+
+// ToolName returns the value of the "tool_name" field in the mutation.
+func (m *ApprovalRuleMutation) ToolName() (r string, exists bool) {
+	v := m.tool_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolName returns the old "tool_name" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldToolName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolName: %w", err)
+	}
+	return oldValue.ToolName, nil
+}
+
+// ClearToolName clears the value of the "tool_name" field.
+func (m *ApprovalRuleMutation) ClearToolName() {
+	m.tool_name = nil
+	m.clearedFields[approvalrule.FieldToolName] = struct{}{}
+}
+
+// ToolNameCleared returns if the "tool_name" field was cleared in this mutation.
+func (m *ApprovalRuleMutation) ToolNameCleared() bool {
+	_, ok := m.clearedFields[approvalrule.FieldToolName]
+	return ok
+}
+
+// ResetToolName resets all changes to the "tool_name" field.
+func (m *ApprovalRuleMutation) ResetToolName() {
+	m.tool_name = nil
+	delete(m.clearedFields, approvalrule.FieldToolName)
+}
+
+// SetToolPattern sets the "tool_pattern" field.
+func (m *ApprovalRuleMutation) SetToolPattern(s string) {
+	m.tool_pattern = &s
+}
+
+// ToolPattern returns the value of the "tool_pattern" field in the mutation.
+func (m *ApprovalRuleMutation) ToolPattern() (r string, exists bool) {
+	v := m.tool_pattern
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolPattern returns the old "tool_pattern" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldToolPattern(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolPattern is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolPattern requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolPattern: %w", err)
+	}
+	return oldValue.ToolPattern, nil
+}
+
+// ClearToolPattern clears the value of the "tool_pattern" field.
+func (m *ApprovalRuleMutation) ClearToolPattern() {
+	m.tool_pattern = nil
+	m.clearedFields[approvalrule.FieldToolPattern] = struct{}{}
+}
+
+// ToolPatternCleared returns if the "tool_pattern" field was cleared in this mutation.
+func (m *ApprovalRuleMutation) ToolPatternCleared() bool {
+	_, ok := m.clearedFields[approvalrule.FieldToolPattern]
+	return ok
+}
+
+// ResetToolPattern resets all changes to the "tool_pattern" field.
+func (m *ApprovalRuleMutation) ResetToolPattern() {
+	m.tool_pattern = nil
+	delete(m.clearedFields, approvalrule.FieldToolPattern)
+}
+
+// SetToolCategory sets the "tool_category" field.
+func (m *ApprovalRuleMutation) SetToolCategory(s string) {
+	m.tool_category = &s
+}
+
+// ToolCategory returns the value of the "tool_category" field in the mutation.
+func (m *ApprovalRuleMutation) ToolCategory() (r string, exists bool) {
+	v := m.tool_category
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolCategory returns the old "tool_category" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldToolCategory(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolCategory is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolCategory requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolCategory: %w", err)
+	}
+	return oldValue.ToolCategory, nil
+}
+
+// ClearToolCategory clears the value of the "tool_category" field.
+func (m *ApprovalRuleMutation) ClearToolCategory() {
+	m.tool_category = nil
+	m.clearedFields[approvalrule.FieldToolCategory] = struct{}{}
+}
+
+// ToolCategoryCleared returns if the "tool_category" field was cleared in this mutation.
+func (m *ApprovalRuleMutation) ToolCategoryCleared() bool {
+	_, ok := m.clearedFields[approvalrule.FieldToolCategory]
+	return ok
+}
+
+// ResetToolCategory resets all changes to the "tool_category" field.
+func (m *ApprovalRuleMutation) ResetToolCategory() {
+	m.tool_category = nil
+	delete(m.clearedFields, approvalrule.FieldToolCategory)
+}
+
+// SetCommandPattern sets the "command_pattern" field.
+func (m *ApprovalRuleMutation) SetCommandPattern(s string) {
+	m.command_pattern = &s
+}
+
+// CommandPattern returns the value of the "command_pattern" field in the mutation.
+func (m *ApprovalRuleMutation) CommandPattern() (r string, exists bool) {
+	v := m.command_pattern
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommandPattern returns the old "command_pattern" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldCommandPattern(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommandPattern is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommandPattern requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommandPattern: %w", err)
+	}
+	return oldValue.CommandPattern, nil
+}
+
+// ClearCommandPattern clears the value of the "command_pattern" field.
+func (m *ApprovalRuleMutation) ClearCommandPattern() {
+	m.command_pattern = nil
+	m.clearedFields[approvalrule.FieldCommandPattern] = struct{}{}
+}
+
+// CommandPatternCleared returns if the "command_pattern" field was cleared in this mutation.
+func (m *ApprovalRuleMutation) CommandPatternCleared() bool {
+	_, ok := m.clearedFields[approvalrule.FieldCommandPattern]
+	return ok
+}
+
+// ResetCommandPattern resets all changes to the "command_pattern" field.
+func (m *ApprovalRuleMutation) ResetCommandPattern() {
+	m.command_pattern = nil
+	delete(m.clearedFields, approvalrule.FieldCommandPattern)
+}
+
+// SetFilePattern sets the "file_pattern" field.
+func (m *ApprovalRuleMutation) SetFilePattern(s string) {
+	m.file_pattern = &s
+}
+
+// FilePattern returns the value of the "file_pattern" field in the mutation.
+func (m *ApprovalRuleMutation) FilePattern() (r string, exists bool) {
+	v := m.file_pattern
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFilePattern returns the old "file_pattern" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldFilePattern(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFilePattern is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFilePattern requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFilePattern: %w", err)
+	}
+	return oldValue.FilePattern, nil
+}
+
+// ClearFilePattern clears the value of the "file_pattern" field.
+func (m *ApprovalRuleMutation) ClearFilePattern() {
+	m.file_pattern = nil
+	m.clearedFields[approvalrule.FieldFilePattern] = struct{}{}
+}
+
+// FilePatternCleared returns if the "file_pattern" field was cleared in this mutation.
+func (m *ApprovalRuleMutation) FilePatternCleared() bool {
+	_, ok := m.clearedFields[approvalrule.FieldFilePattern]
+	return ok
+}
+
+// ResetFilePattern resets all changes to the "file_pattern" field.
+func (m *ApprovalRuleMutation) ResetFilePattern() {
+	m.file_pattern = nil
+	delete(m.clearedFields, approvalrule.FieldFilePattern)
+}
+
+// SetDecision sets the "decision" field.
+func (m *ApprovalRuleMutation) SetDecision(i int) {
+	m.decision = &i
+	m.adddecision = nil
+}
+
+// Decision returns the value of the "decision" field in the mutation.
+func (m *ApprovalRuleMutation) Decision() (r int, exists bool) {
+	v := m.decision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDecision returns the old "decision" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldDecision(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDecision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDecision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDecision: %w", err)
+	}
+	return oldValue.Decision, nil
+}
+
+// AddDecision adds i to the "decision" field.
+func (m *ApprovalRuleMutation) AddDecision(i int) {
+	if m.adddecision != nil {
+		*m.adddecision += i
+	} else {
+		m.adddecision = &i
+	}
+}
+
+// AddedDecision returns the value that was added to the "decision" field in this mutation.
+func (m *ApprovalRuleMutation) AddedDecision() (r int, exists bool) {
+	v := m.adddecision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDecision resets all changes to the "decision" field.
+func (m *ApprovalRuleMutation) ResetDecision() {
+	m.decision = nil
+	m.adddecision = nil
+}
+
+// SetRiskLevel sets the "risk_level" field.
+func (m *ApprovalRuleMutation) SetRiskLevel(i int) {
+	m.risk_level = &i
+	m.addrisk_level = nil
+}
+
+// RiskLevel returns the value of the "risk_level" field in the mutation.
+func (m *ApprovalRuleMutation) RiskLevel() (r int, exists bool) {
+	v := m.risk_level
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRiskLevel returns the old "risk_level" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldRiskLevel(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRiskLevel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRiskLevel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRiskLevel: %w", err)
+	}
+	return oldValue.RiskLevel, nil
+}
+
+// AddRiskLevel adds i to the "risk_level" field.
+func (m *ApprovalRuleMutation) AddRiskLevel(i int) {
+	if m.addrisk_level != nil {
+		*m.addrisk_level += i
+	} else {
+		m.addrisk_level = &i
+	}
+}
+
+// AddedRiskLevel returns the value that was added to the "risk_level" field in this mutation.
+func (m *ApprovalRuleMutation) AddedRiskLevel() (r int, exists bool) {
+	v := m.addrisk_level
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRiskLevel resets all changes to the "risk_level" field.
+func (m *ApprovalRuleMutation) ResetRiskLevel() {
+	m.risk_level = nil
+	m.addrisk_level = nil
+}
+
+// SetReason sets the "reason" field.
+func (m *ApprovalRuleMutation) SetReason(s string) {
+	m.reason = &s
+}
+
+// Reason returns the value of the "reason" field in the mutation.
+func (m *ApprovalRuleMutation) Reason() (r string, exists bool) {
+	v := m.reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReason returns the old "reason" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReason: %w", err)
+	}
+	return oldValue.Reason, nil
+}
+
+// ClearReason clears the value of the "reason" field.
+func (m *ApprovalRuleMutation) ClearReason() {
+	m.reason = nil
+	m.clearedFields[approvalrule.FieldReason] = struct{}{}
+}
+
+// ReasonCleared returns if the "reason" field was cleared in this mutation.
+func (m *ApprovalRuleMutation) ReasonCleared() bool {
+	_, ok := m.clearedFields[approvalrule.FieldReason]
+	return ok
+}
+
+// ResetReason resets all changes to the "reason" field.
+func (m *ApprovalRuleMutation) ResetReason() {
+	m.reason = nil
+	delete(m.clearedFields, approvalrule.FieldReason)
+}
+
+// SetAlternative sets the "alternative" field.
+func (m *ApprovalRuleMutation) SetAlternative(s string) {
+	m.alternative = &s
+}
+
+// Alternative returns the value of the "alternative" field in the mutation.
+func (m *ApprovalRuleMutation) Alternative() (r string, exists bool) {
+	v := m.alternative
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAlternative returns the old "alternative" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldAlternative(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAlternative is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAlternative requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAlternative: %w", err)
+	}
+	return oldValue.Alternative, nil
+}
+
+// ClearAlternative clears the value of the "alternative" field.
+func (m *ApprovalRuleMutation) ClearAlternative() {
+	m.alternative = nil
+	m.clearedFields[approvalrule.FieldAlternative] = struct{}{}
+}
+
+// AlternativeCleared returns if the "alternative" field was cleared in this mutation.
+func (m *ApprovalRuleMutation) AlternativeCleared() bool {
+	_, ok := m.clearedFields[approvalrule.FieldAlternative]
+	return ok
+}
+
+// ResetAlternative resets all changes to the "alternative" field.
+func (m *ApprovalRuleMutation) ResetAlternative() {
+	m.alternative = nil
+	delete(m.clearedFields, approvalrule.FieldAlternative)
+}
+
+// SetPriority sets the "priority" field.
+func (m *ApprovalRuleMutation) SetPriority(i int) {
+	m.priority = &i
+	m.addpriority = nil
+}
+
+// Priority returns the value of the "priority" field in the mutation.
+func (m *ApprovalRuleMutation) Priority() (r int, exists bool) {
+	v := m.priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriority returns the old "priority" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldPriority(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
+	}
+	return oldValue.Priority, nil
+}
+
+// AddPriority adds i to the "priority" field.
+func (m *ApprovalRuleMutation) AddPriority(i int) {
+	if m.addpriority != nil {
+		*m.addpriority += i
+	} else {
+		m.addpriority = &i
+	}
+}
+
+// AddedPriority returns the value that was added to the "priority" field in this mutation.
+func (m *ApprovalRuleMutation) AddedPriority() (r int, exists bool) {
+	v := m.addpriority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPriority resets all changes to the "priority" field.
+func (m *ApprovalRuleMutation) ResetPriority() {
+	m.priority = nil
+	m.addpriority = nil
+}
+
+// SetEnabled sets the "enabled" field.
+func (m *ApprovalRuleMutation) SetEnabled(b bool) {
+	m.enabled = &b
+}
+
+// Enabled returns the value of the "enabled" field in the mutation.
+func (m *ApprovalRuleMutation) Enabled() (r bool, exists bool) {
+	v := m.enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnabled returns the old "enabled" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnabled: %w", err)
+	}
+	return oldValue.Enabled, nil
+}
+
+// ResetEnabled resets all changes to the "enabled" field.
+func (m *ApprovalRuleMutation) ResetEnabled() {
+	m.enabled = nil
+}
+
+// SetSource sets the "source" field.
+func (m *ApprovalRuleMutation) SetSource(s string) {
+	m.source = &s
+}
+
+// Source returns the value of the "source" field in the mutation.
+func (m *ApprovalRuleMutation) Source() (r string, exists bool) {
+	v := m.source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSource returns the old "source" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSource: %w", err)
+	}
+	return oldValue.Source, nil
+}
+
+// ResetSource resets all changes to the "source" field.
+func (m *ApprovalRuleMutation) ResetSource() {
+	m.source = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ApprovalRuleMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ApprovalRuleMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ApprovalRuleMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ApprovalRuleMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ApprovalRuleMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ApprovalRule entity.
+// If the ApprovalRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ApprovalRuleMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ApprovalRuleMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the ApprovalRuleMutation builder.
+func (m *ApprovalRuleMutation) Where(ps ...predicate.ApprovalRule) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ApprovalRuleMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ApprovalRuleMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ApprovalRule, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ApprovalRuleMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ApprovalRuleMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ApprovalRule).
+func (m *ApprovalRuleMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ApprovalRuleMutation) Fields() []string {
+	fields := make([]string, 0, 16)
+	if m.rule_id != nil {
+		fields = append(fields, approvalrule.FieldRuleID)
+	}
+	if m.name != nil {
+		fields = append(fields, approvalrule.FieldName)
+	}
+	if m.tool_name != nil {
+		fields = append(fields, approvalrule.FieldToolName)
+	}
+	if m.tool_pattern != nil {
+		fields = append(fields, approvalrule.FieldToolPattern)
+	}
+	if m.tool_category != nil {
+		fields = append(fields, approvalrule.FieldToolCategory)
+	}
+	if m.command_pattern != nil {
+		fields = append(fields, approvalrule.FieldCommandPattern)
+	}
+	if m.file_pattern != nil {
+		fields = append(fields, approvalrule.FieldFilePattern)
+	}
+	if m.decision != nil {
+		fields = append(fields, approvalrule.FieldDecision)
+	}
+	if m.risk_level != nil {
+		fields = append(fields, approvalrule.FieldRiskLevel)
+	}
+	if m.reason != nil {
+		fields = append(fields, approvalrule.FieldReason)
+	}
+	if m.alternative != nil {
+		fields = append(fields, approvalrule.FieldAlternative)
+	}
+	if m.priority != nil {
+		fields = append(fields, approvalrule.FieldPriority)
+	}
+	if m.enabled != nil {
+		fields = append(fields, approvalrule.FieldEnabled)
+	}
+	if m.source != nil {
+		fields = append(fields, approvalrule.FieldSource)
+	}
+	if m.created_at != nil {
+		fields = append(fields, approvalrule.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, approvalrule.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ApprovalRuleMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case approvalrule.FieldRuleID:
+		return m.RuleID()
+	case approvalrule.FieldName:
+		return m.Name()
+	case approvalrule.FieldToolName:
+		return m.ToolName()
+	case approvalrule.FieldToolPattern:
+		return m.ToolPattern()
+	case approvalrule.FieldToolCategory:
+		return m.ToolCategory()
+	case approvalrule.FieldCommandPattern:
+		return m.CommandPattern()
+	case approvalrule.FieldFilePattern:
+		return m.FilePattern()
+	case approvalrule.FieldDecision:
+		return m.Decision()
+	case approvalrule.FieldRiskLevel:
+		return m.RiskLevel()
+	case approvalrule.FieldReason:
+		return m.Reason()
+	case approvalrule.FieldAlternative:
+		return m.Alternative()
+	case approvalrule.FieldPriority:
+		return m.Priority()
+	case approvalrule.FieldEnabled:
+		return m.Enabled()
+	case approvalrule.FieldSource:
+		return m.Source()
+	case approvalrule.FieldCreatedAt:
+		return m.CreatedAt()
+	case approvalrule.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ApprovalRuleMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case approvalrule.FieldRuleID:
+		return m.OldRuleID(ctx)
+	case approvalrule.FieldName:
+		return m.OldName(ctx)
+	case approvalrule.FieldToolName:
+		return m.OldToolName(ctx)
+	case approvalrule.FieldToolPattern:
+		return m.OldToolPattern(ctx)
+	case approvalrule.FieldToolCategory:
+		return m.OldToolCategory(ctx)
+	case approvalrule.FieldCommandPattern:
+		return m.OldCommandPattern(ctx)
+	case approvalrule.FieldFilePattern:
+		return m.OldFilePattern(ctx)
+	case approvalrule.FieldDecision:
+		return m.OldDecision(ctx)
+	case approvalrule.FieldRiskLevel:
+		return m.OldRiskLevel(ctx)
+	case approvalrule.FieldReason:
+		return m.OldReason(ctx)
+	case approvalrule.FieldAlternative:
+		return m.OldAlternative(ctx)
+	case approvalrule.FieldPriority:
+		return m.OldPriority(ctx)
+	case approvalrule.FieldEnabled:
+		return m.OldEnabled(ctx)
+	case approvalrule.FieldSource:
+		return m.OldSource(ctx)
+	case approvalrule.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case approvalrule.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown ApprovalRule field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ApprovalRuleMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case approvalrule.FieldRuleID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRuleID(v)
+		return nil
+	case approvalrule.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case approvalrule.FieldToolName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolName(v)
+		return nil
+	case approvalrule.FieldToolPattern:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolPattern(v)
+		return nil
+	case approvalrule.FieldToolCategory:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolCategory(v)
+		return nil
+	case approvalrule.FieldCommandPattern:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommandPattern(v)
+		return nil
+	case approvalrule.FieldFilePattern:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFilePattern(v)
+		return nil
+	case approvalrule.FieldDecision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDecision(v)
+		return nil
+	case approvalrule.FieldRiskLevel:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRiskLevel(v)
+		return nil
+	case approvalrule.FieldReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReason(v)
+		return nil
+	case approvalrule.FieldAlternative:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAlternative(v)
+		return nil
+	case approvalrule.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriority(v)
+		return nil
+	case approvalrule.FieldEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnabled(v)
+		return nil
+	case approvalrule.FieldSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSource(v)
+		return nil
+	case approvalrule.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case approvalrule.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalRule field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ApprovalRuleMutation) AddedFields() []string {
+	var fields []string
+	if m.adddecision != nil {
+		fields = append(fields, approvalrule.FieldDecision)
+	}
+	if m.addrisk_level != nil {
+		fields = append(fields, approvalrule.FieldRiskLevel)
+	}
+	if m.addpriority != nil {
+		fields = append(fields, approvalrule.FieldPriority)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ApprovalRuleMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case approvalrule.FieldDecision:
+		return m.AddedDecision()
+	case approvalrule.FieldRiskLevel:
+		return m.AddedRiskLevel()
+	case approvalrule.FieldPriority:
+		return m.AddedPriority()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ApprovalRuleMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case approvalrule.FieldDecision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDecision(v)
+		return nil
+	case approvalrule.FieldRiskLevel:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRiskLevel(v)
+		return nil
+	case approvalrule.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPriority(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalRule numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ApprovalRuleMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(approvalrule.FieldToolName) {
+		fields = append(fields, approvalrule.FieldToolName)
+	}
+	if m.FieldCleared(approvalrule.FieldToolPattern) {
+		fields = append(fields, approvalrule.FieldToolPattern)
+	}
+	if m.FieldCleared(approvalrule.FieldToolCategory) {
+		fields = append(fields, approvalrule.FieldToolCategory)
+	}
+	if m.FieldCleared(approvalrule.FieldCommandPattern) {
+		fields = append(fields, approvalrule.FieldCommandPattern)
+	}
+	if m.FieldCleared(approvalrule.FieldFilePattern) {
+		fields = append(fields, approvalrule.FieldFilePattern)
+	}
+	if m.FieldCleared(approvalrule.FieldReason) {
+		fields = append(fields, approvalrule.FieldReason)
+	}
+	if m.FieldCleared(approvalrule.FieldAlternative) {
+		fields = append(fields, approvalrule.FieldAlternative)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ApprovalRuleMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ApprovalRuleMutation) ClearField(name string) error {
+	switch name {
+	case approvalrule.FieldToolName:
+		m.ClearToolName()
+		return nil
+	case approvalrule.FieldToolPattern:
+		m.ClearToolPattern()
+		return nil
+	case approvalrule.FieldToolCategory:
+		m.ClearToolCategory()
+		return nil
+	case approvalrule.FieldCommandPattern:
+		m.ClearCommandPattern()
+		return nil
+	case approvalrule.FieldFilePattern:
+		m.ClearFilePattern()
+		return nil
+	case approvalrule.FieldReason:
+		m.ClearReason()
+		return nil
+	case approvalrule.FieldAlternative:
+		m.ClearAlternative()
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalRule nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ApprovalRuleMutation) ResetField(name string) error {
+	switch name {
+	case approvalrule.FieldRuleID:
+		m.ResetRuleID()
+		return nil
+	case approvalrule.FieldName:
+		m.ResetName()
+		return nil
+	case approvalrule.FieldToolName:
+		m.ResetToolName()
+		return nil
+	case approvalrule.FieldToolPattern:
+		m.ResetToolPattern()
+		return nil
+	case approvalrule.FieldToolCategory:
+		m.ResetToolCategory()
+		return nil
+	case approvalrule.FieldCommandPattern:
+		m.ResetCommandPattern()
+		return nil
+	case approvalrule.FieldFilePattern:
+		m.ResetFilePattern()
+		return nil
+	case approvalrule.FieldDecision:
+		m.ResetDecision()
+		return nil
+	case approvalrule.FieldRiskLevel:
+		m.ResetRiskLevel()
+		return nil
+	case approvalrule.FieldReason:
+		m.ResetReason()
+		return nil
+	case approvalrule.FieldAlternative:
+		m.ResetAlternative()
+		return nil
+	case approvalrule.FieldPriority:
+		m.ResetPriority()
+		return nil
+	case approvalrule.FieldEnabled:
+		m.ResetEnabled()
+		return nil
+	case approvalrule.FieldSource:
+		m.ResetSource()
+		return nil
+	case approvalrule.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case approvalrule.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ApprovalRule field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ApprovalRuleMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ApprovalRuleMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ApprovalRuleMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ApprovalRuleMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ApprovalRuleMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ApprovalRuleMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ApprovalRuleMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown ApprovalRule unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ApprovalRuleMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown ApprovalRule edge %s", name)
+}
+
+// ClassificationAnalyticsMutation represents an operation that mutates the ClassificationAnalytics nodes in the graph.
+type ClassificationAnalyticsMutation struct {
+	config
+	op                   Op
+	typ                  string
+	id                   *int
+	analytics_id         *string
+	session_id           *string
+	tool_name            *string
+	command_preview      *string
+	cwd                  *string
+	decision             *string
+	risk_level           *string
+	rule_id              *string
+	rule_name            *string
+	reason               *string
+	alternative          *string
+	duration_ms          *int64
+	addduration_ms       *int64
+	approval_id          *string
+	command_program      *string
+	command_category     *string
+	command_subcategory  *string
+	python_imports       *[]string
+	appendpython_imports []string
+	created_at           *time.Time
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*ClassificationAnalytics, error)
+	predicates           []predicate.ClassificationAnalytics
+}
+
+var _ ent.Mutation = (*ClassificationAnalyticsMutation)(nil)
+
+// classificationanalyticsOption allows management of the mutation configuration using functional options.
+type classificationanalyticsOption func(*ClassificationAnalyticsMutation)
+
+// newClassificationAnalyticsMutation creates new mutation for the ClassificationAnalytics entity.
+func newClassificationAnalyticsMutation(c config, op Op, opts ...classificationanalyticsOption) *ClassificationAnalyticsMutation {
+	m := &ClassificationAnalyticsMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeClassificationAnalytics,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withClassificationAnalyticsID sets the ID field of the mutation.
+func withClassificationAnalyticsID(id int) classificationanalyticsOption {
+	return func(m *ClassificationAnalyticsMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ClassificationAnalytics
+		)
+		m.oldValue = func(ctx context.Context) (*ClassificationAnalytics, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ClassificationAnalytics.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withClassificationAnalytics sets the old ClassificationAnalytics of the mutation.
+func withClassificationAnalytics(node *ClassificationAnalytics) classificationanalyticsOption {
+	return func(m *ClassificationAnalyticsMutation) {
+		m.oldValue = func(context.Context) (*ClassificationAnalytics, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ClassificationAnalyticsMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ClassificationAnalyticsMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ClassificationAnalyticsMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ClassificationAnalyticsMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ClassificationAnalytics.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetAnalyticsID sets the "analytics_id" field.
+func (m *ClassificationAnalyticsMutation) SetAnalyticsID(s string) {
+	m.analytics_id = &s
+}
+
+// AnalyticsID returns the value of the "analytics_id" field in the mutation.
+func (m *ClassificationAnalyticsMutation) AnalyticsID() (r string, exists bool) {
+	v := m.analytics_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAnalyticsID returns the old "analytics_id" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldAnalyticsID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAnalyticsID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAnalyticsID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAnalyticsID: %w", err)
+	}
+	return oldValue.AnalyticsID, nil
+}
+
+// ResetAnalyticsID resets all changes to the "analytics_id" field.
+func (m *ClassificationAnalyticsMutation) ResetAnalyticsID() {
+	m.analytics_id = nil
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *ClassificationAnalyticsMutation) SetSessionID(s string) {
+	m.session_id = &s
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *ClassificationAnalyticsMutation) SessionID() (r string, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldSessionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (m *ClassificationAnalyticsMutation) ClearSessionID() {
+	m.session_id = nil
+	m.clearedFields[classificationanalytics.FieldSessionID] = struct{}{}
+}
+
+// SessionIDCleared returns if the "session_id" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) SessionIDCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldSessionID]
+	return ok
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *ClassificationAnalyticsMutation) ResetSessionID() {
+	m.session_id = nil
+	delete(m.clearedFields, classificationanalytics.FieldSessionID)
+}
+
+// SetToolName sets the "tool_name" field.
+func (m *ClassificationAnalyticsMutation) SetToolName(s string) {
+	m.tool_name = &s
+}
+
+// ToolName returns the value of the "tool_name" field in the mutation.
+func (m *ClassificationAnalyticsMutation) ToolName() (r string, exists bool) {
+	v := m.tool_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolName returns the old "tool_name" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldToolName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolName: %w", err)
+	}
+	return oldValue.ToolName, nil
+}
+
+// ResetToolName resets all changes to the "tool_name" field.
+func (m *ClassificationAnalyticsMutation) ResetToolName() {
+	m.tool_name = nil
+}
+
+// SetCommandPreview sets the "command_preview" field.
+func (m *ClassificationAnalyticsMutation) SetCommandPreview(s string) {
+	m.command_preview = &s
+}
+
+// CommandPreview returns the value of the "command_preview" field in the mutation.
+func (m *ClassificationAnalyticsMutation) CommandPreview() (r string, exists bool) {
+	v := m.command_preview
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommandPreview returns the old "command_preview" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldCommandPreview(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommandPreview is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommandPreview requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommandPreview: %w", err)
+	}
+	return oldValue.CommandPreview, nil
+}
+
+// ClearCommandPreview clears the value of the "command_preview" field.
+func (m *ClassificationAnalyticsMutation) ClearCommandPreview() {
+	m.command_preview = nil
+	m.clearedFields[classificationanalytics.FieldCommandPreview] = struct{}{}
+}
+
+// CommandPreviewCleared returns if the "command_preview" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) CommandPreviewCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldCommandPreview]
+	return ok
+}
+
+// ResetCommandPreview resets all changes to the "command_preview" field.
+func (m *ClassificationAnalyticsMutation) ResetCommandPreview() {
+	m.command_preview = nil
+	delete(m.clearedFields, classificationanalytics.FieldCommandPreview)
+}
+
+// SetCwd sets the "cwd" field.
+func (m *ClassificationAnalyticsMutation) SetCwd(s string) {
+	m.cwd = &s
+}
+
+// Cwd returns the value of the "cwd" field in the mutation.
+func (m *ClassificationAnalyticsMutation) Cwd() (r string, exists bool) {
+	v := m.cwd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCwd returns the old "cwd" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldCwd(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCwd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCwd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCwd: %w", err)
+	}
+	return oldValue.Cwd, nil
+}
+
+// ClearCwd clears the value of the "cwd" field.
+func (m *ClassificationAnalyticsMutation) ClearCwd() {
+	m.cwd = nil
+	m.clearedFields[classificationanalytics.FieldCwd] = struct{}{}
+}
+
+// CwdCleared returns if the "cwd" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) CwdCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldCwd]
+	return ok
+}
+
+// ResetCwd resets all changes to the "cwd" field.
+func (m *ClassificationAnalyticsMutation) ResetCwd() {
+	m.cwd = nil
+	delete(m.clearedFields, classificationanalytics.FieldCwd)
+}
+
+// SetDecision sets the "decision" field.
+func (m *ClassificationAnalyticsMutation) SetDecision(s string) {
+	m.decision = &s
+}
+
+// Decision returns the value of the "decision" field in the mutation.
+func (m *ClassificationAnalyticsMutation) Decision() (r string, exists bool) {
+	v := m.decision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDecision returns the old "decision" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldDecision(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDecision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDecision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDecision: %w", err)
+	}
+	return oldValue.Decision, nil
+}
+
+// ResetDecision resets all changes to the "decision" field.
+func (m *ClassificationAnalyticsMutation) ResetDecision() {
+	m.decision = nil
+}
+
+// SetRiskLevel sets the "risk_level" field.
+func (m *ClassificationAnalyticsMutation) SetRiskLevel(s string) {
+	m.risk_level = &s
+}
+
+// RiskLevel returns the value of the "risk_level" field in the mutation.
+func (m *ClassificationAnalyticsMutation) RiskLevel() (r string, exists bool) {
+	v := m.risk_level
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRiskLevel returns the old "risk_level" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldRiskLevel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRiskLevel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRiskLevel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRiskLevel: %w", err)
+	}
+	return oldValue.RiskLevel, nil
+}
+
+// ResetRiskLevel resets all changes to the "risk_level" field.
+func (m *ClassificationAnalyticsMutation) ResetRiskLevel() {
+	m.risk_level = nil
+}
+
+// SetRuleID sets the "rule_id" field.
+func (m *ClassificationAnalyticsMutation) SetRuleID(s string) {
+	m.rule_id = &s
+}
+
+// RuleID returns the value of the "rule_id" field in the mutation.
+func (m *ClassificationAnalyticsMutation) RuleID() (r string, exists bool) {
+	v := m.rule_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRuleID returns the old "rule_id" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldRuleID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRuleID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRuleID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRuleID: %w", err)
+	}
+	return oldValue.RuleID, nil
+}
+
+// ClearRuleID clears the value of the "rule_id" field.
+func (m *ClassificationAnalyticsMutation) ClearRuleID() {
+	m.rule_id = nil
+	m.clearedFields[classificationanalytics.FieldRuleID] = struct{}{}
+}
+
+// RuleIDCleared returns if the "rule_id" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) RuleIDCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldRuleID]
+	return ok
+}
+
+// ResetRuleID resets all changes to the "rule_id" field.
+func (m *ClassificationAnalyticsMutation) ResetRuleID() {
+	m.rule_id = nil
+	delete(m.clearedFields, classificationanalytics.FieldRuleID)
+}
+
+// SetRuleName sets the "rule_name" field.
+func (m *ClassificationAnalyticsMutation) SetRuleName(s string) {
+	m.rule_name = &s
+}
+
+// RuleName returns the value of the "rule_name" field in the mutation.
+func (m *ClassificationAnalyticsMutation) RuleName() (r string, exists bool) {
+	v := m.rule_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRuleName returns the old "rule_name" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldRuleName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRuleName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRuleName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRuleName: %w", err)
+	}
+	return oldValue.RuleName, nil
+}
+
+// ClearRuleName clears the value of the "rule_name" field.
+func (m *ClassificationAnalyticsMutation) ClearRuleName() {
+	m.rule_name = nil
+	m.clearedFields[classificationanalytics.FieldRuleName] = struct{}{}
+}
+
+// RuleNameCleared returns if the "rule_name" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) RuleNameCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldRuleName]
+	return ok
+}
+
+// ResetRuleName resets all changes to the "rule_name" field.
+func (m *ClassificationAnalyticsMutation) ResetRuleName() {
+	m.rule_name = nil
+	delete(m.clearedFields, classificationanalytics.FieldRuleName)
+}
+
+// SetReason sets the "reason" field.
+func (m *ClassificationAnalyticsMutation) SetReason(s string) {
+	m.reason = &s
+}
+
+// Reason returns the value of the "reason" field in the mutation.
+func (m *ClassificationAnalyticsMutation) Reason() (r string, exists bool) {
+	v := m.reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReason returns the old "reason" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReason: %w", err)
+	}
+	return oldValue.Reason, nil
+}
+
+// ClearReason clears the value of the "reason" field.
+func (m *ClassificationAnalyticsMutation) ClearReason() {
+	m.reason = nil
+	m.clearedFields[classificationanalytics.FieldReason] = struct{}{}
+}
+
+// ReasonCleared returns if the "reason" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) ReasonCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldReason]
+	return ok
+}
+
+// ResetReason resets all changes to the "reason" field.
+func (m *ClassificationAnalyticsMutation) ResetReason() {
+	m.reason = nil
+	delete(m.clearedFields, classificationanalytics.FieldReason)
+}
+
+// SetAlternative sets the "alternative" field.
+func (m *ClassificationAnalyticsMutation) SetAlternative(s string) {
+	m.alternative = &s
+}
+
+// Alternative returns the value of the "alternative" field in the mutation.
+func (m *ClassificationAnalyticsMutation) Alternative() (r string, exists bool) {
+	v := m.alternative
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAlternative returns the old "alternative" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldAlternative(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAlternative is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAlternative requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAlternative: %w", err)
+	}
+	return oldValue.Alternative, nil
+}
+
+// ClearAlternative clears the value of the "alternative" field.
+func (m *ClassificationAnalyticsMutation) ClearAlternative() {
+	m.alternative = nil
+	m.clearedFields[classificationanalytics.FieldAlternative] = struct{}{}
+}
+
+// AlternativeCleared returns if the "alternative" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) AlternativeCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldAlternative]
+	return ok
+}
+
+// ResetAlternative resets all changes to the "alternative" field.
+func (m *ClassificationAnalyticsMutation) ResetAlternative() {
+	m.alternative = nil
+	delete(m.clearedFields, classificationanalytics.FieldAlternative)
+}
+
+// SetDurationMs sets the "duration_ms" field.
+func (m *ClassificationAnalyticsMutation) SetDurationMs(i int64) {
+	m.duration_ms = &i
+	m.addduration_ms = nil
+}
+
+// DurationMs returns the value of the "duration_ms" field in the mutation.
+func (m *ClassificationAnalyticsMutation) DurationMs() (r int64, exists bool) {
+	v := m.duration_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDurationMs returns the old "duration_ms" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldDurationMs(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDurationMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDurationMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDurationMs: %w", err)
+	}
+	return oldValue.DurationMs, nil
+}
+
+// AddDurationMs adds i to the "duration_ms" field.
+func (m *ClassificationAnalyticsMutation) AddDurationMs(i int64) {
+	if m.addduration_ms != nil {
+		*m.addduration_ms += i
+	} else {
+		m.addduration_ms = &i
+	}
+}
+
+// AddedDurationMs returns the value that was added to the "duration_ms" field in this mutation.
+func (m *ClassificationAnalyticsMutation) AddedDurationMs() (r int64, exists bool) {
+	v := m.addduration_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDurationMs resets all changes to the "duration_ms" field.
+func (m *ClassificationAnalyticsMutation) ResetDurationMs() {
+	m.duration_ms = nil
+	m.addduration_ms = nil
+}
+
+// SetApprovalID sets the "approval_id" field.
+func (m *ClassificationAnalyticsMutation) SetApprovalID(s string) {
+	m.approval_id = &s
+}
+
+// ApprovalID returns the value of the "approval_id" field in the mutation.
+func (m *ClassificationAnalyticsMutation) ApprovalID() (r string, exists bool) {
+	v := m.approval_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApprovalID returns the old "approval_id" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldApprovalID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApprovalID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApprovalID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApprovalID: %w", err)
+	}
+	return oldValue.ApprovalID, nil
+}
+
+// ClearApprovalID clears the value of the "approval_id" field.
+func (m *ClassificationAnalyticsMutation) ClearApprovalID() {
+	m.approval_id = nil
+	m.clearedFields[classificationanalytics.FieldApprovalID] = struct{}{}
+}
+
+// ApprovalIDCleared returns if the "approval_id" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) ApprovalIDCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldApprovalID]
+	return ok
+}
+
+// ResetApprovalID resets all changes to the "approval_id" field.
+func (m *ClassificationAnalyticsMutation) ResetApprovalID() {
+	m.approval_id = nil
+	delete(m.clearedFields, classificationanalytics.FieldApprovalID)
+}
+
+// SetCommandProgram sets the "command_program" field.
+func (m *ClassificationAnalyticsMutation) SetCommandProgram(s string) {
+	m.command_program = &s
+}
+
+// CommandProgram returns the value of the "command_program" field in the mutation.
+func (m *ClassificationAnalyticsMutation) CommandProgram() (r string, exists bool) {
+	v := m.command_program
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommandProgram returns the old "command_program" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldCommandProgram(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommandProgram is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommandProgram requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommandProgram: %w", err)
+	}
+	return oldValue.CommandProgram, nil
+}
+
+// ClearCommandProgram clears the value of the "command_program" field.
+func (m *ClassificationAnalyticsMutation) ClearCommandProgram() {
+	m.command_program = nil
+	m.clearedFields[classificationanalytics.FieldCommandProgram] = struct{}{}
+}
+
+// CommandProgramCleared returns if the "command_program" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) CommandProgramCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldCommandProgram]
+	return ok
+}
+
+// ResetCommandProgram resets all changes to the "command_program" field.
+func (m *ClassificationAnalyticsMutation) ResetCommandProgram() {
+	m.command_program = nil
+	delete(m.clearedFields, classificationanalytics.FieldCommandProgram)
+}
+
+// SetCommandCategory sets the "command_category" field.
+func (m *ClassificationAnalyticsMutation) SetCommandCategory(s string) {
+	m.command_category = &s
+}
+
+// CommandCategory returns the value of the "command_category" field in the mutation.
+func (m *ClassificationAnalyticsMutation) CommandCategory() (r string, exists bool) {
+	v := m.command_category
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommandCategory returns the old "command_category" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldCommandCategory(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommandCategory is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommandCategory requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommandCategory: %w", err)
+	}
+	return oldValue.CommandCategory, nil
+}
+
+// ClearCommandCategory clears the value of the "command_category" field.
+func (m *ClassificationAnalyticsMutation) ClearCommandCategory() {
+	m.command_category = nil
+	m.clearedFields[classificationanalytics.FieldCommandCategory] = struct{}{}
+}
+
+// CommandCategoryCleared returns if the "command_category" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) CommandCategoryCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldCommandCategory]
+	return ok
+}
+
+// ResetCommandCategory resets all changes to the "command_category" field.
+func (m *ClassificationAnalyticsMutation) ResetCommandCategory() {
+	m.command_category = nil
+	delete(m.clearedFields, classificationanalytics.FieldCommandCategory)
+}
+
+// SetCommandSubcategory sets the "command_subcategory" field.
+func (m *ClassificationAnalyticsMutation) SetCommandSubcategory(s string) {
+	m.command_subcategory = &s
+}
+
+// CommandSubcategory returns the value of the "command_subcategory" field in the mutation.
+func (m *ClassificationAnalyticsMutation) CommandSubcategory() (r string, exists bool) {
+	v := m.command_subcategory
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommandSubcategory returns the old "command_subcategory" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldCommandSubcategory(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommandSubcategory is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommandSubcategory requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommandSubcategory: %w", err)
+	}
+	return oldValue.CommandSubcategory, nil
+}
+
+// ClearCommandSubcategory clears the value of the "command_subcategory" field.
+func (m *ClassificationAnalyticsMutation) ClearCommandSubcategory() {
+	m.command_subcategory = nil
+	m.clearedFields[classificationanalytics.FieldCommandSubcategory] = struct{}{}
+}
+
+// CommandSubcategoryCleared returns if the "command_subcategory" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) CommandSubcategoryCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldCommandSubcategory]
+	return ok
+}
+
+// ResetCommandSubcategory resets all changes to the "command_subcategory" field.
+func (m *ClassificationAnalyticsMutation) ResetCommandSubcategory() {
+	m.command_subcategory = nil
+	delete(m.clearedFields, classificationanalytics.FieldCommandSubcategory)
+}
+
+// SetPythonImports sets the "python_imports" field.
+func (m *ClassificationAnalyticsMutation) SetPythonImports(s []string) {
+	m.python_imports = &s
+	m.appendpython_imports = nil
+}
+
+// PythonImports returns the value of the "python_imports" field in the mutation.
+func (m *ClassificationAnalyticsMutation) PythonImports() (r []string, exists bool) {
+	v := m.python_imports
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPythonImports returns the old "python_imports" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldPythonImports(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPythonImports is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPythonImports requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPythonImports: %w", err)
+	}
+	return oldValue.PythonImports, nil
+}
+
+// AppendPythonImports adds s to the "python_imports" field.
+func (m *ClassificationAnalyticsMutation) AppendPythonImports(s []string) {
+	m.appendpython_imports = append(m.appendpython_imports, s...)
+}
+
+// AppendedPythonImports returns the list of values that were appended to the "python_imports" field in this mutation.
+func (m *ClassificationAnalyticsMutation) AppendedPythonImports() ([]string, bool) {
+	if len(m.appendpython_imports) == 0 {
+		return nil, false
+	}
+	return m.appendpython_imports, true
+}
+
+// ClearPythonImports clears the value of the "python_imports" field.
+func (m *ClassificationAnalyticsMutation) ClearPythonImports() {
+	m.python_imports = nil
+	m.appendpython_imports = nil
+	m.clearedFields[classificationanalytics.FieldPythonImports] = struct{}{}
+}
+
+// PythonImportsCleared returns if the "python_imports" field was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) PythonImportsCleared() bool {
+	_, ok := m.clearedFields[classificationanalytics.FieldPythonImports]
+	return ok
+}
+
+// ResetPythonImports resets all changes to the "python_imports" field.
+func (m *ClassificationAnalyticsMutation) ResetPythonImports() {
+	m.python_imports = nil
+	m.appendpython_imports = nil
+	delete(m.clearedFields, classificationanalytics.FieldPythonImports)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ClassificationAnalyticsMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ClassificationAnalyticsMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ClassificationAnalytics entity.
+// If the ClassificationAnalytics object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ClassificationAnalyticsMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ClassificationAnalyticsMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// Where appends a list predicates to the ClassificationAnalyticsMutation builder.
+func (m *ClassificationAnalyticsMutation) Where(ps ...predicate.ClassificationAnalytics) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ClassificationAnalyticsMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ClassificationAnalyticsMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ClassificationAnalytics, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ClassificationAnalyticsMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ClassificationAnalyticsMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ClassificationAnalytics).
+func (m *ClassificationAnalyticsMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ClassificationAnalyticsMutation) Fields() []string {
+	fields := make([]string, 0, 18)
+	if m.analytics_id != nil {
+		fields = append(fields, classificationanalytics.FieldAnalyticsID)
+	}
+	if m.session_id != nil {
+		fields = append(fields, classificationanalytics.FieldSessionID)
+	}
+	if m.tool_name != nil {
+		fields = append(fields, classificationanalytics.FieldToolName)
+	}
+	if m.command_preview != nil {
+		fields = append(fields, classificationanalytics.FieldCommandPreview)
+	}
+	if m.cwd != nil {
+		fields = append(fields, classificationanalytics.FieldCwd)
+	}
+	if m.decision != nil {
+		fields = append(fields, classificationanalytics.FieldDecision)
+	}
+	if m.risk_level != nil {
+		fields = append(fields, classificationanalytics.FieldRiskLevel)
+	}
+	if m.rule_id != nil {
+		fields = append(fields, classificationanalytics.FieldRuleID)
+	}
+	if m.rule_name != nil {
+		fields = append(fields, classificationanalytics.FieldRuleName)
+	}
+	if m.reason != nil {
+		fields = append(fields, classificationanalytics.FieldReason)
+	}
+	if m.alternative != nil {
+		fields = append(fields, classificationanalytics.FieldAlternative)
+	}
+	if m.duration_ms != nil {
+		fields = append(fields, classificationanalytics.FieldDurationMs)
+	}
+	if m.approval_id != nil {
+		fields = append(fields, classificationanalytics.FieldApprovalID)
+	}
+	if m.command_program != nil {
+		fields = append(fields, classificationanalytics.FieldCommandProgram)
+	}
+	if m.command_category != nil {
+		fields = append(fields, classificationanalytics.FieldCommandCategory)
+	}
+	if m.command_subcategory != nil {
+		fields = append(fields, classificationanalytics.FieldCommandSubcategory)
+	}
+	if m.python_imports != nil {
+		fields = append(fields, classificationanalytics.FieldPythonImports)
+	}
+	if m.created_at != nil {
+		fields = append(fields, classificationanalytics.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ClassificationAnalyticsMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case classificationanalytics.FieldAnalyticsID:
+		return m.AnalyticsID()
+	case classificationanalytics.FieldSessionID:
+		return m.SessionID()
+	case classificationanalytics.FieldToolName:
+		return m.ToolName()
+	case classificationanalytics.FieldCommandPreview:
+		return m.CommandPreview()
+	case classificationanalytics.FieldCwd:
+		return m.Cwd()
+	case classificationanalytics.FieldDecision:
+		return m.Decision()
+	case classificationanalytics.FieldRiskLevel:
+		return m.RiskLevel()
+	case classificationanalytics.FieldRuleID:
+		return m.RuleID()
+	case classificationanalytics.FieldRuleName:
+		return m.RuleName()
+	case classificationanalytics.FieldReason:
+		return m.Reason()
+	case classificationanalytics.FieldAlternative:
+		return m.Alternative()
+	case classificationanalytics.FieldDurationMs:
+		return m.DurationMs()
+	case classificationanalytics.FieldApprovalID:
+		return m.ApprovalID()
+	case classificationanalytics.FieldCommandProgram:
+		return m.CommandProgram()
+	case classificationanalytics.FieldCommandCategory:
+		return m.CommandCategory()
+	case classificationanalytics.FieldCommandSubcategory:
+		return m.CommandSubcategory()
+	case classificationanalytics.FieldPythonImports:
+		return m.PythonImports()
+	case classificationanalytics.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ClassificationAnalyticsMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case classificationanalytics.FieldAnalyticsID:
+		return m.OldAnalyticsID(ctx)
+	case classificationanalytics.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case classificationanalytics.FieldToolName:
+		return m.OldToolName(ctx)
+	case classificationanalytics.FieldCommandPreview:
+		return m.OldCommandPreview(ctx)
+	case classificationanalytics.FieldCwd:
+		return m.OldCwd(ctx)
+	case classificationanalytics.FieldDecision:
+		return m.OldDecision(ctx)
+	case classificationanalytics.FieldRiskLevel:
+		return m.OldRiskLevel(ctx)
+	case classificationanalytics.FieldRuleID:
+		return m.OldRuleID(ctx)
+	case classificationanalytics.FieldRuleName:
+		return m.OldRuleName(ctx)
+	case classificationanalytics.FieldReason:
+		return m.OldReason(ctx)
+	case classificationanalytics.FieldAlternative:
+		return m.OldAlternative(ctx)
+	case classificationanalytics.FieldDurationMs:
+		return m.OldDurationMs(ctx)
+	case classificationanalytics.FieldApprovalID:
+		return m.OldApprovalID(ctx)
+	case classificationanalytics.FieldCommandProgram:
+		return m.OldCommandProgram(ctx)
+	case classificationanalytics.FieldCommandCategory:
+		return m.OldCommandCategory(ctx)
+	case classificationanalytics.FieldCommandSubcategory:
+		return m.OldCommandSubcategory(ctx)
+	case classificationanalytics.FieldPythonImports:
+		return m.OldPythonImports(ctx)
+	case classificationanalytics.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown ClassificationAnalytics field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ClassificationAnalyticsMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case classificationanalytics.FieldAnalyticsID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAnalyticsID(v)
+		return nil
+	case classificationanalytics.FieldSessionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case classificationanalytics.FieldToolName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolName(v)
+		return nil
+	case classificationanalytics.FieldCommandPreview:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommandPreview(v)
+		return nil
+	case classificationanalytics.FieldCwd:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCwd(v)
+		return nil
+	case classificationanalytics.FieldDecision:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDecision(v)
+		return nil
+	case classificationanalytics.FieldRiskLevel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRiskLevel(v)
+		return nil
+	case classificationanalytics.FieldRuleID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRuleID(v)
+		return nil
+	case classificationanalytics.FieldRuleName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRuleName(v)
+		return nil
+	case classificationanalytics.FieldReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReason(v)
+		return nil
+	case classificationanalytics.FieldAlternative:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAlternative(v)
+		return nil
+	case classificationanalytics.FieldDurationMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDurationMs(v)
+		return nil
+	case classificationanalytics.FieldApprovalID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApprovalID(v)
+		return nil
+	case classificationanalytics.FieldCommandProgram:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommandProgram(v)
+		return nil
+	case classificationanalytics.FieldCommandCategory:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommandCategory(v)
+		return nil
+	case classificationanalytics.FieldCommandSubcategory:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommandSubcategory(v)
+		return nil
+	case classificationanalytics.FieldPythonImports:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPythonImports(v)
+		return nil
+	case classificationanalytics.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ClassificationAnalytics field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ClassificationAnalyticsMutation) AddedFields() []string {
+	var fields []string
+	if m.addduration_ms != nil {
+		fields = append(fields, classificationanalytics.FieldDurationMs)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ClassificationAnalyticsMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case classificationanalytics.FieldDurationMs:
+		return m.AddedDurationMs()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ClassificationAnalyticsMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case classificationanalytics.FieldDurationMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDurationMs(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ClassificationAnalytics numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ClassificationAnalyticsMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(classificationanalytics.FieldSessionID) {
+		fields = append(fields, classificationanalytics.FieldSessionID)
+	}
+	if m.FieldCleared(classificationanalytics.FieldCommandPreview) {
+		fields = append(fields, classificationanalytics.FieldCommandPreview)
+	}
+	if m.FieldCleared(classificationanalytics.FieldCwd) {
+		fields = append(fields, classificationanalytics.FieldCwd)
+	}
+	if m.FieldCleared(classificationanalytics.FieldRuleID) {
+		fields = append(fields, classificationanalytics.FieldRuleID)
+	}
+	if m.FieldCleared(classificationanalytics.FieldRuleName) {
+		fields = append(fields, classificationanalytics.FieldRuleName)
+	}
+	if m.FieldCleared(classificationanalytics.FieldReason) {
+		fields = append(fields, classificationanalytics.FieldReason)
+	}
+	if m.FieldCleared(classificationanalytics.FieldAlternative) {
+		fields = append(fields, classificationanalytics.FieldAlternative)
+	}
+	if m.FieldCleared(classificationanalytics.FieldApprovalID) {
+		fields = append(fields, classificationanalytics.FieldApprovalID)
+	}
+	if m.FieldCleared(classificationanalytics.FieldCommandProgram) {
+		fields = append(fields, classificationanalytics.FieldCommandProgram)
+	}
+	if m.FieldCleared(classificationanalytics.FieldCommandCategory) {
+		fields = append(fields, classificationanalytics.FieldCommandCategory)
+	}
+	if m.FieldCleared(classificationanalytics.FieldCommandSubcategory) {
+		fields = append(fields, classificationanalytics.FieldCommandSubcategory)
+	}
+	if m.FieldCleared(classificationanalytics.FieldPythonImports) {
+		fields = append(fields, classificationanalytics.FieldPythonImports)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ClassificationAnalyticsMutation) ClearField(name string) error {
+	switch name {
+	case classificationanalytics.FieldSessionID:
+		m.ClearSessionID()
+		return nil
+	case classificationanalytics.FieldCommandPreview:
+		m.ClearCommandPreview()
+		return nil
+	case classificationanalytics.FieldCwd:
+		m.ClearCwd()
+		return nil
+	case classificationanalytics.FieldRuleID:
+		m.ClearRuleID()
+		return nil
+	case classificationanalytics.FieldRuleName:
+		m.ClearRuleName()
+		return nil
+	case classificationanalytics.FieldReason:
+		m.ClearReason()
+		return nil
+	case classificationanalytics.FieldAlternative:
+		m.ClearAlternative()
+		return nil
+	case classificationanalytics.FieldApprovalID:
+		m.ClearApprovalID()
+		return nil
+	case classificationanalytics.FieldCommandProgram:
+		m.ClearCommandProgram()
+		return nil
+	case classificationanalytics.FieldCommandCategory:
+		m.ClearCommandCategory()
+		return nil
+	case classificationanalytics.FieldCommandSubcategory:
+		m.ClearCommandSubcategory()
+		return nil
+	case classificationanalytics.FieldPythonImports:
+		m.ClearPythonImports()
+		return nil
+	}
+	return fmt.Errorf("unknown ClassificationAnalytics nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ClassificationAnalyticsMutation) ResetField(name string) error {
+	switch name {
+	case classificationanalytics.FieldAnalyticsID:
+		m.ResetAnalyticsID()
+		return nil
+	case classificationanalytics.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case classificationanalytics.FieldToolName:
+		m.ResetToolName()
+		return nil
+	case classificationanalytics.FieldCommandPreview:
+		m.ResetCommandPreview()
+		return nil
+	case classificationanalytics.FieldCwd:
+		m.ResetCwd()
+		return nil
+	case classificationanalytics.FieldDecision:
+		m.ResetDecision()
+		return nil
+	case classificationanalytics.FieldRiskLevel:
+		m.ResetRiskLevel()
+		return nil
+	case classificationanalytics.FieldRuleID:
+		m.ResetRuleID()
+		return nil
+	case classificationanalytics.FieldRuleName:
+		m.ResetRuleName()
+		return nil
+	case classificationanalytics.FieldReason:
+		m.ResetReason()
+		return nil
+	case classificationanalytics.FieldAlternative:
+		m.ResetAlternative()
+		return nil
+	case classificationanalytics.FieldDurationMs:
+		m.ResetDurationMs()
+		return nil
+	case classificationanalytics.FieldApprovalID:
+		m.ResetApprovalID()
+		return nil
+	case classificationanalytics.FieldCommandProgram:
+		m.ResetCommandProgram()
+		return nil
+	case classificationanalytics.FieldCommandCategory:
+		m.ResetCommandCategory()
+		return nil
+	case classificationanalytics.FieldCommandSubcategory:
+		m.ResetCommandSubcategory()
+		return nil
+	case classificationanalytics.FieldPythonImports:
+		m.ResetPythonImports()
+		return nil
+	case classificationanalytics.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ClassificationAnalytics field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ClassificationAnalyticsMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ClassificationAnalyticsMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ClassificationAnalyticsMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ClassificationAnalyticsMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ClassificationAnalyticsMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ClassificationAnalyticsMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown ClassificationAnalytics unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ClassificationAnalyticsMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown ClassificationAnalytics edge %s", name)
+}
 
 // ClaudeMetadataMutation represents an operation that mutates the ClaudeMetadata nodes in the graph.
 type ClaudeMetadataMutation struct {

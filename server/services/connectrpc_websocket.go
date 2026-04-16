@@ -570,7 +570,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 				return
 			case data, ok := <-updateChan:
 				if !ok {
-					log.InfoLog.Printf("[streamViaControlMode] Update channel closed for session '%s'", sessionID)
 					return
 				}
 
@@ -635,7 +634,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 
 				// Check for EndStream
 				if envelope.Flags&protocol.EndStreamFlag != 0 {
-					log.InfoLog.Printf("[streamViaControlMode] Received EndStream for session '%s'", sessionID)
 					errChan <- nil
 					return
 				}
@@ -680,7 +678,9 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 						}
 						errorBytes, _ := proto.Marshal(errorData)
 						errorEnvelope := protocol.CreateEnvelope(0, errorBytes)
-						stream.WriteMessage(websocket.BinaryMessage, errorEnvelope)
+						if err := stream.WriteMessage(websocket.BinaryMessage, errorEnvelope); err != nil {
+							log.ErrorLog.Printf("[streamViaControlMode] Failed to send input error to client: %v", err)
+						}
 						continue
 					}
 				}
@@ -703,10 +703,8 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 	// EndStream is sent by the caller (HandleWebSocket) after this function returns.
 	select {
 	case err := <-errChan:
-		log.InfoLog.Printf("[streamViaControlMode] Streaming ended for session '%s': %v", sessionID, err)
 		return err
 	case <-doneChan:
-		log.InfoLog.Printf("[streamViaControlMode] Streaming completed for session '%s'", sessionID)
 		return nil
 	}
 }
@@ -957,7 +955,9 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 						}
 						if errBytes, err := proto.Marshal(errorData); err == nil {
 							errEnvelope := protocol.CreateEnvelope(0, errBytes)
-							stream.WriteMessage(websocket.BinaryMessage, errEnvelope)
+							if err := stream.WriteMessage(websocket.BinaryMessage, errEnvelope); err != nil {
+								log.ErrorLog.Printf("[streamViaTmuxCapture] Failed to send input error to client: %v", err)
+							}
 						}
 					} else {
 						log.DebugLog.Printf("[streamViaTmuxCapture] Sent input (%d bytes) to tmux '%s'",
@@ -1232,13 +1232,13 @@ func parseConnectHeaders(headersText string) map[string]string {
 // sendErrorResponse sends an error response over WebSocket
 func sendErrorResponse(conn *websocket.Conn, errorMsg string) {
 	responseHeaders := fmt.Sprintf("Status-Code: 500\r\nContent-Type: text/plain\r\n\r\n%s", errorMsg)
-	conn.WriteMessage(websocket.TextMessage, []byte(responseHeaders))
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(responseHeaders)); err != nil {
+		log.ErrorLog.Printf("Failed to send error response headers: %v", err)
+	}
 }
 
 // sendEndStreamSuccess sends a successful EndStream message
 func sendEndStreamSuccess(stream *connectWebSocketStream) {
-	log.InfoLog.Printf("Sending EndStreamSuccess")
-
 	// ConnectRPC protocol requires JSON-encoded EndStream payload (not protobuf)
 	// Success EndStream is an empty JSON object
 	dataBytes := []byte(`{}`)
@@ -1262,7 +1262,9 @@ func sendEndStreamError(stream *connectWebSocketStream, err error) {
 	dataBytes := fmt.Appendf(nil, `{"error":{"code":"internal","message":%s}}`, errMsg)
 
 	envelope := protocol.CreateEnvelope(protocol.EndStreamFlag, dataBytes)
-	stream.WriteMessage(websocket.BinaryMessage, envelope)
+	if err := stream.WriteMessage(websocket.BinaryMessage, envelope); err != nil {
+		log.ErrorLog.Printf("Failed to send EndStreamError: %v", err)
+	}
 }
 
 // detectContentWidth analyzes captured terminal content to determine the actual

@@ -10,6 +10,8 @@ export const routes = {
   history: "/history",
   logs: "/logs",
   config: "/config",
+  settings: "/settings",
+  settingsDefaults: "/settings/defaults",
   login: "/login",
   sessionDetail: (id: string) => `/sessions/${id}`,
 } as const;

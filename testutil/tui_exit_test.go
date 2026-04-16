@@ -180,7 +180,7 @@ func TestTUINoHangOnExit(t *testing.T) {
 		}
 
 		// Wait for exit (allow up to 8 seconds for safe margin)
-		err = session.WaitForExit(8 * time.Second)
+		_ = session.WaitForExit(8 * time.Second)
 		elapsed := time.Since(startTime)
 
 		t.Logf("Exit took %v", elapsed)

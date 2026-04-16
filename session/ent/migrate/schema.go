@@ -8,6 +8,104 @@ import (
 )
 
 var (
+	// ApprovalRulesColumns holds the columns for the "approval_rules" table.
+	ApprovalRulesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "rule_id", Type: field.TypeString, Unique: true},
+		{Name: "name", Type: field.TypeString},
+		{Name: "tool_name", Type: field.TypeString, Nullable: true},
+		{Name: "tool_pattern", Type: field.TypeString, Nullable: true},
+		{Name: "tool_category", Type: field.TypeString, Nullable: true},
+		{Name: "command_pattern", Type: field.TypeString, Nullable: true},
+		{Name: "file_pattern", Type: field.TypeString, Nullable: true},
+		{Name: "decision", Type: field.TypeInt},
+		{Name: "risk_level", Type: field.TypeInt},
+		{Name: "reason", Type: field.TypeString, Nullable: true},
+		{Name: "alternative", Type: field.TypeString, Nullable: true},
+		{Name: "priority", Type: field.TypeInt, Default: 0},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "source", Type: field.TypeString, Default: "user"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// ApprovalRulesTable holds the schema information for the "approval_rules" table.
+	ApprovalRulesTable = &schema.Table{
+		Name:       "approval_rules",
+		Columns:    ApprovalRulesColumns,
+		PrimaryKey: []*schema.Column{ApprovalRulesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "approvalrule_rule_id",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalRulesColumns[1]},
+			},
+			{
+				Name:    "approvalrule_priority",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalRulesColumns[12]},
+			},
+			{
+				Name:    "approvalrule_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalRulesColumns[13]},
+			},
+		},
+	}
+	// ClassificationAnalyticsColumns holds the columns for the "classification_analytics" table.
+	ClassificationAnalyticsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "analytics_id", Type: field.TypeString, Unique: true},
+		{Name: "session_id", Type: field.TypeString, Nullable: true},
+		{Name: "tool_name", Type: field.TypeString},
+		{Name: "command_preview", Type: field.TypeString, Nullable: true},
+		{Name: "cwd", Type: field.TypeString, Nullable: true},
+		{Name: "decision", Type: field.TypeString},
+		{Name: "risk_level", Type: field.TypeString},
+		{Name: "rule_id", Type: field.TypeString, Nullable: true},
+		{Name: "rule_name", Type: field.TypeString, Nullable: true},
+		{Name: "reason", Type: field.TypeString, Nullable: true},
+		{Name: "alternative", Type: field.TypeString, Nullable: true},
+		{Name: "duration_ms", Type: field.TypeInt64, Default: 0},
+		{Name: "approval_id", Type: field.TypeString, Nullable: true},
+		{Name: "command_program", Type: field.TypeString, Nullable: true},
+		{Name: "command_category", Type: field.TypeString, Nullable: true},
+		{Name: "command_subcategory", Type: field.TypeString, Nullable: true},
+		{Name: "python_imports", Type: field.TypeJSON, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// ClassificationAnalyticsTable holds the schema information for the "classification_analytics" table.
+	ClassificationAnalyticsTable = &schema.Table{
+		Name:       "classification_analytics",
+		Columns:    ClassificationAnalyticsColumns,
+		PrimaryKey: []*schema.Column{ClassificationAnalyticsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "classificationanalytics_session_id",
+				Unique:  false,
+				Columns: []*schema.Column{ClassificationAnalyticsColumns[2]},
+			},
+			{
+				Name:    "classificationanalytics_decision",
+				Unique:  false,
+				Columns: []*schema.Column{ClassificationAnalyticsColumns[6]},
+			},
+			{
+				Name:    "classificationanalytics_risk_level",
+				Unique:  false,
+				Columns: []*schema.Column{ClassificationAnalyticsColumns[7]},
+			},
+			{
+				Name:    "classificationanalytics_rule_id",
+				Unique:  false,
+				Columns: []*schema.Column{ClassificationAnalyticsColumns[8]},
+			},
+			{
+				Name:    "classificationanalytics_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{ClassificationAnalyticsColumns[18]},
+			},
+		},
+	}
 	// ClaudeMetadataColumns holds the columns for the "claude_metadata" table.
 	ClaudeMetadataColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -213,6 +311,8 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		ApprovalRulesTable,
+		ClassificationAnalyticsTable,
 		ClaudeMetadataTable,
 		ClaudeSessionsTable,
 		DiffStatsTable,

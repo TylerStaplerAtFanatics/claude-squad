@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	cmdbridge "github.com/tstapler/stapler-squad/cmd"
+	"github.com/tstapler/stapler-squad/cmd/commands"
 	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/daemon"
 	"github.com/tstapler/stapler-squad/executor"
@@ -30,7 +31,7 @@ import (
 )
 
 var (
-	version            = "dev"
+	version            = "1.1.2"
 	daemonFlag         bool
 	testModeFlag       bool
 	testDirFlag        string
@@ -48,7 +49,21 @@ var (
 		Use:   "stapler-squad",
 		Short: "Stapler Squad - Manage multiple AI agents like Claude Code, Aider, Codex, and Amp (Web Mode)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Graceful shutdown on SIGTERM (pkill from Makefile) and SIGINT (Ctrl+C).
+			// cancel() triggers srv.Shutdown() which runs the shutdown hooks that persist
+			// session state (including Claude session IDs for --resume on next start).
+			sigChan := make(chan os.Signal, 1)
+			signal.Notify(sigChan, syscall.SIGTERM, os.Interrupt)
+			defer signal.Stop(sigChan)
+			go func() {
+				sig := <-sigChan
+				log.InfoLog.Printf("Received signal %v, initiating graceful shutdown", sig)
+				log.LogSessionPathsToStderr()
+				cancel()
+			}()
 
 			// Enable test mode if flag is set
 			if testModeFlag {
@@ -633,6 +648,7 @@ func init() {
 	rootCmd.AddCommand(testPtyCmd)
 	rootCmd.AddCommand(listSessionsCmd)
 	rootCmd.AddCommand(printQRCodesCmd)
+	rootCmd.AddCommand(commands.GetSessionCmd)
 }
 
 // resolveLANHostnames returns a list of domain names suitable for use as a WebAuthn rpID
@@ -759,11 +775,10 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 
 	remoteAddr := fmt.Sprintf("0.0.0.0:%d", remotePort)
 
-	// Build SAN list for the TLS cert — hostnames only.
-	// IPs are intentionally excluded: WebAuthn rpID must be a hostname, so
-	// including the LAN IP in the SANs would cause the CA to regenerate on
-	// every DHCP lease change, invalidating previously installed CA certs.
-	sans := []string{"localhost"}
+	// Build SAN list for the TLS cert (include localhost, IP, and all hostnames).
+	// WebAuthn rpID must be a hostname, so including the LAN IP in the SANs
+	// is fine for HTTPS but rpID itself must be a hostname for most browsers.
+	sans := []string{"localhost", "127.0.0.1", lanIPStr}
 	sans = append(sans, hostnames...)
 
 	tlsPaths, err := server.EnsureTLSCerts(sans)
@@ -776,6 +791,8 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 		return fmt.Errorf("load TLS config: %w", err)
 	}
 
+	// Determine rpID: config/flag override > first detected hostname > detected LAN IP.
+	// WebAuthn spec requires a domain name; IP addresses are not accepted by browsers.
 	rpID := cfg.PasskeyRPID
 	if rpID == "" {
 		if len(hostnames) > 0 {
@@ -875,18 +892,6 @@ func startRemoteAccess(ctx context.Context, srv *server.Server, localAddr string
 }
 
 func main() {
-	// Set up signal handling for SIGTERM only (not SIGINT/Ctrl+C)
-	// We only intercept SIGTERM for forced termination (e.g., systemd, docker)
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGTERM) // Only SIGTERM, not os.Interrupt
-
-	go func() {
-		<-c
-		log.InfoLog.Printf("Received SIGTERM, forcing exit")
-		log.LogSessionPathsToStderr()
-		os.Exit(1)
-	}()
-
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 	}

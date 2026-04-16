@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/tstapler/stapler-squad/config"
+	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/server/events"
@@ -76,11 +77,14 @@ func NewServer(addr string) *Server {
 		},
 	}
 
+	log.InfoLog.Printf("Building server dependencies...")
+	startTime := time.Now()
 	deps, err := BuildDependencies()
 	if err != nil {
 		log.ErrorLog.Printf("Failed to build server dependencies: %v", err)
 		// Continue without services — all RPC calls will return errors
 	} else {
+		log.InfoLog.Printf("Server dependencies built in %v", time.Since(startTime))
 		// Start background components
 		serverCtx := context.Background()
 		go deps.ReactiveQueueMgr.Start(serverCtx)
@@ -150,8 +154,8 @@ func NewServer(addr string) *Server {
 				"tmux-server",
 				"System",
 				uuid.New().String(),
-				int32(8), // NotificationType_NOTIFICATION_TYPE_WARNING
-				int32(2), // NotificationPriority_NOTIFICATION_PRIORITY_MEDIUM
+				int32(sessionv1.NotificationType_NOTIFICATION_TYPE_WARNING),
+				int32(sessionv1.NotificationPriority_NOTIFICATION_PRIORITY_MEDIUM),
 				"Tmux Server Recovered",
 				"Connection to the tmux server has been restored. Sessions will resume automatically.",
 				nil,

@@ -126,11 +126,6 @@ func ToStaplerSquadTmuxName(str string) string {
 	return toStaplerSquadTmuxNameWithPrefix(str, TmuxPrefix)
 }
 
-// toStaplerSquadTmuxName is the internal version for backward compatibility
-func toStaplerSquadTmuxName(str string) string {
-	return ToStaplerSquadTmuxName(str)
-}
-
 func toStaplerSquadTmuxNameWithPrefix(str string, prefix string) string {
 	str = whiteSpaceRegex.ReplaceAllString(str, "")
 	str = strings.ReplaceAll(str, ".", "_") // tmux replaces all . with _
@@ -463,7 +458,9 @@ func (t *TmuxSession) start(workDir string, setupCleanup bool, cleanup *CleanupF
 	// Create a new detached tmux session and start the program in it.
 	// Pass -e CLAUDECODE= to unset CLAUDECODE in the child environment so that
 	// nested Claude Code sessions are not blocked by the "nested session" guard.
-	cmd := t.buildTmuxCommand("new-session", "-d", "-s", t.sanitizedName, "-e", "CLAUDECODE=", "-c", workDir, t.program)
+	historyPath := fmt.Sprintf("%s/.stapler_squad_history", workDir)
+	programWithHistory := fmt.Sprintf("env HISTFILE=%s %s", historyPath, t.program)
+	cmd := t.buildTmuxCommand("new-session", "-d", "-s", t.sanitizedName, "-e", "CLAUDECODE=", "-c", workDir, programWithHistory)
 
 	// Use cmdExec.Run() instead of pty.Start() for detached session creation
 	// since detached sessions don't need PTY attachment during creation
@@ -976,31 +973,7 @@ func (t *TmuxSession) Detach() {
 
 	// Mark as detaching to prevent concurrent operations
 	t.detaching = true
-
-	// TODO: control flow is a bit messy here. If there's an error,
-	// I'm not sure if we get into a bad state. Needs testing.
 	defer func() {
-		// Safely close attachCh only if it exists and isn't already closed
-		if t.attachCh != nil {
-			// Use a select with default to avoid blocking on an already-closed channel
-			select {
-			case <-t.attachCh:
-				// Channel is already closed, nothing to do
-			default:
-				// Channel is open, safe to close
-				close(t.attachCh)
-			}
-			t.attachCh = nil
-		}
-		if t.cancel != nil {
-			t.cancel()
-			t.cancel = nil
-		}
-		if t.wg != nil {
-			t.wg.Wait()
-			t.wg = nil
-		}
-		t.ctx = nil
 		t.detaching = false
 	}()
 
@@ -1039,9 +1012,27 @@ func (t *TmuxSession) Detach() {
 	// Cancel goroutines created by Attach.
 	if t.cancel != nil {
 		t.cancel()
+		t.cancel = nil
 	}
 	if t.wg != nil {
 		t.wg.Wait()
+		t.wg = nil
+	}
+
+	t.ctx = nil
+
+	// Safely close attachCh only if it exists and isn't already closed
+	// This is done after goroutines finish tearing down to match original behavior.
+	if t.attachCh != nil {
+		// Use a select with default to avoid blocking on an already-closed channel
+		select {
+		case <-t.attachCh:
+			// Channel is already closed, nothing to do
+		default:
+			// Channel is open, safe to close
+			close(t.attachCh)
+		}
+		t.attachCh = nil
 	}
 }
 
@@ -1572,7 +1563,7 @@ func CleanupSessionsOnServer(cmdExec executor.Executor, serverSocket string) err
 	return nil
 }
 
-// sanitizeUTF8String converts raw bytes to valid UTF-8 string, preserving ANSI escape sequences
+// sanitizeUTF8String converts raw bytes to valid UTF-8 string, replacing invalid sequences
 // This prevents xterm.js parsing errors from invalid byte sequences while maintaining
 // terminal formatting and color information
 func sanitizeUTF8String(rawBytes []byte) string {
@@ -1609,7 +1600,7 @@ func sanitizeUTF8String(rawBytes []byte) string {
 
 		if r == utf8.RuneError && size == 1 {
 			// Invalid UTF-8 byte - replace with replacement character
-			result.WriteString("�")
+			result.WriteString("")
 			i++
 		} else if r < 32 {
 			// Control character - allow common terminal chars

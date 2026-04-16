@@ -1,17 +1,16 @@
 package services
 
 import (
-	"bufio"
-	"encoding/json"
+	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/pkg/classifier"
+	"github.com/tstapler/stapler-squad/session"
 )
 
 // AnalyticsEntry records a single classification decision.
@@ -114,22 +113,22 @@ type AnalyticsSummary struct {
 	CommandSubcommandStats []SubcommandStat `json:"command_subcommand_stats"`
 }
 
-// AnalyticsStore writes AnalyticsEntry records asynchronously to a JSONL file
-// and provides in-memory query aggregations.
+// AnalyticsStore writes AnalyticsEntry records asynchronously to SQLite
+// via session.Storage and provides aggregations.
 type AnalyticsStore struct {
-	filePath string
-	ch       chan AnalyticsEntry
-	dropped  int64 // atomic counter for dropped entries
+	storage *session.Storage
+	ch      chan AnalyticsEntry
+	dropped int64 // atomic counter for dropped entries
 }
 
 const analyticsBufferSize = 1000
 
-// NewAnalyticsStore creates an AnalyticsStore backed by the given JSONL file.
+// NewAnalyticsStore creates an AnalyticsStore backed by the given storage.
 // Call Start() to begin the background flush goroutine.
-func NewAnalyticsStore(filePath string) *AnalyticsStore {
+func NewAnalyticsStore(storage *session.Storage) *AnalyticsStore {
 	return &AnalyticsStore{
-		filePath: filePath,
-		ch:       make(chan AnalyticsEntry, analyticsBufferSize),
+		storage: storage,
+		ch:      make(chan AnalyticsEntry, analyticsBufferSize),
 	}
 }
 
@@ -157,7 +156,7 @@ func (s *AnalyticsStore) Record(entry AnalyticsEntry) {
 }
 
 // RecordFromResult builds and records an AnalyticsEntry from classification output.
-func (s *AnalyticsStore) RecordFromResult(payload PermissionRequestPayload, result ClassificationResult, sessionID, approvalID string, durationMs int64) {
+func (s *AnalyticsStore) RecordFromResult(payload classifier.PermissionRequestPayload, result classifier.ClassificationResult, sessionID, approvalID string, durationMs int64) {
 	cmd, _ := payload.ToolInput["command"].(string)
 	filePath, _ := payload.ToolInput["file_path"].(string)
 	preview := cmd
@@ -185,13 +184,13 @@ func (s *AnalyticsStore) RecordFromResult(payload PermissionRequestPayload, resu
 
 	// For Bash tool calls, extract which programs are being invoked.
 	if payload.ToolName == "Bash" && cmd != "" {
-		info := ParseBashCommand(cmd)
+		info := classifier.ParseBashCommand(cmd)
 		entry.CommandProgram = info.Program
 		entry.CommandCategory = info.Category
 		entry.CommandSubcategory = info.Subcommand
 		// For Python interpreter calls, also extract inline imports.
-		if pythonPrograms[info.Program] {
-			pyInfo := ParsePythonCommand(cmd)
+		if classifier.PythonPrograms[info.Program] {
+			pyInfo := classifier.ParsePythonCommand(cmd)
 			entry.PythonImports = pyInfo.Imports
 		}
 	}
@@ -215,37 +214,39 @@ func (s *AnalyticsStore) DroppedCount() int64 {
 	return atomic.LoadInt64(&s.dropped)
 }
 
-// LoadWindow reads JSONL entries from disk with timestamps >= since.
-// Malformed lines are skipped with a warning.
+// LoadWindow reads entries from DB with timestamps >= since.
+// TODO: Add a timestamp-filtered query to the repository layer to avoid
+// loading all rows into memory as the analytics table grows.
 func (s *AnalyticsStore) LoadWindow(since time.Time) ([]AnalyticsEntry, error) {
-	f, err := os.Open(s.filePath)
+	data, err := s.storage.ListAnalytics(context.Background(), 0)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("open %s: %w", s.filePath, err)
+		return nil, fmt.Errorf("list analytics from DB: %w", err)
 	}
-	defer f.Close()
 
 	var entries []AnalyticsEntry
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB per line
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
+	for _, d := range data {
+		if !d.CreatedAt.Before(since) {
+			entries = append(entries, AnalyticsEntry{
+				ID:                 d.ID,
+				Timestamp:          d.CreatedAt,
+				SessionID:          d.SessionID,
+				ToolName:           d.ToolName,
+				CommandPreview:     d.CommandPreview,
+				Cwd:                d.Cwd,
+				Decision:           d.Decision,
+				RiskLevel:          d.RiskLevel,
+				RuleID:             d.RuleID,
+				RuleName:           d.RuleName,
+				Reason:             d.Reason,
+				Alternative:        d.Alternative,
+				DurationMs:         d.DurationMs,
+				ApprovalID:         d.ApprovalID,
+				CommandProgram:     d.CommandProgram,
+				CommandCategory:    d.CommandCategory,
+				CommandSubcategory: d.CommandSubcategory,
+				PythonImports:      d.PythonImports,
+			})
 		}
-		var e AnalyticsEntry
-		if err := json.Unmarshal(line, &e); err != nil {
-			log.WarningLog.Printf("[AnalyticsStore] Skipping malformed line: %v", err)
-			continue
-		}
-		if !e.Timestamp.Before(since) {
-			entries = append(entries, e)
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return entries, fmt.Errorf("scan %s: %w", s.filePath, err)
 	}
 	return entries, nil
 }
@@ -259,7 +260,7 @@ func (s *AnalyticsStore) LoadWindow(since time.Time) ([]AnalyticsEntry, error) {
 // the CURRENT rule set rather than the rules that were active when the entry was
 // recorded. This prevents historical gaps from artificially inflating the gap
 // rate after new rules are added.
-func ReclassifyGaps(entries []AnalyticsEntry, c Classifier) []AnalyticsEntry {
+func ReclassifyGaps(entries []AnalyticsEntry, c classifier.Classifier) []AnalyticsEntry {
 	result := make([]AnalyticsEntry, len(entries))
 	copy(result, entries)
 	for i, e := range result {
@@ -267,15 +268,15 @@ func ReclassifyGaps(entries []AnalyticsEntry, c Classifier) []AnalyticsEntry {
 			continue
 		}
 		// Build a minimal payload from the stored preview and tool name.
-		payload := PermissionRequestPayload{
+		payload := classifier.PermissionRequestPayload{
 			ToolName: e.ToolName,
 			ToolInput: map[string]interface{}{
 				"command":   e.CommandPreview,
 				"file_path": e.CommandPreview,
 			},
 		}
-		r := c.Classify(payload, ClassificationContext{})
-		if r.Decision == AutoAllow || r.Decision == AutoDeny {
+		r := c.Classify(payload, classifier.ClassificationContext{})
+		if r.Decision == classifier.AutoAllow || r.Decision == classifier.AutoDeny {
 			result[i].Decision = decisionString(r.Decision)
 			result[i].RuleID = r.RuleID
 			result[i].RuleName = r.RuleName
@@ -466,41 +467,33 @@ func ComputeDailyBuckets(entries []AnalyticsEntry) []DailyBucket {
 	return buckets
 }
 
-// flush drains the channel and appends to the JSONL file.
+// flush drains the channel and writes to the DB.
 func (s *AnalyticsStore) flush(ctx interface{ Done() <-chan struct{} }) {
-	if err := os.MkdirAll(filepath.Dir(s.filePath), 0o755); err != nil {
-		log.WarningLog.Printf("[AnalyticsStore] Cannot create analytics dir: %v", err)
-	}
-
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	var pending []AnalyticsEntry
-	fsyncEvery := 10
 
-	flushPending := func() {
-		if len(pending) == 0 {
-			return
+	flushEntry := func(e AnalyticsEntry) {
+		data := session.AnalyticsData{
+			ID:                 e.ID,
+			SessionID:          e.SessionID,
+			ToolName:           e.ToolName,
+			CommandPreview:     e.CommandPreview,
+			Cwd:                e.Cwd,
+			Decision:           e.Decision,
+			RiskLevel:          e.RiskLevel,
+			RuleID:             e.RuleID,
+			RuleName:           e.RuleName,
+			Reason:             e.Reason,
+			Alternative:        e.Alternative,
+			DurationMs:         e.DurationMs,
+			ApprovalID:         e.ApprovalID,
+			CommandProgram:     e.CommandProgram,
+			CommandCategory:    e.CommandCategory,
+			CommandSubcategory: e.CommandSubcategory,
+			PythonImports:      e.PythonImports,
+			CreatedAt:          e.Timestamp,
 		}
-		f, err := os.OpenFile(s.filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			log.WarningLog.Printf("[AnalyticsStore] Cannot open analytics file: %v", err)
-			return
-		}
-		defer f.Close()
-		for _, e := range pending {
-			b, err := json.Marshal(e)
-			if err != nil {
-				log.WarningLog.Printf("[AnalyticsStore] Cannot marshal entry: %v", err)
-				continue
-			}
-			if _, err := fmt.Fprintf(f, "%s\n", b); err != nil {
-				log.WarningLog.Printf("[AnalyticsStore] Write error: %v", err)
-			}
-		}
-		if len(pending) >= fsyncEvery {
-			_ = f.Sync()
-		}
-		pending = pending[:0]
+		_ = s.storage.RecordAnalytics(context.Background(), data)
 	}
 
 	for {
@@ -510,43 +503,38 @@ func (s *AnalyticsStore) flush(ctx interface{ Done() <-chan struct{} }) {
 			for {
 				select {
 				case e := <-s.ch:
-					pending = append(pending, e)
+					flushEntry(e)
 				default:
-					flushPending()
 					return
 				}
 			}
 		case e := <-s.ch:
-			pending = append(pending, e)
-			if len(pending) >= fsyncEvery {
-				flushPending()
-			}
+			flushEntry(e)
 		case <-ticker.C:
-			flushPending()
 		}
 	}
 }
 
-func decisionString(d ClassificationDecision) string {
+func decisionString(d classifier.ClassificationDecision) string {
 	switch d {
-	case AutoAllow:
+	case classifier.AutoAllow:
 		return "auto_allow"
-	case AutoDeny:
+	case classifier.AutoDeny:
 		return "auto_deny"
 	default:
 		return "escalate"
 	}
 }
 
-func riskLevelString(r RiskLevel) string {
+func riskLevelString(r classifier.RiskLevel) string {
 	switch r {
-	case RiskLow:
+	case classifier.RiskLow:
 		return "low"
-	case RiskMedium:
+	case classifier.RiskMedium:
 		return "medium"
-	case RiskHigh:
+	case classifier.RiskHigh:
 		return "high"
-	case RiskCritical:
+	case classifier.RiskCritical:
 		return "critical"
 	default:
 		return "medium"

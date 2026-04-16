@@ -53,6 +53,8 @@ func (p *PathCompletionService) ListPathCompletions(
 	}
 
 	// Determine whether the exact expanded path exists as a directory.
+	// Intentionally directory-only: clients use this for path completion,
+	// where only directories are valid navigation targets.
 	pathExists := false
 	if info, statErr := os.Stat(expanded); statErr == nil {
 		pathExists = info.IsDir()
@@ -252,15 +254,12 @@ func splitPathPrefix(expanded string) (baseDir, filterPrefix string) {
 	if expanded == "" {
 		return ".", ""
 	}
-	idx := strings.LastIndex(expanded, "/")
-	if idx < 0 {
-		// No slash: treat as filter on current working directory.
-		return ".", expanded
+	dir := filepath.Dir(expanded)
+	base := filepath.Base(expanded)
+	// If expanded ends with a separator, Dir strips it and Base returns the last element.
+	// Detect trailing separator to treat as "list this directory".
+	if expanded[len(expanded)-1] == filepath.Separator || expanded[len(expanded)-1] == '/' {
+		return filepath.Clean(expanded), ""
 	}
-	if idx == 0 {
-		// e.g. "/foo" → ("/", "foo")
-		return "/", expanded[1:]
-	}
-	// General case: split at last slash.
-	return expanded[:idx], expanded[idx+1:]
+	return dir, base
 }
