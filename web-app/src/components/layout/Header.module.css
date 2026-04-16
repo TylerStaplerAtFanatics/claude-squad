@@ -287,10 +287,6 @@
     font-size: 0.8125rem;
   }
 
-  .newSessionLabel {
-    display: none; /* hide "New Session" text, keep + icon */
-  }
-
   .newSessionButton {
     padding: 0.5rem 0.625rem;
   }
@@ -301,6 +297,13 @@
 
   .subtitle {
     display: none; /* hide "Session Manager" earlier */
+  }
+}
+
+/* Hide "New Session" label at narrow-laptop/large-tablet width where header starts crowding */
+@media (max-width: 840px) {
+  .newSessionLabel {
+    display: none;
   }
 }
 
@@ -355,11 +358,6 @@
 
   .navLink:last-child {
     border-bottom: none;
-  }
-
-  /* Keep "New Session" button but hide its text label on mobile */
-  .newSessionLabel {
-    display: none;
   }
 
   .newSessionButton {
