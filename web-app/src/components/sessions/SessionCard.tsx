@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState, CheckpointProto } from "@/gen/session/v1/types_pb";
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
 import { GitHubBadge } from "./GitHubBadge";
 import { TagEditor } from "./TagEditor";
 import { useTerminalSnapshot } from "@/lib/hooks/useTerminalSnapshot";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import * as snapshotStyles from "./SessionCard.css";
 import styles from "./SessionCard.module.css";
 
@@ -72,6 +73,21 @@ export function SessionCard({
   const [checkpointError, setCheckpointError] = useState("");
   const [forkError, setForkError] = useState("");
   const [isSnapshotOpen, setIsSnapshotOpen] = useState(false);
+
+  // Refs for focus trap: dialog containers and the buttons that trigger them
+  const renameDialogRef = useRef<HTMLDivElement>(null);
+  const restartDialogRef = useRef<HTMLDivElement>(null);
+  const checkpointDialogRef = useRef<HTMLDivElement>(null);
+  const forkDialogRef = useRef<HTMLDivElement>(null);
+  const renameTriggerRef = useRef<HTMLButtonElement>(null);
+  const restartTriggerRef = useRef<HTMLButtonElement>(null);
+  const checkpointTriggerRef = useRef<HTMLButtonElement>(null);
+  const forkTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useFocusTrap(renameDialogRef, isRenameOpen, renameTriggerRef);
+  useFocusTrap(restartDialogRef, isRestartConfirmOpen, restartTriggerRef);
+  useFocusTrap(checkpointDialogRef, isCheckpointOpen, checkpointTriggerRef);
+  useFocusTrap(forkDialogRef, isForkOpen, forkTriggerRef);
 
   // Only fetch snapshot for running sessions (paused/loading sessions have stale output)
   const isSnapshotEnabled = session.status === SessionStatus.RUNNING && isSnapshotOpen;
@@ -357,9 +373,16 @@ export function SessionCard({
         />
       )}
       {isRenameOpen && (
-        <div className={styles.renameDialog} onClick={(e) => e.stopPropagation()}>
+        <div
+          ref={renameDialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="renameDialogTitle"
+          className={styles.renameDialog}
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className={styles.dialogContent}>
-            <h3>Rename Session</h3>
+            <h3 id="renameDialogTitle">Rename Session</h3>
             <input
               type="text"
               value={newTitle}
@@ -394,11 +417,13 @@ export function SessionCard({
       )}
       {isRestartConfirmOpen && (
         <div
+          ref={restartDialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="restartDialogTitle"
           className={styles.confirmDialog}
           onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => { if (e.key === "Escape") handleRestartCancel(e as unknown as React.MouseEvent); }}
         >
           <div className={styles.dialogContent}>
             <h3 id="restartDialogTitle">Restart Session</h3>
@@ -425,6 +450,7 @@ export function SessionCard({
       )}
       {isCheckpointOpen && (
         <div
+          ref={checkpointDialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="checkpointDialogTitle"
@@ -468,6 +494,7 @@ export function SessionCard({
       )}
       {isForkOpen && (
         <div
+          ref={forkDialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="forkDialogTitle"
@@ -820,6 +847,7 @@ export function SessionCard({
             </button>
           )}
           <button
+            ref={renameTriggerRef}
             className={styles.actionButton}
             onClick={handleRenameClick}
             title="Rename this session"
@@ -828,6 +856,7 @@ export function SessionCard({
             <span aria-hidden="true">✏️</span> Rename
           </button>
           <button
+            ref={restartTriggerRef}
             className={`${styles.actionButton} ${styles.restartButton}`}
             onClick={handleRestartClick}
             title="Restart this session"
@@ -837,6 +866,7 @@ export function SessionCard({
           </button>
           {onCreateCheckpoint && (
             <button
+              ref={checkpointTriggerRef}
               className={styles.actionButton}
               onClick={handleCheckpointClick}
               title="Save a named checkpoint of the current session state"
@@ -847,6 +877,7 @@ export function SessionCard({
           )}
           {onForkFromCheckpoint && (
             <button
+              ref={forkTriggerRef}
               className={styles.actionButton}
               onClick={handleForkClick}
               title="Fork this session from a checkpoint"
