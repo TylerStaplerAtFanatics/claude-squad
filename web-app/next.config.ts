@@ -20,13 +20,9 @@ const nextConfig: NextConfig = {
   experimental: {
     // Optimize package imports to reduce CSS chunking and preload warnings
     optimizePackageImports: ['@/components', '@/lib'],
-    // Turbopack configuration for protobuf .js to .ts resolution
-    turbo: {
-      resolveAlias: {
-        // Note: Turbopack handles this differently - we need symlinks or alias in tsconfig
-      },
-      resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
-    },
+  },
+  turbopack: {
+    resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
   },
   // Disable minification for development builds (better debugging)
   ...(isDevelopmentBuild ? {

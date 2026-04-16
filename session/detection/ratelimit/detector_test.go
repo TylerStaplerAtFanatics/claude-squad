@@ -194,9 +194,9 @@ func TestScheduler_ScheduleRecovery(t *testing.T) {
 func TestScheduler_CancelRecovery(t *testing.T) {
 	scheduler := NewScheduler("test-session")
 
-	var executed bool
+	var executed atomic.Bool
 	scheduler.SetRecoveryCallback(func() error {
-		executed = true
+		executed.Store(true)
 		return nil
 	})
 
@@ -207,7 +207,7 @@ func TestScheduler_CancelRecovery(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	if executed {
+	if executed.Load() {
 		t.Error("expected recovery callback to NOT be executed after cancel")
 	}
 }
