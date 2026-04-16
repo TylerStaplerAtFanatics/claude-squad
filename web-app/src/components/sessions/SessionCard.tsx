@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState, CheckpointProto } from "@/gen/session/v1/types_pb";
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
@@ -182,7 +182,25 @@ export function SessionCard({
   };
 
   const isPaused = session.status === SessionStatus.PAUSED;
+  const isRunning = session.status === SessionStatus.RUNNING;
+  const isReady = session.status === SessionStatus.READY;
   const isExternal = session.instanceType === InstanceType.EXTERNAL;
+
+  // Desktop overflow menu state
+  const [showOverflow, setShowOverflow] = useState(false);
+  const overflowContainerRef = useRef<HTMLDivElement>(null);
+
+  // Close overflow menu when clicking outside
+  useEffect(() => {
+    if (!showOverflow) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (overflowContainerRef.current && !overflowContainerRef.current.contains(e.target as Node)) {
+        setShowOverflow(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [showOverflow]);
   const sourceTerminal = session.externalMetadata?.sourceTerminal || "External";
   const muxEnabled = session.externalMetadata?.muxEnabled || false;
 
@@ -817,6 +835,142 @@ export function SessionCard({
           })()}
         </div>
 
+          {/* Desktop: primary action + overflow menu */}
+          <div className={styles.desktopActions}>
+            {(isPaused || isReady) && (
+              <button
+                className={styles.actionButton}
+                onClick={(e) => { e.stopPropagation(); onResume?.(); }}
+                aria-label={`Resume session ${session.title}`}
+                title="Resume this session"
+              >
+                <span aria-hidden="true">▶️</span> Resume
+              </button>
+            )}
+            {isRunning && (
+              <button
+                className={styles.actionButton}
+                onClick={(e) => { e.stopPropagation(); onPause?.(); }}
+                aria-label={`Pause session ${session.title}`}
+                title="Pause this session"
+              >
+                <span aria-hidden="true">⏸️</span> Pause
+              </button>
+            )}
+            <div ref={overflowContainerRef} className={styles.overflowContainer}>
+              <button
+                className={styles.overflowButton}
+                onClick={(e) => { e.stopPropagation(); setShowOverflow((o) => !o); }}
+                aria-label="More session actions"
+                aria-expanded={showOverflow}
+                aria-haspopup="menu"
+              >
+                ···
+              </button>
+              {showOverflow && (
+                <div
+                  className={styles.overflowMenu}
+                  role="menu"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => { if (e.key === "Escape") setShowOverflow(false); }}
+                >
+                  {!(isPaused || isReady) && (
+                    <button
+                      ref={null}
+                      role="menuitem"
+                      className={styles.overflowMenuItem}
+                      onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onResume?.(); }}
+                      aria-label={`Resume session ${session.title}`}
+                    >
+                      <span aria-hidden="true">▶️</span> Resume
+                    </button>
+                  )}
+                  {!isRunning && (
+                    <button
+                      role="menuitem"
+                      className={styles.overflowMenuItem}
+                      onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onPause?.(); }}
+                      aria-label={`Pause session ${session.title}`}
+                    >
+                      <span aria-hidden="true">⏸️</span> Pause
+                    </button>
+                  )}
+                  <button
+                    ref={renameTriggerRef}
+                    role="menuitem"
+                    className={styles.overflowMenuItem}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleRenameClick(e); }}
+                    aria-label={`Rename session ${session.title}`}
+                  >
+                    <span aria-hidden="true">✏️</span> Rename
+                  </button>
+                  <button
+                    ref={restartTriggerRef}
+                    role="menuitem"
+                    className={`${styles.overflowMenuItem} ${styles.overflowMenuItemDanger}`}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleRestartClick(e); }}
+                    aria-label={`Restart session ${session.title}`}
+                  >
+                    <span aria-hidden="true">🔄</span> Restart
+                  </button>
+                  {onCreateCheckpoint && (
+                    <button
+                      ref={checkpointTriggerRef}
+                      role="menuitem"
+                      className={styles.overflowMenuItem}
+                      onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleCheckpointClick(e); }}
+                      aria-label={`Create checkpoint for session ${session.title}`}
+                    >
+                      <span aria-hidden="true">📍</span> Checkpoint
+                    </button>
+                  )}
+                  {onForkFromCheckpoint && (
+                    <button
+                      ref={forkTriggerRef}
+                      role="menuitem"
+                      className={styles.overflowMenuItem}
+                      onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleForkClick(e); }}
+                      aria-label={`Fork session ${session.title} from checkpoint`}
+                    >
+                      <span aria-hidden="true">🍴</span> Fork
+                    </button>
+                  )}
+                  <button
+                    role="menuitem"
+                    className={styles.overflowMenuItem}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onNewWorkspace?.(); }}
+                    aria-label={`New workspace from ${session.title}`}
+                  >
+                    <span aria-hidden="true">➕</span> New Workspace
+                  </button>
+                  <button
+                    role="menuitem"
+                    className={styles.overflowMenuItem}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onDuplicate?.(); }}
+                    aria-label={`Duplicate session ${session.title}`}
+                  >
+                    <span aria-hidden="true">📋</span> Duplicate
+                  </button>
+                  <button
+                    role="menuitem"
+                    className={`${styles.overflowMenuItem} ${styles.overflowMenuItemDanger}`}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setShowOverflow(false);
+                      setIsDeleting(true);
+                      try { await onDelete?.(); } catch { setIsDeleting(false); }
+                    }}
+                    disabled={isDeleting}
+                    aria-label={`Delete session ${session.title}`}
+                  >
+                    {isDeleting ? "Deleting..." : <><span aria-hidden="true">🗑️</span> Delete</>}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Mobile: accordion toggle + full action list */}
           <button
             className={styles.actionsToggle}
             onClick={(e) => { e.stopPropagation(); setShowActions(!showActions); }}
@@ -852,7 +1006,6 @@ export function SessionCard({
             </button>
           )}
           <button
-            ref={renameTriggerRef}
             className={styles.actionButton}
             onClick={handleRenameClick}
             title="Rename this session"
@@ -861,7 +1014,6 @@ export function SessionCard({
             <span aria-hidden="true">✏️</span> Rename
           </button>
           <button
-            ref={restartTriggerRef}
             className={`${styles.actionButton} ${styles.restartButton}`}
             onClick={handleRestartClick}
             title="Restart this session"
@@ -871,7 +1023,6 @@ export function SessionCard({
           </button>
           {onCreateCheckpoint && (
             <button
-              ref={checkpointTriggerRef}
               className={styles.actionButton}
               onClick={handleCheckpointClick}
               title="Save a named checkpoint of the current session state"
@@ -882,7 +1033,6 @@ export function SessionCard({
           )}
           {onForkFromCheckpoint && (
             <button
-              ref={forkTriggerRef}
               className={styles.actionButton}
               onClick={handleForkClick}
               title="Fork this session from a checkpoint"
