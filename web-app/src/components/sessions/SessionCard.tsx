@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState, CheckpointProto } from "@/gen/session/v1/types_pb";
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
 import { GitHubBadge } from "./GitHubBadge";
@@ -372,16 +373,16 @@ export function SessionCard({
           sessionTitle={session.title}
         />
       )}
-      {isRenameOpen && (
-        <div
-          ref={renameDialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="renameDialogTitle"
-          className={styles.renameDialog}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className={styles.dialogContent}>
+      {isRenameOpen && createPortal(
+        <div className={styles.renameDialog} onClick={handleRenameCancel as unknown as React.MouseEventHandler}>
+          <div
+            ref={renameDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="renameDialogTitle"
+            className={styles.dialogContent}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 id="renameDialogTitle">Rename Session</h3>
             <input
               type="text"
@@ -413,19 +414,20 @@ export function SessionCard({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-      {isRestartConfirmOpen && (
-        <div
-          ref={restartDialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="restartDialogTitle"
-          className={styles.confirmDialog}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => { if (e.key === "Escape") handleRestartCancel(e as unknown as React.MouseEvent); }}
-        >
-          <div className={styles.dialogContent}>
+      {isRestartConfirmOpen && createPortal(
+        <div className={styles.confirmDialog} onClick={handleRestartCancel as unknown as React.MouseEventHandler}>
+          <div
+            ref={restartDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="restartDialogTitle"
+            className={styles.dialogContent}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => { if (e.key === "Escape") handleRestartCancel(e as unknown as React.MouseEvent); }}
+          >
             <h3 id="restartDialogTitle">Restart Session</h3>
             <p>Are you sure you want to restart &quot;{session.title}&quot;?</p>
             <p className={styles.warningText}>This will terminate the current process and start a new one.</p>
@@ -446,18 +448,19 @@ export function SessionCard({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-      {isCheckpointOpen && (
-        <div
-          ref={checkpointDialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="checkpointDialogTitle"
-          className={styles.renameDialog}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className={styles.dialogContent}>
+      {isCheckpointOpen && createPortal(
+        <div className={styles.renameDialog} onClick={handleCheckpointCancel as unknown as React.MouseEventHandler}>
+          <div
+            ref={checkpointDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="checkpointDialogTitle"
+            className={styles.dialogContent}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 id="checkpointDialogTitle">Create Checkpoint</h3>
             <p>Enter a label for this checkpoint of &quot;{session.title}&quot;:</p>
             <input
@@ -490,18 +493,19 @@ export function SessionCard({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-      {isForkOpen && (
-        <div
-          ref={forkDialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="forkDialogTitle"
-          className={styles.renameDialog}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className={styles.dialogContent}>
+      {isForkOpen && createPortal(
+        <div className={styles.renameDialog} onClick={handleForkCancel as unknown as React.MouseEventHandler}>
+          <div
+            ref={forkDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="forkDialogTitle"
+            className={styles.dialogContent}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 id="forkDialogTitle">Fork Session</h3>
             <p>Fork &quot;{session.title}&quot; from a checkpoint into a new independent session.</p>
             <label className={styles.renameLabel}>New session title:</label>
@@ -560,7 +564,8 @@ export function SessionCard({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     <div
       className={`${styles.card} ${selectMode ? styles.selectMode : ""} ${isSelected ? styles.selected : ""} ${isExternal ? styles.external : ""} ${isDeleting ? styles.deleting : ""}`}
