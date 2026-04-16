@@ -1,18 +1,25 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import Fuse from "fuse.js";
 import { detect, InputType, INPUT_TYPE_INFO, DetectionResult } from "@/lib/omnibar";
 import { PROGRAMS } from "@/lib/constants/programs";
 import { usePathCompletions } from "@/lib/hooks/usePathCompletions";
 import { usePathHistory } from "@/lib/hooks/usePathHistory";
 import { useWorktreeSuggestions } from "@/lib/hooks/useWorktreeSuggestions";
+import { useSessionSearch, type SessionSearchResult } from "@/lib/hooks/useSessionSearch";
+import { useAppSelector } from "@/lib/store";
+import { selectAllSessions } from "@/lib/store/sessionsSlice";
+import { Session, SessionStatus } from "@/gen/session/v1/types_pb";
 import { PathCompletionDropdown, type CompletionEntry } from "./PathCompletionDropdown";
+import { OmnibarResultList, getResultListItemCount, getHighlightedItemId } from "./OmnibarResultList";
 import styles from "./Omnibar.module.css";
 
 interface OmnibarProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateSession: (data: OmnibarSessionData) => Promise<void>;
+  onNavigateToSession: (sessionId: string) => void;
 }
 
 export interface OmnibarSessionData {
@@ -33,7 +40,11 @@ export interface OmnibarSessionData {
   workingDir?: string;
 }
 
-export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
+type OmnibarMode = "discovery" | "creation";
+
+const RESULT_LISTBOX_ID = "omnibar-result-listbox";
+
+export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession }: OmnibarProps) {
   // Input state
   const [input, setInput] = useState("");
   const [detection, setDetection] = useState<DetectionResult | null>(null);
@@ -60,10 +71,18 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
   const [dropdownIndex, setDropdownIndex] = useState(-1);
   const [dropdownDismissed, setDropdownDismissed] = useState(false);
 
+  // Two-phase mode state
+  const [mode, setMode] = useState<OmnibarMode>("discovery");
+  const [resultHighlightIndex, setResultHighlightIndex] = useState(-1);
+
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const lastSuggestedNameRef = useRef<string>("");
+  const prevDetectionTypeRef = useRef<string | null>(null);
+  // Stable ref so handleKeyDown can always call the latest handleSubmit without
+  // a circular declaration-order dependency (handleKeyDown is declared before handleSubmit).
+  const handleSubmitRef = useRef<() => void>(() => {});
 
   // Determine whether completions should be active.
   const isPathInput =
@@ -84,7 +103,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
     directoriesOnly: true,
   });
 
-  const { getMatching: getHistoryMatching, save: saveHistory } = usePathHistory();
+  const { getMatching: getHistoryMatching, getAll: getAllHistory, save: saveHistory } = usePathHistory();
 
   // Worktree suggestions for the "Use Existing Worktree" mode
   const repoPathForWorktrees = isPathInput ? (detection?.localPath ?? "") : "";
@@ -130,6 +149,63 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
   const isDropdownVisible =
     isPathInput && mergedEntries.length > 0 && !dropdownDismissed;
 
+  // Discovery mode hooks
+  const isDiscoveryMode = mode === "discovery";
+
+  // Compute session search query without waiting for the 150ms detection debounce.
+  // Bare text (no path/URL/github prefix) passes to Fuse immediately for zero-lag search.
+  const sessionSearchQuery = useMemo(() => {
+    if (!input.trim()) return "";
+    if (detection?.type === InputType.SessionSearch) return input;
+    // Eagerly treat as session search if input doesn't look like a path or URL
+    if (!input.startsWith("/") && !input.startsWith("~") && !input.startsWith("http")) {
+      return input;
+    }
+    return "";
+  }, [input, detection]);
+  const sessionResults = useSessionSearch(sessionSearchQuery);
+
+  const allRepoEntries = useMemo(() => getAllHistory(50), [getAllHistory]);
+  const repoFuse = useMemo(
+    () =>
+      new Fuse(allRepoEntries, {
+        keys: [{ name: "path", weight: 1.0 }],
+        threshold: 0.4,
+        ignoreLocation: true,
+        minMatchCharLength: 1,
+      }),
+    [allRepoEntries]
+  );
+
+  const allSessions = useAppSelector(selectAllSessions);
+
+  const displayedSessionResults = useMemo((): SessionSearchResult[] => {
+    if (!input.trim()) {
+      const active = allSessions
+        .filter((s) => s.status !== SessionStatus.UNSPECIFIED)
+        .sort((a, b) => {
+          const aTime = Number(a.updatedAt?.seconds ?? 0);
+          const bTime = Number(b.updatedAt?.seconds ?? 0);
+          return bTime - aTime;
+        })
+        .slice(0, 5);
+      return active.map((s) => ({ session: s, score: 0, matchedFields: [] }));
+    }
+    return sessionResults;
+  }, [input, sessionResults, allSessions]);
+
+  const displayedRepoEntries = useMemo(() => {
+    if (!input.trim()) {
+      return allRepoEntries.slice(0, 5);
+    }
+    return repoFuse.search(input).map((r) => r.item).slice(0, 8);
+  }, [input, allRepoEntries, repoFuse]);
+
+  const totalResultCount = getResultListItemCount(
+    displayedSessionResults.length,
+    displayedRepoEntries.length
+  );
+
   // Accept a completion entry: fill the input and continue for further completion.
   const handleCompletionSelect = useCallback(
     (entry: CompletionEntry) => {
@@ -153,6 +229,29 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
         const result = detect(input);
         setDetection(result);
 
+        // Reset dropdown dismissed state when input type changes modes.
+        // Prevents session results from being suppressed after user dismisses
+        // path completion dropdown then backspaces to bare text.
+        if (result.type !== prevDetectionTypeRef.current) {
+          setDropdownDismissed(false);
+        }
+        prevDetectionTypeRef.current = result.type;
+
+        // Update mode based on detection type
+        if (
+          result.type === InputType.LocalPath ||
+          result.type === InputType.PathWithBranch ||
+          result.type === InputType.GitHubPR ||
+          result.type === InputType.GitHubBranch ||
+          result.type === InputType.GitHubRepo ||
+          result.type === InputType.GitHubShorthand
+        ) {
+          setMode("creation");
+        } else if (result.type === InputType.SessionSearch) {
+          setMode("discovery");
+          setResultHighlightIndex(-1);
+        }
+
         // Auto-fill session name if:
         // 1. Session name is empty, OR
         // 2. Session name matches the last auto-suggested name (not manually edited)
@@ -170,6 +269,8 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
         }
       } else {
         setDetection(null);
+        setMode("discovery");
+        setResultHighlightIndex(-1);
       }
     }, 150); // 150ms debounce
 
@@ -204,14 +305,78 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
       setExistingWorktree("");
       setWorkingDir("");
       lastSuggestedNameRef.current = "";
+      prevDetectionTypeRef.current = null;
       setDropdownIndex(-1);
       setDropdownDismissed(false);
+      setMode("discovery");
+      setResultHighlightIndex(-1);
     }
   }, [isOpen]);
+
+  // Session result selection handlers
+  const handleSessionSelect = useCallback(
+    (session: Session) => {
+      onNavigateToSession(session.id);
+      onClose();
+    },
+    [onNavigateToSession, onClose]
+  );
+
+  const handleRepoSelect = useCallback(
+    (path: string) => {
+      setInput(path + "/");
+      setMode("creation");
+      setResultHighlightIndex(-1);
+      setDropdownDismissed(false);
+      inputRef.current?.focus();
+    },
+    []
+  );
+
+  const dispatchHighlightedResultAction = useCallback(
+    (index: number) => {
+      if (index < displayedSessionResults.length) {
+        handleSessionSelect(displayedSessionResults[index].session);
+      } else {
+        const repoIndex = index - displayedSessionResults.length;
+        if (repoIndex < displayedRepoEntries.length) {
+          handleRepoSelect(displayedRepoEntries[repoIndex].path);
+        } else {
+          setMode("creation");
+          setResultHighlightIndex(-1);
+        }
+      }
+    },
+    [displayedSessionResults, displayedRepoEntries, handleSessionSelect, handleRepoSelect]
+  );
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // Discovery mode navigation (before dropdown check)
+      if (isDiscoveryMode && (resultHighlightIndex >= 0 || e.key === "ArrowDown")) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setResultHighlightIndex((i) => Math.min(i + 1, totalResultCount - 1));
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setResultHighlightIndex((i) => Math.max(i - 1, -1));
+          return;
+        }
+        if (e.key === "Enter" && !e.metaKey && resultHighlightIndex >= 0) {
+          e.preventDefault();
+          dispatchHighlightedResultAction(resultHighlightIndex);
+          return;
+        }
+        if (e.key === "Escape" && resultHighlightIndex >= 0) {
+          e.nativeEvent.stopImmediatePropagation();
+          setResultHighlightIndex(-1);
+          return;
+        }
+      }
+
       if (isDropdownVisible) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
@@ -263,13 +428,25 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
       if (e.key === "Escape") {
         // Stop propagation so the global document listener doesn't call onClose() a second time.
         e.nativeEvent.stopImmediatePropagation();
-        onClose();
+        if (!isDiscoveryMode) {
+          // Escape in creation mode: return to discovery rather than closing.
+          // Second Escape (in discovery mode) will close.
+          setMode("discovery");
+          setInput("");
+          setResultHighlightIndex(-1);
+        } else {
+          onClose();
+        }
       } else if (e.key === "Enter" && e.metaKey) {
-        // Cmd+Enter to submit
-        handleSubmit();
+        // Cmd+Enter to submit — use ref to avoid declaration-order dependency.
+        handleSubmitRef.current();
       }
     },
     [
+      isDiscoveryMode,
+      resultHighlightIndex,
+      totalResultCount,
+      dispatchHighlightedResultAction,
       isDropdownVisible,
       mergedEntries,
       liveEntries,
@@ -303,7 +480,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
   const canSubmit = useMemo(() => {
     if (!input.trim()) return false;
     if (!sessionName.trim()) return false;
-    if (!detection || detection.type === InputType.Unknown) return false;
+    if (!detection || detection.type === InputType.Unknown || detection.type === InputType.SessionSearch) return false;
 
     // Validate session type specific requirements
     if (sessionType === "new_worktree") {
@@ -318,7 +495,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
   }, [input, sessionName, detection, sessionType, branch, useTitleAsBranch, existingWorktree]);
 
   // Handle form submission
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (!canSubmit || isSubmitting) return;
 
     setIsSubmitting(true);
@@ -367,7 +544,29 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [
+    canSubmit,
+    isSubmitting,
+    branch,
+    sessionName,
+    sessionType,
+    useTitleAsBranch,
+    detection,
+    program,
+    category,
+    autoYes,
+    existingWorktree,
+    workingDir,
+    isPathInput,
+    saveHistory,
+    onCreateSession,
+    onClose,
+  ]);
+
+  // Keep the ref in sync so handleKeyDown always dispatches the latest version.
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  }, [handleSubmit]);
 
   if (!isOpen) return null;
 
@@ -393,7 +592,11 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
             ref={inputRef}
             type="text"
             className={styles.input}
-            placeholder="Enter path, GitHub URL, or owner/repo..."
+            placeholder={
+              isDiscoveryMode
+                ? "Jump to session or search repos..."
+                : "Enter path, GitHub URL, or owner/repo..."
+            }
             value={input}
             onChange={(e) => {
               setInput(e.target.value);
@@ -406,16 +609,29 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
             spellCheck={false}
             aria-label="Session source input"
             aria-autocomplete="list"
-            aria-expanded={isDropdownVisible}
-            aria-controls="path-completion-listbox"
+            aria-expanded={
+              isDiscoveryMode
+                ? displayedSessionResults.length > 0 || displayedRepoEntries.length > 0
+                : isDropdownVisible
+            }
+            aria-controls={
+              isDiscoveryMode ? RESULT_LISTBOX_ID : "path-completion-listbox"
+            }
             aria-activedescendant={
-              isDropdownVisible && dropdownIndex >= 0
+              isDiscoveryMode
+                ? getHighlightedItemId(
+                    RESULT_LISTBOX_ID,
+                    displayedSessionResults,
+                    displayedRepoEntries,
+                    resultHighlightIndex
+                  )
+                : isDropdownVisible && dropdownIndex >= 0
                 ? `path-completion-listbox-option-${dropdownIndex}`
                 : undefined
             }
           />
           {/* Path existence indicator */}
-          {isPathInput && input.trim() && (
+          {isPathInput && !isDiscoveryMode && input.trim() && (
             <span
               className={styles.pathIndicator}
               aria-live="polite"
@@ -438,8 +654,24 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
           )}
         </div>
 
-        {/* Path completion dropdown */}
-        {isDropdownVisible && (
+        {/* Discovery mode: session results + recent repos */}
+        {isDiscoveryMode && (
+          <OmnibarResultList
+            id={RESULT_LISTBOX_ID}
+            sessionResults={displayedSessionResults}
+            repoEntries={displayedRepoEntries}
+            highlightedIndex={resultHighlightIndex}
+            onSessionSelect={handleSessionSelect}
+            onRepoSelect={handleRepoSelect}
+            onCreateNew={() => {
+              setMode("creation");
+              setResultHighlightIndex(-1);
+            }}
+          />
+        )}
+
+        {/* Creation mode: path completion dropdown (existing, unchanged) */}
+        {!isDiscoveryMode && isDropdownVisible && (
           <PathCompletionDropdown
             id="path-completion-listbox"
             entries={mergedEntries}
@@ -458,7 +690,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
         )}
 
         {/* Detection Badge */}
-        {input.trim() && (
+        {input.trim() && !isDiscoveryMode && (
           <div className={styles.detectionInfo}>
             <span
               className={`${styles.detectionBadge} ${
@@ -470,197 +702,199 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
           </div>
         )}
 
-        {/* Form Fields */}
-        <div className={styles.body}>
-          {/* Session Name */}
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="omnibar-name">
-              Session Name *
-            </label>
-            <input
-              id="omnibar-name"
-              type="text"
-              className={styles.fieldInput}
-              placeholder="my-feature-session"
-              value={sessionName}
-              onChange={(e) => setSessionName(e.target.value)}
-            />
-          </div>
-
-          {/* Session Type */}
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="omnibar-session-type">
-              Session Type
-            </label>
-            <select
-              id="omnibar-session-type"
-              className={styles.select}
-              value={sessionType}
-              onChange={(e) => setSessionType(e.target.value as "directory" | "new_worktree" | "existing_worktree")}
-            >
-              <option value="new_worktree">Create New Worktree</option>
-              <option value="existing_worktree">Use Existing Worktree</option>
-              <option value="directory">Directory Only (No Worktree)</option>
-            </select>
-            <span className={styles.hint}>
-              {sessionType === "new_worktree" && "Creates an isolated git worktree for this session"}
-              {sessionType === "existing_worktree" && "Uses an existing worktree at a specific path"}
-              {sessionType === "directory" && "Works directly in the repository without worktree isolation"}
-            </span>
-          </div>
-
-          {/* Branch controls (for new worktree) */}
-          {sessionType === "new_worktree" && (
-            <>
-              <label className={styles.checkbox}>
-                <input
-                  type="checkbox"
-                  checked={useTitleAsBranch}
-                  onChange={(e) => setUseTitleAsBranch(e.target.checked)}
-                />
-                <span>Use session name as branch name</span>
-              </label>
-
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="omnibar-branch">
-                  Git Branch {!useTitleAsBranch && "*"}
-                </label>
-                <input
-                  id="omnibar-branch"
-                  type="text"
-                  className={styles.fieldInput}
-                  placeholder={useTitleAsBranch ? sessionName || "Enter session name first" : "feature/my-feature"}
-                  value={useTitleAsBranch ? sessionName : branch}
-                  onChange={(e) => !useTitleAsBranch && setBranch(e.target.value)}
-                  disabled={useTitleAsBranch}
-                  style={{ opacity: useTitleAsBranch ? 0.6 : 1 }}
-                />
-                <span className={styles.hint}>
-                  {useTitleAsBranch
-                    ? `Branch name will be: ${sessionName || "(enter session name)"}`
-                    : "Branch to create for the new worktree"}
-                </span>
-              </div>
-            </>
-          )}
-
-          {/* Existing worktree path */}
-          {sessionType === "existing_worktree" && (
+        {/* Form Fields - creation mode only */}
+        {!isDiscoveryMode && (
+          <div className={styles.body}>
+            {/* Session Name */}
             <div className={styles.field}>
-              <label className={styles.label} htmlFor="omnibar-existing-worktree">
-                Existing Worktree Path *
+              <label className={styles.label} htmlFor="omnibar-name">
+                Session Name *
               </label>
-              {worktrees.length > 0 ? (
-                <select
-                  id="omnibar-existing-worktree"
-                  className={styles.select}
-                  value={existingWorktree}
-                  onChange={(e) => setExistingWorktree(e.target.value)}
-                >
-                  <option value="">Select a worktree...</option>
-                  {worktrees.map((wt) => (
-                    <option key={wt.path} value={wt.path}>
-                      {wt.branch ? `${wt.branch} (${wt.path})` : wt.path}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  id="omnibar-existing-worktree"
-                  type="text"
-                  className={styles.fieldInput}
-                  placeholder="/path/to/existing/worktree"
-                  value={existingWorktree}
-                  onChange={(e) => setExistingWorktree(e.target.value)}
-                />
-              )}
-              <span className={styles.hint}>
-                {worktrees.length > 0
-                  ? "Select an existing git worktree for this repository"
-                  : "Absolute path to an existing git worktree"}
-              </span>
+              <input
+                id="omnibar-name"
+                type="text"
+                className={styles.fieldInput}
+                placeholder="my-feature-session"
+                value={sessionName}
+                onChange={(e) => setSessionName(e.target.value)}
+              />
             </div>
-          )}
 
-          {/* Working Directory (optional, for all types) */}
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="omnibar-working-dir">
-              Working Directory
-            </label>
-            <input
-              id="omnibar-working-dir"
-              type="text"
-              className={styles.fieldInput}
-              placeholder="src/api (optional)"
-              value={workingDir}
-              onChange={(e) => setWorkingDir(e.target.value)}
-            />
-            <span className={styles.hint}>Optional: Start in a subdirectory (relative path)</span>
-          </div>
-
-          {/* Advanced Options */}
-          <div className={styles.collapsible}>
-            <div
-              className={styles.collapsibleHeader}
-              onClick={() => setShowAdvanced(!showAdvanced)}
-            >
-              <span className={styles.collapsibleTitle}>Advanced Options</span>
-              <span
-                className={`${styles.collapsibleIcon} ${
-                  showAdvanced ? styles.expanded : ""
-                }`}
+            {/* Session Type */}
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="omnibar-session-type">
+                Session Type
+              </label>
+              <select
+                id="omnibar-session-type"
+                className={styles.select}
+                value={sessionType}
+                onChange={(e) => setSessionType(e.target.value as "directory" | "new_worktree" | "existing_worktree")}
               >
-                ▼
+                <option value="new_worktree">Create New Worktree</option>
+                <option value="existing_worktree">Use Existing Worktree</option>
+                <option value="directory">Directory Only (No Worktree)</option>
+              </select>
+              <span className={styles.hint}>
+                {sessionType === "new_worktree" && "Creates an isolated git worktree for this session"}
+                {sessionType === "existing_worktree" && "Uses an existing worktree at a specific path"}
+                {sessionType === "directory" && "Works directly in the repository without worktree isolation"}
               </span>
             </div>
 
-            {showAdvanced && (
-              <div className={styles.collapsibleContent}>
-                {/* Program */}
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="omnibar-program">
-                    Program
-                  </label>
-                  <select
-                    id="omnibar-program"
-                    className={styles.select}
-                    value={program}
-                    onChange={(e) => setProgram(e.target.value)}
-                  >
-                    {PROGRAMS.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Category */}
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="omnibar-category">
-                    Category
-                  </label>
-                  <input
-                    id="omnibar-category"
-                    type="text"
-                    className={styles.fieldInput}
-                    placeholder="e.g., Features, Bugfixes"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                  />
-                </div>
-
-                {/* Auto-Yes */}
+            {/* Branch controls (for new worktree) */}
+            {sessionType === "new_worktree" && (
+              <>
                 <label className={styles.checkbox}>
                   <input
                     type="checkbox"
-                    checked={autoYes}
-                    onChange={(e) => setAutoYes(e.target.checked)}
+                    checked={useTitleAsBranch}
+                    onChange={(e) => setUseTitleAsBranch(e.target.checked)}
                   />
-                  <span>Auto-approve prompts (experimental)</span>
+                  <span>Use session name as branch name</span>
                 </label>
+
+                <div className={styles.field}>
+                  <label className={styles.label} htmlFor="omnibar-branch">
+                    Git Branch {!useTitleAsBranch && "*"}
+                  </label>
+                  <input
+                    id="omnibar-branch"
+                    type="text"
+                    className={styles.fieldInput}
+                    placeholder={useTitleAsBranch ? sessionName || "Enter session name first" : "feature/my-feature"}
+                    value={useTitleAsBranch ? sessionName : branch}
+                    onChange={(e) => !useTitleAsBranch && setBranch(e.target.value)}
+                    disabled={useTitleAsBranch}
+                    style={{ opacity: useTitleAsBranch ? 0.6 : 1 }}
+                  />
+                  <span className={styles.hint}>
+                    {useTitleAsBranch
+                      ? `Branch name will be: ${sessionName || "(enter session name)"}`
+                      : "Branch to create for the new worktree"}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {/* Existing worktree path */}
+            {sessionType === "existing_worktree" && (
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="omnibar-existing-worktree">
+                  Existing Worktree Path *
+                </label>
+                {worktrees.length > 0 ? (
+                  <select
+                    id="omnibar-existing-worktree"
+                    className={styles.select}
+                    value={existingWorktree}
+                    onChange={(e) => setExistingWorktree(e.target.value)}
+                  >
+                    <option value="">Select a worktree...</option>
+                    {worktrees.map((wt) => (
+                      <option key={wt.path} value={wt.path}>
+                        {wt.branch ? `${wt.branch} (${wt.path})` : wt.path}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="omnibar-existing-worktree"
+                    type="text"
+                    className={styles.fieldInput}
+                    placeholder="/path/to/existing/worktree"
+                    value={existingWorktree}
+                    onChange={(e) => setExistingWorktree(e.target.value)}
+                  />
+                )}
+                <span className={styles.hint}>
+                  {worktrees.length > 0
+                    ? "Select an existing git worktree for this repository"
+                    : "Absolute path to an existing git worktree"}
+                </span>
               </div>
             )}
+
+            {/* Working Directory (optional, for all types) */}
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="omnibar-working-dir">
+                Working Directory
+              </label>
+              <input
+                id="omnibar-working-dir"
+                type="text"
+                className={styles.fieldInput}
+                placeholder="src/api (optional)"
+                value={workingDir}
+                onChange={(e) => setWorkingDir(e.target.value)}
+              />
+              <span className={styles.hint}>Optional: Start in a subdirectory (relative path)</span>
+            </div>
+
+            {/* Advanced Options */}
+            <div className={styles.collapsible}>
+              <div
+                className={styles.collapsibleHeader}
+                onClick={() => setShowAdvanced(!showAdvanced)}
+              >
+                <span className={styles.collapsibleTitle}>Advanced Options</span>
+                <span
+                  className={`${styles.collapsibleIcon} ${
+                    showAdvanced ? styles.expanded : ""
+                  }`}
+                >
+                  ▼
+                </span>
+              </div>
+
+              {showAdvanced && (
+                <div className={styles.collapsibleContent}>
+                  {/* Program */}
+                  <div className={styles.field}>
+                    <label className={styles.label} htmlFor="omnibar-program">
+                      Program
+                    </label>
+                    <select
+                      id="omnibar-program"
+                      className={styles.select}
+                      value={program}
+                      onChange={(e) => setProgram(e.target.value)}
+                    >
+                      {PROGRAMS.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Category */}
+                  <div className={styles.field}>
+                    <label className={styles.label} htmlFor="omnibar-category">
+                      Category
+                    </label>
+                    <input
+                      id="omnibar-category"
+                      type="text"
+                      className={styles.fieldInput}
+                      placeholder="e.g., Features, Bugfixes"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Auto-Yes */}
+                  <label className={styles.checkbox}>
+                    <input
+                      type="checkbox"
+                      checked={autoYes}
+                      onChange={(e) => setAutoYes(e.target.checked)}
+                    />
+                    <span>Auto-approve prompts (experimental)</span>
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Error Message */}
         {error && <div className={styles.error}>{error}</div>}
@@ -689,10 +923,22 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
           <span className={styles.shortcut}>
             <span className={styles.shortcutKey}>Esc</span> Close
           </span>
-          <span className={styles.shortcut}>
-            <span className={styles.shortcutKey}>⌘↵</span> Create
-          </span>
-          {isDropdownVisible && (
+          {!isDiscoveryMode && (
+            <span className={styles.shortcut}>
+              <span className={styles.shortcutKey}>⌘↵</span> Create
+            </span>
+          )}
+          {isDiscoveryMode && (
+            <>
+              <span className={styles.shortcut}>
+                <span className={styles.shortcutKey}>↑↓</span> Navigate
+              </span>
+              <span className={styles.shortcut}>
+                <span className={styles.shortcutKey}>↵</span> Jump
+              </span>
+            </>
+          )}
+          {!isDiscoveryMode && isDropdownVisible && (
             <>
               <span className={styles.shortcut}>
                 <span className={styles.shortcutKey}>↑↓</span> Navigate

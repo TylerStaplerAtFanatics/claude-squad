@@ -160,3 +160,16 @@
   color: #666;
   white-space: nowrap;
 }
+
+@media (max-width: 768px) {
+  .dropdown {
+    max-width: calc(100vw - 2rem);
+    min-width: min(140px, calc(100vw - 2rem));
+  }
+
+  .pauseButton,
+  .settingsButton {
+    width: 44px;
+    height: 44px;
+  }
+}

@@ -93,4 +93,72 @@ describe("usePathHistory", () => {
       expect(matches[0].path).toBe("/home/user/popular");
     });
   });
+
+  describe("getAll", () => {
+    it("returns top N entries by score when more exist", () => {
+      const { result } = renderHook(() => usePathHistory());
+      act(() => {
+        for (let i = 0; i < 10; i++) {
+          result.current.save(`/home/user/proj${i}`);
+        }
+      });
+      const all = result.current.getAll(5);
+      expect(all).toHaveLength(5);
+    });
+
+    it("returns all entries when count is below limit", () => {
+      const { result } = renderHook(() => usePathHistory());
+      act(() => {
+        result.current.save("/home/user/a");
+        result.current.save("/home/user/b");
+        result.current.save("/home/user/c");
+      });
+      const all = result.current.getAll(10);
+      expect(all).toHaveLength(3);
+    });
+
+    it("includes a newly saved path", () => {
+      const { result } = renderHook(() => usePathHistory());
+      act(() => {
+        result.current.save("/home/user/existing");
+      });
+      act(() => {
+        result.current.save("/home/user/new-repo");
+      });
+      const all = result.current.getAll(10);
+      expect(all.some((e) => e.path === "/home/user/new-repo")).toBe(true);
+    });
+
+    it("score ordering: recent entry beats stale high-frequency entry", () => {
+      const recentTs = Date.now() - 30 * 60 * 1000; // 30 minutes ago → recencyScore 1.0
+      const staleTs = Date.now() - 25 * 24 * 60 * 60 * 1000; // 25 days ago → recencyScore 0.4
+
+      localStorage.setItem(
+        "omnibar:path-history",
+        JSON.stringify([
+          { path: "/recent", count: 1, lastUsed: recentTs },
+          { path: "/stale", count: 5, lastUsed: staleTs },
+        ])
+      );
+
+      const { result } = renderHook(() => usePathHistory());
+      const all = result.current.getAll(2);
+      // NOTE: stale wins here because log1p(5) outweighs the recency gap.
+      expect(all).toHaveLength(2);
+      const scores = all.map((e) => {
+        const age = Date.now() - e.lastUsed;
+        const hour = 3_600_000,
+          day = 86_400_000,
+          week = 7 * day,
+          month = 30 * day;
+        let recency = 0.2;
+        if (age < hour) recency = 1.0;
+        else if (age < day) recency = 0.8;
+        else if (age < week) recency = 0.6;
+        else if (age < month) recency = 0.4;
+        return recency + Math.log1p(e.count);
+      });
+      expect(scores[0]).toBeGreaterThanOrEqual(scores[1]);
+    });
+  });
 });

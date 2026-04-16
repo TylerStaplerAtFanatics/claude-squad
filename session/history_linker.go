@@ -182,7 +182,8 @@ func (hl *HistoryLinker) correlateSession(inst *Instance) {
 	}
 
 	if info == nil {
-		return // No JSONL found yet.
+		log.DebugLog.Printf("HistoryLinker: no JSONL found for '%s' (path=%q)", inst.Title, inst.Path)
+		return
 	}
 
 	log.InfoLog.Printf("HistoryLinker: linked '%s' → conv UUID %s", inst.Title, info.ConversationUUID)

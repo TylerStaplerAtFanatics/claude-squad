@@ -160,6 +160,13 @@ func TestClaudeProjectDirName(t *testing.T) {
 		{"/Users/alice/myproject", "-Users-alice-myproject"},
 		{"/Users/alice/my-project", "-Users-alice-my-project"},
 		{"/home/bob/work/stapler", "-home-bob-work-stapler"},
+		// Dots must be replaced (e.g. hidden dirs like .stapler-squad)
+		{"/Users/alice/.hidden/project", "-Users-alice--hidden-project"},
+		// Underscores must be replaced (e.g. worktree suffix like _18a6509d1eaa86b8)
+		{"/Users/alice/my_project", "-Users-alice-my-project"},
+		// Real-world worktree path: both dot and underscore in same path
+		{"/Users/tylerstapler/.stapler-squad/workspaces/a21d754799a5c839/worktrees/claude-squad-resume-not-working_18a6509d1eaa86b8",
+			"-Users-tylerstapler--stapler-squad-workspaces-a21d754799a5c839-worktrees-claude-squad-resume-not-working-18a6509d1eaa86b8"},
 	}
 	for _, c := range cases {
 		got := ClaudeProjectDirName(c.path)
