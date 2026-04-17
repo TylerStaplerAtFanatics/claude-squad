@@ -233,24 +233,11 @@ func (h *ConnectRPCWebSocketHandler) resolveSession(sessionID string) (*session.
 		}
 	}
 
-	// Priority 3 (LAST RESORT): Check Storage for managed sessions
-	// WARNING: LoadInstances() calls FromInstanceData() which calls .Start() on EVERY instance!
-	// This should NEVER happen during normal operation - ReviewQueuePoller should have the session.
-	// If we reach here, something is wrong with the poller state.
-	log.WarningLog.Printf("[resolveSession] Session '%s' NOT found in ReviewQueuePoller, falling back to storage (this should not happen!)", sessionID)
-	instances, err := h.sessionService.storage.LoadInstances()
-	if err == nil {
-		for _, inst := range instances {
-			if inst.Title == sessionID {
-				log.WarningLog.Printf("[resolveSession] Found managed session '%s' in Storage (but this caused all sessions to restart!)", sessionID)
-				return inst, false // Not external
-			}
-		}
-	} else {
-		log.ErrorLog.Printf("[resolveSession] Failed to load instances from storage: %v", err)
-	}
-
-	log.ErrorLog.Printf("[resolveSession] Session '%s' not found in any source", sessionID)
+	// Session not found. Do NOT fall back to storage.LoadInstances() — that call restarts
+	// every managed session as a side effect and must never be used for a lookup.
+	// If the session isn't in the poller or external discovery, it doesn't exist from
+	// this handler's perspective. The caller returns a proper not-found response.
+	log.WarningLog.Printf("[resolveSession] Session '%s' not found in poller or external discovery", sessionID)
 	return nil, false
 }
 
@@ -267,7 +254,10 @@ func (h *ConnectRPCWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *h
 	log.InfoLog.Printf("ConnectRPC WebSocket connection established")
 
 	// Read headers from first message (text format: "key: value\r\nkey: value\r\n\r\n")
+	// 30s deadline: a client that never sends headers should not hold the connection open.
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second)) //nolint:errcheck
 	_, headersBytes, err := conn.ReadMessage()
+	conn.SetReadDeadline(time.Time{}) //nolint:errcheck // clear deadline for subsequent reads
 	if err != nil {
 		log.ErrorLog.Printf("Failed to read headers: %v", err)
 		return
@@ -277,7 +267,9 @@ func (h *ConnectRPCWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *h
 	log.InfoLog.Printf("Received headers: %v", headers)
 
 	// Read enveloped request body
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second)) //nolint:errcheck
 	_, bodyBytes, err := conn.ReadMessage()
+	conn.SetReadDeadline(time.Time{}) //nolint:errcheck
 	if err != nil {
 		log.ErrorLog.Printf("Failed to read request body: %v", err)
 		return
@@ -450,22 +442,35 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 	// produces garbled output in a fresh xterm.js terminal.
 	// Start control mode streaming early so we can subscribe to output events
 	// for quiescence detection BEFORE the resize nudge.
-	tmuxSession := instance.GetTmuxSession()
-	if tmuxSession == nil {
-		return fmt.Errorf("tmux session not available for control mode")
-	}
+	// Use the SessionStreamer interface to decouple this handler from the concrete
+	// *tmux.TmuxSession type. *Instance satisfies this interface via delegation methods.
+	var streamer SessionStreamer = instance
 
-	if err := tmuxSession.StartControlMode(); err != nil {
-		return fmt.Errorf("failed to start control mode: %w", err)
+	if err := streamer.StartControlMode(); err != nil {
+		// If the tmux session no longer exists (e.g. process exited, server recovered),
+		// restore it before giving up so the user gets a live terminal on reconnect.
+		tmuxSession := instance.GetTmuxSession()
+		if tmuxSession != nil && !tmuxSession.DoesSessionExist() {
+			log.InfoLog.Printf("[streamViaControlMode] Session '%s' not in tmux, restoring before control mode", sessionID)
+			workDir := instance.GetWorkingDirectory()
+			if restoreErr := tmuxSession.RestoreWithWorkDir(workDir); restoreErr != nil {
+				return fmt.Errorf("tmux session missing and restore failed: %w", restoreErr)
+			}
+			if err := streamer.StartControlMode(); err != nil {
+				return fmt.Errorf("failed to start control mode after restore: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to start control mode: %w", err)
+		}
 	}
 	defer func() {
-		if err := tmuxSession.StopControlMode(); err != nil {
+		if err := streamer.StopControlMode(); err != nil {
 			log.WarningLog.Printf("[waitForQuiescence] StopControlMode: %v", err)
 		}
 	}()
 
 	// Subscribe for quiescence detection (separate subscription from the streaming one below)
-	quiescenceSubID, quiescenceUpdateChan := tmuxSession.SubscribeToControlModeUpdates()
+	quiescenceSubID, quiescenceUpdateChan := streamer.SubscribeControlModeUpdates()
 	quiescenceCh := make(chan struct{}, 16)
 	go func() {
 		for range quiescenceUpdateChan {
@@ -500,7 +505,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 		log.WarningLog.Printf("[streamViaControlMode] Handshake missing dimensions, layout may be incorrect")
 	}
 
-	tmuxSession.UnsubscribeFromControlModeUpdates(quiescenceSubID)
+	streamer.UnsubscribeControlModeUpdates(quiescenceSubID)
 
 	// Now capture content at correct dimensions.
 	// If capture fails (session died), proceed with empty content rather than trying
@@ -549,8 +554,8 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 	}
 
 	// Subscribe to control mode updates for streaming
-	subscriberID, updateChan := tmuxSession.SubscribeToControlModeUpdates()
-	defer tmuxSession.UnsubscribeFromControlModeUpdates(subscriberID)
+	subscriberID, updateChan := streamer.SubscribeControlModeUpdates()
+	defer streamer.UnsubscribeControlModeUpdates(subscriberID)
 
 	log.InfoLog.Printf("[streamViaControlMode] Subscribed to control mode as %s for session '%s'", subscriberID, sessionID)
 
@@ -570,6 +575,23 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 				return
 			case data, ok := <-updateChan:
 				if !ok {
+					// Session exited. Send any captured exit content so the user sees
+					// the error instead of a blank terminal.
+					if exitContent := instance.GetExitContent(); len(exitContent) > 0 {
+						exitData := &sessionv1.TerminalData{
+							SessionId: sessionID,
+							Data: &sessionv1.TerminalData_Output{
+								Output: &sessionv1.TerminalOutput{
+									Data: exitContent,
+								},
+							},
+						}
+						if exitBytes, merr := proto.Marshal(exitData); merr == nil {
+							_ = stream.WriteMessage(websocket.BinaryMessage, protocol.CreateEnvelope(0, exitBytes))
+						}
+						log.InfoLog.Printf("[streamViaControlMode] Sent %d bytes of exit content to client for session '%s'",
+							len(exitContent), sessionID)
+					}
 					return
 				}
 
@@ -835,8 +857,9 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 		}
 	}
 
-	// Register consumer with tmux streamer
-	streamer.AddConsumer(consumer)
+	// Register consumer with tmux streamer; deregister when this function returns
+	consumerKey := streamer.AddConsumer(consumer)
+	defer streamer.RemoveConsumer(consumerKey)
 
 	// Goroutine 1: Forward output from tmux streamer to WebSocket
 	go func() {
@@ -891,7 +914,11 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 			case <-doneChan:
 				return
 			default:
+				// Rolling 30s deadline: resets on each iteration so active clients
+				// are never dropped, but a stalled/disconnected client is cleaned up.
+				stream.conn.SetReadDeadline(time.Now().Add(30 * time.Second)) //nolint:errcheck
 				_, message, err := stream.conn.ReadMessage()
+				stream.conn.SetReadDeadline(time.Time{}) //nolint:errcheck
 				if err != nil {
 					if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 						log.InfoLog.Printf("[streamViaTmuxCapture] WebSocket closed for session '%s'", sessionID)

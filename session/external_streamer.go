@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/mux"
 )
@@ -24,8 +25,8 @@ type ExternalStreamer struct {
 	socketPath string
 	conn       net.Conn
 
-	// Output consumers
-	consumers   []OutputConsumer
+	// Output consumers (keyed by token for reliable removal)
+	consumers   map[string]OutputConsumer
 	consumersMu sync.RWMutex
 
 	// Ring buffer for recent output (for new consumers to catch up)
@@ -138,9 +139,15 @@ func (s *ExternalStreamer) GetMetadata() *mux.SessionMetadata {
 
 // AddConsumer registers a callback to receive output data.
 // If catchUp is true, the consumer receives buffered recent output first.
-func (s *ExternalStreamer) AddConsumer(consumer OutputConsumer, catchUp bool) {
+// Returns a token that must be passed to RemoveConsumer to deregister.
+func (s *ExternalStreamer) AddConsumer(consumer OutputConsumer, catchUp bool) string {
+	key := uuid.New().String()
+
 	s.consumersMu.Lock()
-	s.consumers = append(s.consumers, consumer)
+	if s.consumers == nil {
+		s.consumers = make(map[string]OutputConsumer)
+	}
+	s.consumers[key] = consumer
 	s.consumersMu.Unlock()
 
 	// Send buffered data to new consumer
@@ -149,23 +156,15 @@ func (s *ExternalStreamer) AddConsumer(consumer OutputConsumer, catchUp bool) {
 			consumer(buffered)
 		}
 	}
+
+	return key
 }
 
-// RemoveConsumer unregisters a consumer callback.
-// Note: This uses function pointer comparison which may not work for closures.
-// Consider using a consumer ID pattern for production use.
-func (s *ExternalStreamer) RemoveConsumer(consumer OutputConsumer) {
+// RemoveConsumer deregisters a consumer by the token returned from AddConsumer.
+func (s *ExternalStreamer) RemoveConsumer(key string) {
 	s.consumersMu.Lock()
 	defer s.consumersMu.Unlock()
-
-	// Find and remove the consumer
-	for i, c := range s.consumers {
-		// Note: This pointer comparison works for non-closure functions
-		if fmt.Sprintf("%p", c) == fmt.Sprintf("%p", consumer) {
-			s.consumers = append(s.consumers[:i], s.consumers[i+1:]...)
-			return
-		}
-	}
+	delete(s.consumers, key)
 }
 
 // ConsumerCount returns the number of registered consumers.
@@ -470,8 +469,10 @@ func (s *ExternalStreamer) reconnect(delay time.Duration) error {
 // broadcast sends data to all registered consumers.
 func (s *ExternalStreamer) broadcast(data []byte) {
 	s.consumersMu.RLock()
-	consumers := make([]OutputConsumer, len(s.consumers))
-	copy(consumers, s.consumers)
+	consumers := make([]OutputConsumer, 0, len(s.consumers))
+	for _, c := range s.consumers {
+		consumers = append(consumers, c)
+	}
 	s.consumersMu.RUnlock()
 
 	for _, consumer := range consumers {
