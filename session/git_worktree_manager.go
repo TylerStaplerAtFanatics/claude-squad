@@ -199,6 +199,39 @@ func (gm *GitWorktreeManager) ClearDiffStats() {
 	gm.diffStats = nil
 }
 
+// GitManager is the interface satisfied by *GitWorktreeManager.
+// It covers all git worktree operations used by Instance and can be implemented
+// by test doubles to avoid requiring a real git repository.
+type GitManager interface {
+	HasWorktree() bool
+	GetWorktree() *git.GitWorktree
+	SetWorktree(*git.GitWorktree)
+	GetWorktreePath() string
+	GetRepoPath() string
+	GetRepoName() string
+	GetBranchName() string
+	GetBaseCommitSHA() string
+	Setup() error
+	Cleanup() error
+	Remove() error
+	Prune() error
+	IsDirty() (bool, error)
+	CommitChanges(commitMsg string) error
+	PushChanges(commitMsg string, open bool) error
+	IsBranchCheckedOut() (bool, error)
+	OpenBranchURL() error
+	ComputeDiffIfReady() (stats *git.DiffStats, needsPause bool)
+	ComputeDiff() *git.DiffStats
+	UpdateDiffStats()
+	GetDiffStats() *git.DiffStats
+	SetDiffStats(*git.DiffStats)
+	ClearDiffStats()
+	GetCurrentCommitSHA() (string, error)
+}
+
+// compile-time check that *GitWorktreeManager satisfies GitManager.
+var _ GitManager = (*GitWorktreeManager)(nil)
+
 // GetCurrentCommitSHA returns the current HEAD commit SHA for the worktree.
 // Returns an empty string (not an error) if no worktree is set or the repo
 // has no commits yet — this is safe to use in checkpoint creation.

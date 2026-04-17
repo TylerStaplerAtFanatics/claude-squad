@@ -79,3 +79,49 @@ func TestScheduledHealthCheck(t *testing.T) {
 		t.Error("Scheduled health check did not stop in time")
 	}
 }
+
+// TestHealthCheckerDebounce verifies that recovery is deferred until failureThreshold
+// consecutive check failures occur, then resets the counter after an attempt.
+func TestHealthCheckerDebounce(t *testing.T) {
+	checker := NewSessionHealthChecker(nil)
+
+	// Create a minimal instance that appears started but has no tmux session.
+	// TmuxAlive() returns false because tmuxManager.HasSession() is false.
+	inst := &Instance{
+		Title:   "debounce-test",
+		started: true,
+		Status:  Running,
+	}
+
+	// First call: count=1, below threshold (2), no recovery attempted.
+	result1 := checker.checkSingleSession(inst)
+	if result1.RecoveryAttempted {
+		t.Error("first failure: expected RecoveryAttempted=false (below threshold)")
+	}
+	if result1.IsHealthy {
+		t.Error("first failure: expected IsHealthy=false")
+	}
+
+	// Verify failure count is 1.
+	checker.failureCountsMu.Lock()
+	count := checker.failureCounts[inst.Title]
+	checker.failureCountsMu.Unlock()
+	if count != 1 {
+		t.Errorf("expected failure count=1 after first call, got %d", count)
+	}
+
+	// Second call: count reaches failureThreshold (2), recovery attempted.
+	// Start(false) will fail (no real tmux session), but RecoveryAttempted must be true.
+	result2 := checker.checkSingleSession(inst)
+	if !result2.RecoveryAttempted {
+		t.Error("second failure: expected RecoveryAttempted=true (threshold reached)")
+	}
+
+	// Verify failure count is reset to 0 after recovery attempt (regardless of success).
+	checker.failureCountsMu.Lock()
+	count = checker.failureCounts[inst.Title]
+	checker.failureCountsMu.Unlock()
+	if count != 0 {
+		t.Errorf("expected failure count=0 after recovery attempt, got %d", count)
+	}
+}
