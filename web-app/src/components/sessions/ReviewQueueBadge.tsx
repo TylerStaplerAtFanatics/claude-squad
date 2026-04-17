@@ -2,7 +2,7 @@
 
 import { Priority, AttentionReason } from "@/gen/session/v1/types_pb";
 import { StatusBadge, getAttentionReasonInfo } from "./StatusBadge";
-import styles from "./ReviewQueueBadge.module.css";
+import * as styles from "./ReviewQueueBadge.css";
 
 interface ReviewQueueBadgeProps {
   priority: Priority;

@@ -1,4 +1,4 @@
-import styles from "./Skeleton.module.css";
+import { skeleton, rectangular, circular, text } from "./Skeleton.css";
 
 interface SkeletonProps {
   className?: string;
@@ -26,7 +26,7 @@ export function Skeleton({
 
   return (
     <div
-      className={`${styles.skeleton} ${styles[variant]} ${className}`}
+      className={`${skeleton} ${{ rectangular, circular, text }[variant]} ${className}`}
       style={style}
     />
   );

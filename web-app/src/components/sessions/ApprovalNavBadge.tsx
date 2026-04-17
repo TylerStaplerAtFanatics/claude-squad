@@ -1,7 +1,7 @@
 "use client";
 
 import { useApprovalsContext } from "@/lib/contexts/ApprovalsContext";
-import styles from "./ApprovalNavBadge.module.css";
+import { badge, inline as inlineClass } from "./ApprovalNavBadge.css";
 
 interface ApprovalNavBadgeProps {
   inline?: boolean;
@@ -24,8 +24,8 @@ export function ApprovalNavBadge({ inline = false, onClick }: ApprovalNavBadgePr
   }
 
   const className = inline
-    ? `${styles.badge} ${styles.inline}`
-    : styles.badge;
+    ? `${badge} ${inlineClass}`
+    : badge;
 
   return (
     <button

@@ -16,7 +16,7 @@ import { useKeyboard } from "@/lib/hooks/useKeyboard";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { getApiBaseUrl } from "@/lib/config";
 import { SessionFormData } from "@/lib/validation/sessionSchema";
-import styles from "./page.module.css";
+import * as styles from "./page.css";
 
 function HomeContent() {
   const searchParams = useSearchParams();

@@ -6,7 +6,24 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { getApiBaseUrl } from "@/lib/config";
 import { PROGRAMS } from "@/lib/constants/programs";
-import styles from "./GlobalDefaultsForm.module.css";
+import {
+  container,
+  heading,
+  loadingText,
+  form,
+  field,
+  label as labelClass,
+  select,
+  input,
+  tagList,
+  tag as tagClass,
+  tagRemove,
+  tagInputRow,
+  envVarTable,
+  envVarRow,
+  deleteBtn,
+  actions,
+} from "./GlobalDefaultsForm.css";
 
 export function GlobalDefaultsForm() {
   const [program, setProgram] = useState("");
@@ -117,29 +134,29 @@ export function GlobalDefaultsForm() {
 
   if (loading) {
     return (
-      <div className={styles.container}>
-        <h2 className={styles.heading}>Global Defaults</h2>
-        <div className={styles.loadingText}>Loading...</div>
+      <div className={container}>
+        <h2 className={heading}>Global Defaults</h2>
+        <div className={loadingText}>Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className={styles.container}>
-      <h2 className={styles.heading}>Global Defaults</h2>
+    <div className={container}>
+      <h2 className={heading}>Global Defaults</h2>
 
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      <div className={styles.form}>
+      <div className={form}>
         {/* Program */}
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="global-program">
+        <div className={field}>
+          <label className={labelClass} htmlFor="global-program">
             Program
           </label>
           <select
             id="global-program"
-            className={styles.select}
+            className={select}
             value={program}
             onChange={(e) => setProgram(e.target.value)}
           >
@@ -153,27 +170,27 @@ export function GlobalDefaultsForm() {
         </div>
 
         {/* Tags */}
-        <div className={styles.field}>
-          <label className={styles.label}>Tags</label>
-          <div className={styles.tagList}>
-            {tags.map((tag) => (
-              <span key={tag} className={styles.tag}>
-                {tag}
+        <div className={field}>
+          <label className={labelClass}>Tags</label>
+          <div className={tagList}>
+            {tags.map((t) => (
+              <span key={t} className={tagClass}>
+                {t}
                 <button
                   type="button"
-                  className={styles.tagRemove}
-                  onClick={() => handleRemoveTag(tag)}
-                  aria-label={`Remove tag ${tag}`}
+                  className={tagRemove}
+                  onClick={() => handleRemoveTag(t)}
+                  aria-label={`Remove tag ${t}`}
                 >
                   x
                 </button>
               </span>
             ))}
           </div>
-          <div className={styles.tagInputRow}>
+          <div className={tagInputRow}>
             <input
               type="text"
-              className={styles.input}
+              className={input}
               placeholder="Add a tag..."
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
@@ -190,21 +207,21 @@ export function GlobalDefaultsForm() {
         </div>
 
         {/* Env Vars */}
-        <div className={styles.field}>
-          <label className={styles.label}>Environment Variables</label>
-          <div className={styles.envVarTable}>
+        <div className={field}>
+          <label className={labelClass}>Environment Variables</label>
+          <div className={envVarTable}>
             {envVars.map((envVar, i) => (
-              <div key={i} className={styles.envVarRow}>
+              <div key={i} className={envVarRow}>
                 <input
                   type="text"
-                  className={styles.input}
+                  className={input}
                   placeholder="KEY"
                   value={envVar.key}
                   onChange={(e) => handleEnvVarChange(i, "key", e.target.value)}
                 />
                 <input
                   type="text"
-                  className={styles.input}
+                  className={input}
                   placeholder="value"
                   value={envVar.value}
                   onChange={(e) =>
@@ -213,7 +230,7 @@ export function GlobalDefaultsForm() {
                 />
                 <button
                   type="button"
-                  className={styles.deleteBtn}
+                  className={deleteBtn}
                   onClick={() => handleRemoveEnvVar(i)}
                   aria-label="Remove environment variable"
                 >
@@ -232,14 +249,14 @@ export function GlobalDefaultsForm() {
         </div>
 
         {/* CLI Flags */}
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="global-cli-flags">
+        <div className={field}>
+          <label className={labelClass} htmlFor="global-cli-flags">
             CLI Flags
           </label>
           <input
             id="global-cli-flags"
             type="text"
-            className={styles.input}
+            className={input}
             placeholder="e.g. --verbose --no-color"
             value={cliFlags}
             onChange={(e) => setCliFlags(e.target.value)}
@@ -247,7 +264,7 @@ export function GlobalDefaultsForm() {
         </div>
 
         {/* Save */}
-        <div className={styles.actions}>
+        <div className={actions}>
           <button
             type="button"
             className="btn btn-primary"

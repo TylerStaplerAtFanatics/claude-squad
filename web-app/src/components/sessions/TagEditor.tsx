@@ -2,7 +2,7 @@
 
 import { useState, KeyboardEvent, useRef } from "react";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
-import styles from "./TagEditor.module.css";
+import * as styles from "./TagEditor.css";
 
 interface TagEditorProps {
   tags: string[];

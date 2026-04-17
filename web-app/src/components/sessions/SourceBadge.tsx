@@ -1,7 +1,7 @@
 "use client";
 
 import type { FieldSource } from "@/lib/hooks/useSessionDefaults";
-import styles from "./SourceBadge.module.css";
+import * as styles from "./SourceBadge.css";
 
 interface SourceBadgeProps {
   source: FieldSource;

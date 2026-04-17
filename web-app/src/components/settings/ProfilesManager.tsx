@@ -9,7 +9,32 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { getApiBaseUrl } from "@/lib/config";
 import { PROGRAMS } from "@/lib/constants/programs";
-import styles from "./ProfilesManager.module.css";
+import {
+  container,
+  heading,
+  headerRow,
+  loadingText,
+  emptyText,
+  profileRow,
+  profileInfo,
+  profileName,
+  profileDesc,
+  profileMeta,
+  profileActions,
+  formCard,
+  formTitle,
+  formFields,
+  field,
+  label as labelClass,
+  checkboxLabel,
+  input,
+  select,
+  tagList,
+  tag as tagClass,
+  tagRemove,
+  tagInputRow,
+  formActions,
+} from "./ProfilesManager.css";
 
 interface ProfileFormData {
   name: string;
@@ -170,17 +195,17 @@ export function ProfilesManager() {
 
   if (loading) {
     return (
-      <div className={styles.container}>
-        <h2 className={styles.heading}>Profiles</h2>
-        <div className={styles.loadingText}>Loading...</div>
+      <div className={container}>
+        <h2 className={heading}>Profiles</h2>
+        <div className={loadingText}>Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.headerRow}>
-        <h2 className={styles.heading}>Profiles</h2>
+    <div className={container}>
+      <div className={headerRow}>
+        <h2 className={heading}>Profiles</h2>
         <button
           type="button"
           className="btn btn-primary"
@@ -195,30 +220,30 @@ export function ProfilesManager() {
 
       {/* Profile list */}
       {profiles.length === 0 && !showForm && (
-        <div className={styles.emptyText}>No profiles configured.</div>
+        <div className={emptyText}>No profiles configured.</div>
       )}
       {profiles.map(({ key, profile }) => (
-        <div key={key} className={styles.profileRow}>
-          <div className={styles.profileInfo}>
-            <span className={styles.profileName}>{profile.name}</span>
+        <div key={key} className={profileRow}>
+          <div className={profileInfo}>
+            <span className={profileName}>{profile.name}</span>
             {profile.description && (
-              <span className={styles.profileDesc}>{profile.description}</span>
+              <span className={profileDesc}>{profile.description}</span>
             )}
             {profile.program && (
-              <span className={styles.profileMeta}>
+              <span className={profileMeta}>
                 Program: {profile.program}
               </span>
             )}
             {profile.autoYes && (
-              <span className={styles.profileMeta}>Auto-yes: on</span>
+              <span className={profileMeta}>Auto-yes: on</span>
             )}
             {profile.tags.length > 0 && (
-              <span className={styles.profileMeta}>
+              <span className={profileMeta}>
                 Tags: {profile.tags.join(", ")}
               </span>
             )}
           </div>
-          <div className={styles.profileActions}>
+          <div className={profileActions}>
             <button
               type="button"
               className="btn btn-secondary"
@@ -239,33 +264,33 @@ export function ProfilesManager() {
 
       {/* Inline form */}
       {showForm && (
-        <div className={styles.formCard}>
-          <h3 className={styles.formTitle}>
+        <div className={formCard}>
+          <h3 className={formTitle}>
             {editingKey ? `Edit Profile: ${editingKey}` : "New Profile"}
           </h3>
-          <div className={styles.formFields}>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="profile-name">
+          <div className={formFields}>
+            <div className={field}>
+              <label className={labelClass} htmlFor="profile-name">
                 Name *
               </label>
               <input
                 id="profile-name"
                 type="text"
-                className={styles.input}
+                className={input}
                 placeholder="e.g. fast-mode"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 disabled={!!editingKey}
               />
             </div>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="profile-desc">
+            <div className={field}>
+              <label className={labelClass} htmlFor="profile-desc">
                 Description
               </label>
               <input
                 id="profile-desc"
                 type="text"
-                className={styles.input}
+                className={input}
                 placeholder="Short description"
                 value={form.description}
                 onChange={(e) =>
@@ -273,13 +298,13 @@ export function ProfilesManager() {
                 }
               />
             </div>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="profile-program">
+            <div className={field}>
+              <label className={labelClass} htmlFor="profile-program">
                 Program
               </label>
               <select
                 id="profile-program"
-                className={styles.select}
+                className={select}
                 value={form.program}
                 onChange={(e) => setForm({ ...form, program: e.target.value })}
               >
@@ -291,8 +316,8 @@ export function ProfilesManager() {
                 ))}
               </select>
             </div>
-            <div className={styles.field}>
-              <label className={styles.checkboxLabel}>
+            <div className={field}>
+              <label className={checkboxLabel}>
                 <input
                   type="checkbox"
                   checked={form.autoYes}
@@ -303,27 +328,27 @@ export function ProfilesManager() {
                 Auto-yes
               </label>
             </div>
-            <div className={styles.field}>
-              <label className={styles.label}>Tags</label>
-              <div className={styles.tagList}>
-                {form.tags.map((tag) => (
-                  <span key={tag} className={styles.tag}>
-                    {tag}
+            <div className={field}>
+              <label className={labelClass}>Tags</label>
+              <div className={tagList}>
+                {form.tags.map((t) => (
+                  <span key={t} className={tagClass}>
+                    {t}
                     <button
                       type="button"
-                      className={styles.tagRemove}
-                      onClick={() => handleRemoveTag(tag)}
-                      aria-label={`Remove tag ${tag}`}
+                      className={tagRemove}
+                      onClick={() => handleRemoveTag(t)}
+                      aria-label={`Remove tag ${t}`}
                     >
                       x
                     </button>
                   </span>
                 ))}
               </div>
-              <div className={styles.tagInputRow}>
+              <div className={tagInputRow}>
                 <input
                   type="text"
-                  className={styles.input}
+                  className={input}
                   placeholder="Add a tag..."
                   value={form.tagInput}
                   onChange={(e) =>
@@ -341,7 +366,7 @@ export function ProfilesManager() {
               </div>
             </div>
           </div>
-          <div className={styles.formActions}>
+          <div className={formActions}>
             <button
               type="button"
               className="btn btn-primary"

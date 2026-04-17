@@ -13,7 +13,7 @@ import { ActionBar } from "@/components/ui/ActionBar";
 import { useSessionService } from "@/lib/hooks/useSessionService";
 import { getApiBaseUrl } from "@/lib/config";
 import { getProgramDisplay, isKnownProgram, PROGRAMS } from "@/lib/constants/programs";
-import styles from "./SessionDetail.module.css";
+import * as styles from "./SessionDetail.css";
 
 // Dynamically import TerminalOutput with SSR disabled (xterm.js requires browser environment)
 const TerminalOutput = dynamic(

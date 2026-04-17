@@ -16,7 +16,7 @@ import {
   getCategoryStats,
   getLibraryStats,
 } from '@/lib/test-generators/escape-codes/library';
-import styles from './page.module.css';
+import * as styles from './page.css';
 
 type TestPattern = 'isolated' | 'sequential' | 'mixed' | 'stress';
 
