@@ -1,12 +1,14 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { useDispatch, useSelector } from "react-redux";
 import approvalsReducer from "./approvalsSlice";
+import bulkSelectionReducer from "./bulkSelectionSlice";
 import reviewQueueReducer from "./reviewQueueSlice";
 import sessionsReducer from "./sessionsSlice";
 
 export const store = configureStore({
   reducer: {
     approvals: approvalsReducer,
+    bulkSelection: bulkSelectionReducer,
     reviewQueue: reviewQueueReducer,
     sessions: sessionsReducer,
   },

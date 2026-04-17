@@ -19,6 +19,8 @@
   box-sizing: content-box; /* CRITICAL: FitAddon requires content-box for accurate dimension calculation */
   padding: 0; /* Remove any padding that would interfere with fit calculations */
   margin: 0; /* Remove any margin that would interfere with fit calculations */
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
 }
 
 /* Ensure xterm.js terminal fills container */

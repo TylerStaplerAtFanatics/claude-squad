@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState, CheckpointProto } from "@/gen/session/v1/types_pb";
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
 import { GitHubBadge } from "./GitHubBadge";
@@ -63,6 +63,9 @@ export function SessionCard({
   const [isRestarting, setIsRestarting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [renameError, setRenameError] = useState("");
+  const [isInlineEditing, setIsInlineEditing] = useState(false);
+  const [inlineEditValue, setInlineEditValue] = useState("");
+  const inlineSavingRef = useRef(false);
   const [checkpointError, setCheckpointError] = useState("");
   const [forkError, setForkError] = useState("");
   const getStatusColor = (status: SessionStatus): string => {
@@ -243,6 +246,45 @@ export function SessionCard({
     setIsRenameOpen(false);
     setNewTitle(session.title);
     setRenameError("");
+  };
+
+  const handleTitleClick = (e: React.MouseEvent) => {
+    if (selectMode) return;
+    e.stopPropagation();
+    setInlineEditValue(session.title);
+    setIsInlineEditing(true);
+  };
+
+  const handleInlineSave = async () => {
+    if (inlineSavingRef.current) return;
+    const trimmed = inlineEditValue.trim();
+    if (!trimmed || trimmed === session.title) {
+      setIsInlineEditing(false);
+      return;
+    }
+    inlineSavingRef.current = true;
+    setIsInlineEditing(false);
+    try {
+      const success = await onRename?.(session.id, trimmed);
+      if (!success) {
+        // Re-open inline edit on failure so the user can correct
+        setInlineEditValue(trimmed);
+        setIsInlineEditing(true);
+      }
+    } catch {
+      setInlineEditValue(trimmed);
+      setIsInlineEditing(true);
+    } finally {
+      inlineSavingRef.current = false;
+    }
+  };
+
+  const handleInlineKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleInlineSave();
+    } else if (e.key === "Escape") {
+      setIsInlineEditing(false);
+    }
   };
 
   const handleRestartClick = (e: React.MouseEvent) => {
@@ -525,19 +567,37 @@ export function SessionCard({
       aria-label={`Session ${session.title}, status: ${getStatusText(session.status)}, program: ${session.program}`}
       aria-pressed={selectMode ? isSelected : undefined}
     >
-      {selectMode && (
-        <div className={styles.checkbox} onClick={handleCheckboxClick}>
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => {}} // Controlled by onClick
-            aria-label={`Select ${session.title}`}
-          />
-        </div>
-      )}
+      <div className={styles.checkbox} onClick={handleCheckboxClick}>
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => {}} // Controlled by onClick
+          aria-label={`Select ${session.title}`}
+        />
+      </div>
       <div className={styles.header}>
         <div className={styles.titleRow}>
-          <h3 className={styles.title}>{session.title}</h3>
+          {isInlineEditing ? (
+            <input
+              className={styles.inlineTitleInput}
+              value={inlineEditValue}
+              autoFocus
+              onChange={(e) => setInlineEditValue(e.target.value)}
+              onBlur={handleInlineSave}
+              onKeyDown={handleInlineKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Edit session title"
+            />
+          ) : (
+            <h3
+              className={styles.title}
+              onClick={handleTitleClick}
+              title={selectMode ? undefined : "Click to rename"}
+              style={selectMode ? undefined : { cursor: "text" }}
+            >
+              {session.title}
+            </h3>
+          )}
           <div className={styles.badges}>
             {isExternal && (
               <span
