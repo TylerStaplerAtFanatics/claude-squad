@@ -8,6 +8,7 @@ import approvalsReducer, {
   selectApprovalsLoading,
   selectApprovalsError,
 } from "../approvalsSlice";
+import bulkSelectionReducer from "../bulkSelectionSlice";
 import reviewQueueReducer from "../reviewQueueSlice";
 import sessionsReducer from "../sessionsSlice";
 import { PendingApprovalProto, PendingApprovalProtoSchema } from "@/gen/session/v1/types_pb";
@@ -17,7 +18,7 @@ import { create } from "@bufbuild/protobuf";
 // without needing `as any` casts. A fresh instance per-test prevents state leakage.
 function makeStore() {
   return configureStore({
-    reducer: { approvals: approvalsReducer, reviewQueue: reviewQueueReducer, sessions: sessionsReducer },
+    reducer: { approvals: approvalsReducer, bulkSelection: bulkSelectionReducer, reviewQueue: reviewQueueReducer, sessions: sessionsReducer },
     middleware: (getDefault) => getDefault({ serializableCheck: false }),
   });
 }

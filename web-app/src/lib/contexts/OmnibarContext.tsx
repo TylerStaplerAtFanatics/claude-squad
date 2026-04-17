@@ -66,6 +66,14 @@ export function OmnibarProvider({ children }: OmnibarProviderProps) {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [toggle, open]);
 
+  const handleNavigateToSession = useCallback(
+    (sessionId: string) => {
+      router.push(`/?session=${sessionId}`);
+      close();
+    },
+    [router, close]
+  );
+
   // Handle session creation
   const handleCreateSession = useCallback(
     async (data: OmnibarSessionData) => {
@@ -106,6 +114,7 @@ export function OmnibarProvider({ children }: OmnibarProviderProps) {
         isOpen={isOpen}
         onClose={close}
         onCreateSession={handleCreateSession}
+        onNavigateToSession={handleNavigateToSession}
       />
     </OmnibarContext.Provider>
   );
@@ -119,6 +128,6 @@ function isInputElement(element: Element | null): boolean {
     tagName === "input" ||
     tagName === "textarea" ||
     tagName === "select" ||
-    (element as HTMLElement).isContentEditable
+    element instanceof HTMLElement && element.isContentEditable
   );
 }

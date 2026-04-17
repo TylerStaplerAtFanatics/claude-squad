@@ -142,6 +142,10 @@ func (p *PRStatusPoller) pollLoop() {
 	ticker := time.NewTicker(p.config.PollInterval)
 	defer ticker.Stop()
 
+	// Run an immediate check so sessions show real status without waiting a
+	// full PollInterval. ETag caching and rate-limit guards still apply.
+	p.checkAllSessions()
+
 	for {
 		select {
 		case <-p.ctx.Done():

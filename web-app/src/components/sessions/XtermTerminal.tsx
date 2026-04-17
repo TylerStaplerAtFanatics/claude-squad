@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
 import { Terminal } from "@xterm/xterm";
+import { useTouchScroll } from "@/lib/hooks/useTouchScroll";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
@@ -107,6 +108,9 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, XtermTerminalProps>
   // Store callbacks in refs to avoid recreating terminal on callback changes
   const onDataRef = useRef(onData);
   const onResizeRef = useRef(onResize);
+
+  // Enable touch-based scrolling on mobile devices
+  useTouchScroll(containerRef, () => terminalRef.current);
 
   useEffect(() => {
     onDataRef.current = onData;

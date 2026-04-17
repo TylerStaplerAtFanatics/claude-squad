@@ -40,17 +40,40 @@
   background: linear-gradient(to right, rgba(99, 102, 241, 0.05), var(--card-bg));
 }
 
+/* Checkbox: hidden by default, revealed on hover or when a card is selected/in selectMode. */
 .checkbox {
   position: absolute;
   left: 16px;
   top: 50%;
   transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.card:hover .checkbox,
+.card.selected .checkbox,
+.card.selectMode .checkbox {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .checkbox input[type="checkbox"] {
   width: 20px;
   height: 20px;
   cursor: pointer;
+}
+
+/* Mobile (no hover capability): only show checkboxes when selectMode is active. */
+@media (hover: none) {
+  .card .checkbox {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .card.selectMode .checkbox {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .header {
@@ -69,6 +92,20 @@
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.inlineTitleInput {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  outline: 2px solid var(--primary, #0070f3);
+  border-radius: 4px;
+  padding: 0 4px;
+  width: 100%;
+  font-family: inherit;
 }
 
 .badges {
