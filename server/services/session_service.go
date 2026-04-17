@@ -1982,7 +1982,10 @@ func (s *SessionService) GetTerminalSnapshot(
 		content = ""
 	}
 
-	// Trim to last N lines
+	// Trim to last N lines and strip trailing whitespace per line.
+	// tmux capture-pane pads each line with spaces to the full pane width (e.g. 220 chars).
+	// Without trimming, pre-wrap CSS causes each padded line to wrap into many visual lines,
+	// showing only 1-2 actual content lines in a fixed-height preview box.
 	lastN := int(req.Msg.LastNLines)
 	if lastN <= 0 {
 		lastN = 20
@@ -1990,6 +1993,9 @@ func (s *SessionService) GetTerminalSnapshot(
 	lines := strings.Split(content, "\n")
 	if len(lines) > lastN {
 		lines = lines[len(lines)-lastN:]
+	}
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(line, " \t")
 	}
 	content = strings.Join(lines, "\n")
 
