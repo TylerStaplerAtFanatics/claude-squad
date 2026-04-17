@@ -25,16 +25,19 @@ type circuitBreakerResponse struct {
 }
 
 type circuitBreakerEntry struct {
-	Key                 string                    `json:"key"`
-	State               string                    `json:"state"`
-	ConsecutiveFailures int                       `json:"consecutive_failures"`
-	LastStateChange     string                    `json:"last_state_change"`
-	Config              circuitBreakerConfigEntry `json:"config"`
+	Key                          string                    `json:"key"`
+	State                        string                    `json:"state"`
+	ConsecutiveFailures          int                       `json:"consecutive_failures"`
+	ConsecutiveOpenTrips         int                       `json:"consecutive_open_trips"`
+	EffectiveRecoveryTimeoutSecs int                       `json:"effective_recovery_timeout_seconds"`
+	LastStateChange              string                    `json:"last_state_change"`
+	Config                       circuitBreakerConfigEntry `json:"config"`
 }
 
 type circuitBreakerConfigEntry struct {
-	FailureThreshold       int `json:"failure_threshold"`
-	RecoveryTimeoutSeconds int `json:"recovery_timeout_seconds"`
+	FailureThreshold          int `json:"failure_threshold"`
+	RecoveryTimeoutSeconds    int `json:"recovery_timeout_seconds"`
+	MaxRecoveryTimeoutSeconds int `json:"max_recovery_timeout_seconds"`
 }
 
 // HandleCircuitBreakers returns the current state of all circuit breakers.
@@ -53,13 +56,16 @@ func (h *CircuitBreakerHandler) HandleCircuitBreakers(w http.ResponseWriter, r *
 
 	for key, snap := range snapshots {
 		entry := circuitBreakerEntry{
-			Key:                 key,
-			State:               snap.State.String(),
-			ConsecutiveFailures: snap.ConsecutiveFailures,
-			LastStateChange:     snap.LastStateChange.UTC().Format("2006-01-02T15:04:05Z"),
+			Key:                          key,
+			State:                        snap.State.String(),
+			ConsecutiveFailures:          snap.ConsecutiveFailures,
+			ConsecutiveOpenTrips:         snap.ConsecutiveOpenTrips,
+			EffectiveRecoveryTimeoutSecs: int(snap.EffectiveRecovery.Seconds()),
+			LastStateChange:              snap.LastStateChange.UTC().Format("2006-01-02T15:04:05Z"),
 			Config: circuitBreakerConfigEntry{
-				FailureThreshold:       snap.Config.FailureThreshold,
-				RecoveryTimeoutSeconds: int(snap.Config.RecoveryTimeout.Seconds()),
+				FailureThreshold:          snap.Config.FailureThreshold,
+				RecoveryTimeoutSeconds:    int(snap.Config.RecoveryTimeout.Seconds()),
+				MaxRecoveryTimeoutSeconds: int(snap.Config.MaxRecoveryTimeout.Seconds()),
 			},
 		}
 		resp.Breakers = append(resp.Breakers, entry)

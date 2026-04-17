@@ -175,6 +175,7 @@ func TestDefaultCircuitBreakerConfig(t *testing.T) {
 	cfg := DefaultCircuitBreakerConfig()
 	assert.Equal(t, 3, cfg.FailureThreshold)
 	assert.Equal(t, 30*time.Second, cfg.RecoveryTimeout)
+	assert.Equal(t, 5*time.Minute, cfg.MaxRecoveryTimeout)
 }
 
 // --- Core state transition tests (table-driven) ---
@@ -742,6 +743,80 @@ func TestCircuitBreakerRegistry_Unregister(t *testing.T) {
 
 // TestCircuitBreakerExecutor_IsFailure verifies that a custom IsFailure classifier controls
 // which errors count as circuit breaker failures.
+// TestCircuitBreakerExponentialBackoff verifies that successive failed HALF-OPEN probes
+// double the recovery timeout up to MaxRecoveryTimeout.
+func TestCircuitBreakerExponentialBackoff(t *testing.T) {
+	clock := newMockClock(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
+	cfg := CircuitBreakerConfig{
+		FailureThreshold:   3,
+		RecoveryTimeout:    30 * time.Second,
+		MaxRecoveryTimeout: 5 * time.Minute,
+	}
+	cbe := NewCircuitBreakerExecutorWithClock(failingExecutor(), cfg, clock)
+
+	// Trip the breaker (consecutiveOpenTrips=0, effectiveTimeout=30s).
+	for i := 0; i < 3; i++ {
+		_ = cbe.Run(dummyCmd("git", "diff"))
+	}
+	snap := cbe.AllBreakers()["git-diff"]
+	require.Equal(t, CircuitOpen, snap.State)
+	assert.Equal(t, 0, snap.ConsecutiveOpenTrips)
+	assert.Equal(t, 30*time.Second, snap.EffectiveRecovery)
+
+	// First probe fails: effectiveTimeout doubles to 60s.
+	clock.Advance(31 * time.Second) // past 30s
+	_ = cbe.Run(dummyCmd("git", "diff"))
+	snap = cbe.AllBreakers()["git-diff"]
+	require.Equal(t, CircuitOpen, snap.State)
+	assert.Equal(t, 1, snap.ConsecutiveOpenTrips)
+	assert.Equal(t, 60*time.Second, snap.EffectiveRecovery)
+
+	// 30s after re-open: still not enough (need 60s).
+	clock.Advance(30 * time.Second)
+	err := cbe.Run(dummyCmd("git", "diff"))
+	assert.ErrorIs(t, err, ErrCircuitOpen, "30s < 60s backoff: should still be open")
+
+	// Second probe fails: effectiveTimeout doubles to 120s.
+	clock.Advance(31 * time.Second) // 61s since re-open → allowed
+	_ = cbe.Run(dummyCmd("git", "diff"))
+	snap = cbe.AllBreakers()["git-diff"]
+	require.Equal(t, CircuitOpen, snap.State)
+	assert.Equal(t, 2, snap.ConsecutiveOpenTrips)
+	assert.Equal(t, 120*time.Second, snap.EffectiveRecovery)
+
+	// Third probe fails: effectiveTimeout would be 240s but capped at 5min=300s (no cap yet).
+	clock.Advance(121 * time.Second)
+	_ = cbe.Run(dummyCmd("git", "diff"))
+	snap = cbe.AllBreakers()["git-diff"]
+	require.Equal(t, CircuitOpen, snap.State)
+	assert.Equal(t, 3, snap.ConsecutiveOpenTrips)
+	assert.Equal(t, 240*time.Second, snap.EffectiveRecovery)
+
+	// Fourth probe fails: effectiveTimeout would be 480s → capped at 300s (5min).
+	clock.Advance(241 * time.Second)
+	_ = cbe.Run(dummyCmd("git", "diff"))
+	snap = cbe.AllBreakers()["git-diff"]
+	require.Equal(t, CircuitOpen, snap.State)
+	assert.Equal(t, 4, snap.ConsecutiveOpenTrips)
+	assert.Equal(t, 5*time.Minute, snap.EffectiveRecovery, "timeout should be capped at MaxRecoveryTimeout")
+
+	// Subsequent failures stay at the cap.
+	clock.Advance(301 * time.Second)
+	_ = cbe.Run(dummyCmd("git", "diff"))
+	snap = cbe.AllBreakers()["git-diff"]
+	assert.Equal(t, 5*time.Minute, snap.EffectiveRecovery, "cap should persist")
+
+	// Successful probe resets all backoff state.
+	clock.Advance(301 * time.Second)
+	cbe.delegate = succeedingExecutor()
+	err = cbe.Run(dummyCmd("git", "diff"))
+	assert.NoError(t, err)
+	snap = cbe.AllBreakers()["git-diff"]
+	assert.Equal(t, CircuitClosed, snap.State)
+	assert.Equal(t, 0, snap.ConsecutiveOpenTrips)
+	assert.Equal(t, 30*time.Second, snap.EffectiveRecovery, "base timeout restored after close")
+}
+
 func TestCircuitBreakerExecutor_IsFailure(t *testing.T) {
 	softErr := errors.New("soft error: no sessions")
 	hardErr := errors.New("hard error: no server running")

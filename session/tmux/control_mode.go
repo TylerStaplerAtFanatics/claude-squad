@@ -85,6 +85,10 @@ func (t *TmuxSession) StopControlMode() error {
 		return nil // Not running
 	}
 
+	// Mark as intentional before closing anything so that the scanner-EOF path
+	// in readControlModeOutput() knows not to fire the onExit callback.
+	t.intentionalStop.Store(true)
+
 	// Signal termination
 	if t.controlModeDone != nil {
 		close(t.controlModeDone)
@@ -175,16 +179,28 @@ func (t *TmuxSession) readControlModeOutput() {
 		delete(t.controlModeSubscribers, id)
 	}
 	t.controlModeSubMu.Unlock()
+
+	// Scanner-EOF fallback: if the pipe closed without a %exit notification (e.g. the
+	// tmux server crashed or the process was killed), fire the onExit callback here.
+	// intentionalStop guards against false-positive fires during clean StopControlMode().
+	if !t.intentionalStop.Load() {
+		t.onExitOnce.Do(func() {
+			if t.onExit != nil {
+				t.onExit("control-mode-pipe-closed")
+			}
+		})
+	}
 }
 
 // monitorControlModeErrors monitors stderr for control mode errors.
 func (t *TmuxSession) monitorControlModeErrors(stderr io.ReadCloser) {
+	doneCh := t.controlModeDone // capture before StopControlMode can nil it
 	defer stderr.Close()
 
 	scanner := bufio.NewScanner(stderr)
 	for scanner.Scan() {
 		select {
-		case <-t.controlModeDone:
+		case <-doneCh:
 			return
 		default:
 			line := scanner.Text()
@@ -247,9 +263,28 @@ func (t *TmuxSession) processControlModeLine(line string) {
 		}
 
 	case "%exit":
-		// Session closed
+		// tmux server exited or detached from the session
 		log.InfoLog.Printf("Control mode received %%exit for session '%s'", t.sanitizedName)
-		// Don't stop here - let the caller handle cleanup
+		if !t.intentionalStop.Load() {
+			t.onExitOnce.Do(func() {
+				if t.onExit != nil {
+					t.onExit("control-mode-%exit")
+				}
+			})
+		}
+
+	case "%session-closed":
+		// A specific tmux session was closed (the session we are watching exited)
+		if len(fields) >= 2 {
+			log.InfoLog.Printf("Control mode session-closed for '%s': %s", t.sanitizedName, strings.Join(fields[1:], " "))
+		}
+		if !t.intentionalStop.Load() {
+			t.onExitOnce.Do(func() {
+				if t.onExit != nil {
+					t.onExit("session-closed")
+				}
+			})
+		}
 
 	case "%session-changed":
 		// %session-changed $SESSION_ID NAME

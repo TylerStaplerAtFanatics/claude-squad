@@ -68,9 +68,11 @@ func NewEntRepository(opts ...RepositoryOption) (*EntRepository, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(5) // Allow multiple readers
-	db.SetMaxIdleConns(2)
+	// SQLite supports only one writer at a time; serialise all access through a
+	// single connection to eliminate "database is locked" contention.
+	// WAL mode still allows concurrent reads via the same connection pool.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(time.Hour)
 
 	// Create Ent client with the existing database connection
