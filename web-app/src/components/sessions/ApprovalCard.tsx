@@ -77,8 +77,13 @@ export function ApprovalCard({ approval, onApprove, onDeny, sessionTitle }: Appr
     return `${secs}s`;
   };
 
+  const isExpired = secondsLeft <= 0;
+
   return (
-    <div className={styles.card} data-testid={`approval-card-${approval.id}`}>
+    <div
+      className={`${styles.card} ${isExpired ? styles.cardExpired : ""}`}
+      data-testid={`approval-card-${approval.id}`}
+    >
       <div className={styles.header}>
         <div className={styles.toolName}>
           <span className={styles.toolIcon} aria-hidden="true">&#x1F527;</span>
@@ -134,25 +139,7 @@ export function ApprovalCard({ approval, onApprove, onDeny, sessionTitle }: Appr
       )}
 
       <div className={styles.actions}>
-        <button
-          className={styles.approveButton}
-          onClick={onApprove}
-          disabled={secondsLeft <= 0}
-          title="Allow this tool use"
-          aria-label={`Approve ${approval.toolName}`}
-        >
-          Approve
-        </button>
-        <button
-          className={styles.denyButton}
-          onClick={onDeny}
-          disabled={secondsLeft <= 0}
-          title="Deny this tool use"
-          aria-label={`Deny ${approval.toolName}`}
-        >
-          Deny
-        </button>
-        {secondsLeft <= 0 && (
+        {isExpired ? (
           <button
             className={styles.dismissButton}
             onClick={onDeny}
@@ -161,6 +148,25 @@ export function ApprovalCard({ approval, onApprove, onDeny, sessionTitle }: Appr
           >
             Dismiss
           </button>
+        ) : (
+          <>
+            <button
+              className={styles.approveButton}
+              onClick={onApprove}
+              title="Allow this tool use"
+              aria-label={`Approve ${approval.toolName}`}
+            >
+              Approve
+            </button>
+            <button
+              className={styles.denyButton}
+              onClick={onDeny}
+              title="Deny this tool use"
+              aria-label={`Deny ${approval.toolName}`}
+            >
+              Deny
+            </button>
+          </>
         )}
       </div>
     </div>
