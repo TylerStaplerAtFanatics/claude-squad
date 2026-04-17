@@ -278,6 +278,28 @@
   font-weight: 600;
 }
 
+/* Last Activity — shown in card header as Tier 1 info */
+.lastActivityRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.lastActivityLabel {
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.6875rem;
+}
+
+.lastActivityTime {
+  color: var(--text-secondary);
+}
+
 .footer {
   display: flex;
   justify-content: space-between;
@@ -304,6 +326,7 @@
 
 .actionButton {
   padding: 6px 16px;
+  min-height: 44px;
   border: 1px solid var(--button-border);
   border-radius: 6px;
   background: var(--button-bg);
@@ -523,7 +546,7 @@
   cursor: pointer;
   letter-spacing: 2px;
   line-height: 1;
-  min-height: 32px;
+  min-height: 44px;
   transition: background 0.2s ease;
 }
 

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState, CheckpointProto } from "@/gen/session/v1/types_pb";
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
+import { StatusBadge } from "./StatusBadge";
 import { GitHubBadge } from "./GitHubBadge";
 import { TagEditor } from "./TagEditor";
 import { useTerminalSnapshot } from "@/lib/hooks/useTerminalSnapshot";
@@ -656,22 +657,12 @@ export function SessionCard({
               </span>
             )}
             {detectedStatus && (
-              <span
-                className={`${styles.status} ${styles.statusDetected}`}
-                role="status"
-                aria-label={`Detected: ${detectedStatus}`}
-                title={detectedContext || detectedStatus}
-              >
-                {detectedStatus}
-              </span>
+              <StatusBadge detectedStatus={detectedStatus} context={detectedContext} />
             )}
           </div>
         </div>
-        {session.category && (
-          <span className={styles.category}>{session.category}</span>
-        )}
-        <div className={styles.tagsContainer}>
-          {session.tags && session.tags.length > 0 && (
+        {session.tags && session.tags.length > 0 && (
+          <div className={styles.tagsContainer}>
             <div className={styles.tags}>
               {session.tags.map((tag, index) => (
                 <span key={index} className={styles.tag}>
@@ -679,15 +670,8 @@ export function SessionCard({
                 </span>
               ))}
             </div>
-          )}
-          <button
-            className={styles.editTagsButton}
-            onClick={handleEditTags}
-            title="Edit tags"
-          >
-            {session.tags && session.tags.length > 0 ? "Edit Tags" : "Add Tags"}
-          </button>
-        </div>
+          </div>
+        )}
         {reviewItem && !selectMode && (
           <div className={styles.reviewInfo}>
             <ReviewQueueBadge
@@ -700,71 +684,38 @@ export function SessionCard({
             )}
           </div>
         )}
+        {/* Last Activity — Tier 1 always-visible in header */}
+        {(() => {
+          const moSecs = session.lastMeaningfulOutput?.seconds ?? BigInt(0);
+          const tuSecs = session.lastTerminalUpdate?.seconds ?? BigInt(0);
+          const lastActivity = moSecs === BigInt(0) && tuSecs === BigInt(0)
+            ? undefined
+            : moSecs >= tuSecs ? session.lastMeaningfulOutput : session.lastTerminalUpdate;
+          return lastActivity ? (
+            <div className={styles.lastActivityRow}>
+              <span className={styles.lastActivityLabel}>Active</span>
+              <time
+                dateTime={new Date(Number(lastActivity.seconds) * 1000).toISOString()}
+                title={new Date(Number(lastActivity.seconds) * 1000).toISOString()}
+                className={styles.lastActivityTime}
+              >
+                {formatTimeAgo(lastActivity)}
+              </time>
+            </div>
+          ) : null;
+        })()}
       </div>
 
       <div className={styles.body}>
-        <div className={styles.info}>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>Program:</span>
-            <span className={styles.value}>{session.program}</span>
+        {/* Tier 2: branch context — one line */}
+        {session.branch && (
+          <div className={styles.info}>
+            <div className={styles.infoRow}>
+              <span className={styles.label}>Branch:</span>
+              <span className={styles.value}>{session.branch}</span>
+            </div>
           </div>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>Branch:</span>
-            <span className={styles.value}>{session.branch}</span>
-          </div>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>Path:</span>
-            <span className={styles.value} title={session.path}>
-              {session.path}
-            </span>
-          </div>
-          {session.workingDir && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Working Dir:</span>
-              <span className={styles.value}>{session.workingDir}</span>
-            </div>
-          )}
-          {session.githubOwner && session.githubRepo && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Repository:</span>
-              <span className={styles.value}>
-                <a
-                  href={`https://github.com/${session.githubOwner}/${session.githubRepo}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className={styles.githubLink}
-                >
-                  {session.githubOwner}/{session.githubRepo}
-                </a>
-              </span>
-            </div>
-          )}
-          {session.githubPrNumber > 0 && session.githubPrUrl && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Pull Request:</span>
-              <span className={styles.value}>
-                <a
-                  href={session.githubPrUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className={styles.githubLink}
-                >
-                  #{session.githubPrNumber}
-                </a>
-              </span>
-            </div>
-          )}
-          {session.clonedRepoPath && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Cloned To:</span>
-              <span className={styles.value} title={session.clonedRepoPath}>
-                {session.clonedRepoPath}
-              </span>
-            </div>
-          )}
-        </div>
+        )}
 
         {session.diffStats && (
           <div className={styles.diffStats}>
@@ -811,30 +762,6 @@ export function SessionCard({
       </div>
 
       <div className={styles.footer}>
-        <div className={styles.timestamps}>
-          <span className={styles.timestamp}>
-            Created: <time dateTime={session.createdAt ? new Date(Number(session.createdAt.seconds) * 1000).toISOString() : ""}>{formatDate(session.createdAt)}</time>
-          </span>
-          <span className={styles.timestamp}>
-            Updated: <time dateTime={session.updatedAt ? new Date(Number(session.updatedAt.seconds) * 1000).toISOString() : ""}>{formatDate(session.updatedAt)}</time>
-          </span>
-          {(() => {
-            // Use the most recent of lastMeaningfulOutput and lastTerminalUpdate.
-            // lastMeaningfulOutput is gated by a content-signature check, so it can lag
-            // behind lastTerminalUpdate when content repeats (e.g. idle prompt).
-            const moSecs = session.lastMeaningfulOutput?.seconds ?? BigInt(0);
-            const tuSecs = session.lastTerminalUpdate?.seconds ?? BigInt(0);
-            const lastActivity = moSecs === BigInt(0) && tuSecs === BigInt(0)
-              ? undefined
-              : moSecs >= tuSecs ? session.lastMeaningfulOutput : session.lastTerminalUpdate;
-            return lastActivity ? (
-              <span className={styles.timestamp} title="Last terminal activity">
-                Last Activity: <time dateTime={new Date(Number(lastActivity.seconds) * 1000).toISOString()} title={new Date(Number(lastActivity.seconds) * 1000).toISOString()}>{formatTimeAgo(lastActivity)}</time>
-              </span>
-            ) : null;
-          })()}
-        </div>
-
           {/* Desktop: primary action + overflow menu */}
           <div className={styles.desktopActions}>
             {(isPaused || isReady) && (
@@ -935,6 +862,14 @@ export function SessionCard({
                       <span aria-hidden="true">🍴</span> Fork
                     </button>
                   )}
+                  <button
+                    role="menuitem"
+                    className={styles.overflowMenuItem}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleEditTags(e); }}
+                    aria-label={`Edit tags for session ${session.title}`}
+                  >
+                    <span aria-hidden="true">🏷️</span> Edit Tags
+                  </button>
                   <button
                     role="menuitem"
                     className={styles.overflowMenuItem}
@@ -1041,6 +976,14 @@ export function SessionCard({
               <span aria-hidden="true">🍴</span> Fork
             </button>
           )}
+          <button
+            className={styles.actionButton}
+            onClick={handleEditTags}
+            title="Edit session tags"
+            aria-label={`Edit tags for session ${session.title}`}
+          >
+            <span aria-hidden="true">🏷️</span> Edit Tags
+          </button>
           <button
             className={styles.actionButton}
             onClick={(e) => {
