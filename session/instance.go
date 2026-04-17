@@ -60,6 +60,26 @@ func (s Status) String() string {
 	}
 }
 
+// LifecycleEvent is a notification type emitted by an Instance when key state
+// transitions occur (e.g., the session starts, or the program exits unexpectedly).
+type LifecycleEvent int
+
+const (
+	// EventStarted fires at the end of start() when the instance has successfully
+	// transitioned to Running and the controller is up.
+	EventStarted LifecycleEvent = iota
+	// EventExited fires when the underlying program exits unexpectedly (not via an
+	// operator-initiated Kill/Stop). Callers may use this to drive auto-restart logic.
+	EventExited
+)
+
+// LifecycleListener is implemented by any component that wants to receive Instance
+// lifecycle notifications. Implementations must be non-blocking; use a goroutine
+// or channel if the handler needs to do significant work.
+type LifecycleListener interface {
+	OnLifecycleEvent(event LifecycleEvent, reason string)
+}
+
 // ==== Instance -- Core Fields and Construction ====
 
 // Instance is a running instance of claude code.
@@ -201,6 +221,13 @@ type Instance struct {
 
 	// Mutex to protect concurrent access to instance state
 	stateMutex sync.RWMutex
+	// startMu prevents concurrent calls to start() from racing during session setup.
+	// Held for the full duration of start(); callers that lose the race return early.
+	startMu sync.Mutex
+
+	// lifecycleListeners receives EventStarted / EventExited notifications.
+	lifecycleListeners   []LifecycleListener
+	lifecycleListenersMu sync.Mutex
 }
 
 // ToInstanceData converts an Instance to its serializable form
@@ -435,11 +462,11 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 	// because the instance may be in any state (e.g., Ready, Loading) from which
 	// Paused is not a valid transition, yet the worktree is physically gone.
 	// No mutex is needed here because the instance is not yet shared.
-	if !instance.Paused() && instance.gitManager.worktree != nil {
-		worktreePath := instance.gitManager.worktree.GetWorktreePath()
+	if !instance.Paused() && instance.gitManager.HasWorktree() {
+		worktreePath := instance.gitManager.GetWorktreePath()
 		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
 			// Worktree has been deleted, mark instance as paused
-			log.LogForSession(instance.Title, "warning", "Worktree directory doesn't exist at '%s', marking as paused", worktreePath)
+			log.ForSession(instance.Title).Warning("Worktree directory doesn't exist at '%s', marking as paused", worktreePath)
 			instance.setStatus(Paused)
 		}
 	}
@@ -454,9 +481,9 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 
 		// Use server socket isolation if specified, otherwise use prefix-only isolation
 		if instance.TmuxServerSocket != "" {
-			instance.tmuxManager.session = tmux.NewTmuxSessionWithServerSocket(instance.Title, instance.Program, tmuxPrefix, instance.TmuxServerSocket)
+			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithServerSocket(instance.Title, instance.Program, tmuxPrefix, instance.TmuxServerSocket))
 		} else {
-			instance.tmuxManager.session = tmux.NewTmuxSessionWithPrefix(instance.Title, instance.Program, tmuxPrefix)
+			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithPrefix(instance.Title, instance.Program, tmuxPrefix))
 		}
 	} else {
 		if err := instance.Start(false); err != nil {
@@ -722,6 +749,12 @@ func (i *Instance) GetTitle() string {
 	return i.Title
 }
 
+// GetTmuxSessionName returns the sanitized tmux session name for reconciliation.
+// Returns empty string for external or uninitialized sessions.
+func (i *Instance) GetTmuxSessionName() string {
+	return i.tmuxManager.GetTmuxSessionName()
+}
+
 // setStatus sets the instance status without locking.
 // Must be called with i.stateMutex held.
 func (i *Instance) setStatus(status Status) {
@@ -778,6 +811,12 @@ func (i *Instance) StartWithCleanup(firstTimeSetup bool) (tmux.CleanupFunc, erro
 
 // start is the internal implementation for Start and StartWithCleanup.
 func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.CleanupFunc) error {
+	// Serialize concurrent start() calls for the same instance. A concurrent call
+	// (e.g. from onExit callback triggering a restart while another goroutine is
+	// already in start()) will block here until the first call finishes.
+	i.startMu.Lock()
+	defer i.startMu.Unlock()
+
 	log.InfoLog.Printf("Starting instance '%s' (firstTimeSetup: %v)", i.Title, firstTimeSetup)
 
 	if i.Title == "" {
@@ -785,6 +824,22 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	}
 
 	i.initTmuxSession()
+
+	// Wire the exit callback so control-mode %exit / PTY EOF fires our handler.
+	// ResetExitOnce is called first so repeated start() calls (restarts) allow
+	// the callback to fire again after the sync.Once was exhausted in the prior run.
+	i.tmuxManager.ResetExitOnce()
+	i.tmuxManager.SetOnExitCallback(func(reason string) {
+		log.InfoLog.Printf("Instance '%s': unexpected exit detected via control mode (%s)", i.Title, reason)
+		i.stateMutex.Lock()
+		if i.Status == Running || i.Status == Ready {
+			if err := i.transitionTo(Stopped); err != nil {
+				log.WarningLog.Printf("Instance '%s': exit callback transition failed: %v", i.Title, err)
+			}
+		}
+		i.stateMutex.Unlock()
+		i.fireLifecycleEvent(EventExited, reason)
+	})
 
 	if firstTimeSetup {
 		if err := i.setupFirstTimeWorktree(); err != nil {
@@ -821,6 +876,7 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 		if i.gitManager.HasWorktree() {
 			log.InfoLog.Printf("Setting up git worktree for instance '%s'", i.Title)
 			if err := i.gitManager.Setup(); err != nil {
+				log.ForSession(i.Title).Error("Failed to setup git worktree: %v", err)
 				setupErr = fmt.Errorf("failed to setup git worktree: %w", err)
 				return setupErr
 			}
@@ -859,6 +915,7 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	}
 	i.stateMutex.Unlock()
 	i.started = true
+	i.fireLifecycleEvent(EventStarted, "")
 
 	// Start controller for new sessions only; loaded sessions are wired later by server.go.
 	if firstTimeSetup {
@@ -871,7 +928,8 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 			// Session already exists; workDir only matters for the fallback recreation path.
 			_ = i.tmuxManager.RestoreWithWorkDir("")
 			if retryErr := i.StartController(); retryErr != nil {
-				log.ErrorLog.Printf("Controller start failed for '%s' after retry: %v", i.Title, retryErr)
+				log.ErrorLog.Printf("Controller start failed for '%s' after retry: %v — marking degraded", i.Title, retryErr)
+				i.fireLifecycleEvent(EventExited, "controller-start-failed")
 			}
 		}
 	} else {
@@ -1278,6 +1336,7 @@ func (i *Instance) Resume() error {
 		// Setup git worktree
 		if err := i.gitManager.Setup(); err != nil {
 			log.ErrorLog.Print(err)
+			log.ForSession(i.Title).Error("Failed to setup git worktree: %v", err)
 			return fmt.Errorf("failed to setup git worktree: %w", err)
 		}
 
@@ -1696,7 +1755,32 @@ func (i *Instance) PreviewFullHistory() (string, error) {
 func (i *Instance) GetTmuxSession() *tmux.TmuxSession {
 	i.stateMutex.RLock()
 	defer i.stateMutex.RUnlock()
-	return i.tmuxManager.session
+	return i.tmuxManager.Session()
+}
+
+// ---- SessionStreamer delegation methods ----
+// These methods satisfy the services.SessionStreamer interface without exposing
+// the concrete *tmux.TmuxSession type to the server layer.
+
+// StartControlMode starts the control mode stream on the underlying tmux session.
+func (i *Instance) StartControlMode() error {
+	return i.tmuxManager.StartControlMode()
+}
+
+// StopControlMode stops the control mode stream.
+func (i *Instance) StopControlMode() error {
+	return i.tmuxManager.StopControlMode()
+}
+
+// SubscribeControlModeUpdates returns a subscriber ID and a read-only output channel.
+// Returns a pre-closed channel if the tmux session is not available.
+func (i *Instance) SubscribeControlModeUpdates() (string, <-chan []byte) {
+	return i.tmuxManager.SubscribeToControlModeUpdates()
+}
+
+// UnsubscribeControlModeUpdates removes a subscriber by ID.
+func (i *Instance) UnsubscribeControlModeUpdates(id string) {
+	i.tmuxManager.UnsubscribeFromControlModeUpdates(id)
 }
 
 // SetTmuxSession sets the tmux session for testing purposes
@@ -2272,6 +2356,20 @@ func (i *Instance) StartController() error {
 		return fmt.Errorf("failed to create controller: %w", err)
 	}
 
+	// Wire PTY-EOF callback: when the ResponseStream detects PTY exit without an
+	// explicit Stop(), transition the instance to Stopped and notify listeners.
+	controller.SetOnEOFCallback(func() {
+		log.InfoLog.Printf("Instance '%s': PTY EOF received from ResponseStream", i.Title)
+		i.stateMutex.Lock()
+		if i.Status == Running || i.Status == Ready {
+			if err := i.transitionTo(Stopped); err != nil {
+				log.WarningLog.Printf("Instance '%s': exit callback transition failed: %v", i.Title, err)
+			}
+		}
+		i.stateMutex.Unlock()
+		i.fireLifecycleEvent(EventExited, "pty-eof")
+	})
+
 	// Start the controller - this initializes all components and begins background operations
 	// Single call replaces the old Initialize() + Start() pattern
 	if err := controller.Start(context.Background()); err != nil {
@@ -2295,6 +2393,28 @@ func (i *Instance) StartController() error {
 	return nil
 }
 
+// RegisterLifecycleListener adds a listener that will receive EventStarted and
+// EventExited notifications for this instance.
+// The listener is called synchronously on the goroutine that fires the event;
+// implementations must return quickly (no long blocking operations).
+func (i *Instance) RegisterLifecycleListener(l LifecycleListener) {
+	i.lifecycleListenersMu.Lock()
+	defer i.lifecycleListenersMu.Unlock()
+	i.lifecycleListeners = append(i.lifecycleListeners, l)
+}
+
+// fireLifecycleEvent notifies all registered listeners of a lifecycle event.
+func (i *Instance) fireLifecycleEvent(event LifecycleEvent, reason string) {
+	i.lifecycleListenersMu.Lock()
+	listeners := make([]LifecycleListener, len(i.lifecycleListeners))
+	copy(listeners, i.lifecycleListeners)
+	i.lifecycleListenersMu.Unlock()
+
+	for _, l := range listeners {
+		l.OnLifecycleEvent(event, reason)
+	}
+}
+
 // StopController stops and cleans up the ClaudeController for this instance
 func (i *Instance) StopController() {
 	i.stateMutex.Lock()
@@ -2314,6 +2434,16 @@ func (i *Instance) GetController() *ClaudeController {
 	i.stateMutex.RLock()
 	defer i.stateMutex.RUnlock()
 	return i.controllerManager.GetController()
+}
+
+// GetExitContent returns the last terminal bytes captured before the PTY exited.
+// Returns nil if the controller is not running or no exit content was recorded.
+func (i *Instance) GetExitContent() []byte {
+	ctrl := i.GetController()
+	if ctrl == nil {
+		return nil
+	}
+	return ctrl.GetExitContent()
 }
 
 // GetRateLimitState returns the current rate limit detection state.
@@ -2399,7 +2529,7 @@ func (i *Instance) UpdateTerminalTimestamps(content string, forceUpdate bool) {
 			filteredContent, _ = i.tmuxManager.FilterBanners(content)
 		} else {
 			hasMeaningful := i.tmuxManager.HasMeaningfulContent(content)
-			log.LogForSession(i.Title, "debug", "HasMeaningfulContent=%v for %d bytes: %q", hasMeaningful, len(content), content)
+			log.ForSession(i.Title).Debug("HasMeaningfulContent=%v for %d bytes: %q", hasMeaningful, len(content), content)
 			if hasMeaningful {
 				shouldUpdateMeaningful = true
 				filteredContent, _ = i.tmuxManager.FilterBanners(content)
