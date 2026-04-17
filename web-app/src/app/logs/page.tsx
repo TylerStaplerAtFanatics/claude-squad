@@ -17,7 +17,7 @@ import { ExportButton } from "@/components/logs/ExportButton";
 import { SearchWithHistory } from "@/components/logs/SearchWithHistory";
 import { DensityToggle, type LogDensity } from "@/components/logs/DensityToggle";
 import { useLiveTail } from "@/lib/hooks/useLiveTail";
-import styles from "./page.module.css";
+import * as styles from "./page.css";
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);

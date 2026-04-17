@@ -3,7 +3,19 @@
 import { useState } from "react";
 import { useApprovalAnalytics } from "@/lib/hooks/useApprovalAnalytics";
 import { DailyBucketProto, SubcommandStatProto } from "@/gen/session/v1/types_pb";
-import styles from "./ApprovalAnalyticsPanel.module.css";
+import {
+  panel, header, titleRow, title, subtitle, refreshButton,
+  windowSelector, windowBtn, windowBtnActive,
+  error as errorClass, retryButton,
+  cards, card, cardAllow, cardDeny, cardManual, cardValue, cardLabel, cardSub,
+  loading as loadingClass, empty, emptyHint,
+  sectionTitle, tableSection, tableWrapper, table, th, thRight, td, tdRight, tdBar, row,
+  allowCount, denyCount, manualCount, pctLabel, toolName, ruleName,
+  barTrack, barFill, barTotal, barTool, barRule, barCmd, barPython, barGap,
+  categoryBadge, subSectionTitle, filterInput, addRuleLink,
+  coverageGapHeader, coverageGapHigh, coverageGapMed, coverageGapLow,
+  coverageGapTitleRow, coverageGapIcon, coverageGapTitle, coverageGapBadge, coverageGapDesc,
+} from "./ApprovalAnalyticsPanel.css";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -26,8 +38,8 @@ function formatDate(iso: string): string {
 function Bar({ value, max, className }: { value: number; max: number; className: string }) {
   const width = max === 0 ? 0 : Math.round((value / max) * 100);
   return (
-    <div className={styles.barTrack}>
-      <div className={`${styles.barFill} ${className}`} style={{ width: `${width}%` }} />
+    <div className={barTrack}>
+      <div className={`${barFill} ${className}`} style={{ width: `${width}%` }} />
     </div>
   );
 }
@@ -71,31 +83,31 @@ export function ApprovalAnalyticsPanel() {
   const maxDayTotal = dailyBuckets.reduce((m, b) => Math.max(m, b.total), 0);
 
   return (
-    <div className={styles.panel}>
+    <div className={panel}>
       {/* ── Header ── */}
-      <div className={styles.header}>
-        <div className={styles.titleRow}>
-          <h2 className={styles.title}>Approval Analytics</h2>
+      <div className={header}>
+        <div className={titleRow}>
+          <h2 className={title}>Approval Analytics</h2>
           <button
             onClick={refresh}
-            className={styles.refreshButton}
+            className={refreshButton}
             disabled={loading}
             aria-label="Refresh analytics"
           >
             {loading ? "⟳" : "↻"}
           </button>
         </div>
-        <p className={styles.subtitle}>
+        <p className={subtitle}>
           Decision trends for auto-classification over time.
         </p>
       </div>
 
       {/* ── Window selector ── */}
-      <div className={styles.windowSelector}>
+      <div className={windowSelector}>
         {WINDOW_OPTIONS.map((opt) => (
           <button
             key={opt.value}
-            className={`${styles.windowBtn} ${windowDays === opt.value ? styles.windowBtnActive : ""}`}
+            className={`${windowBtn} ${windowDays === opt.value ? windowBtnActive : ""}`}
             onClick={() => setWindowDays(opt.value)}
           >
             {opt.label}
@@ -104,84 +116,84 @@ export function ApprovalAnalyticsPanel() {
       </div>
 
       {error && (
-        <div className={styles.error}>
+        <div className={errorClass}>
           Failed to load analytics: {error.message}
-          <button onClick={refresh} className={styles.retryButton}>Retry</button>
+          <button onClick={refresh} className={retryButton}>Retry</button>
         </div>
       )}
 
       {/* ── Summary cards ── */}
-      <div className={styles.cards}>
-        <div className={styles.card}>
-          <span className={styles.cardValue}>{total}</span>
-          <span className={styles.cardLabel}>Total decisions</span>
+      <div className={cards}>
+        <div className={card}>
+          <span className={cardValue}>{total}</span>
+          <span className={cardLabel}>Total decisions</span>
         </div>
-        <div className={`${styles.card} ${styles.cardAllow}`}>
-          <span className={styles.cardValue}>{autoAllowRate}%</span>
-          <span className={styles.cardLabel}>Auto-allowed</span>
-          <span className={styles.cardSub}>{autoAllowCount} requests</span>
+        <div className={`${card} ${cardAllow}`}>
+          <span className={cardValue}>{autoAllowRate}%</span>
+          <span className={cardLabel}>Auto-allowed</span>
+          <span className={cardSub}>{autoAllowCount} requests</span>
         </div>
-        <div className={`${styles.card} ${styles.cardDeny}`}>
-          <span className={styles.cardValue}>{autoDenyRate}%</span>
-          <span className={styles.cardLabel}>Auto-denied</span>
-          <span className={styles.cardSub}>{autoDenyCount} requests</span>
+        <div className={`${card} ${cardDeny}`}>
+          <span className={cardValue}>{autoDenyRate}%</span>
+          <span className={cardLabel}>Auto-denied</span>
+          <span className={cardSub}>{autoDenyCount} requests</span>
         </div>
-        <div className={`${styles.card} ${styles.cardManual}`}>
-          <span className={styles.cardValue}>{manualRate}%</span>
-          <span className={styles.cardLabel}>Manual review</span>
-          <span className={styles.cardSub}>{escalateCount} requests</span>
+        <div className={`${card} ${cardManual}`}>
+          <span className={cardValue}>{manualRate}%</span>
+          <span className={cardLabel}>Manual review</span>
+          <span className={cardSub}>{escalateCount} requests</span>
         </div>
-        <div className={styles.card}>
-          <span className={styles.cardValue}>{avgPerDay}</span>
-          <span className={styles.cardLabel}>Avg / day</span>
+        <div className={card}>
+          <span className={cardValue}>{avgPerDay}</span>
+          <span className={cardLabel}>Avg / day</span>
         </div>
       </div>
 
       {/* ── Daily breakdown ── */}
       {loading && dailyBuckets.length === 0 ? (
-        <div className={styles.loading}>Loading analytics…</div>
+        <div className={loadingClass}>Loading analytics…</div>
       ) : dailyBuckets.length === 0 ? (
-        <div className={styles.empty}>
+        <div className={empty}>
           No data for the last {windowDays} days.
           <br />
-          <span className={styles.emptyHint}>Analytics are recorded when Claude Code sends hook requests.</span>
+          <span className={emptyHint}>Analytics are recorded when Claude Code sends hook requests.</span>
         </div>
       ) : (
-        <div className={styles.tableSection}>
-          <h3 className={styles.sectionTitle}>Daily Breakdown</h3>
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
+        <div className={tableSection}>
+          <h3 className={sectionTitle}>Daily Breakdown</h3>
+          <div className={tableWrapper}>
+            <table className={table}>
               <thead>
                 <tr>
-                  <th className={styles.th}>Date</th>
-                  <th className={`${styles.th} ${styles.thRight}`}>Total</th>
-                  <th className={`${styles.th} ${styles.thRight}`}>Allow</th>
-                  <th className={`${styles.th} ${styles.thRight}`}>Deny</th>
-                  <th className={`${styles.th} ${styles.thRight}`}>Manual</th>
-                  <th className={styles.th}>Volume</th>
+                  <th className={th}>Date</th>
+                  <th className={`${th} ${thRight}`}>Total</th>
+                  <th className={`${th} ${thRight}`}>Allow</th>
+                  <th className={`${th} ${thRight}`}>Deny</th>
+                  <th className={`${th} ${thRight}`}>Manual</th>
+                  <th className={th}>Volume</th>
                 </tr>
               </thead>
               <tbody>
                 {[...dailyBuckets].reverse().map((b) => {
                   const manualTotal = b.escalate + b.manualAllow + b.manualDeny;
                   return (
-                    <tr key={b.date} className={styles.row}>
-                      <td className={styles.td}>{formatDate(b.date)}</td>
-                      <td className={`${styles.td} ${styles.tdRight}`}>{b.total}</td>
-                      <td className={`${styles.td} ${styles.tdRight}`}>
-                        <span className={styles.allowCount}>{b.autoAllow}</span>
-                        <span className={styles.pctLabel}> {pct(b.autoAllow, b.total)}%</span>
+                    <tr key={b.date} className={row}>
+                      <td className={td}>{formatDate(b.date)}</td>
+                      <td className={`${td} ${tdRight}`}>{b.total}</td>
+                      <td className={`${td} ${tdRight}`}>
+                        <span className={allowCount}>{b.autoAllow}</span>
+                        <span className={pctLabel}> {pct(b.autoAllow, b.total)}%</span>
                       </td>
-                      <td className={`${styles.td} ${styles.tdRight}`}>
-                        <span className={styles.denyCount}>{b.autoDeny}</span>
-                        <span className={styles.pctLabel}> {pct(b.autoDeny, b.total)}%</span>
+                      <td className={`${td} ${tdRight}`}>
+                        <span className={denyCount}>{b.autoDeny}</span>
+                        <span className={pctLabel}> {pct(b.autoDeny, b.total)}%</span>
                       </td>
-                      <td className={`${styles.td} ${styles.tdRight}`}>
-                        <span className={styles.manualCount}>{manualTotal}</span>
-                        <span className={styles.pctLabel}> {pct(manualTotal, b.total)}%</span>
+                      <td className={`${td} ${tdRight}`}>
+                        <span className={manualCount}>{manualTotal}</span>
+                        <span className={pctLabel}> {pct(manualTotal, b.total)}%</span>
                       </td>
-                      <td className={`${styles.td} ${styles.tdBar}`}>
-                        <Bar value={b.total} max={maxDayTotal} className={styles.barTotal} />
+                      <td className={`${td} ${tdBar}`}>
+                        <Bar value={b.total} max={maxDayTotal} className={barTotal} />
                       </td>
                     </tr>
                   );
@@ -194,24 +206,24 @@ export function ApprovalAnalyticsPanel() {
 
       {/* ── Top tools ── */}
       {summary && summary.topTools.length > 0 && (
-        <div className={styles.tableSection}>
-          <h3 className={styles.sectionTitle}>Top Tools</h3>
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
+        <div className={tableSection}>
+          <h3 className={sectionTitle}>Top Tools</h3>
+          <div className={tableWrapper}>
+            <table className={table}>
               <thead>
                 <tr>
-                  <th className={styles.th}>Tool</th>
-                  <th className={`${styles.th} ${styles.thRight}`}>Requests</th>
-                  <th className={styles.th}>Share</th>
+                  <th className={th}>Tool</th>
+                  <th className={`${th} ${thRight}`}>Requests</th>
+                  <th className={th}>Share</th>
                 </tr>
               </thead>
               <tbody>
                 {summary.topTools.map((t) => (
-                  <tr key={t.toolName} className={styles.row}>
-                    <td className={styles.td}><code className={styles.toolName}>{t.toolName}</code></td>
-                    <td className={`${styles.td} ${styles.tdRight}`}>{t.count}</td>
-                    <td className={`${styles.td} ${styles.tdBar}`}>
-                      <Bar value={t.count} max={summary.topTools[0]?.count ?? 1} className={styles.barTool} />
+                  <tr key={t.toolName} className={row}>
+                    <td className={td}><code className={toolName}>{t.toolName}</code></td>
+                    <td className={`${td} ${tdRight}`}>{t.count}</td>
+                    <td className={`${td} ${tdBar}`}>
+                      <Bar value={t.count} max={summary.topTools[0]?.count ?? 1} className={barTool} />
                     </td>
                   </tr>
                 ))}
@@ -223,26 +235,26 @@ export function ApprovalAnalyticsPanel() {
 
       {/* ── Top triggered rules ── */}
       {summary && summary.topTriggeredRules.length > 0 && (
-        <div className={styles.tableSection}>
-          <h3 className={styles.sectionTitle}>Top Triggered Rules</h3>
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
+        <div className={tableSection}>
+          <h3 className={sectionTitle}>Top Triggered Rules</h3>
+          <div className={tableWrapper}>
+            <table className={table}>
               <thead>
                 <tr>
-                  <th className={styles.th}>Rule</th>
-                  <th className={`${styles.th} ${styles.thRight}`}>Triggers</th>
-                  <th className={styles.th}>Frequency</th>
+                  <th className={th}>Rule</th>
+                  <th className={`${th} ${thRight}`}>Triggers</th>
+                  <th className={th}>Frequency</th>
                 </tr>
               </thead>
               <tbody>
                 {summary.topTriggeredRules.map((r) => (
-                  <tr key={r.ruleId} className={styles.row}>
-                    <td className={styles.td}>
-                      <span className={styles.ruleName}>{r.ruleName || r.ruleId}</span>
+                  <tr key={r.ruleId} className={row}>
+                    <td className={td}>
+                      <span className={ruleName}>{r.ruleName || r.ruleId}</span>
                     </td>
-                    <td className={`${styles.td} ${styles.tdRight}`}>{r.count}</td>
-                    <td className={`${styles.td} ${styles.tdBar}`}>
-                      <Bar value={r.count} max={summary.topTriggeredRules[0]?.count ?? 1} className={styles.barRule} />
+                    <td className={`${td} ${tdRight}`}>{r.count}</td>
+                    <td className={`${td} ${tdBar}`}>
+                      <Bar value={r.count} max={summary.topTriggeredRules[0]?.count ?? 1} className={barRule} />
                     </td>
                   </tr>
                 ))}
@@ -254,28 +266,28 @@ export function ApprovalAnalyticsPanel() {
 
       {/* ── Top command programs (Bash AST) ── */}
       {summary && summary.topCommandPrograms.length > 0 && (
-        <div className={styles.tableSection}>
-          <h3 className={styles.sectionTitle}>Top Bash Programs</h3>
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
+        <div className={tableSection}>
+          <h3 className={sectionTitle}>Top Bash Programs</h3>
+          <div className={tableWrapper}>
+            <table className={table}>
               <thead>
                 <tr>
-                  <th className={styles.th}>Program</th>
-                  <th className={styles.th}>Category</th>
-                  <th className={`${styles.th} ${styles.thRight}`}>Calls</th>
-                  <th className={styles.th}>Share</th>
+                  <th className={th}>Program</th>
+                  <th className={th}>Category</th>
+                  <th className={`${th} ${thRight}`}>Calls</th>
+                  <th className={th}>Share</th>
                 </tr>
               </thead>
               <tbody>
                 {summary.topCommandPrograms.map((p) => (
-                  <tr key={p.programName} className={styles.row}>
-                    <td className={styles.td}><code className={styles.toolName}>{p.programName}</code></td>
-                    <td className={styles.td}>
-                      <span className={styles.categoryBadge}>{p.category}</span>
+                  <tr key={p.programName} className={row}>
+                    <td className={td}><code className={toolName}>{p.programName}</code></td>
+                    <td className={td}>
+                      <span className={categoryBadge}>{p.category}</span>
                     </td>
-                    <td className={`${styles.td} ${styles.tdRight}`}>{p.count}</td>
-                    <td className={`${styles.td} ${styles.tdBar}`}>
-                      <Bar value={p.count} max={summary.topCommandPrograms[0]?.count ?? 1} className={styles.barCmd} />
+                    <td className={`${td} ${tdRight}`}>{p.count}</td>
+                    <td className={`${td} ${tdBar}`}>
+                      <Bar value={p.count} max={summary.topCommandPrograms[0]?.count ?? 1} className={barCmd} />
                     </td>
                   </tr>
                 ))}
@@ -287,24 +299,24 @@ export function ApprovalAnalyticsPanel() {
 
       {/* ── Top Python imports ── */}
       {summary && summary.topPythonImports.length > 0 && (
-        <div className={styles.tableSection}>
-          <h3 className={styles.sectionTitle}>Top Python Imports</h3>
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
+        <div className={tableSection}>
+          <h3 className={sectionTitle}>Top Python Imports</h3>
+          <div className={tableWrapper}>
+            <table className={table}>
               <thead>
                 <tr>
-                  <th className={styles.th}>Module</th>
-                  <th className={`${styles.th} ${styles.thRight}`}>Uses</th>
-                  <th className={styles.th}>Share</th>
+                  <th className={th}>Module</th>
+                  <th className={`${th} ${thRight}`}>Uses</th>
+                  <th className={th}>Share</th>
                 </tr>
               </thead>
               <tbody>
                 {summary.topPythonImports.map((imp) => (
-                  <tr key={imp.module} className={styles.row}>
-                    <td className={styles.td}><code className={styles.toolName}>{imp.module}</code></td>
-                    <td className={`${styles.td} ${styles.tdRight}`}>{imp.count}</td>
-                    <td className={`${styles.td} ${styles.tdBar}`}>
-                      <Bar value={imp.count} max={summary.topPythonImports[0]?.count ?? 1} className={styles.barPython} />
+                  <tr key={imp.module} className={row}>
+                    <td className={td}><code className={toolName}>{imp.module}</code></td>
+                    <td className={`${td} ${tdRight}`}>{imp.count}</td>
+                    <td className={`${td} ${tdBar}`}>
+                      <Bar value={imp.count} max={summary.topPythonImports[0]?.count ?? 1} className={barPython} />
                     </td>
                   </tr>
                 ))}
@@ -316,40 +328,40 @@ export function ApprovalAnalyticsPanel() {
 
       {/* ── Command distribution ── */}
       {summary && summary.commandSubcommandStats.length > 0 && (
-        <div className={styles.tableSection}>
-          <h3 className={styles.sectionTitle}>Command Distribution</h3>
+        <div className={tableSection}>
+          <h3 className={sectionTitle}>Command Distribution</h3>
           <CommandDistributionTable stats={summary.commandSubcommandStats} />
         </div>
       )}
 
       {/* ── Rule coverage gaps ── */}
       {summary && summary.coverageGapCount > 0 && (
-        <div className={styles.tableSection}>
+        <div className={tableSection}>
           <CoverageGapHeader gapCount={summary.coverageGapCount} gapRate={summary.coverageGapRate} total={total} />
 
           {summary.topUncoveredTools.length > 0 && (
             <>
-              <h4 className={styles.subSectionTitle}>Uncovered Tools</h4>
-              <div className={styles.tableWrapper}>
-                <table className={styles.table}>
+              <h4 className={subSectionTitle}>Uncovered Tools</h4>
+              <div className={tableWrapper}>
+                <table className={table}>
                   <thead>
                     <tr>
-                      <th className={styles.th}>Tool</th>
-                      <th className={`${styles.th} ${styles.thRight}`}>Unmatched</th>
-                      <th className={styles.th}>Share of gaps</th>
-                      <th className={styles.th}></th>
+                      <th className={th}>Tool</th>
+                      <th className={`${th} ${thRight}`}>Unmatched</th>
+                      <th className={th}>Share of gaps</th>
+                      <th className={th}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {summary.topUncoveredTools.map((t) => (
-                      <tr key={t.toolName} className={styles.row}>
-                        <td className={styles.td}><code className={styles.toolName}>{t.toolName}</code></td>
-                        <td className={`${styles.td} ${styles.tdRight}`}>{t.count}</td>
-                        <td className={`${styles.td} ${styles.tdBar}`}>
-                          <Bar value={t.count} max={summary.topUncoveredTools[0]?.count ?? 1} className={styles.barGap} />
+                      <tr key={t.toolName} className={row}>
+                        <td className={td}><code className={toolName}>{t.toolName}</code></td>
+                        <td className={`${td} ${tdRight}`}>{t.count}</td>
+                        <td className={`${td} ${tdBar}`}>
+                          <Bar value={t.count} max={summary.topUncoveredTools[0]?.count ?? 1} className={barGap} />
                         </td>
-                        <td className={styles.td}>
-                          <a href="/rules" className={styles.addRuleLink} title="Add a rule to cover this tool">
+                        <td className={td}>
+                          <a href="/rules" className={addRuleLink} title="Add a rule to cover this tool">
                             Add rule →
                           </a>
                         </td>
@@ -363,29 +375,29 @@ export function ApprovalAnalyticsPanel() {
 
           {summary.topUncoveredPrograms.length > 0 && (
             <>
-              <h4 className={styles.subSectionTitle}>Uncovered Bash Programs</h4>
-              <div className={styles.tableWrapper}>
-                <table className={styles.table}>
+              <h4 className={subSectionTitle}>Uncovered Bash Programs</h4>
+              <div className={tableWrapper}>
+                <table className={table}>
                   <thead>
                     <tr>
-                      <th className={styles.th}>Program</th>
-                      <th className={styles.th}>Category</th>
-                      <th className={`${styles.th} ${styles.thRight}`}>Unmatched</th>
-                      <th className={styles.th}>Share of gaps</th>
-                      <th className={styles.th}></th>
+                      <th className={th}>Program</th>
+                      <th className={th}>Category</th>
+                      <th className={`${th} ${thRight}`}>Unmatched</th>
+                      <th className={th}>Share of gaps</th>
+                      <th className={th}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {summary.topUncoveredPrograms.map((p) => (
-                      <tr key={p.programName} className={styles.row}>
-                        <td className={styles.td}><code className={styles.toolName}>{p.programName}</code></td>
-                        <td className={styles.td}><span className={styles.categoryBadge}>{p.category}</span></td>
-                        <td className={`${styles.td} ${styles.tdRight}`}>{p.count}</td>
-                        <td className={`${styles.td} ${styles.tdBar}`}>
-                          <Bar value={p.count} max={summary.topUncoveredPrograms[0]?.count ?? 1} className={styles.barGap} />
+                      <tr key={p.programName} className={row}>
+                        <td className={td}><code className={toolName}>{p.programName}</code></td>
+                        <td className={td}><span className={categoryBadge}>{p.category}</span></td>
+                        <td className={`${td} ${tdRight}`}>{p.count}</td>
+                        <td className={`${td} ${tdBar}`}>
+                          <Bar value={p.count} max={summary.topUncoveredPrograms[0]?.count ?? 1} className={barGap} />
                         </td>
-                        <td className={styles.td}>
-                          <a href="/rules" className={styles.addRuleLink} title="Add a rule to cover this program">
+                        <td className={td}>
+                          <a href="/rules" className={addRuleLink} title="Add a rule to cover this program">
                             Add rule →
                           </a>
                         </td>
@@ -423,40 +435,40 @@ function CommandDistributionTable({ stats }: { stats: SubcommandStatProto[] }) {
         placeholder="Filter by program or subcommand (e.g. gh, sed, aws s3)…"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        className={styles.filterInput}
+        className={filterInput}
       />
-      <div className={styles.tableWrapper}>
-        <table className={styles.table}>
+      <div className={tableWrapper}>
+        <table className={table}>
           <thead>
             <tr>
-              <th className={styles.th}>Program</th>
-              <th className={styles.th}>Subcommand</th>
-              <th className={styles.th}>Category</th>
-              <th className={`${styles.th} ${styles.thRight}`}>Calls</th>
-              <th className={styles.th}>Share</th>
-              <th className={styles.th}></th>
+              <th className={th}>Program</th>
+              <th className={th}>Subcommand</th>
+              <th className={th}>Category</th>
+              <th className={`${th} ${thRight}`}>Calls</th>
+              <th className={th}>Share</th>
+              <th className={th}></th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((s) => (
-              <tr key={s.programName + ":" + s.subcommand} className={styles.row}>
-                <td className={styles.td}>
-                  <code className={styles.toolName}>{s.programName}</code>
+              <tr key={s.programName + ":" + s.subcommand} className={row}>
+                <td className={td}>
+                  <code className={toolName}>{s.programName}</code>
                 </td>
-                <td className={styles.td}>
-                  <code className={styles.toolName}>{s.subcommand}</code>
+                <td className={td}>
+                  <code className={toolName}>{s.subcommand}</code>
                 </td>
-                <td className={styles.td}>
-                  <span className={styles.categoryBadge}>{s.category}</span>
+                <td className={td}>
+                  <span className={categoryBadge}>{s.category}</span>
                 </td>
-                <td className={`${styles.td} ${styles.tdRight}`}>{s.count}</td>
-                <td className={`${styles.td} ${styles.tdBar}`}>
-                  <Bar value={s.count} max={maxCount} className={styles.barCmd} />
+                <td className={`${td} ${tdRight}`}>{s.count}</td>
+                <td className={`${td} ${tdBar}`}>
+                  <Bar value={s.count} max={maxCount} className={barCmd} />
                 </td>
-                <td className={styles.td}>
+                <td className={td}>
                   <a
                     href="/rules"
-                    className={styles.addRuleLink}
+                    className={addRuleLink}
                     title={`Add a rule for ${s.programName} ${s.subcommand}`}
                   >
                     Add rule →
@@ -479,13 +491,13 @@ function CoverageGapHeader({ gapCount, gapRate, total }: { gapCount: number; gap
   const isMed   = rounded >= 10;
 
   return (
-    <div className={`${styles.coverageGapHeader} ${isHigh ? styles.coverageGapHigh : isMed ? styles.coverageGapMed : styles.coverageGapLow}`}>
-      <div className={styles.coverageGapTitleRow}>
-        <span className={styles.coverageGapIcon}>{isHigh ? "⚠️" : isMed ? "💡" : "✓"}</span>
-        <h3 className={styles.coverageGapTitle}>Rule Coverage Gaps</h3>
-        <span className={styles.coverageGapBadge}>{rounded}% uncovered</span>
+    <div className={`${coverageGapHeader} ${isHigh ? coverageGapHigh : isMed ? coverageGapMed : coverageGapLow}`}>
+      <div className={coverageGapTitleRow}>
+        <span className={coverageGapIcon}>{isHigh ? "⚠️" : isMed ? "💡" : "✓"}</span>
+        <h3 className={coverageGapTitle}>Rule Coverage Gaps</h3>
+        <span className={coverageGapBadge}>{rounded}% uncovered</span>
       </div>
-      <p className={styles.coverageGapDesc}>
+      <p className={coverageGapDesc}>
         {gapCount} of {total} decision{total !== 1 ? "s" : ""} had no matching rule and went to manual review.{" "}
         {isHigh
           ? "High gap rate — adding rules for the patterns below could significantly reduce manual review."

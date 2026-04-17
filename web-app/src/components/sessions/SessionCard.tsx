@@ -5,7 +5,68 @@ import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState, Check
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
 import { GitHubBadge } from "./GitHubBadge";
 import { TagEditor } from "./TagEditor";
-import styles from "./SessionCard.module.css";
+import {
+  card,
+  cardDeleting,
+  cardSelectMode,
+  cardSelected,
+  cardExternal,
+  checkbox,
+  header,
+  titleRow,
+  title,
+  badges,
+  externalBadge,
+  muxIndicator,
+  reviewInfo,
+  reviewContext,
+  status,
+  statusRunning,
+  statusReady,
+  statusPaused,
+  statusLoading,
+  statusNeedsApproval,
+  statusUnknown,
+  category,
+  tagsContainer,
+  tags,
+  tag,
+  editTagsButton,
+  body,
+  info,
+  infoRow,
+  label,
+  value,
+  githubLink,
+  diffStats,
+  diffAdded,
+  diffRemoved,
+  footer,
+  timestamps,
+  timestamp,
+  actions,
+  actionsOpen,
+  actionsToggle,
+  actionButton,
+  deleteButton,
+  restartButton,
+  renameDialog,
+  confirmDialog,
+  dialogContent,
+  warningText,
+  renameInput,
+  renameLabel,
+  errorMessage,
+  dialogActions,
+  submitButton,
+  cancelButton,
+  dangerButton,
+  forkEmptyMessage,
+  forkCheckpointList,
+  forkCheckpointItem,
+  forkCheckpointLabel,
+  forkGitSha,
+} from "./SessionCard.css";
 
 interface SessionCardProps {
   session: Session;
@@ -65,20 +126,20 @@ export function SessionCard({
   const [renameError, setRenameError] = useState("");
   const [checkpointError, setCheckpointError] = useState("");
   const [forkError, setForkError] = useState("");
-  const getStatusColor = (status: SessionStatus): string => {
-    switch (status) {
+  const getStatusColor = (sessionStatus: SessionStatus): string => {
+    switch (sessionStatus) {
       case SessionStatus.RUNNING:
-        return styles.statusRunning;
+        return statusRunning;
       case SessionStatus.READY:
-        return styles.statusReady;
+        return statusReady;
       case SessionStatus.PAUSED:
-        return styles.statusPaused;
+        return statusPaused;
       case SessionStatus.LOADING:
-        return styles.statusLoading;
+        return statusLoading;
       case SessionStatus.NEEDS_APPROVAL:
-        return styles.statusNeedsApproval;
+        return statusNeedsApproval;
       default:
-        return styles.statusUnknown;
+        return statusUnknown;
     }
   };
 
@@ -121,13 +182,13 @@ export function SessionCard({
       case RateLimitState.NONE:
         return "";
       case RateLimitState.WAITING:
-        return styles.statusNeedsApproval;
+        return statusNeedsApproval;
       case RateLimitState.RECOVERING:
-        return styles.statusLoading;
+        return statusLoading;
       case RateLimitState.RECOVERED:
-        return styles.statusReady;
+        return statusReady;
       case RateLimitState.FAILED:
-        return styles.statusPaused;
+        return statusPaused;
       default:
         return "";
     }
@@ -344,8 +405,8 @@ export function SessionCard({
         />
       )}
       {isRenameOpen && (
-        <div className={styles.renameDialog} onClick={(e) => e.stopPropagation()}>
-          <div className={styles.dialogContent}>
+        <div className={renameDialog} onClick={(e) => e.stopPropagation()}>
+          <div className={dialogContent}>
             <h3>Rename Session</h3>
             <input
               type="text"
@@ -357,21 +418,21 @@ export function SessionCard({
               }}
               placeholder="Enter new title"
               autoFocus
-              className={styles.renameInput}
+              className={renameInput}
             />
-            {renameError && <span className={styles.errorMessage}>{renameError}</span>}
-            <div className={styles.dialogActions}>
+            {renameError && <span className={errorMessage}>{renameError}</span>}
+            <div className={dialogActions}>
               <button
                 onClick={handleRenameSubmit}
                 disabled={isRenaming || !newTitle.trim()}
-                className={styles.submitButton}
+                className={submitButton}
               >
                 {isRenaming ? "Renaming..." : "Rename"}
               </button>
               <button
                 onClick={handleRenameCancel}
                 disabled={isRenaming}
-                className={styles.cancelButton}
+                className={cancelButton}
               >
                 Cancel
               </button>
@@ -380,23 +441,23 @@ export function SessionCard({
         </div>
       )}
       {isRestartConfirmOpen && (
-        <div className={styles.confirmDialog} onClick={(e) => e.stopPropagation()}>
-          <div className={styles.dialogContent}>
+        <div className={confirmDialog} onClick={(e) => e.stopPropagation()}>
+          <div className={dialogContent}>
             <h3>Restart Session</h3>
             <p>Are you sure you want to restart &quot;{session.title}&quot;?</p>
-            <p className={styles.warningText}>This will terminate the current process and start a new one.</p>
-            <div className={styles.dialogActions}>
+            <p className={warningText}>This will terminate the current process and start a new one.</p>
+            <div className={dialogActions}>
               <button
                 onClick={handleRestartConfirm}
                 disabled={isRestarting}
-                className={styles.dangerButton}
+                className={dangerButton}
               >
                 {isRestarting ? "Restarting..." : "Restart"}
               </button>
               <button
                 onClick={handleRestartCancel}
                 disabled={isRestarting}
-                className={styles.cancelButton}
+                className={cancelButton}
               >
                 Cancel
               </button>
@@ -409,10 +470,10 @@ export function SessionCard({
           role="dialog"
           aria-modal="true"
           aria-labelledby="checkpointDialogTitle"
-          className={styles.renameDialog}
+          className={renameDialog}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className={styles.dialogContent}>
+          <div className={dialogContent}>
             <h3 id="checkpointDialogTitle">Create Checkpoint</h3>
             <p>Enter a label for this checkpoint of &quot;{session.title}&quot;:</p>
             <input
@@ -424,22 +485,22 @@ export function SessionCard({
                 if (e.key === "Escape") handleCheckpointCancel(e as unknown as React.MouseEvent);
               }}
               placeholder="e.g. before refactor, working state"
-              className={styles.renameInput}
+              className={renameInput}
               autoFocus
             />
-            {checkpointError && <span className={styles.errorMessage}>{checkpointError}</span>}
-            <div className={styles.dialogActions}>
+            {checkpointError && <span className={errorMessage}>{checkpointError}</span>}
+            <div className={dialogActions}>
               <button
                 onClick={handleCheckpointSubmit}
                 disabled={isCreatingCheckpoint || !checkpointLabel.trim()}
-                className={styles.submitButton}
+                className={submitButton}
               >
                 {isCreatingCheckpoint ? "Saving..." : "📍 Save Checkpoint"}
               </button>
               <button
                 onClick={handleCheckpointCancel}
                 disabled={isCreatingCheckpoint}
-                className={styles.cancelButton}
+                className={cancelButton}
               >
                 Cancel
               </button>
@@ -452,13 +513,13 @@ export function SessionCard({
           role="dialog"
           aria-modal="true"
           aria-labelledby="forkDialogTitle"
-          className={styles.renameDialog}
+          className={renameDialog}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className={styles.dialogContent}>
+          <div className={dialogContent}>
             <h3 id="forkDialogTitle">Fork Session</h3>
             <p>Fork &quot;{session.title}&quot; from a checkpoint into a new independent session.</p>
-            <label className={styles.renameLabel}>New session title:</label>
+            <label className={renameLabel}>New session title:</label>
             <input
               type="text"
               value={forkTitle}
@@ -467,17 +528,17 @@ export function SessionCard({
                 if (e.key === "Escape") handleForkCancel(e as unknown as React.MouseEvent);
               }}
               placeholder="e.g. my-session-fork"
-              className={styles.renameInput}
+              className={renameInput}
               autoFocus
             />
             {forkCheckpoints.length === 0 ? (
-              <p className={styles.forkEmptyMessage}>
+              <p className={forkEmptyMessage}>
                 No checkpoints found. Create a checkpoint first.
               </p>
             ) : (
-              <ul className={styles.forkCheckpointList}>
+              <ul className={forkCheckpointList}>
                 {forkCheckpoints.map((cp) => (
-                  <li key={cp.id} className={styles.forkCheckpointItem}>
+                  <li key={cp.id} className={forkCheckpointItem}>
                     <input
                       type="radio"
                       name="forkCheckpoint"
@@ -486,19 +547,19 @@ export function SessionCard({
                       onChange={() => setActiveForkCheckpointId(cp.id)}
                       id={`cp-${cp.id}`}
                     />
-                    <label htmlFor={`cp-${cp.id}`} className={styles.forkCheckpointLabel}>
+                    <label htmlFor={`cp-${cp.id}`} className={forkCheckpointLabel}>
                       <strong>{cp.label}</strong>
-                      {cp.gitCommitSha && <span className={styles.forkGitSha}>{cp.gitCommitSha.slice(0, 7)}</span>}
+                      {cp.gitCommitSha && <span className={forkGitSha}>{cp.gitCommitSha.slice(0, 7)}</span>}
                     </label>
                   </li>
                 ))}
               </ul>
             )}
-            {forkError && <span className={styles.errorMessage}>{forkError}</span>}
-            <div className={styles.dialogActions}>
+            {forkError && <span className={errorMessage}>{forkError}</span>}
+            <div className={dialogActions}>
               {forkCheckpoints.length > 0 && (
                 <button
-                  className={styles.submitButton}
+                  className={submitButton}
                   onClick={() => handleForkSubmit(activeForkCheckpointId)}
                   disabled={isForking || !forkTitle.trim() || !activeForkCheckpointId}
                 >
@@ -507,7 +568,7 @@ export function SessionCard({
               )}
               <button
                 onClick={handleForkCancel}
-                className={styles.cancelButton}
+                className={cancelButton}
                 disabled={isForking}
               >
                 Cancel
@@ -517,7 +578,13 @@ export function SessionCard({
         </div>
       )}
     <div
-      className={`${styles.card} ${selectMode ? styles.selectMode : ""} ${isSelected ? styles.selected : ""} ${isExternal ? styles.external : ""} ${isDeleting ? styles.deleting : ""}`}
+      className={[
+        card,
+        selectMode ? cardSelectMode : "",
+        isSelected ? cardSelected : "",
+        isExternal ? cardExternal : "",
+        isDeleting ? cardDeleting : "",
+      ].filter(Boolean).join(" ")}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
       role="button"
@@ -526,7 +593,7 @@ export function SessionCard({
       aria-pressed={selectMode ? isSelected : undefined}
     >
       {selectMode && (
-        <div className={styles.checkbox} onClick={handleCheckboxClick}>
+        <div className={checkbox} onClick={handleCheckboxClick}>
           <input
             type="checkbox"
             checked={isSelected}
@@ -535,18 +602,18 @@ export function SessionCard({
           />
         </div>
       )}
-      <div className={styles.header}>
-        <div className={styles.titleRow}>
-          <h3 className={styles.title}>{session.title}</h3>
-          <div className={styles.badges}>
+      <div className={header}>
+        <div className={titleRow}>
+          <h3 className={title}>{session.title}</h3>
+          <div className={badges}>
             {isExternal && (
               <span
-                className={styles.externalBadge}
+                className={externalBadge}
                 title={`External session from ${sourceTerminal}${muxEnabled ? " (mux-enabled)" : ""}`}
                 aria-label={`External session from ${sourceTerminal}`}
               >
                 🔗 {sourceTerminal}
-                {muxEnabled && <span className={styles.muxIndicator}>✓</span>}
+                {muxEnabled && <span className={muxIndicator}>✓</span>}
               </span>
             )}
             <GitHubBadge
@@ -571,7 +638,7 @@ export function SessionCard({
               />
             )}
             <span
-              className={`${styles.status} ${getStatusColor(session.status)}`}
+              className={`${status} ${getStatusColor(session.status)}`}
               role="status"
               aria-label={`Session status: ${getStatusText(session.status)}`}
             >
@@ -579,7 +646,7 @@ export function SessionCard({
             </span>
             {session.rateLimitState && session.rateLimitState !== RateLimitState.NONE && (
               <span
-                className={`${styles.status} ${getRateLimitStateColor(session.rateLimitState)}`}
+                className={`${status} ${getRateLimitStateColor(session.rateLimitState)}`}
                 role="status"
                 aria-label={`Rate limit: ${getRateLimitStateText(session.rateLimitState)}`}
               >
@@ -589,20 +656,20 @@ export function SessionCard({
           </div>
         </div>
         {session.category && (
-          <span className={styles.category}>{session.category}</span>
+          <span className={category}>{session.category}</span>
         )}
-        <div className={styles.tagsContainer}>
+        <div className={tagsContainer}>
           {session.tags && session.tags.length > 0 && (
-            <div className={styles.tags}>
-              {session.tags.map((tag, index) => (
-                <span key={index} className={styles.tag}>
-                  {tag}
+            <div className={tags}>
+              {session.tags.map((sessionTag, index) => (
+                <span key={index} className={tag}>
+                  {sessionTag}
                 </span>
               ))}
             </div>
           )}
           <button
-            className={styles.editTagsButton}
+            className={editTagsButton}
             onClick={handleEditTags}
             title="Edit tags"
           >
@@ -610,51 +677,51 @@ export function SessionCard({
           </button>
         </div>
         {reviewItem && !selectMode && (
-          <div className={styles.reviewInfo}>
+          <div className={reviewInfo}>
             <ReviewQueueBadge
               priority={reviewItem.priority}
               reason={reviewItem.reason}
               compact={false}
             />
             {reviewItem.context && (
-              <span className={styles.reviewContext}>{reviewItem.context}</span>
+              <span className={reviewContext}>{reviewItem.context}</span>
             )}
           </div>
         )}
       </div>
 
-      <div className={styles.body}>
-        <div className={styles.info}>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>Program:</span>
-            <span className={styles.value}>{session.program}</span>
+      <div className={body}>
+        <div className={info}>
+          <div className={infoRow}>
+            <span className={label}>Program:</span>
+            <span className={value}>{session.program}</span>
           </div>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>Branch:</span>
-            <span className={styles.value}>{session.branch}</span>
+          <div className={infoRow}>
+            <span className={label}>Branch:</span>
+            <span className={value}>{session.branch}</span>
           </div>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>Path:</span>
-            <span className={styles.value} title={session.path}>
+          <div className={infoRow}>
+            <span className={label}>Path:</span>
+            <span className={value} title={session.path}>
               {session.path}
             </span>
           </div>
           {session.workingDir && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Working Dir:</span>
-              <span className={styles.value}>{session.workingDir}</span>
+            <div className={infoRow}>
+              <span className={label}>Working Dir:</span>
+              <span className={value}>{session.workingDir}</span>
             </div>
           )}
           {session.githubOwner && session.githubRepo && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Repository:</span>
-              <span className={styles.value}>
+            <div className={infoRow}>
+              <span className={label}>Repository:</span>
+              <span className={value}>
                 <a
                   href={`https://github.com/${session.githubOwner}/${session.githubRepo}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className={styles.githubLink}
+                  className={githubLink}
                 >
                   {session.githubOwner}/{session.githubRepo}
                 </a>
@@ -662,15 +729,15 @@ export function SessionCard({
             </div>
           )}
           {session.githubPrNumber > 0 && session.githubPrUrl && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Pull Request:</span>
-              <span className={styles.value}>
+            <div className={infoRow}>
+              <span className={label}>Pull Request:</span>
+              <span className={value}>
                 <a
                   href={session.githubPrUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className={styles.githubLink}
+                  className={githubLink}
                 >
                   #{session.githubPrNumber}
                 </a>
@@ -678,9 +745,9 @@ export function SessionCard({
             </div>
           )}
           {session.clonedRepoPath && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Cloned To:</span>
-              <span className={styles.value} title={session.clonedRepoPath}>
+            <div className={infoRow}>
+              <span className={label}>Cloned To:</span>
+              <span className={value} title={session.clonedRepoPath}>
                 {session.clonedRepoPath}
               </span>
             </div>
@@ -688,19 +755,19 @@ export function SessionCard({
         </div>
 
         {session.diffStats && (
-          <div className={styles.diffStats}>
-            <span className={styles.diffAdded}>+{session.diffStats.added}</span>
-            <span className={styles.diffRemoved}>-{session.diffStats.removed}</span>
+          <div className={diffStats}>
+            <span className={diffAdded}>+{session.diffStats.added}</span>
+            <span className={diffRemoved}>-{session.diffStats.removed}</span>
           </div>
         )}
       </div>
 
-      <div className={styles.footer}>
-        <div className={styles.timestamps}>
-          <span className={styles.timestamp}>
+      <div className={footer}>
+        <div className={timestamps}>
+          <span className={timestamp}>
             Created: <time dateTime={session.createdAt ? new Date(Number(session.createdAt.seconds) * 1000).toISOString() : ""}>{formatDate(session.createdAt)}</time>
           </span>
-          <span className={styles.timestamp}>
+          <span className={timestamp}>
             Updated: <time dateTime={session.updatedAt ? new Date(Number(session.updatedAt.seconds) * 1000).toISOString() : ""}>{formatDate(session.updatedAt)}</time>
           </span>
           {(() => {
@@ -713,7 +780,7 @@ export function SessionCard({
               ? undefined
               : moSecs >= tuSecs ? session.lastMeaningfulOutput : session.lastTerminalUpdate;
             return lastActivity ? (
-              <span className={styles.timestamp} title="Last terminal activity">
+              <span className={timestamp} title="Last terminal activity">
                 Last Activity: <time dateTime={new Date(Number(lastActivity.seconds) * 1000).toISOString()}>{formatTimeAgo(lastActivity)}</time>
               </span>
             ) : null;
@@ -721,17 +788,17 @@ export function SessionCard({
         </div>
 
           <button
-            className={styles.actionsToggle}
+            className={actionsToggle}
             onClick={(e) => { e.stopPropagation(); setShowActions(!showActions); }}
             aria-expanded={showActions}
             aria-label="Toggle session actions"
           >
             Actions {showActions ? "▲" : "▼"}
           </button>
-        <div className={`${styles.actions} ${showActions ? styles.actionsOpen : ""}`}>
+        <div className={`${actions} ${showActions ? actionsOpen : ""}`}>
           {isPaused ? (
             <button
-              className={styles.actionButton}
+              className={actionButton}
               onClick={(e) => {
                 e.stopPropagation();
                 onResume?.();
@@ -743,7 +810,7 @@ export function SessionCard({
             </button>
           ) : (
             <button
-              className={styles.actionButton}
+              className={actionButton}
               onClick={(e) => {
                 e.stopPropagation();
                 onPause?.();
@@ -755,7 +822,7 @@ export function SessionCard({
             </button>
           )}
           <button
-            className={styles.actionButton}
+            className={actionButton}
             onClick={handleRenameClick}
             title="Rename this session"
             aria-label={`Rename session ${session.title}`}
@@ -763,7 +830,7 @@ export function SessionCard({
             ✏️ Rename
           </button>
           <button
-            className={`${styles.actionButton} ${styles.restartButton}`}
+            className={`${actionButton} ${restartButton}`}
             onClick={handleRestartClick}
             title="Restart this session"
             aria-label={`Restart session ${session.title}`}
@@ -772,7 +839,7 @@ export function SessionCard({
           </button>
           {onCreateCheckpoint && (
             <button
-              className={styles.actionButton}
+              className={actionButton}
               onClick={handleCheckpointClick}
               title="Save a named checkpoint of the current session state"
               aria-label={`Create checkpoint for session ${session.title}`}
@@ -782,7 +849,7 @@ export function SessionCard({
           )}
           {onForkFromCheckpoint && (
             <button
-              className={styles.actionButton}
+              className={actionButton}
               onClick={handleForkClick}
               title="Fork this session from a checkpoint"
               aria-label={`Fork session ${session.title} from checkpoint`}
@@ -791,7 +858,7 @@ export function SessionCard({
             </button>
           )}
           <button
-            className={styles.actionButton}
+            className={actionButton}
             onClick={(e) => {
               e.stopPropagation();
               onNewWorkspace?.();
@@ -802,7 +869,7 @@ export function SessionCard({
             ➕ New Workspace
           </button>
           <button
-            className={styles.actionButton}
+            className={actionButton}
             onClick={(e) => {
               e.stopPropagation();
               onDuplicate?.();
@@ -813,7 +880,7 @@ export function SessionCard({
             📋 Duplicate
           </button>
           <button
-            className={`${styles.actionButton} ${styles.deleteButton}`}
+            className={`${actionButton} ${deleteButton}`}
             onClick={async (e) => {
               e.stopPropagation();
               setIsDeleting(true);

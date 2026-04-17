@@ -10,7 +10,34 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { getApiBaseUrl } from "@/lib/config";
 import { PROGRAMS } from "@/lib/constants/programs";
-import styles from "./DirectoryRulesManager.module.css";
+import {
+  container,
+  heading,
+  headerRow,
+  loadingText,
+  emptyText,
+  ruleRow,
+  ruleInfo,
+  rulePath,
+  ruleMeta,
+  ruleActions,
+  formCard,
+  formTitle,
+  formFields,
+  field,
+  label as labelClass,
+  checkboxLabel,
+  input,
+  inputError,
+  fieldError,
+  select,
+  overridesSection,
+  tagList,
+  tag as tagClass,
+  tagRemove,
+  tagInputRow,
+  formActions,
+} from "./DirectoryRulesManager.css";
 
 interface RuleFormData {
   path: string;
@@ -189,17 +216,17 @@ export function DirectoryRulesManager() {
 
   if (loading) {
     return (
-      <div className={styles.container}>
-        <h2 className={styles.heading}>Directory Rules</h2>
-        <div className={styles.loadingText}>Loading...</div>
+      <div className={container}>
+        <h2 className={heading}>Directory Rules</h2>
+        <div className={loadingText}>Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.headerRow}>
-        <h2 className={styles.heading}>Directory Rules</h2>
+    <div className={container}>
+      <div className={headerRow}>
+        <h2 className={heading}>Directory Rules</h2>
         <button
           type="button"
           className="btn btn-primary"
@@ -213,28 +240,28 @@ export function DirectoryRulesManager() {
       {success && <div className="alert alert-success">{success}</div>}
 
       {rules.length === 0 && !showForm && (
-        <div className={styles.emptyText}>
+        <div className={emptyText}>
           No directory rules configured. Rules auto-populate form fields based on working directory.
         </div>
       )}
       {rules.map((rule) => (
-        <div key={rule.path} className={styles.ruleRow}>
-          <div className={styles.ruleInfo}>
-            <span className={styles.rulePath}>{rule.path}</span>
+        <div key={rule.path} className={ruleRow}>
+          <div className={ruleInfo}>
+            <span className={rulePath}>{rule.path}</span>
             {rule.profile && (
-              <span className={styles.ruleMeta}>Profile: {rule.profile}</span>
+              <span className={ruleMeta}>Profile: {rule.profile}</span>
             )}
             {rule.overrides?.program && (
-              <span className={styles.ruleMeta}>Program: {rule.overrides.program}</span>
+              <span className={ruleMeta}>Program: {rule.overrides.program}</span>
             )}
             {rule.overrides?.autoYes && (
-              <span className={styles.ruleMeta}>Auto-yes: on</span>
+              <span className={ruleMeta}>Auto-yes: on</span>
             )}
             {(rule.overrides?.tags?.length ?? 0) > 0 && (
-              <span className={styles.ruleMeta}>Tags: {rule.overrides!.tags.join(", ")}</span>
+              <span className={ruleMeta}>Tags: {rule.overrides!.tags.join(", ")}</span>
             )}
           </div>
-          <div className={styles.ruleActions}>
+          <div className={ruleActions}>
             <button
               type="button"
               className="btn btn-secondary"
@@ -254,19 +281,19 @@ export function DirectoryRulesManager() {
       ))}
 
       {showForm && (
-        <div className={styles.formCard}>
-          <h3 className={styles.formTitle}>
+        <div className={formCard}>
+          <h3 className={formTitle}>
             {editingPath ? `Edit Rule: ${editingPath}` : "New Directory Rule"}
           </h3>
-          <div className={styles.formFields}>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="rule-path">
+          <div className={formFields}>
+            <div className={field}>
+              <label className={labelClass} htmlFor="rule-path">
                 Directory Path *
               </label>
               <input
                 id="rule-path"
                 type="text"
-                className={`${styles.input}${pathError ? ` ${styles.inputError}` : ""}`}
+                className={`${input}${pathError ? ` ${inputError}` : ""}`}
                 placeholder="/Users/you/projects/myrepo"
                 value={form.path}
                 onChange={(e) => {
@@ -275,15 +302,15 @@ export function DirectoryRulesManager() {
                 }}
                 disabled={!!editingPath}
               />
-              {pathError && <span className={styles.fieldError}>{pathError}</span>}
+              {pathError && <span className={fieldError}>{pathError}</span>}
             </div>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="rule-profile">
+            <div className={field}>
+              <label className={labelClass} htmlFor="rule-profile">
                 Profile (optional)
               </label>
               <select
                 id="rule-profile"
-                className={styles.select}
+                className={select}
                 value={form.profile}
                 onChange={(e) => setForm({ ...form, profile: e.target.value })}
               >
@@ -295,8 +322,8 @@ export function DirectoryRulesManager() {
                 ))}
               </select>
             </div>
-            <div className={styles.field}>
-              <label className={styles.checkboxLabel}>
+            <div className={field}>
+              <label className={checkboxLabel}>
                 <input
                   type="checkbox"
                   checked={form.showOverrides}
@@ -306,14 +333,14 @@ export function DirectoryRulesManager() {
               </label>
             </div>
             {form.showOverrides && (
-              <div className={styles.overridesSection}>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="rule-program">
+              <div className={overridesSection}>
+                <div className={field}>
+                  <label className={labelClass} htmlFor="rule-program">
                     Override Program
                   </label>
                   <select
                     id="rule-program"
-                    className={styles.select}
+                    className={select}
                     value={form.overrideProgram}
                     onChange={(e) => setForm({ ...form, overrideProgram: e.target.value })}
                   >
@@ -325,8 +352,8 @@ export function DirectoryRulesManager() {
                     ))}
                   </select>
                 </div>
-                <div className={styles.field}>
-                  <label className={styles.checkboxLabel}>
+                <div className={field}>
+                  <label className={checkboxLabel}>
                     <input
                       type="checkbox"
                       checked={form.overrideAutoYes}
@@ -335,27 +362,27 @@ export function DirectoryRulesManager() {
                     Auto-yes
                   </label>
                 </div>
-                <div className={styles.field}>
-                  <label className={styles.label}>Override Tags</label>
-                  <div className={styles.tagList}>
-                    {form.overrideTags.map((tag) => (
-                      <span key={tag} className={styles.tag}>
-                        {tag}
+                <div className={field}>
+                  <label className={labelClass}>Override Tags</label>
+                  <div className={tagList}>
+                    {form.overrideTags.map((t) => (
+                      <span key={t} className={tagClass}>
+                        {t}
                         <button
                           type="button"
-                          className={styles.tagRemove}
-                          onClick={() => handleRemoveTag(tag)}
-                          aria-label={`Remove tag ${tag}`}
+                          className={tagRemove}
+                          onClick={() => handleRemoveTag(t)}
+                          aria-label={`Remove tag ${t}`}
                         >
                           x
                         </button>
                       </span>
                     ))}
                   </div>
-                  <div className={styles.tagInputRow}>
+                  <div className={tagInputRow}>
                     <input
                       type="text"
-                      className={styles.input}
+                      className={input}
                       placeholder="Add a tag..."
                       value={form.tagInput}
                       onChange={(e) => setForm({ ...form, tagInput: e.target.value })}
@@ -373,7 +400,7 @@ export function DirectoryRulesManager() {
               </div>
             )}
           </div>
-          <div className={styles.formActions}>
+          <div className={formActions}>
             <button
               type="button"
               className="btn btn-primary"

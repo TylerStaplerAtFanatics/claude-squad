@@ -1,16 +1,17 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { useDispatch, useSelector } from "react-redux";
-import approvalsReducer from "./approvalsSlice";
 import reviewQueueReducer from "./reviewQueueSlice";
 import sessionsReducer from "./sessionsSlice";
+import { connectApi } from "@/lib/api/connectApi";
 
 export const store = configureStore({
   reducer: {
-    approvals: approvalsReducer,
     reviewQueue: reviewQueueReducer,
     sessions: sessionsReducer,
+    [connectApi.reducerPath]: connectApi.reducer,
   },
-  middleware: (getDefaultMiddleware) => getDefaultMiddleware(),
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(connectApi.middleware),
 });
 
 export type RootState = ReturnType<typeof store.getState>;

@@ -7,7 +7,15 @@ import { usePathCompletions } from "@/lib/hooks/usePathCompletions";
 import { usePathHistory } from "@/lib/hooks/usePathHistory";
 import { useWorktreeSuggestions } from "@/lib/hooks/useWorktreeSuggestions";
 import { PathCompletionDropdown, type CompletionEntry } from "./PathCompletionDropdown";
-import styles from "./Omnibar.module.css";
+import {
+  overlay, modal, inputContainer, typeIndicator, input as inputClass,
+  detectionInfo, detectionBadge, unknown,
+  body, field, label as labelClass, fieldInput, hint, select as selectClass,
+  checkbox as checkboxClass, collapsible, collapsibleHeader, collapsibleTitle, collapsibleIcon, expanded,
+  collapsibleContent, footer, button as buttonClass, buttonSecondary, buttonPrimary,
+  error as errorClass, shortcuts, shortcut, shortcutKey, completionError as completionErrorClass,
+  pathIndicator, pathIndicatorValid, pathIndicatorInvalid, pathIndicatorLoading,
+} from "./Omnibar.css";
 
 interface OmnibarProps {
   isOpen: boolean;
@@ -373,26 +381,26 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
 
   return (
     <div
-      className={styles.overlay}
+      className={overlay}
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="omnibar-title"
     >
       <div
-        className={styles.modal}
+        className={modal}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         {/* Main Input */}
-        <div className={styles.inputContainer}>
-          <span className={styles.typeIndicator} aria-hidden="true">
+        <div className={inputContainer}>
+          <span className={typeIndicator} aria-hidden="true">
             {typeInfo.icon}
           </span>
           <input
             ref={inputRef}
             type="text"
-            className={styles.input}
+            className={inputClass}
             placeholder="Enter path, GitHub URL, or owner/repo..."
             value={input}
             onChange={(e) => {
@@ -417,7 +425,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
           {/* Path existence indicator */}
           {isPathInput && input.trim() && (
             <span
-              className={styles.pathIndicator}
+              className={pathIndicator}
               aria-live="polite"
               aria-label={
                 isCompletionLoading
@@ -428,11 +436,11 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
               }
             >
               {isCompletionLoading ? (
-                <span className={styles.pathIndicatorLoading} aria-hidden="true">⟳</span>
+                <span className={pathIndicatorLoading} aria-hidden="true">⟳</span>
               ) : pathExists ? (
-                <span className={styles.pathIndicatorValid} aria-hidden="true">✓</span>
+                <span className={pathIndicatorValid} aria-hidden="true">✓</span>
               ) : (
-                <span className={styles.pathIndicatorInvalid} aria-hidden="true">✗</span>
+                <span className={pathIndicatorInvalid} aria-hidden="true">✗</span>
               )}
             </span>
           )}
@@ -452,17 +460,17 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
 
         {/* Path completion error */}
         {isPathInput && completionError && (
-          <div className={styles.completionError} aria-live="polite">
+          <div className={completionErrorClass} aria-live="polite">
             Could not load completions
           </div>
         )}
 
         {/* Detection Badge */}
         {input.trim() && (
-          <div className={styles.detectionInfo}>
+          <div className={detectionInfo}>
             <span
-              className={`${styles.detectionBadge} ${
-                detection?.type === InputType.Unknown ? styles.unknown : ""
+              className={`${detectionBadge} ${
+                detection?.type === InputType.Unknown ? unknown : ""
               }`}
             >
               {typeInfo.icon} {typeInfo.label}
@@ -471,16 +479,16 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
         )}
 
         {/* Form Fields */}
-        <div className={styles.body}>
+        <div className={body}>
           {/* Session Name */}
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="omnibar-name">
+          <div className={field}>
+            <label className={labelClass} htmlFor="omnibar-name">
               Session Name *
             </label>
             <input
               id="omnibar-name"
               type="text"
-              className={styles.fieldInput}
+              className={fieldInput}
               placeholder="my-feature-session"
               value={sessionName}
               onChange={(e) => setSessionName(e.target.value)}
@@ -488,13 +496,13 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
           </div>
 
           {/* Session Type */}
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="omnibar-session-type">
+          <div className={field}>
+            <label className={labelClass} htmlFor="omnibar-session-type">
               Session Type
             </label>
             <select
               id="omnibar-session-type"
-              className={styles.select}
+              className={selectClass}
               value={sessionType}
               onChange={(e) => setSessionType(e.target.value as "directory" | "new_worktree" | "existing_worktree")}
             >
@@ -502,7 +510,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
               <option value="existing_worktree">Use Existing Worktree</option>
               <option value="directory">Directory Only (No Worktree)</option>
             </select>
-            <span className={styles.hint}>
+            <span className={hint}>
               {sessionType === "new_worktree" && "Creates an isolated git worktree for this session"}
               {sessionType === "existing_worktree" && "Uses an existing worktree at a specific path"}
               {sessionType === "directory" && "Works directly in the repository without worktree isolation"}
@@ -512,7 +520,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
           {/* Branch controls (for new worktree) */}
           {sessionType === "new_worktree" && (
             <>
-              <label className={styles.checkbox}>
+              <label className={checkboxClass}>
                 <input
                   type="checkbox"
                   checked={useTitleAsBranch}
@@ -521,21 +529,21 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
                 <span>Use session name as branch name</span>
               </label>
 
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="omnibar-branch">
+              <div className={field}>
+                <label className={labelClass} htmlFor="omnibar-branch">
                   Git Branch {!useTitleAsBranch && "*"}
                 </label>
                 <input
                   id="omnibar-branch"
                   type="text"
-                  className={styles.fieldInput}
+                  className={fieldInput}
                   placeholder={useTitleAsBranch ? sessionName || "Enter session name first" : "feature/my-feature"}
                   value={useTitleAsBranch ? sessionName : branch}
                   onChange={(e) => !useTitleAsBranch && setBranch(e.target.value)}
                   disabled={useTitleAsBranch}
                   style={{ opacity: useTitleAsBranch ? 0.6 : 1 }}
                 />
-                <span className={styles.hint}>
+                <span className={hint}>
                   {useTitleAsBranch
                     ? `Branch name will be: ${sessionName || "(enter session name)"}`
                     : "Branch to create for the new worktree"}
@@ -546,14 +554,14 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
 
           {/* Existing worktree path */}
           {sessionType === "existing_worktree" && (
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="omnibar-existing-worktree">
+            <div className={field}>
+              <label className={labelClass} htmlFor="omnibar-existing-worktree">
                 Existing Worktree Path *
               </label>
               {worktrees.length > 0 ? (
                 <select
                   id="omnibar-existing-worktree"
-                  className={styles.select}
+                  className={selectClass}
                   value={existingWorktree}
                   onChange={(e) => setExistingWorktree(e.target.value)}
                 >
@@ -568,13 +576,13 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
                 <input
                   id="omnibar-existing-worktree"
                   type="text"
-                  className={styles.fieldInput}
+                  className={fieldInput}
                   placeholder="/path/to/existing/worktree"
                   value={existingWorktree}
                   onChange={(e) => setExistingWorktree(e.target.value)}
                 />
               )}
-              <span className={styles.hint}>
+              <span className={hint}>
                 {worktrees.length > 0
                   ? "Select an existing git worktree for this repository"
                   : "Absolute path to an existing git worktree"}
@@ -583,31 +591,31 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
           )}
 
           {/* Working Directory (optional, for all types) */}
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="omnibar-working-dir">
+          <div className={field}>
+            <label className={labelClass} htmlFor="omnibar-working-dir">
               Working Directory
             </label>
             <input
               id="omnibar-working-dir"
               type="text"
-              className={styles.fieldInput}
+              className={fieldInput}
               placeholder="src/api (optional)"
               value={workingDir}
               onChange={(e) => setWorkingDir(e.target.value)}
             />
-            <span className={styles.hint}>Optional: Start in a subdirectory (relative path)</span>
+            <span className={hint}>Optional: Start in a subdirectory (relative path)</span>
           </div>
 
           {/* Advanced Options */}
-          <div className={styles.collapsible}>
+          <div className={collapsible}>
             <div
-              className={styles.collapsibleHeader}
+              className={collapsibleHeader}
               onClick={() => setShowAdvanced(!showAdvanced)}
             >
-              <span className={styles.collapsibleTitle}>Advanced Options</span>
+              <span className={collapsibleTitle}>Advanced Options</span>
               <span
-                className={`${styles.collapsibleIcon} ${
-                  showAdvanced ? styles.expanded : ""
+                className={`${collapsibleIcon} ${
+                  showAdvanced ? expanded : ""
                 }`}
               >
                 ▼
@@ -615,15 +623,15 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
             </div>
 
             {showAdvanced && (
-              <div className={styles.collapsibleContent}>
+              <div className={collapsibleContent}>
                 {/* Program */}
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="omnibar-program">
+                <div className={field}>
+                  <label className={labelClass} htmlFor="omnibar-program">
                     Program
                   </label>
                   <select
                     id="omnibar-program"
-                    className={styles.select}
+                    className={selectClass}
                     value={program}
                     onChange={(e) => setProgram(e.target.value)}
                   >
@@ -634,14 +642,14 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
                 </div>
 
                 {/* Category */}
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="omnibar-category">
+                <div className={field}>
+                  <label className={labelClass} htmlFor="omnibar-category">
                     Category
                   </label>
                   <input
                     id="omnibar-category"
                     type="text"
-                    className={styles.fieldInput}
+                    className={fieldInput}
                     placeholder="e.g., Features, Bugfixes"
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
@@ -649,7 +657,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
                 </div>
 
                 {/* Auto-Yes */}
-                <label className={styles.checkbox}>
+                <label className={checkboxClass}>
                   <input
                     type="checkbox"
                     checked={autoYes}
@@ -663,20 +671,20 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
         </div>
 
         {/* Error Message */}
-        {error && <div className={styles.error}>{error}</div>}
+        {error && <div className={errorClass}>{error}</div>}
 
         {/* Footer */}
-        <div className={styles.footer}>
+        <div className={footer}>
           <button
             type="button"
-            className={`${styles.button} ${styles.buttonSecondary}`}
+            className={`${buttonClass} ${buttonSecondary}`}
             onClick={onClose}
           >
             Cancel
           </button>
           <button
             type="button"
-            className={`${styles.button} ${styles.buttonPrimary}`}
+            className={`${buttonClass} ${buttonPrimary}`}
             onClick={handleSubmit}
             disabled={!canSubmit || isSubmitting}
           >
@@ -685,20 +693,20 @@ export function Omnibar({ isOpen, onClose, onCreateSession }: OmnibarProps) {
         </div>
 
         {/* Keyboard Shortcuts */}
-        <div className={styles.shortcuts}>
-          <span className={styles.shortcut}>
-            <span className={styles.shortcutKey}>Esc</span> Close
+        <div className={shortcuts}>
+          <span className={shortcut}>
+            <span className={shortcutKey}>Esc</span> Close
           </span>
-          <span className={styles.shortcut}>
-            <span className={styles.shortcutKey}>⌘↵</span> Create
+          <span className={shortcut}>
+            <span className={shortcutKey}>⌘↵</span> Create
           </span>
           {isDropdownVisible && (
             <>
-              <span className={styles.shortcut}>
-                <span className={styles.shortcutKey}>↑↓</span> Navigate
+              <span className={shortcut}>
+                <span className={shortcutKey}>↑↓</span> Navigate
               </span>
-              <span className={styles.shortcut}>
-                <span className={styles.shortcutKey}>Tab</span> Complete
+              <span className={shortcut}>
+                <span className={shortcutKey}>Tab</span> Complete
               </span>
             </>
           )}

@@ -6,7 +6,36 @@ import { Session, SessionStatus, CheckpointProto } from "@/gen/session/v1/types_
 import { SessionCard } from "./SessionCard";
 import { BulkActions } from "./BulkActions";
 import { GroupingStrategy, GroupingStrategyLabels, groupSessions, cycleGroupingStrategy } from "@/lib/grouping/strategies";
-import styles from "./SessionList.module.css";
+import {
+  container,
+  header,
+  headerTop,
+  title,
+  headerActions,
+  selectModeButton,
+  selectModeButtonActive,
+  filters,
+  filterTopRow,
+  filterToggle,
+  filterToggleActive,
+  filterActiveDot,
+  filterControls,
+  filterControlsOpen,
+  searchInput,
+  select,
+  sortDirButton,
+  checkboxLabel,
+  sessionList,
+  categoryGroup,
+  categoryTitle,
+  categoryContent,
+  empty,
+  clearButton,
+  emptyActions,
+  emptyHint,
+  newSessionButtonLarge,
+  newSessionIcon,
+} from "./SessionList.css";
 
 interface SessionListProps {
   sessions: Session[];
@@ -316,14 +345,14 @@ export function SessionList({
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerTop}>
-          <h2 className={styles.title}>Sessions ({filteredSessions.length})</h2>
-          <div className={styles.headerActions}>
+    <div className={container}>
+      <div className={header}>
+        <div className={headerTop}>
+          <h2 className={title}>Sessions ({filteredSessions.length})</h2>
+          <div className={headerActions}>
             <button
               onClick={handleToggleSelectMode}
-              className={`${styles.selectModeButton} ${selectMode ? styles.active : ""}`}
+              className={`${selectModeButton} ${selectMode ? selectModeButtonActive : ""}`}
               aria-label={selectMode ? "Exit select mode" : "Enter select mode"}
             >
               {selectMode ? "Cancel" : "Select"}
@@ -331,22 +360,22 @@ export function SessionList({
           </div>
         </div>
 
-        <div className={styles.filters}>
+        <div className={filters}>
           {/* Search input — always visible */}
-          <div className={styles.filterTopRow}>
+          <div className={filterTopRow}>
             <input
               type="text"
               placeholder="Search sessions..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={styles.searchInput}
+              className={searchInput}
               aria-label="Search sessions"
             />
             {/* Filter toggle — only shown on mobile via CSS */}
             <button
-              className={`${styles.filterToggle} ${
+              className={`${filterToggle} ${
                 selectedStatus !== "all" || selectedCategory !== "all" || selectedTag !== "all" || hidePaused
-                  ? styles.filterToggleActive
+                  ? filterToggleActive
                   : ""
               }`}
               aria-expanded={filtersOpen}
@@ -355,7 +384,7 @@ export function SessionList({
             >
               Filters
               {(selectedStatus !== "all" || selectedCategory !== "all" || selectedTag !== "all" || hidePaused) && (
-                <span className={styles.filterActiveDot} aria-hidden="true" />
+                <span className={filterActiveDot} aria-hidden="true" />
               )}
             </button>
           </div>
@@ -363,7 +392,7 @@ export function SessionList({
           {/* Collapsible filter controls */}
           <div
             id="session-filter-controls"
-            className={`${styles.filterControls} ${filtersOpen ? styles.filterControlsOpen : ""}`}
+            className={`${filterControls} ${filtersOpen ? filterControlsOpen : ""}`}
           >
             {/* Status filter */}
             <select
@@ -373,7 +402,7 @@ export function SessionList({
                   e.target.value === "all" ? "all" : Number(e.target.value)
                 )
               }
-              className={styles.select}
+              className={select}
               aria-label="Filter by status"
             >
               <option value="all">All Statuses</option>
@@ -390,13 +419,13 @@ export function SessionList({
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className={styles.select}
+              className={select}
               aria-label="Filter by category"
             >
               <option value="all">All Categories</option>
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
                 </option>
               ))}
             </select>
@@ -405,19 +434,19 @@ export function SessionList({
             <select
               value={selectedTag}
               onChange={(e) => setSelectedTag(e.target.value)}
-              className={styles.select}
+              className={select}
               aria-label="Filter by tag"
             >
               <option value="all">All Tags</option>
-              {tags.map((tag) => (
-                <option key={tag} value={tag}>
-                  {tag}
+              {tags.map((t) => (
+                <option key={t} value={t}>
+                  {t}
                 </option>
               ))}
             </select>
 
             {/* Hide paused toggle */}
-            <label className={styles.checkbox}>
+            <label className={checkboxLabel}>
               <input
                 type="checkbox"
                 checked={hidePaused}
@@ -431,7 +460,7 @@ export function SessionList({
             <select
               value={groupingStrategy}
               onChange={(e) => setGroupingStrategy(e.target.value as GroupingStrategy)}
-              className={styles.select}
+              className={select}
               title="Group by (Keyboard: G)"
               aria-label="Group sessions by"
             >
@@ -446,7 +475,7 @@ export function SessionList({
             <select
               value={sortField}
               onChange={(e) => setSortField(e.target.value as SortField)}
-              className={styles.select}
+              className={select}
               aria-label="Sort sessions by"
             >
               <option value="lastActivity">Sort: Last Activity</option>
@@ -458,7 +487,7 @@ export function SessionList({
             {/* Sort direction toggle */}
             <button
               onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-              className={styles.sortDirButton}
+              className={sortDirButton}
               title={sortDir === 'asc' ? 'Ascending — click to sort descending' : 'Descending — click to sort ascending'}
               aria-label={`Sort direction: ${sortDir === 'asc' ? 'ascending' : 'descending'}`}
             >
@@ -483,14 +512,14 @@ export function SessionList({
 
       {/* Session list */}
       {filteredSessions.length === 0 ? (
-        <div className={styles.empty}>
+        <div className={empty}>
           <p>{searchQuery || selectedStatus !== "all" || selectedCategory !== "all" || selectedTag !== "all" || hidePaused
             ? "No sessions found"
             : "No sessions yet"
           }</p>
           {searchQuery || selectedStatus !== "all" || selectedCategory !== "all" || selectedTag !== "all" || hidePaused ? (
             <button
-              className={styles.clearButton}
+              className={clearButton}
               onClick={() => {
                 setSearchQuery("");
                 setSelectedStatus("all");
@@ -502,28 +531,28 @@ export function SessionList({
               Clear filters
             </button>
           ) : (
-            <div className={styles.emptyActions}>
-              <p className={styles.emptyHint}>
+            <div className={emptyActions}>
+              <p className={emptyHint}>
                 Get started by creating your first AI coding session
               </p>
               <button
-                className={styles.newSessionButtonLarge}
+                className={newSessionButtonLarge}
                 onClick={() => onNewSession?.()}
               >
-                <span className={styles.newSessionIcon}>+</span>
+                <span className={newSessionIcon}>+</span>
                 Create Your First Session
               </button>
             </div>
           )}
         </div>
       ) : (
-        <div className={styles.sessionList}>
+        <div className={sessionList}>
           {groupedSessions.map(({ groupKey, displayName, sessions: groupSessions }) => (
-            <div key={groupKey} className={styles.categoryGroup}>
-              <h3 className={styles.categoryTitle}>
+            <div key={groupKey} className={categoryGroup}>
+              <h3 className={categoryTitle}>
                 {displayName} ({groupSessions.length})
               </h3>
-              <div className={styles.categoryContent}>
+              <div className={categoryContent}>
                 {groupSessions.map((session, index) => (
                   <div key={session.id} style={{'--card-index': index} as React.CSSProperties}>
                     <SessionCard

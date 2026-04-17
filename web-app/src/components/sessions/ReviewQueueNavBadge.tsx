@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useReviewQueueContext } from "@/lib/contexts/ReviewQueueContext";
 import { useReviewQueueNotifications } from "@/lib/hooks/useReviewQueueNotifications";
 import { NotificationSound } from "@/lib/utils/notifications";
-import styles from "./ReviewQueueNavBadge.module.css";
+import * as styles from "./ReviewQueueNavBadge.css";
 
 interface ReviewQueueNavBadgeProps {
   inline?: boolean;

@@ -12,7 +12,7 @@ import type {
   SearchMode,
 } from "@/lib/hooks/useHistoryFilters";
 import type { useHistoryFullTextSearch } from "@/lib/hooks/useHistoryFullTextSearch";
-import styles from "./HistoryFilterBar.module.css";
+import * as styles from "./HistoryFilterBar.css";
 
 // ============================================================================
 // Types
@@ -83,14 +83,14 @@ export function HistoryFilterBar({
       {/* Search Mode Toggle */}
       <div className={styles.searchModeToggle}>
         <button
-          className={`${styles.searchModeButton} ${searchMode === "metadata" ? styles.active : ""}`}
+          className={`${styles.searchModeButton} ${searchMode === "metadata" ? styles.searchModeButtonActive : ""}`}
           onClick={() => setSearchMode("metadata")}
           title="Search by name, project, model"
         >
           📋 Metadata
         </button>
         <button
-          className={`${styles.searchModeButton} ${searchMode === "fulltext" ? styles.active : ""}`}
+          className={`${styles.searchModeButton} ${searchMode === "fulltext" ? styles.searchModeButtonActive : ""}`}
           onClick={() => setSearchMode("fulltext")}
           title="Search full conversation content"
         >

@@ -7,7 +7,7 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import Editor, { OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import styles from "./config.module.css";
+import * as styles from "./config.css";
 import { getApiBaseUrl } from "@/lib/config";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { registerPasskey, logout as doLogout } from "@/lib/auth/passkey";

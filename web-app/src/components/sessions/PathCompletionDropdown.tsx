@@ -1,6 +1,9 @@
 "use client";
 
-import styles from "./PathCompletionDropdown.module.css";
+import {
+  dropdown, item, itemSelected, icon as iconClass, name as nameClass,
+  suffix, itemHistory, divider, loading as loadingClass,
+} from "./PathCompletionDropdown.css";
 
 /** A single item shown in the path completion dropdown. */
 export interface CompletionEntry {
@@ -38,9 +41,9 @@ function EntryItem({
     <li
       id={`${id}-option-${index}`}
       className={[
-        styles.item,
-        index === selectedIndex ? styles.itemSelected : "",
-        entry.isHistory ? styles.itemHistory : "",
+        item,
+        index === selectedIndex ? itemSelected : "",
+        entry.isHistory ? itemHistory : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -51,12 +54,12 @@ function EntryItem({
         onSelect(entry);
       }}
     >
-      <span className={styles.icon} aria-hidden="true">
+      <span className={iconClass} aria-hidden="true">
         {entry.isHistory ? "🕒" : entry.isDirectory ? "📁" : "📄"}
       </span>
-      <span className={styles.name}>{entry.name}</span>
+      <span className={nameClass}>{entry.name}</span>
       {entry.isDirectory && !entry.isHistory && (
-        <span className={styles.suffix} aria-hidden="true">
+        <span className={suffix} aria-hidden="true">
           /
         </span>
       )}
@@ -73,7 +76,7 @@ export function PathCompletionDropdown({
   id = "path-completion-listbox",
 }: PathCompletionDropdownProps) {
   if (isLoading && entries.length === 0) {
-    return <div className={styles.loading}>Loading completions…</div>;
+    return <div className={loadingClass}>Loading completions…</div>;
   }
   if (entries.length === 0) return null;
 
@@ -82,7 +85,7 @@ export function PathCompletionDropdown({
   return (
     <ul
       id={id}
-      className={styles.dropdown}
+      className={dropdown}
       role="listbox"
       aria-label="Path completions"
     >
@@ -97,7 +100,7 @@ export function PathCompletionDropdown({
         />
       ))}
       {showDivider && (
-        <li className={styles.divider} role="presentation" aria-hidden="true" />
+        <li className={divider} role="presentation" aria-hidden="true" />
       )}
       {entries.slice(historyCount).map((entry, i) => (
         <EntryItem

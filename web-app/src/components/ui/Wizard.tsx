@@ -1,7 +1,24 @@
 "use client";
 
 import { ReactNode } from "react";
-import styles from "./Wizard.module.css";
+import {
+  wizard,
+  steps,
+  step,
+  stepNumber,
+  stepLabel,
+  stepConnector,
+  active,
+  activeStepNumber,
+  activeStepLabel,
+  completed,
+  completedStepNumber,
+  completedStepLabel,
+  completedStepConnector,
+  pending,
+  content,
+  wizardActions,
+} from "./Wizard.css";
 
 interface WizardProps {
   currentStep: number;
@@ -11,28 +28,42 @@ interface WizardProps {
 
 export function Wizard({ currentStep, steps, children }: WizardProps) {
   return (
-    <div className={styles.wizard}>
-      <div className={styles.steps}>
-        {steps.map((step, index) => (
+    <div className={wizard}>
+      <div className={steps}>
+        {steps.map((stepName, index) => (
           <div
             key={index}
-            className={`${styles.step} ${
+            className={`${step} ${
               index < currentStep
-                ? styles.completed
+                ? completed
                 : index === currentStep
-                ? styles.active
-                : styles.pending
+                ? active
+                : pending
             }`}
           >
-            <div className={styles.stepNumber}>
+            <div className={
+              index < currentStep
+                ? completedStepNumber
+                : index === currentStep
+                ? activeStepNumber
+                : stepNumber
+            }>
               {index < currentStep ? "✓" : index + 1}
             </div>
-            <div className={styles.stepLabel}>{step}</div>
-            {index < steps.length - 1 && <div className={styles.stepConnector} />}
+            <div className={
+              index < currentStep
+                ? completedStepLabel
+                : index === currentStep
+                ? activeStepLabel
+                : stepLabel
+            }>{stepName}</div>
+            {index < steps.length - 1 && (
+              <div className={index < currentStep ? completedStepConnector : stepConnector} />
+            )}
           </div>
         ))}
       </div>
-      <div className={styles.content}>{children}</div>
+      <div className={content}>{children}</div>
     </div>
   );
 }
@@ -42,5 +73,5 @@ interface WizardActionsProps {
 }
 
 export function WizardActions({ children }: WizardActionsProps) {
-  return <div className={styles.actions}>{children}</div>;
+  return <div className={wizardActions}>{children}</div>;
 }

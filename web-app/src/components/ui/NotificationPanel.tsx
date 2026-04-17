@@ -19,7 +19,57 @@ import {
   priorityColor,
   notificationTypeFilter,
 } from "@/lib/utils/notificationMapping";
-import styles from "./NotificationPanel.module.css";
+import {
+  overlay,
+  panel,
+  panelOpen,
+  header,
+  title,
+  unreadBadge,
+  headerActions,
+  markAllButton,
+  clearButton,
+  closeButton,
+  filterBar,
+  searchInput,
+  filterPills,
+  filterPill,
+  filterPillActive,
+  content,
+  empty,
+  emptyIcon,
+  emptyText,
+  emptySubtext,
+  list,
+  item,
+  read,
+  unread,
+  itemHeader,
+  itemTitle,
+  unreadDot,
+  typeIcon,
+  typeLabel,
+  countBadge,
+  removeButton,
+  itemSubtitle,
+  itemContext,
+  itemMessage,
+  approvalDetails,
+  approvalTool,
+  approvalCommand,
+  approvalCwd,
+  itemWorkingDir,
+  itemFooter,
+  timestamp,
+  itemActions,
+  resolvedBadge,
+  approveButton,
+  denyButton,
+  focusButton,
+  viewButton,
+  loadMore,
+  loadMoreButton,
+} from "./NotificationPanel.css";
 
 type TypeFilter = "all" | "approval_needed" | "error" | "task_complete" | "info";
 
@@ -175,30 +225,30 @@ export function NotificationPanel() {
     <>
       {/* Overlay backdrop */}
       {isPanelOpen && (
-        <div className={styles.overlay} onClick={togglePanel} aria-hidden="true" />
+        <div className={overlay} onClick={togglePanel} aria-hidden="true" />
       )}
 
       {/* Notification Panel */}
       <div
-        className={`${styles.panel} ${isPanelOpen ? styles.open : ""}`}
+        className={`${panel} ${isPanelOpen ? panelOpen : ""}`}
         role="dialog"
         aria-label="Notification Panel"
         aria-modal="true"
       >
         {/* Header */}
-        <div className={styles.header}>
-          <h2 className={styles.title}>
+        <div className={header}>
+          <h2 className={title}>
             Notifications
             {unreadCount > 0 && (
-              <span className={styles.unreadBadge}>{unreadCount}</span>
+              <span className={unreadBadge}>{unreadCount}</span>
             )}
           </h2>
-          <div className={styles.headerActions}>
+          <div className={headerActions}>
             {notificationHistory.length > 0 && (
               <>
                 {unreadCount > 0 && (
                   <button
-                    className={styles.markAllButton}
+                    className={markAllButton}
                     onClick={markAllAsRead}
                     aria-label="Mark all as read"
                   >
@@ -206,7 +256,7 @@ export function NotificationPanel() {
                   </button>
                 )}
                 <button
-                  className={styles.clearButton}
+                  className={clearButton}
                   onClick={clearHistory}
                   aria-label="Clear all notifications"
                 >
@@ -215,7 +265,7 @@ export function NotificationPanel() {
               </>
             )}
             <button
-              className={styles.closeButton}
+              className={closeButton}
               onClick={togglePanel}
               aria-label="Close notification panel"
             >
@@ -225,20 +275,20 @@ export function NotificationPanel() {
         </div>
 
         {/* Search + Filter Bar */}
-        <div className={styles.filterBar}>
+        <div className={filterBar}>
           <input
-            className={styles.searchInput}
+            className={searchInput}
             type="search"
             placeholder="Search notifications…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             aria-label="Search notifications"
           />
-          <div className={styles.filterPills} role="group" aria-label="Filter by type">
+          <div className={filterPills} role="group" aria-label="Filter by type">
             {(Object.keys(TYPE_FILTER_LABELS) as TypeFilter[]).map((filter) => (
               <button
                 key={filter}
-                className={`${styles.filterPill} ${typeFilter === filter ? styles.filterPillActive : ""}`}
+                className={`${filterPill} ${typeFilter === filter ? filterPillActive : ""}`}
                 onClick={() => setTypeFilter(filter)}
                 aria-pressed={typeFilter === filter}
               >
@@ -249,26 +299,26 @@ export function NotificationPanel() {
         </div>
 
         {/* Notification List */}
-        <div className={styles.content}>
+        <div className={content}>
           {historyLoading && notificationHistory.length === 0 ? (
-            <div className={styles.empty}>
-              <div className={styles.emptyIcon}>⏳</div>
-              <p className={styles.emptyText}>Loading notifications...</p>
+            <div className={empty}>
+              <div className={emptyIcon}>⏳</div>
+              <p className={emptyText}>Loading notifications...</p>
             </div>
           ) : filteredNotifications.length === 0 ? (
-            <div className={styles.empty}>
-              <div className={styles.emptyIcon}>{searchQuery || typeFilter !== "all" ? "🔍" : "🔔"}</div>
-              <p className={styles.emptyText}>
+            <div className={empty}>
+              <div className={emptyIcon}>{searchQuery || typeFilter !== "all" ? "🔍" : "🔔"}</div>
+              <p className={emptyText}>
                 {searchQuery || typeFilter !== "all" ? "No matching notifications" : "No notifications yet"}
               </p>
-              <p className={styles.emptySubtext}>
+              <p className={emptySubtext}>
                 {searchQuery || typeFilter !== "all"
                   ? "Try adjusting your search or filter"
                   : "You'll see notifications from your sessions here"}
               </p>
             </div>
           ) : (
-            <div className={styles.list}>
+            <div className={list}>
               {groupNotifications(filteredNotifications).map((group) => {
                 const notification = group.notification;
                 const contextString = getContextString(notification);
@@ -292,31 +342,31 @@ export function NotificationPanel() {
                 return (
                   <div
                     key={notification.id}
-                    className={`${styles.item} ${notification.isRead ? styles.read : styles.unread}`}
+                    className={`${item} ${notification.isRead ? read : unread}`}
                     style={
                       {
                         "--priority-color": getPriorityColor(notification.priority),
                       } as React.CSSProperties
                     }
                   >
-                    <div className={styles.itemHeader}>
-                      <div className={styles.itemTitle}>
+                    <div className={itemHeader}>
+                      <div className={itemTitle}>
                         {!notification.isRead && (
-                          <span className={styles.unreadDot} aria-label="Unread" />
+                          <span className={unreadDot} aria-label="Unread" />
                         )}
-                        <span className={styles.typeIcon}>{getTypeIcon(notification.notificationType)}</span>
+                        <span className={typeIcon}>{getTypeIcon(notification.notificationType)}</span>
                         <strong>{primaryTitle}</strong>
-                        <span className={styles.typeLabel} style={{ backgroundColor: getPriorityColor(notification.priority) }}>
+                        <span className={typeLabel} style={{ backgroundColor: getPriorityColor(notification.priority) }}>
                           {getTypeLabel(notification.notificationType)}
                         </span>
                         {group.count > 1 && (
-                          <span className={styles.countBadge} aria-label={`${group.count} occurrences`}>
+                          <span className={countBadge} aria-label={`${group.count} occurrences`}>
                             x{group.count}
                           </span>
                         )}
                       </div>
                       <button
-                        className={styles.removeButton}
+                        className={removeButton}
                         onClick={() => removeFromHistory(notification.id)}
                         aria-label="Remove notification"
                       >
@@ -326,37 +376,37 @@ export function NotificationPanel() {
 
                     {/* Specific notification title (e.g. "Permission Required: Bash") */}
                     {subtitleText && (
-                      <div className={styles.itemSubtitle}>{subtitleText}</div>
+                      <div className={itemSubtitle}>{subtitleText}</div>
                     )}
 
                     {contextString && (
-                      <div className={styles.itemContext}>
+                      <div className={itemContext}>
                         {contextString}
                       </div>
                     )}
 
-                    <p className={styles.itemMessage}>{notification.message}</p>
+                    <p className={itemMessage}>{notification.message}</p>
 
                     {/* Approval metadata: tool name + command/file details */}
                     {notification.notificationType === "approval_needed" && notification.metadata && (
-                      <div className={styles.approvalDetails}>
+                      <div className={approvalDetails}>
                         {notification.metadata.tool_name && (
-                          <span className={styles.approvalTool}>
+                          <span className={approvalTool}>
                             🔧 {notification.metadata.tool_name}
                           </span>
                         )}
                         {notification.metadata.tool_input_command && (
-                          <code className={styles.approvalCommand}>
+                          <code className={approvalCommand}>
                             {notification.metadata.tool_input_command}
                           </code>
                         )}
                         {notification.metadata.tool_input_file && !notification.metadata.tool_input_command && (
-                          <code className={styles.approvalCommand}>
+                          <code className={approvalCommand}>
                             {notification.metadata.tool_input_file}
                           </code>
                         )}
                         {notification.metadata.cwd && (
-                          <span className={styles.approvalCwd} title={notification.metadata.cwd}>
+                          <span className={approvalCwd} title={notification.metadata.cwd}>
                             📁 {notification.metadata.cwd.split('/').slice(-2).join('/')}
                           </span>
                         )}
@@ -364,16 +414,16 @@ export function NotificationPanel() {
                     )}
 
                     {notification.sourceWorkingDir && (
-                      <div className={styles.itemWorkingDir} title={notification.sourceWorkingDir}>
+                      <div className={itemWorkingDir} title={notification.sourceWorkingDir}>
                         📁 {notification.sourceWorkingDir.split('/').slice(-2).join('/')}
                       </div>
                     )}
 
-                    <div className={styles.itemFooter}>
-                      <span className={styles.timestamp}>
+                    <div className={itemFooter}>
+                      <span className={timestamp}>
                         {formatRelativeTime(notification.timestamp)}
                       </span>
-                      <div className={styles.itemActions}>
+                      <div className={itemActions}>
                         {/* Approve/Deny for approval notifications that have a live approval_id */}
                         {notification.notificationType === "approval_needed" && notification.metadata?.approval_id && (() => {
                           const approvalId = notification.metadata!.approval_id;
@@ -381,18 +431,18 @@ export function NotificationPanel() {
                           const isPending = !!pendingApprovals[approvalId];
 
                           if (resolved === "allow") {
-                            return <span className={styles.resolvedBadge} data-decision="allow">✓ Approved</span>;
+                            return <span className={resolvedBadge} data-decision="allow">✓ Approved</span>;
                           }
                           if (resolved === "deny") {
-                            return <span className={styles.resolvedBadge} data-decision="deny">✗ Denied</span>;
+                            return <span className={resolvedBadge} data-decision="deny">✗ Denied</span>;
                           }
                           if (resolved === "expired") {
-                            return <span className={styles.resolvedBadge} data-decision="expired">Expired</span>;
+                            return <span className={resolvedBadge} data-decision="expired">Expired</span>;
                           }
                           return (
                             <>
                               <button
-                                className={styles.approveButton}
+                                className={approveButton}
                                 onClick={() => resolveApproval(approvalId, "allow", group.allIds)}
                                 disabled={isPending}
                                 title="Approve this tool use"
@@ -400,7 +450,7 @@ export function NotificationPanel() {
                                 {isPending ? "…" : "✓ Approve"}
                               </button>
                               <button
-                                className={styles.denyButton}
+                                className={denyButton}
                                 onClick={() => resolveApproval(approvalId, "deny", group.allIds)}
                                 disabled={isPending}
                                 title="Deny this tool use"
@@ -412,7 +462,7 @@ export function NotificationPanel() {
                         })()}
                         {hasSourceApp && notification.onFocusWindow && (
                           <button
-                            className={styles.focusButton}
+                            className={focusButton}
                             onClick={notification.onFocusWindow}
                             title="Focus the source application window"
                           >
@@ -422,7 +472,7 @@ export function NotificationPanel() {
                         {notification.sessionId && (
                           <Link
                             href={`/?session=${encodeURIComponent(notification.sessionId)}`}
-                            className={styles.viewButton}
+                            className={viewButton}
                             onClick={() => {
                               handleNotificationClick(
                                 group.allIds,
@@ -443,9 +493,9 @@ export function NotificationPanel() {
 
               {/* Load more button */}
               {historyHasMore && (
-                <div className={styles.loadMore}>
+                <div className={loadMore}>
                   <button
-                    className={styles.loadMoreButton}
+                    className={loadMoreButton}
                     onClick={loadMoreHistory}
                     disabled={historyLoading}
                   >

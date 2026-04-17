@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getApiBaseUrl } from "@/lib/config";
-import styles from "./page.module.css";
+import * as styles from "./page.css";
 
 interface EscapeCodeEntry {
   code: string;

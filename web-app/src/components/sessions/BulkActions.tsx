@@ -1,6 +1,8 @@
 "use client";
 
-import styles from "./BulkActions.module.css";
+import {
+  container, selection, count, selectAllButton, clearButton, actions, actionButton, danger,
+} from "./BulkActions.css";
 
 interface BulkActionsProps {
   selectedCount: number;
@@ -22,41 +24,41 @@ export function BulkActions({
   totalCount,
 }: BulkActionsProps) {
   return (
-    <div className={styles.container}>
-      <div className={styles.selection}>
-        <span className={styles.count}>
+    <div className={container}>
+      <div className={selection}>
+        <span className={count}>
           {selectedCount} of {totalCount} selected
         </span>
         {selectedCount < totalCount && (
-          <button onClick={onSelectAll} className={styles.selectAllButton}>
+          <button onClick={onSelectAll} className={selectAllButton}>
             Select All
           </button>
         )}
         {selectedCount > 0 && (
-          <button onClick={onClearSelection} className={styles.clearButton}>
+          <button onClick={onClearSelection} className={clearButton}>
             Clear Selection
           </button>
         )}
       </div>
 
-      <div className={styles.actions}>
+      <div className={actions}>
         <button
           onClick={onPauseAll}
-          className={styles.actionButton}
+          className={actionButton}
           disabled={selectedCount === 0}
         >
           ⏸️ Pause Selected
         </button>
         <button
           onClick={onResumeAll}
-          className={styles.actionButton}
+          className={actionButton}
           disabled={selectedCount === 0}
         >
           ▶️ Resume Selected
         </button>
         <button
           onClick={onDeleteAll}
-          className={`${styles.actionButton} ${styles.danger}`}
+          className={`${actionButton} ${danger}`}
           disabled={selectedCount === 0}
         >
           🗑️ Delete Selected
