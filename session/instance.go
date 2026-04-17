@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/atotto/clipboard"
+	"github.com/google/uuid"
 )
 
 type Status int
@@ -66,6 +67,9 @@ func (s Status) String() string {
 type Instance struct {
 	// Title is the title of the instance.
 	Title string
+	// UUID is a stable unique identifier for this instance, generated at creation time.
+	// Unlike Title, UUID does not change when the session is renamed.
+	UUID string
 	// Path is the path to the workspace repository root.
 	Path string
 	// WorkingDir is the directory within the repository to start in.
@@ -207,6 +211,7 @@ type Instance struct {
 func (i *Instance) ToInstanceData() InstanceData {
 	data := InstanceData{
 		Title:                i.Title,
+		UUID:                 i.UUID,
 		Path:                 i.Path,
 		WorkingDir:           i.WorkingDir,
 		Branch:               i.Branch,
@@ -331,6 +336,7 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 
 	instance := &Instance{
 		Title:       data.Title,
+		UUID:        data.UUID,
 		Path:        migratedPath, // Use migrated path
 		WorkingDir:  data.WorkingDir,
 		Branch:      data.Branch,
@@ -390,6 +396,11 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		ForkedFromID:     data.ForkedFromID,
 		// History file linkage
 		HistoryFilePath: data.HistoryFilePath,
+	}
+
+	// MIGRATION: Assign UUID to existing sessions that pre-date UUID assignment
+	if instance.UUID == "" {
+		instance.UUID = uuid.New().String()
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice
@@ -572,6 +583,7 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 
 	instance := &Instance{
 		Title:            opts.Title,
+		UUID:             uuid.New().String(),
 		Status:           Ready,
 		Path:             absPath,
 		Branch:           opts.Branch,
@@ -719,6 +731,16 @@ func (i *Instance) GetCreatedAt() time.Time {
 
 // GetTitle returns the session title/name.
 func (i *Instance) GetTitle() string {
+	return i.Title
+}
+
+// GetStableID returns a stable identifier for this instance.
+// If UUID is set, returns it. Falls back to Title for backward compatibility
+// with sessions that pre-date UUID assignment.
+func (i *Instance) GetStableID() string {
+	if i.UUID != "" {
+		return i.UUID
+	}
 	return i.Title
 }
 

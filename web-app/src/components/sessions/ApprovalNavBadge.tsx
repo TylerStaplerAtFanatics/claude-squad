@@ -5,6 +5,7 @@ import styles from "./ApprovalNavBadge.module.css";
 
 interface ApprovalNavBadgeProps {
   inline?: boolean;
+  onClick?: () => void;
 }
 
 /**
@@ -13,7 +14,7 @@ interface ApprovalNavBadgeProps {
  *
  * Hidden when there are no pending approvals.
  */
-export function ApprovalNavBadge({ inline = false }: ApprovalNavBadgeProps) {
+export function ApprovalNavBadge({ inline = false, onClick }: ApprovalNavBadgeProps) {
   const { approvals } = useApprovalsContext();
 
   const count = approvals.length;
@@ -27,13 +28,14 @@ export function ApprovalNavBadge({ inline = false }: ApprovalNavBadgeProps) {
     : styles.badge;
 
   return (
-    <span
+    <button
       className={className}
       data-testid="approval-nav-badge"
-      aria-label={`${count} pending approval${count !== 1 ? "s" : ""}`}
+      aria-label={`${count} pending approval${count !== 1 ? "s" : ""}. Click to review.`}
       title={`${count} tool-use request${count !== 1 ? "s" : ""} awaiting approval`}
+      onClick={onClick}
     >
       {count}
-    </span>
+    </button>
   );
 }

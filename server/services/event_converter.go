@@ -40,12 +40,17 @@ func convertEventToProto(event *events.Event) *sessionv1.SessionEvent {
 		}
 
 	case events.EventSessionStatusChanged:
+		statusChangedProto := &sessionv1.SessionStatusChangedEvent{
+			SessionId: event.SessionID,
+			OldStatus: adapters.StatusToProto(event.OldStatus),
+			NewStatus: adapters.StatusToProto(event.NewStatus),
+		}
+		if event.DetectedStatus != "" {
+			statusChangedProto.DetectedStatus = &event.DetectedStatus
+			statusChangedProto.DetectedContext = &event.DetectedContext
+		}
 		protoEvent.Event = &sessionv1.SessionEvent_StatusChanged{
-			StatusChanged: &sessionv1.SessionStatusChangedEvent{
-				SessionId: event.SessionID,
-				OldStatus: adapters.StatusToProto(event.OldStatus),
-				NewStatus: adapters.StatusToProto(event.NewStatus),
-			},
+			StatusChanged: statusChangedProto,
 		}
 
 	case events.EventNotification:
