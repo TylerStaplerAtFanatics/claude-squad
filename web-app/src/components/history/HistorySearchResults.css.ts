@@ -1,4 +1,4 @@
-import { style, keyframes } from "@vanilla-extract/css";
+import { style, keyframes, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 const spin = keyframes({
@@ -102,14 +102,9 @@ export const projectPath = style({
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
-
-  selectors: {
-    "& svg": {
-      flexShrink: 0,
-      opacity: 0.7,
-    },
-  },
 });
+
+globalStyle(`${projectPath} svg`, { flexShrink: 0, opacity: 0.7 });
 
 export const date = style({
   color: vars.color.textMuted,

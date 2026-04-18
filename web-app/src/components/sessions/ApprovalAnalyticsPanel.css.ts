@@ -1,4 +1,4 @@
-import { style, keyframes } from "@vanilla-extract/css";
+import { style, keyframes, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const panel = style({
@@ -239,13 +239,9 @@ export const tdBar = style({
   minWidth: 80,
 });
 
-export const row = style({
-  selectors: {
-    "&:last-child td": {
-      borderBottom: "none",
-    },
-  },
-});
+export const row = style({});
+
+globalStyle(`${row}:last-child td`, { borderBottom: "none" });
 
 export const allowCount = style({
   color: "#22c55e",

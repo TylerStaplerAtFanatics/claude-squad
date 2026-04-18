@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { style, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const detailPanel = style({
@@ -84,13 +84,9 @@ export const emptyState = style({
   padding: "40px 20px",
   textAlign: "center",
   color: vars.color.textMuted,
-
-  selectors: {
-    "& p": {
-      margin: 0,
-    },
-  },
 });
+
+globalStyle(`${emptyState} p`, { margin: 0 });
 
 export const emptyStateIcon = style({
   fontSize: "48px",
