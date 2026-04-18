@@ -154,17 +154,24 @@
   .modal {
     padding: 0;
     padding-top: var(--header-height); /* Clear sticky header */
+    /* Stretch instead of center so modal fills from top — prevents gap above terminal */
+    align-items: stretch;
+    justify-content: flex-start;
   }
 
   .modalContent {
     max-height: calc(var(--viewport-height, 100dvh) - var(--header-height));
     height: calc(var(--viewport-height, 100dvh) - var(--header-height));
     border-radius: 0;
+    /* Remove width constraint on mobile — fill edge to edge */
+    max-width: 100%;
   }
 
   .modalContentFullscreen {
     max-height: calc(var(--viewport-height, 100dvh) - var(--header-height)) !important;
     height: calc(var(--viewport-height, 100dvh) - var(--header-height)) !important;
+    /* aspect-ratio constraint defeats portrait layout; disable on mobile */
+    aspect-ratio: auto !important;
   }
 
   .modalHeader {

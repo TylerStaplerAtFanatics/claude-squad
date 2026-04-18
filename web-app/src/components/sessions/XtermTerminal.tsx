@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
+import { useMobileTerminalGestures } from "@/lib/hooks/useMobileTerminalGestures";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -107,11 +108,34 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, XtermTerminalProps>
   // Store callbacks in refs to avoid recreating terminal on callback changes
   const onDataRef = useRef(onData);
   const onResizeRef = useRef(onResize);
+  // Ref so touch handlers always read the latest mouseTracking value without recreating terminal
+  const mouseTrackingRef = useRef(mouseTracking);
 
   useEffect(() => {
     onDataRef.current = onData;
     onResizeRef.current = onResize;
   }, [onData, onResize]);
+
+  // Keep mouseTrackingRef in sync and try to update terminal option dynamically
+  useEffect(() => {
+    mouseTrackingRef.current = mouseTracking;
+    if (terminalRef.current) {
+      try {
+        (terminalRef.current as any).options.mouseTracking = mouseTracking;
+      } catch {
+        // Proposed API may not support dynamic updates on all xterm.js builds
+      }
+    }
+  }, [mouseTracking]);
+
+  // Mobile touch gestures — scroll and long-press selection.
+  // Extracted to a hook so gesture logic stays separate from terminal lifecycle.
+  useMobileTerminalGestures({
+    containerRef,
+    getTerminal: useCallback(() => terminalRef.current, []),
+    getMouseTracking: useCallback(() => mouseTrackingRef.current, []),
+    fontSize,
+  });
 
   // Initialize terminal on mount
   useEffect(() => {

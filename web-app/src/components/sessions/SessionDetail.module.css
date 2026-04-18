@@ -396,6 +396,39 @@
     padding: 1rem;
   }
 
+  /* Fullscreen (terminal/diff/vcs) on mobile: maximize usable space.
+     Re-declare padding: 0 here so it beats the .content mobile rule above
+     (same specificity, later source order wins). */
+  .fullscreenContent {
+    padding: 0;
+  }
+
+  /* Compact header in fullscreen mode — single row, no wrap */
+  .fullscreen .header {
+    padding: 0.25rem 0.5rem;
+    flex-wrap: nowrap;
+    row-gap: 0;
+  }
+
+  .fullscreen .title {
+    flex: 1 1 auto;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  .fullscreen .headerActions {
+    width: auto;
+    flex-shrink: 0;
+  }
+
+  /* Hide tabs in fullscreen mode — saves ~45 px of vertical space */
+  .fullscreen .tabs {
+    display: none;
+  }
+
   .infoGrid {
     grid-template-columns: 1fr;
     gap: 1rem;

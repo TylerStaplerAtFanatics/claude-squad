@@ -241,20 +241,23 @@
 
 .mobileKey {
   flex: 1;
-  padding: 0.55rem 0.4rem;
+  /* Tighter padding so 7 keys fit per row on a 375 px screen */
+  padding: 0.45rem 0.25rem;
+  min-width: 0; /* allow flex shrink below content width */
   background: #3c3c3c;
   border: 1px solid #555;
   border-bottom: 3px solid #333;
   border-radius: 5px;
   color: #d4d4d4;
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
   text-align: center;
+  white-space: nowrap;
   transition: background 0.08s, border-bottom-width 0.08s, transform 0.08s;
 }
 
@@ -264,9 +267,24 @@
   transform: translateY(2px);
 }
 
-/* Mobile keyboard toggle — hidden on desktop, shown only on mobile */
+/* Sticky modifier active state (CTRL / ALT armed) */
+.mobileKeyActive {
+  background: #1e4976;
+  border-color: #4a8fc7;
+  color: #93d0ff;
+}
+
+/* Mouse-mode toolbar button active state */
+.mouseModeActive {
+  background: #1e4976 !important;
+  border-color: #4a8fc7 !important;
+  color: #93d0ff !important;
+}
+
+/* Mobile keyboard toggle — always visible */
 .mobileKeyboardToggle {
-  display: none;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* Developer-only buttons — hidden on mobile (Debug, Record, streaming mode) */
@@ -319,8 +337,6 @@
   }
 
   .mobileKeyboardToggle {
-    display: inline-flex;
-    align-items: center;
     min-height: var(--min-touch-target, 44px);
     min-width: var(--min-touch-target, 44px);
   }
