@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import {
   container as containerClass,
   error as errorClass,
-  suggestions,
+  suggestions as suggestionsClass,
   suggestion,
   highlighted,
   loading,
@@ -162,7 +162,7 @@ export function AutocompleteInput({
       />
 
       {isOpen && filteredSuggestions.length > 0 && (
-        <ul ref={listRef} className={suggestions} role="listbox">
+        <ul ref={listRef} className={suggestionsClass} role="listbox">
           {filteredSuggestions.map((sugg, index) => (
             <li
               key={sugg}
