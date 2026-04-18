@@ -99,10 +99,29 @@ func ExtractAllCommands(cmd string) []ParsedCommand {
 			prog = prog[idx+1:]
 		}
 
+		// Unwrap transparent proxy commands (sudo, rtk, env, etc.) to find the
+		// real underlying program. Handles chained wrappers and env-var prefixes
+		// between wrappers (e.g., `sudo KEY=VAL git status` → git).
+		startIdx := 1
+		for wrapperCommands[strings.ToLower(prog)] && startIdx < len(tokens) {
+			// Skip env-var assignments (KEY=VALUE) before the real program.
+			for startIdx < len(tokens) && envVarPattern.MatchString(tokens[startIdx]) {
+				startIdx++
+			}
+			if startIdx >= len(tokens) {
+				break // bare wrapper with no following command
+			}
+			prog = tokens[startIdx]
+			if idx := strings.LastIndex(prog, "/"); idx >= 0 {
+				prog = prog[idx+1:]
+			}
+			startIdx++
+		}
+
 		raw := strings.Join(tokens, " ")
 		cmds = append(cmds, ParsedCommand{
 			Program:      prog,
-			Args:         tokens[1:],
+			Args:         tokens[startIdx:],
 			Raw:          raw,
 			Redirections: redirects,
 		})
@@ -139,6 +158,21 @@ type PythonInfo struct {
 	IsInline bool
 }
 
+// shellKeywords is the set of Bash/POSIX shell flow-control keywords. When the
+// naive splitCommandParts fallback is used, these tokens should never be treated
+// as a program name; extractProgramAndSubcommand skips them.
+var shellKeywords = map[string]bool{
+	"for": true, "while": true, "until": true, "if": true,
+	"then": true, "else": true, "elif": true, "fi": true,
+	"do": true, "done": true, "case": true, "esac": true,
+	"in": true, "select": true, "function": true,
+}
+
+// bgOperatorPattern matches a standalone & (background operator) that is not
+// part of a redirect pattern like 2>&1, >&2, or &>file. It matches & preceded
+// by a non-> character and surrounded by whitespace or string boundaries.
+var bgOperatorPattern = regexp.MustCompile(`([^>])&([^>&])`)
+
 var (
 	// envVarPattern matches shell environment variable assignments like FOO=bar or FOO="bar".
 	envVarPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
@@ -151,9 +185,14 @@ var (
 
 // wrapperCommands are programs that take another command as their argument.
 // We skip these when looking for the "primary" program.
+// rtk is a transparent CLI proxy that rewrites commands before execution (e.g.,
+// `rtk git status` → git status with token-saving wrappers). Adding a blanket
+// AutoAllow for rtk would be unsafe; instead, rtk is unwrapped so `rtk rm -rf /`
+// still triggers the deny rule and `rtk git push` still escalates.
 var wrapperCommands = map[string]bool{
 	"sudo": true, "exec": true, "time": true, "nice": true,
 	"nohup": true, "env": true, "watch": true,
+	"rtk": true,
 }
 
 // deepSubcommandPrograms is the set of programs that use two-level subcommand hierarchies
@@ -302,24 +341,29 @@ func matchesProgram(programs []string, prog string) bool {
 }
 
 // ParseBashCommand extracts structured categorization information from a Bash command.
-// It handles pipelines (|), sequential commands (;, &&, ||), environment variable prefixes,
-// path-qualified program names (/usr/bin/git), and sudo/exec wrappers.
+// It uses the mvdan.cc/sh AST parser (via ExtractAllCommands) as the primary path,
+// which correctly handles subshells, pipelines, compound commands, and env-var prefixes.
+// On parse error, ExtractAllCommands falls back to splitCommandParts automatically.
+//
+// The primary program and subcommand are taken from the first CallExpr in the AST.
+// AllPrograms collects all distinct programs across the full command.
 func ParseBashCommand(command string) CommandInfo {
-	parts := splitCommandParts(command)
-	if len(parts) == 0 {
+	cmds := ExtractAllCommands(command)
+	if len(cmds) == 0 {
 		return CommandInfo{}
 	}
 
-	prog, sub := extractProgramAndSubcommand(parts[0])
+	first := cmds[0]
+	prog := first.Program
+	sub := extractSubcommand(prog, first.Args)
 
-	// Collect all distinct programs across the full pipeline.
+	// Collect all distinct programs across the full command.
 	seen := make(map[string]bool)
 	var allProgs []string
-	for _, part := range parts {
-		p, _ := extractProgramAndSubcommand(part)
-		if p != "" && !seen[p] {
-			seen[p] = true
-			allProgs = append(allProgs, p)
+	for _, c := range cmds {
+		if c.Program != "" && !seen[c.Program] {
+			seen[c.Program] = true
+			allProgs = append(allProgs, c.Program)
 		}
 	}
 
@@ -356,12 +400,24 @@ func ParsePythonCommand(command string) PythonInfo {
 }
 
 // splitCommandParts splits a shell command string into individual simple commands
-// by tokenizing on |, ;, &&, ||, and newlines. This is intentionally simple and
+// by tokenizing on |, ;, &&, ||, &, and newlines. This is intentionally simple and
 // does not handle quoted strings or subshell constructs.
 func splitCommandParts(cmd string) []string {
+	// Normalize line continuations: backslash-newline joins continuation lines.
+	cmd = strings.ReplaceAll(cmd, "\\\n", " ")
+
 	// Replace && and || with a single sentinel before splitting on remaining separators.
 	cmd = strings.ReplaceAll(cmd, "&&", "\x00")
 	cmd = strings.ReplaceAll(cmd, "||", "\x00")
+
+	// Replace standalone & (background operator) with the sentinel.
+	// bgOperatorPattern avoids splitting redirect patterns like 2>&1, >&2, &>file.
+	// We pad with spaces to ensure the regex can match at boundaries, then strip.
+	cmd = bgOperatorPattern.ReplaceAllStringFunc(" "+cmd+" ", func(m string) string {
+		// Preserve the non-> char before & and the char after, replacing & with sentinel.
+		return string(m[0]) + "\x00" + string(m[2])
+	})
+	cmd = strings.TrimSpace(cmd)
 
 	parts := strings.FieldsFunc(cmd, func(r rune) bool {
 		return r == '|' || r == ';' || r == '\n' || r == '\x00'
@@ -402,6 +458,10 @@ func extractProgramAndSubcommand(cmd string) (prog, sub string) {
 		}
 
 		if prog == "" {
+			// Skip shell flow-control keywords (for, while, if, …).
+			if shellKeywords[bare] {
+				continue
+			}
 			// Skip wrapper commands (sudo, exec, time, …) that take another command as arg.
 			if wrapperCommands[bare] {
 				continue
@@ -425,7 +485,7 @@ func categorizeProgram(prog string) string {
 		return "node"
 	case "pip", "pip3", "uv", "poetry", "pipenv", "conda", "mamba", "pdm":
 		return "python_pkg"
-	case "go":
+	case "go", "gofmt":
 		return "go"
 	case "cargo", "rustup", "rust-analyzer":
 		return "rust"

@@ -235,6 +235,10 @@ service SessionService {
   // ListWorktrees returns the git worktrees for a given repository path.
   // Used by the Omnibar to populate the "Use Existing Worktree" dropdown.
   rpc ListWorktrees(ListWorktreesRequest) returns (ListWorktreesResponse) {}
+
+  // ListBranches returns the git branches for a given repository path.
+  // Used by the SessionWizard branch autocomplete field.
+  rpc ListBranches(ListBranchesRequest) returns (ListBranchesResponse) {}
 }
 
 // ListSessionsRequest allows filtering sessions by various criteria.
@@ -1475,4 +1479,24 @@ message WorktreeEntry {
 
 message ListWorktreesResponse {
   repeated WorktreeEntry worktrees = 1;
+}
+
+// ListBranches
+
+message ListBranchesRequest {
+  // Absolute path to the git repository root.
+  string repo_path = 1;
+  // Optional substring filter applied in Go (case-insensitive).
+  string filter = 2;
+  // Maximum number of branches to return (default 200).
+  int32 max_results = 3;
+  // Whether to include remote-tracking branches (default false).
+  bool include_remote = 4;
+}
+
+message ListBranchesResponse {
+  repeated string branches = 1;
+  int32 total_count = 2;
+  // True if the command timed out before all branches were collected.
+  bool truncated = 3;
 }

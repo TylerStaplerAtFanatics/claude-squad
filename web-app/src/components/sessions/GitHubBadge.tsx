@@ -3,6 +3,7 @@
 import {
   badge, compact as compactClass, prBadge, repoBadge,
   prBadgeBlocking, prBadgeReady, prBadgePending, prBadgeDraft, prBadgeComplete,
+  prBadgeError, prBadgeUnknown,
   priorityLabel as priorityLabelClass, icon, text,
 } from "./GitHubBadge.css";
 
@@ -39,7 +40,9 @@ function priorityClass(priority: string | undefined): string {
     case "pending":    return prBadgePending;
     case "draft":      return prBadgeDraft;
     case "complete":   return prBadgeComplete;
-    default:           return ""; // fall back to base prBadge purple
+    case "auth_error":
+    case "error":      return prBadgeError;
+    default:           return prBadgeUnknown; // gray: not yet loaded
   }
 }
 
@@ -52,6 +55,8 @@ function priorityLabel(priority: string | undefined, isDraft?: boolean): string 
     case "pending":    return "Pending";
     case "draft":      return "Draft";
     case "complete":   return "Merged";
+    case "auth_error": return "Auth Error";
+    case "error":      return "Error";
     default:           return "";
   }
 }

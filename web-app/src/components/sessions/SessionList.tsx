@@ -5,7 +5,9 @@ import { AppLink } from "@/components/ui/AppLink";
 import { Session, SessionStatus, CheckpointProto } from "@/gen/session/v1/types_pb";
 import { SessionCard } from "./SessionCard";
 import { BulkActions } from "./BulkActions";
+import { TagEditor } from "./TagEditor";
 import { GroupingStrategy, GroupingStrategyLabels, groupSessions, cycleGroupingStrategy } from "@/lib/grouping/strategies";
+import { ActionBar } from "@/components/ui/ActionBar";
 import {
   container,
   header,
@@ -141,6 +143,8 @@ export function SessionList({
   // Multi-select state for bulk actions
   const [selectMode, setSelectMode] = useState(false);
   const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
+  const [bulkFeedback, setBulkFeedback] = useState<string | null>(null);
+  const [isBulkTagEditing, setIsBulkTagEditing] = useState(false);
 
   // Mobile filter panel toggle
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -290,7 +294,14 @@ export function SessionList({
     }
   };
 
+  const showFeedback = (msg: string) => {
+    setBulkFeedback(msg);
+    setTimeout(() => setBulkFeedback(null), 3000);
+  };
+
+  // Entering selectMode automatically when hovering a card and clicking its checkbox.
   const handleToggleSession = useCallback((sessionId: string) => {
+    setSelectMode(true);
     setSelectedSessions((prev) => {
       const newSelected = new Set(prev);
       if (newSelected.has(sessionId)) {
@@ -309,19 +320,23 @@ export function SessionList({
 
   const handleClearSelection = () => {
     setSelectedSessions(new Set());
+    setSelectMode(false);
   };
 
   const handlePauseSelected = () => {
     if (!onPauseSession) return;
-    selectedSessions.forEach(id => onPauseSession(id));
+    const ids = Array.from(selectedSessions);
+    ids.forEach(id => onPauseSession(id));
+    showFeedback(`${ids.length} session${ids.length !== 1 ? 's' : ''} paused`);
     setSelectedSessions(new Set());
     setSelectMode(false);
   };
 
   const handleResumeSelected = () => {
     if (!onDirectResumeSession && !onResumeSession) return;
+    const ids = Array.from(selectedSessions);
     // Bulk resume bypasses the confirmation modal to avoid opening N modals
-    selectedSessions.forEach(id => {
+    ids.forEach(id => {
       const session = sessions.find(s => s.id === id);
       if (session) {
         if (onDirectResumeSession) {
@@ -331,17 +346,54 @@ export function SessionList({
         }
       }
     });
+    showFeedback(`${ids.length} session${ids.length !== 1 ? 's' : ''} resumed`);
     setSelectedSessions(new Set());
     setSelectMode(false);
   };
 
-  const handleDeleteSelected = () => {
+  const handleStopSelected = () => {
+    if (!onPauseSession) return;
+    const ids = Array.from(selectedSessions);
+    ids.forEach(id => onPauseSession(id));
+    showFeedback(`${ids.length} session${ids.length !== 1 ? 's' : ''} stopped`);
+    setSelectedSessions(new Set());
+    setSelectMode(false);
+  };
+
+  const handleDeleteSelected = async () => {
     if (!onDeleteSession) return;
-    if (window.confirm(`Are you sure you want to delete ${selectedSessions.size} session(s)?`)) {
-      selectedSessions.forEach(id => onDeleteSession(id));
+    if (!window.confirm(`Are you sure you want to delete ${selectedSessions.size} session(s)?`)) return;
+    const ids = Array.from(selectedSessions);
+    const results = await Promise.allSettled(
+      ids.map(id => Promise.resolve(onDeleteSession(id)))
+    );
+    const succeeded = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+    const failedIds = new Set(ids.filter((_, i) => results[i].status === 'rejected'));
+    if (failed > 0) {
+      showFeedback(`${succeeded} deleted, ${failed} failed — failed sessions remain selected`);
+      setSelectedSessions(failedIds);
+    } else {
+      showFeedback(`${succeeded} session${succeeded !== 1 ? 's' : ''} deleted`);
       setSelectedSessions(new Set());
       setSelectMode(false);
     }
+  };
+
+  const handleBulkAddTag = () => {
+    setIsBulkTagEditing(true);
+  };
+
+  const handleBulkTagSave = (newTags: string[]) => {
+    if (newTags.length > 0 && onUpdateTags) {
+      selectedSessions.forEach(id => {
+        const session = sessions.find(s => s.id === id);
+        const merged = Array.from(new Set([...(session?.tags ?? []), ...newTags]));
+        onUpdateTags(id, merged);
+      });
+      showFeedback(`Added ${newTags.length} tag${newTags.length !== 1 ? 's' : ''} to ${selectedSessions.size} session${selectedSessions.size !== 1 ? 's' : ''}`);
+    }
+    setIsBulkTagEditing(false);
   };
 
   return (
@@ -390,7 +442,10 @@ export function SessionList({
           </div>
 
           {/* Collapsible filter controls */}
-          <div
+          <ActionBar
+            scroll
+            compact
+            gap="sm"
             id="session-filter-controls"
             className={`${filterControls} ${filtersOpen ? filterControlsOpen : ""}`}
           >
@@ -493,20 +548,33 @@ export function SessionList({
             >
               {sortDir === 'asc' ? '↑' : '↓'}
             </button>
-          </div>
+          </ActionBar>
         </div>
       </div>
 
-      {/* Bulk actions bar */}
-      {selectMode && selectedSessions.size > 0 && (
+      {/* Bulk actions bar — BulkActions renders null when selectedCount === 0 */}
+      {selectMode && (
         <BulkActions
           selectedCount={selectedSessions.size}
           totalCount={filteredSessions.length}
           onPauseAll={handlePauseSelected}
           onResumeAll={handleResumeSelected}
+          onStopAll={handleStopSelected}
           onDeleteAll={handleDeleteSelected}
+          onAddTagAll={handleBulkAddTag}
           onSelectAll={handleSelectAll}
           onClearSelection={handleClearSelection}
+          feedback={bulkFeedback}
+        />
+      )}
+
+      {/* Bulk tag editor modal */}
+      {isBulkTagEditing && (
+        <TagEditor
+          tags={[]}
+          onSave={handleBulkTagSave}
+          onCancel={() => setIsBulkTagEditing(false)}
+          sessionTitle={`${selectedSessions.size} selected session${selectedSessions.size !== 1 ? 's' : ''}`}
         />
       )}
 

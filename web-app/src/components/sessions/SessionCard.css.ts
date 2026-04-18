@@ -102,6 +102,22 @@ export const title = style({
   },
 });
 
+export const inlineTitleInput = style({
+  margin: 0,
+  fontSize: "1.125rem",
+  fontWeight: 600,
+  color: vars.color.textPrimary,
+  background: vars.color.hoverBackground,
+  border: `1px solid ${vars.color.primary}`,
+  borderRadius: vars.radii.sm,
+  padding: "2px 6px",
+  outline: "none",
+  width: "100%",
+  "@media": {
+    "(max-width: 768px)": { fontSize: "1rem" },
+  },
+});
+
 export const badges = style({
   display: "flex",
   alignItems: "center",

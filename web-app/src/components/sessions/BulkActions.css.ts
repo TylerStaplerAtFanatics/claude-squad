@@ -122,3 +122,9 @@ export const danger = style({
     },
   },
 });
+
+export const feedback = style({
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+  marginBottom: "0.5rem",
+});

@@ -1,4 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
+import bulkSelectionReducer from "../bulkSelectionSlice";
 import sessionsReducer from "../sessionsSlice";
 import reviewQueueReducer, {
   setReviewQueue,
@@ -17,7 +18,7 @@ import { create } from "@bufbuild/protobuf";
 
 function makeStore() {
   return configureStore({
-    reducer: { reviewQueue: reviewQueueReducer, sessions: sessionsReducer },
+    reducer: { bulkSelection: bulkSelectionReducer, reviewQueue: reviewQueueReducer, sessions: sessionsReducer },
     middleware: (getDefault) => getDefault({ serializableCheck: false }),
   });
 }
