@@ -296,7 +296,7 @@ export default function EscapeCodesTestPage() {
                     onClick={(e) => e.stopPropagation()}
                   />
                   <span className={styles.codeTitle}>{code.humanReadable}</span>
-                  <span className={`${styles.priority} ${styles[code.priority]}`}>
+                  <span className={`${styles.priority} ${(styles as Record<string, string>)[code.priority] ?? ""}`}>
                     {code.priority}
                   </span>
                 </div>
