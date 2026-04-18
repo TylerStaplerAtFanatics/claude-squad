@@ -1,4 +1,4 @@
-import { style, keyframes } from "@vanilla-extract/css";
+import { style, keyframes, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 const queueFadeIn = keyframes({
@@ -335,10 +335,9 @@ export const empty = style({
   padding: "40px 20px",
   textAlign: "center",
   color: vars.color.textSecondary,
-  selectors: {
-    "& p": { margin: 0, fontSize: "16px" },
-  },
 });
+
+globalStyle(`${empty} p`, { margin: 0, fontSize: "16px" });
 
 export const error = style({
   display: "flex",

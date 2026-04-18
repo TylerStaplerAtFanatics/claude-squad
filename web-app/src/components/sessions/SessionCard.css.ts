@@ -1,4 +1,4 @@
-import { style, keyframes } from "@vanilla-extract/css";
+import { style, keyframes, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 const cardFadeSlideIn = keyframes({
@@ -72,14 +72,9 @@ export const checkbox = style({
   left: vars.space["4"],
   top: "50%",
   transform: "translateY(-50%)",
-  selectors: {
-    "& input[type='checkbox']": {
-      width: "20px",
-      height: "20px",
-      cursor: "pointer",
-    },
-  },
 });
+
+globalStyle(`${checkbox} input[type='checkbox']`, { width: "20px", height: "20px", cursor: "pointer" });
 
 export const header = style({
   marginBottom: vars.space["3"],
@@ -539,19 +534,10 @@ export const dialogContent = style({
   animationName: slideUp,
   animationDuration: "0.3s",
   animationTimingFunction: "ease",
-  selectors: {
-    "& h3": {
-      margin: `0 0 ${vars.space["4"]} 0`,
-      color: vars.color.textPrimary,
-      fontSize: "1.25rem",
-    },
-    "& p": {
-      margin: `${vars.space["3"]} 0`,
-      color: vars.color.textSecondary,
-      fontSize: "0.875rem",
-    },
-  },
 });
+
+globalStyle(`${dialogContent} h3`, { margin: `0 0 ${vars.space["4"]} 0`, color: vars.color.textPrimary, fontSize: "1.25rem" });
+globalStyle(`${dialogContent} p`, { margin: `${vars.space["3"]} 0`, color: vars.color.textSecondary, fontSize: "0.875rem" });
 
 export const warningText = style({
   color: `${vars.color.error} !important` as string,

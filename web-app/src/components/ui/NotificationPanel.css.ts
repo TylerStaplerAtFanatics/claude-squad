@@ -1,4 +1,4 @@
-import { style, keyframes } from "@vanilla-extract/css";
+import { style, keyframes, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 const fadeIn = keyframes({
@@ -229,15 +229,14 @@ export const itemTitle = style({
   flexWrap: "wrap",
   flex: 1,
   minWidth: 0,
-  selectors: {
-    "& strong": {
-      whiteSpace: "nowrap",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      flex: "0 1 auto",
-      minWidth: 0,
-    },
-  },
+});
+
+globalStyle(`${itemTitle} strong`, {
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  flex: "0 1 auto",
+  minWidth: 0,
 });
 
 export const typeIcon = style({

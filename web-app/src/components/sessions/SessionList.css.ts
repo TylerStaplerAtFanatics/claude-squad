@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { style, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const container = style({
@@ -232,7 +232,6 @@ export const checkboxLabel = style({
   transition: "border-color 0.2s ease",
   selectors: {
     "&:hover": { borderColor: vars.color.inputFocusBorder },
-    "& input[type='checkbox']": { cursor: "pointer" },
   },
   "@media": {
     "(max-width: 768px)": {
@@ -241,6 +240,8 @@ export const checkboxLabel = style({
     },
   },
 });
+
+globalStyle(`${checkboxLabel} input[type='checkbox']`, { cursor: "pointer" });
 
 export const sessionList = style({
   display: "flex",
@@ -279,10 +280,9 @@ export const empty = style({
   padding: "48px 24px",
   textAlign: "center",
   color: vars.color.textSecondary,
-  selectors: {
-    "& p": { margin: `0 0 ${vars.space["4"]} 0`, fontSize: "1rem" },
-  },
 });
+
+globalStyle(`${empty} p`, { margin: `0 0 ${vars.space["4"]} 0`, fontSize: "1rem" });
 
 export const clearButton = style({
   padding: `10px 24px`,
