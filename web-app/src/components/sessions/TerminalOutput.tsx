@@ -314,6 +314,11 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     return () => {
       isMountedRef.current = false;
 
+      if (pasteErrorTimerRef.current) {
+        clearTimeout(pasteErrorTimerRef.current);
+        pasteErrorTimerRef.current = null;
+      }
+
       if (sizeStabilityTimeoutRef.current) {
         clearTimeout(sizeStabilityTimeoutRef.current);
         sizeStabilityTimeoutRef.current = null;
@@ -637,7 +642,8 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
               reader.onerror = reject;
               reader.readAsDataURL(blob);
             });
-            const resp = await fetch('/api/upload/image', {
+            const uploadUrl = `${baseUrl}/upload/image`;
+            const resp = await fetch(uploadUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ data: base64, contentType: imageType }),
@@ -645,6 +651,12 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
             if (resp.ok) {
               const { path } = await resp.json();
               handleTerminalData(path);
+            } else {
+              const msg = await resp.text().catch(() => `HTTP ${resp.status}`);
+              console.warn('[TerminalOutput] Image upload failed:', msg);
+              if (pasteErrorTimerRef.current) clearTimeout(pasteErrorTimerRef.current);
+              setPasteError('Upload failed');
+              pasteErrorTimerRef.current = setTimeout(() => setPasteError(null), 2500);
             }
             return;
           }

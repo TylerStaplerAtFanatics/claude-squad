@@ -48,8 +48,8 @@ func TestHandleUpload_ValidPNG(t *testing.T) {
 	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if !strings.HasSuffix(resp.Path, ".png") {
-		t.Errorf("expected .png extension, got %q", resp.Path)
+	if !strings.HasSuffix(resp.Path, ".png") || !strings.Contains(resp.Path, "paste-") {
+		t.Errorf("expected paste-*.png path, got %q", resp.Path)
 	}
 	if _, err := os.Stat(resp.Path); err != nil {
 		t.Errorf("saved file not found: %v", err)
@@ -98,18 +98,20 @@ func TestHandleUpload_InvalidJSON(t *testing.T) {
 
 func TestHandleUpload_ContentTypeExtensions(t *testing.T) {
 	cases := []struct {
-		ct  string
-		ext string
+		name string
+		ct   string
+		ext  string
 	}{
-		{"image/jpeg", ".jpg"},
-		{"image/jpg", ".jpg"},
-		{"image/gif", ".gif"},
-		{"image/webp", ".webp"},
-		{"image/bmp", ".png"}, // unknown → default .png
-		{"", ".png"},
+		{"jpeg", "image/jpeg", ".jpg"},
+		{"jpg", "image/jpg", ".jpg"},
+		{"gif", "image/gif", ".gif"},
+		{"webp", "image/webp", ".webp"},
+		{"png", "image/png", ".png"},
+		{"unknown_bmp", "image/bmp", ""},  // unknown → empty (rejected by handler)
+		{"empty", "", ""},                  // empty → empty (rejected by handler)
 	}
 	for _, tc := range cases {
-		t.Run(tc.ct, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			got := extensionFor(tc.ct)
 			if got != tc.ext {
 				t.Errorf("extensionFor(%q) = %q, want %q", tc.ct, got, tc.ext)
