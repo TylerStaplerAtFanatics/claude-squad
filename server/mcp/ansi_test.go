@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	crand "crypto/rand"
 	"math/rand"
 	"testing"
 	"unicode/utf8"
@@ -150,7 +151,7 @@ func TestANSIStripNeverPanics(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		size := rand.Intn(256)
 		buf := make([]byte, size)
-		rand.Read(buf) //nolint:gosec
+		_, _ = crand.Read(buf)
 		result := stripANSI(buf)
 		if !utf8.Valid(result) {
 			t.Errorf("iteration %d: result is not valid UTF-8", i)

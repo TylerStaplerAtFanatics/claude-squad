@@ -20,7 +20,7 @@ func TestReadOutputLineCap(t *testing.T) {
 	// Populate 250 lines.
 	var buf strings.Builder
 	for i := 0; i < 250; i++ {
-		buf.WriteString(fmt.Sprintf("line %d\n", i))
+		fmt.Fprintf(&buf, "line %d\n", i)
 	}
 	if err := mgr.AppendOutput(sessionID, []byte(buf.String())); err != nil {
 		t.Fatalf("AppendOutput: %v", err)

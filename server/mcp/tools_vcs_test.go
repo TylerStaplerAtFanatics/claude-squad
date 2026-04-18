@@ -63,7 +63,7 @@ func TestGetSessionDiff(t *testing.T) {
 	// because the test only checks response structure, not diff content.
 	var added strings.Builder
 	for i := 0; i < 10; i++ {
-		added.WriteString(fmt.Sprintf("line %d\n", i))
+		fmt.Fprintf(&added, "line %d\n", i)
 	}
 	writeFile(t, repoDir, "newfile.go", added.String())
 	_ = exec.Command("git", "-C", repoDir, "add", "-N", ".").Run()
@@ -97,7 +97,7 @@ func TestGetSessionDiffTruncation(t *testing.T) {
 	// Create a large staged file so there is content to diff.
 	var large strings.Builder
 	for i := 0; i < 1000; i++ {
-		large.WriteString(fmt.Sprintf("this is a long line number %d with extra content to exceed byte cap\n", i))
+		fmt.Fprintf(&large, "this is a long line number %d with extra content to exceed byte cap\n", i)
 	}
 	writeFile(t, repoDir, "large.go", large.String())
 	// Stage and commit so we have a base; then add more content to diff against it.
