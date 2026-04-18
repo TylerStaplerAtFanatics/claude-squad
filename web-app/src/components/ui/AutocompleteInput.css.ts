@@ -1,37 +1,40 @@
-import { style } from "@vanilla-extract/css";
+import { style, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const container = style({
   position: "relative",
   width: "100%",
-  selectors: {
-    "& input": {
-      width: "100%",
-      padding: "0.625rem 0.875rem",
-      border: `1px solid ${vars.color.borderColor}`,
-      borderRadius: "6px",
-      fontSize: "0.9375rem",
-      transition: "border-color 0.2s, box-shadow 0.2s",
-      background: vars.color.inputBackground,
-      color: vars.color.textPrimary,
-    },
-    "& input:focus": {
-      outline: "none",
-      borderColor: vars.color.primary,
-      boxShadow: "0 0 0 3px rgba(0, 112, 243, 0.1)",
-    },
-    "& input.error": {
-      borderColor: vars.color.error,
-    },
-    "& input.error:focus": {
-      boxShadow: "0 0 0 3px rgba(239, 68, 68, 0.1)",
-    },
-    "& input:disabled": {
-      opacity: 0.6,
-      cursor: "not-allowed",
-      background: vars.color.surfaceMuted,
-    },
-  },
+});
+
+globalStyle(`${container} input`, {
+  width: "100%",
+  padding: "0.625rem 0.875rem",
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: "6px",
+  fontSize: "0.9375rem",
+  transition: "border-color 0.2s, box-shadow 0.2s",
+  background: vars.color.inputBackground,
+  color: vars.color.textPrimary,
+});
+
+globalStyle(`${container} input:focus`, {
+  outline: "none",
+  borderColor: vars.color.primary,
+  boxShadow: "0 0 0 3px rgba(0, 112, 243, 0.1)",
+});
+
+globalStyle(`${container} input.error`, {
+  borderColor: vars.color.error,
+});
+
+globalStyle(`${container} input.error:focus`, {
+  boxShadow: "0 0 0 3px rgba(239, 68, 68, 0.1)",
+});
+
+globalStyle(`${container} input:disabled`, {
+  opacity: 0.6,
+  cursor: "not-allowed",
+  background: vars.color.surfaceMuted,
 });
 
 export const error = style({

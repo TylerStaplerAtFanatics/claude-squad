@@ -1,24 +1,18 @@
-import { style } from "@vanilla-extract/css";
+import { style, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const step = style({
   display: "flex",
   flexDirection: "column",
   gap: "1.5rem",
-  selectors: {
-    "& h2": {
-      margin: 0,
-      fontSize: "1.5rem",
-      fontWeight: 600,
-      color: vars.color.textPrimary,
-    },
-  },
   "@media": {
     "screen and (max-width: 768px)": {
       gap: "1.25rem",
     },
   },
 });
+
+globalStyle(`${step} h2`, { margin: 0, fontSize: "1.5rem", fontWeight: 600, color: vars.color.textPrimary });
 
 export const description = style({
   margin: 0,
@@ -35,76 +29,85 @@ export const field = style({
   display: "flex",
   flexDirection: "column",
   gap: "0.5rem",
-  selectors: {
-    "& label": {
-      fontWeight: 500,
-      fontSize: "0.9375rem",
-      color: vars.color.textPrimary,
-    },
-    '& input[type="text"]': {
-      padding: "0.625rem 0.875rem",
-      border: `1px solid ${vars.color.borderColor}`,
-      borderRadius: "6px",
-      fontSize: "0.9375rem",
-      transition: "border-color 0.2s, box-shadow 0.2s",
-      background: vars.color.inputBackground,
-      color: vars.color.textPrimary,
-    },
-    '& input[type="number"]': {
-      padding: "0.625rem 0.875rem",
-      border: `1px solid ${vars.color.borderColor}`,
-      borderRadius: "6px",
-      fontSize: "0.9375rem",
-      transition: "border-color 0.2s, box-shadow 0.2s",
-      background: vars.color.inputBackground,
-      color: vars.color.textPrimary,
-    },
-    "& select": {
-      padding: "0.625rem 0.875rem",
-      border: `1px solid ${vars.color.borderColor}`,
-      borderRadius: "6px",
-      fontSize: "0.9375rem",
-      transition: "border-color 0.2s, box-shadow 0.2s",
-      background: vars.color.inputBackground,
-      color: vars.color.textPrimary,
-    },
-    "& textarea": {
-      padding: "0.625rem 0.875rem",
-      border: `1px solid ${vars.color.borderColor}`,
-      borderRadius: "6px",
-      fontSize: "0.9375rem",
-      transition: "border-color 0.2s, box-shadow 0.2s",
-      background: vars.color.inputBackground,
-      color: vars.color.textPrimary,
-    },
-    '& input[type="text"]::placeholder': {
-      color: vars.color.placeholderColor,
-      opacity: 1,
-    },
-    '& input[type="number"]::placeholder': {
-      color: vars.color.placeholderColor,
-      opacity: 1,
-    },
-    "& textarea::placeholder": {
-      color: vars.color.placeholderColor,
-      opacity: 1,
-    },
-    "& input:focus": {
-      outline: "none",
-      borderColor: vars.color.primary,
-      boxShadow: "0 0 0 3px rgba(0, 112, 243, 0.1)",
-    },
-    "& select:focus": {
-      outline: "none",
-      borderColor: vars.color.primary,
-      boxShadow: "0 0 0 3px rgba(0, 112, 243, 0.1)",
-    },
-    "& textarea:focus": {
-      outline: "none",
-      borderColor: vars.color.primary,
-      boxShadow: "0 0 0 3px rgba(0, 112, 243, 0.1)",
-    },
-  },
+});
+
+globalStyle(`${field} label`, {
+  fontWeight: 500,
+  fontSize: "0.9375rem",
+  color: vars.color.textPrimary,
+});
+
+globalStyle(`${field} input[type="text"]`, {
+  padding: "0.625rem 0.875rem",
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: "6px",
+  fontSize: "0.9375rem",
+  transition: "border-color 0.2s, box-shadow 0.2s",
+  background: vars.color.inputBackground,
+  color: vars.color.textPrimary,
+});
+
+globalStyle(`${field} input[type="number"]`, {
+  padding: "0.625rem 0.875rem",
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: "6px",
+  fontSize: "0.9375rem",
+  transition: "border-color 0.2s, box-shadow 0.2s",
+  background: vars.color.inputBackground,
+  color: vars.color.textPrimary,
+});
+
+globalStyle(`${field} select`, {
+  padding: "0.625rem 0.875rem",
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: "6px",
+  fontSize: "0.9375rem",
+  transition: "border-color 0.2s, box-shadow 0.2s",
+  background: vars.color.inputBackground,
+  color: vars.color.textPrimary,
+});
+
+globalStyle(`${field} textarea`, {
+  padding: "0.625rem 0.875rem",
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: "6px",
+  fontSize: "0.9375rem",
+  transition: "border-color 0.2s, box-shadow 0.2s",
+  background: vars.color.inputBackground,
+  color: vars.color.textPrimary,
+});
+
+globalStyle(`${field} input[type="text"]::placeholder`, {
+  color: vars.color.placeholderColor,
+  opacity: 1,
+});
+
+globalStyle(`${field} input[type="number"]::placeholder`, {
+  color: vars.color.placeholderColor,
+  opacity: 1,
+});
+
+globalStyle(`${field} textarea::placeholder`, {
+  color: vars.color.placeholderColor,
+  opacity: 1,
+});
+
+globalStyle(`${field} input:focus`, {
+  outline: "none",
+  borderColor: vars.color.primary,
+  boxShadow: "0 0 0 3px rgba(0, 112, 243, 0.1)",
+});
+
+globalStyle(`${field} select:focus`, {
+  outline: "none",
+  borderColor: vars.color.primary,
+  boxShadow: "0 0 0 3px rgba(0, 112, 243, 0.1)",
+});
+
+globalStyle(`${field} textarea:focus`, {
+  outline: "none",
+  borderColor: vars.color.primary,
+  boxShadow: "0 0 0 3px rgba(0, 112, 243, 0.1)",
 });
 
 export const required = style({
@@ -135,18 +138,15 @@ export const checkbox = style({
   alignItems: "center",
   gap: "0.625rem",
   cursor: "pointer",
-  selectors: {
-    '& input[type="checkbox"]': {
-      width: "1.125rem",
-      height: "1.125rem",
-      cursor: "pointer",
-    },
-    "& span": {
-      fontWeight: 500,
-      color: vars.color.textPrimary,
-    },
-  },
 });
+
+globalStyle(`${checkbox} input[type="checkbox"]`, {
+  width: "1.125rem",
+  height: "1.125rem",
+  cursor: "pointer",
+});
+
+globalStyle(`${checkbox} span`, { fontWeight: 500, color: vars.color.textPrimary });
 
 export const branchPreview = style({
   display: "flex",
@@ -243,16 +243,15 @@ export const reviewSection = style({
   background: vars.color.surfaceSubtle,
   borderRadius: "8px",
   border: `1px solid ${vars.color.borderColor}`,
-  selectors: {
-    "& h3": {
-      margin: 0,
-      fontSize: "1rem",
-      fontWeight: 600,
-      color: vars.color.textPrimary,
-      paddingBottom: "0.5rem",
-      borderBottom: `1px solid ${vars.color.borderColor}`,
-    },
-  },
+});
+
+globalStyle(`${reviewSection} h3`, {
+  margin: 0,
+  fontSize: "1rem",
+  fontWeight: 600,
+  color: vars.color.textPrimary,
+  paddingBottom: "0.5rem",
+  borderBottom: `1px solid ${vars.color.borderColor}`,
 });
 
 export const reviewItem = style({
@@ -285,12 +284,9 @@ export const submitError = style({
   color: vars.color.errorDark,
   fontSize: "0.9375rem",
   marginTop: "1rem",
-  selectors: {
-    "& strong": {
-      fontWeight: 600,
-    },
-  },
 });
+
+globalStyle(`${submitError} strong`, { fontWeight: 600 });
 
 export const defaultsNotice = style({
   display: "inline-block",
@@ -334,14 +330,13 @@ export const modalContent = style({
   display: "flex",
   flexDirection: "column",
   gap: "1rem",
-  selectors: {
-    "& h3": {
-      margin: 0,
-      fontSize: "1.25rem",
-      fontWeight: 600,
-      color: vars.color.textPrimary,
-    },
-  },
+});
+
+globalStyle(`${modalContent} h3`, {
+  margin: 0,
+  fontSize: "1.25rem",
+  fontWeight: 600,
+  color: vars.color.textPrimary,
 });
 
 export const modalActions = style({

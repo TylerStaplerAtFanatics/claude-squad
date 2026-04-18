@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { style, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const container = style({
@@ -82,23 +82,23 @@ export const tableWrapper = style({
 export const table = style({
   width: "100%",
   borderCollapse: "collapse",
-  selectors: {
-    "& thead": {
-      position: "sticky",
-      top: 0,
-      backgroundColor: "#1a1a1a",
-      zIndex: 1,
-    },
-    "& th": {
-      padding: "0.5rem 0.75rem",
-      textAlign: "left",
-      borderBottom: "1px solid #333",
-      fontWeight: 600,
-      color: "#999",
-      textTransform: "uppercase",
-      fontSize: "0.75rem",
-    },
-  },
+});
+
+globalStyle(`${table} thead`, {
+  position: "sticky",
+  top: 0,
+  backgroundColor: "#1a1a1a",
+  zIndex: 1,
+});
+
+globalStyle(`${table} th`, {
+  padding: "0.5rem 0.75rem",
+  textAlign: "left",
+  borderBottom: "1px solid #333",
+  fontWeight: 600,
+  color: "#999",
+  textTransform: "uppercase",
+  fontSize: "0.75rem",
 });
 
 export const colTimestamp = style({ width: "130px" });

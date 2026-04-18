@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { style, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const container = style({
@@ -131,12 +131,13 @@ export const errorBlock = style({
     "&:last-child": {
       marginBottom: 0,
     },
-    "& strong": {
-      display: "block",
-      marginBottom: "0.5rem",
-      color: vars.color.textPrimary,
-    },
   },
+});
+
+globalStyle(`${errorBlock} strong`, {
+  display: "block",
+  marginBottom: "0.5rem",
+  color: vars.color.textPrimary,
 });
 
 export const errorText = style({

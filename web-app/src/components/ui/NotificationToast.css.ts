@@ -1,4 +1,4 @@
-import { style, keyframes } from "@vanilla-extract/css";
+import { style, keyframes, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 const ring = keyframes({
@@ -133,20 +133,21 @@ export const titleRow = style({
   alignItems: "center",
   gap: "8px",
   selectors: {
-    "& strong": {
-      fontSize: "15px",
-      fontWeight: 600,
-      color: vars.color.textPrimary,
-      whiteSpace: "nowrap",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      flex: 1,
-      minWidth: 0,
-    },
     [`${minimized} & strong`]: {
       fontSize: "13px",
     },
   },
+});
+
+globalStyle(`${titleRow} strong`, {
+  fontSize: "15px",
+  fontWeight: 600,
+  color: vars.color.textPrimary,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  flex: 1,
+  minWidth: 0,
 });
 
 export const typeLabel = style({
