@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	maxImageBytes  = 20 * 1024 * 1024 // 20 MB
-	imageFileMode  = 0o600             // owner read/write only — clipboard images are private
-	pasteDirMode   = 0o700             // owner access only
+	maxImageBytes   = 20 * 1024 * 1024 // 20 MB
+	imageFileMode   = 0o600            // owner read/write only — clipboard images are private
+	pasteDirMode    = 0o700            // owner access only
 	maxPasteFileAge = 24 * time.Hour   // evict files older than this at startup
 )
 
