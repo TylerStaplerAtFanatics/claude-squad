@@ -8,6 +8,10 @@ claude-mux
 cs
 stapler-squad-test
 
+# Override global gitignore: track source files in directories named "logs"
+!web-app/src/**/logs/
+!web-app/src/**/logs/**
+
 # Generated protocol buffer code
 gen/
 web/src/gen/
