@@ -1,4 +1,4 @@
-import { style, keyframes } from "@vanilla-extract/css";
+import { style, keyframes, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 const pulse = keyframes({
@@ -153,11 +153,13 @@ export const workspaceItem = style({
     [`&:not(.${workspaceItemCurrent}):not(.${workspaceItemLoading}):hover`]: {
       background: vars.color.hoverBackground,
     },
-    [`&:not(.${workspaceItemCurrent}):not(.${workspaceItemLoading}):hover .${mergeButton}`]: {
-      opacity: 1,
-    },
   },
 });
+
+globalStyle(
+  `.${workspaceItem}:not(.${workspaceItemCurrent}):not(.${workspaceItemLoading}):hover .${mergeButton}`,
+  { opacity: 1 },
+);
 
 export const workspaceItemMain = style({
   display: "flex",

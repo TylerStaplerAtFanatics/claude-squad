@@ -130,6 +130,21 @@ export const items = style({
   padding: "4px 0",
 });
 
+export const item = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  padding: "8px 12px",
+  cursor: "pointer",
+  transition: "background-color 0.15s ease",
+
+  selectors: {
+    "&:hover": {
+      backgroundColor: vars.color.hoverBackground,
+    },
+  },
+});
+
 export const removeButton = style({
   display: "flex",
   alignItems: "center",
@@ -149,22 +164,7 @@ export const removeButton = style({
     "&:hover": {
       color: vars.color.error,
     },
-  },
-});
-
-export const item = style({
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  padding: "8px 12px",
-  cursor: "pointer",
-  transition: "background-color 0.15s ease",
-
-  selectors: {
-    "&:hover": {
-      backgroundColor: vars.color.hoverBackground,
-    },
-    [`&:hover .${removeButton}`]: {
+    [`${item}:hover &`]: {
       opacity: 1,
     },
   },
