@@ -2,7 +2,34 @@
 
 import { useState, useMemo } from "react";
 import { useSessionVcsContext } from "@/lib/contexts/SessionVcsContext";
-import styles from "./DiffViewer.module.css";
+import {
+  container,
+  toolbar,
+  stats,
+  filesChanged,
+  additions,
+  deletions,
+  viewModeToggle,
+  viewModeButton,
+  viewModeButtonActive,
+  diffContent,
+  file,
+  fileHeader,
+  filename,
+  fileStats,
+  hunk,
+  hunkHeader,
+  lines,
+  line,
+  lineAdd,
+  lineDelete,
+  lineContext,
+  lineNumber,
+  lineContent,
+  loading as loadingClass,
+  empty as emptyClass,
+  emptyHint,
+} from "./DiffViewer.css";
 
 interface DiffViewerProps {
   // Props kept for backward compatibility but data now comes from SessionVcsContext.
@@ -134,20 +161,26 @@ export function DiffViewer(_props: DiffViewerProps) {
   const totalAdditions = rawDiff?.added ?? 0;
   const totalDeletions = rawDiff?.removed ?? 0;
 
+  const getLineClass = (type: DiffLine["type"]): string => {
+    if (type === "add") return lineAdd;
+    if (type === "delete") return lineDelete;
+    return lineContext;
+  };
+
   if (loading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.loading}>Loading diff...</div>
+      <div className={container}>
+        <div className={loadingClass}>Loading diff...</div>
       </div>
     );
   }
 
   if (diff.length === 0 && !loading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.empty}>
+      <div className={container}>
+        <div className={emptyClass}>
           <p>No changes to display</p>
-          <p className={styles.emptyHint}>
+          <p className={emptyHint}>
             Diff will show here when there are uncommitted changes in the session.
           </p>
         </div>
@@ -156,32 +189,28 @@ export function DiffViewer(_props: DiffViewerProps) {
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.toolbar}>
-        <div className={styles.stats}>
-          <span className={styles.filesChanged}>
+    <div className={container}>
+      <div className={toolbar}>
+        <div className={stats}>
+          <span className={filesChanged}>
             {diff.length} {diff.length === 1 ? "file" : "files"} changed
           </span>
-          <span className={styles.additions}>+{totalAdditions}</span>
-          <span className={styles.deletions}>-{totalDeletions}</span>
+          <span className={additions}>+{totalAdditions}</span>
+          <span className={deletions}>-{totalDeletions}</span>
         </div>
-        <button className={styles.viewModeButton} onClick={refreshDiff} title="Refresh diff">
+        <button className={viewModeButton} onClick={refreshDiff} title="Refresh diff">
           ↺
         </button>
-        <div className={styles.viewModeToggle}>
+        <div className={viewModeToggle}>
           <button
-            className={`${styles.viewModeButton} ${
-              viewMode === "unified" ? styles.active : ""
-            }`}
+            className={`${viewModeButton} ${viewMode === "unified" ? viewModeButtonActive : ""}`}
             onClick={() => setViewMode("unified")}
             aria-label="Unified diff view"
           >
             Unified
           </button>
           <button
-            className={`${styles.viewModeButton} ${
-              viewMode === "split" ? styles.active : ""
-            }`}
+            className={`${viewModeButton} ${viewMode === "split" ? viewModeButtonActive : ""}`}
             onClick={() => setViewMode("split")}
             disabled
             title="Split view coming soon"
@@ -192,40 +221,40 @@ export function DiffViewer(_props: DiffViewerProps) {
         </div>
       </div>
 
-      <div className={styles.diffContent}>
-        {diff.map((file, fileIndex) => (
-          <div key={fileIndex} className={styles.file}>
-            <div className={styles.fileHeader}>
-              <span className={styles.filename}>{file.filename}</span>
-              <span className={styles.fileStats}>
-                <span className={styles.additions}>+{file.additions}</span>
-                <span className={styles.deletions}>-{file.deletions}</span>
+      <div className={diffContent}>
+        {diff.map((diffFile, fileIndex) => (
+          <div key={fileIndex} className={file}>
+            <div className={fileHeader}>
+              <span className={filename}>{diffFile.filename}</span>
+              <span className={fileStats}>
+                <span className={additions}>+{diffFile.additions}</span>
+                <span className={deletions}>-{diffFile.deletions}</span>
               </span>
             </div>
 
-            {file.changes.map((hunk, hunkIndex) => (
-              <div key={hunkIndex} className={styles.hunk}>
-                <div className={styles.hunkHeader}>
-                  @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},
-                  {hunk.newLines} @@
+            {diffFile.changes.map((diffHunk, hunkIndex) => (
+              <div key={hunkIndex} className={hunk}>
+                <div className={hunkHeader}>
+                  @@ -{diffHunk.oldStart},{diffHunk.oldLines} +{diffHunk.newStart},
+                  {diffHunk.newLines} @@
                 </div>
-                <div className={styles.lines}>
-                  {hunk.lines.map((line, lineIndex) => (
+                <div className={lines}>
+                  {diffHunk.lines.map((diffLine, lineIndex) => (
                     <div
                       key={lineIndex}
-                      className={`${styles.line} ${styles[line.type]}`}
+                      className={`${line} ${getLineClass(diffLine.type)}`}
                     >
                       {viewMode === "unified" && (
                         <>
-                          <span className={styles.lineNumber}>
-                            {line.oldLineNumber !== undefined ? line.oldLineNumber : " "}
+                          <span className={lineNumber}>
+                            {diffLine.oldLineNumber !== undefined ? diffLine.oldLineNumber : " "}
                           </span>
-                          <span className={styles.lineNumber}>
-                            {line.newLineNumber !== undefined ? line.newLineNumber : " "}
+                          <span className={lineNumber}>
+                            {diffLine.newLineNumber !== undefined ? diffLine.newLineNumber : " "}
                           </span>
                         </>
                       )}
-                      <span className={styles.lineContent}>{line.content}</span>
+                      <span className={lineContent}>{diffLine.content}</span>
                     </div>
                   ))}
                 </div>

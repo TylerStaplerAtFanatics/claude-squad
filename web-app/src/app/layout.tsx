@@ -5,6 +5,8 @@ import { AuthProvider } from "@/lib/contexts/AuthContext";
 import { Providers } from "./Providers";
 import { NotificationPanel } from "@/components/ui/NotificationPanel";
 import { ViewportProvider } from "@/components/providers/ViewportProvider";
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { lightTheme } from "@/styles/theme.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,19 +27,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={lightTheme} suppressHydrationWarning>
       <body>
-        <ViewportProvider />
-        <ErrorBoundary>
-          <AuthProvider>
-            <Providers>
-              <a href="#main-content" className="skip-link">Skip to main content</a>
-              <ConditionalHeader />
-              {children}
-              <NotificationPanel />
-            </Providers>
-          </AuthProvider>
-        </ErrorBoundary>
+        <ThemeProvider />
+        <ViewportProvider>
+          <ErrorBoundary>
+            <AuthProvider>
+              <Providers>
+                <a href="#main-content" className="skip-link">Skip to main content</a>
+                <ConditionalHeader />
+                {children}
+                <NotificationPanel />
+              </Providers>
+            </AuthProvider>
+          </ErrorBoundary>
+        </ViewportProvider>
       </body>
     </html>
   );

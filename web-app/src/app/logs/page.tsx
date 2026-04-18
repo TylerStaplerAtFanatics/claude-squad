@@ -18,7 +18,7 @@ import { SearchWithHistory } from "@/components/logs/SearchWithHistory";
 import { DensityToggle, type LogDensity } from "@/components/logs/DensityToggle";
 import { useLiveTail } from "@/lib/hooks/useLiveTail";
 import { ActionBar } from "@/components/ui/ActionBar";
-import styles from "./page.module.css";
+import * as styles from "./page.css";
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -459,7 +459,7 @@ export default function LogsPage() {
           aria-label="Log entries"
           aria-live="polite"
         >
-          <table className={`${styles.logsTable} ${styles[`density${density.charAt(0).toUpperCase()}${density.slice(1)}`]}`}>
+          <table className={`${styles.logsTable} ${(styles as Record<string, string>)[`density${density.charAt(0).toUpperCase()}${density.slice(1)}`] ?? ""}`}>
             <thead>
               <tr>
                 <th className={styles.expandColumn} aria-label="Expand"></th>

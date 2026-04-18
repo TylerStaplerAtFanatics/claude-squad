@@ -14,7 +14,7 @@ import {
 import { useHistoryFullTextSearch, SearchResultItem } from "@/lib/hooks/useHistoryFullTextSearch";
 import { useHistoryFilters, GroupingStrategyLabels } from "@/lib/hooks/useHistoryFilters";
 import { useHistoryGrouping } from "@/lib/hooks/useHistoryGrouping";
-import styles from "./history.module.css";
+import * as styles from "./history.css";
 
 export default function HistoryBrowserPage() {
   const router = useRouter();

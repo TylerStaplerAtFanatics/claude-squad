@@ -3,7 +3,17 @@
 import { AppLink } from "@/components/ui/AppLink";
 import { usePathname } from "next/navigation";
 import { routes } from "@/lib/routes";
-import styles from "./Navigation.module.css";
+import {
+  nav,
+  container,
+  brand,
+  navTitle,
+  menu,
+  link,
+  active,
+  actions,
+  createButton,
+} from "./Navigation.css";
 
 export function Navigation() {
   const pathname = usePathname();
@@ -14,23 +24,23 @@ export function Navigation() {
   ];
 
   return (
-    <nav className={styles.nav} role="navigation" aria-label="Main navigation">
-      <div className={styles.container}>
-        <div className={styles.brand}>
+    <nav className={nav} role="navigation" aria-label="Main navigation">
+      <div className={container}>
+        <div className={brand}>
           <AppLink href={routes.home} aria-label="Stapler Squad home">
-            <h1 className={styles.title}>Stapler Squad</h1>
+            <h1 className={navTitle}>Stapler Squad</h1>
           </AppLink>
         </div>
 
-        <ul className={styles.menu} role="menubar">
+        <ul className={menu} role="menubar">
           {navItems.map((item) => (
             <li key={item.href} role="none">
               <AppLink
                 href={item.href}
                 role="menuitem"
                 aria-current={pathname === item.href ? "page" : undefined}
-                className={`${styles.link} ${
-                  pathname === item.href ? styles.active : ""
+                className={`${link} ${
+                  pathname === item.href ? active : ""
                 }`}
               >
                 {item.label}
@@ -39,10 +49,10 @@ export function Navigation() {
           ))}
         </ul>
 
-        <div className={styles.actions}>
+        <div className={actions}>
           <AppLink
             href={routes.sessionCreate}
-            className={styles.createButton}
+            className={createButton}
             aria-label="Create new session"
           >
             New Session

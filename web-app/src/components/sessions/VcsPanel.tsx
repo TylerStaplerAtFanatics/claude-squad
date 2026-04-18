@@ -3,7 +3,7 @@
 import { VCSType, FileStatus, FileChange } from "@/gen/session/v1/types_pb";
 import { VcsStatusDisplay } from "@/components/shared/VcsStatusDisplay";
 import { useSessionVcsContext } from "@/lib/contexts/SessionVcsContext";
-import styles from "./VcsPanel.module.css";
+import * as styles from "./VcsPanel.css";
 
 interface VcsPanelProps {
   /** Optional callback to navigate to a file in the Files tab. */

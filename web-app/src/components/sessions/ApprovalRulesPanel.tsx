@@ -4,7 +4,19 @@ import { useState } from "react";
 import { useApprovalRules } from "@/lib/hooks/useApprovalRules";
 import { useApprovalAnalytics } from "@/lib/hooks/useApprovalAnalytics";
 import { ApprovalRuleProto, AutoDecision } from "@/gen/session/v1/types_pb";
-import styles from "./ApprovalRulesPanel.module.css";
+import {
+  panel, header, titleRow, title, subtitle, refreshButton,
+  analyticsBar, analyticsTotal, analyticsRate, rateAllow, rateManual, analyticsTopTool,
+  tabs, tab, tabActive,
+  error as errorClass, retryButton,
+  loading as loadingClass, empty,
+  tableWrapper, table, th, td, tdCenter, row, rowDisabled,
+  ruleName, ruleReason, ruleAlt, matchInfo, matchChip,
+  decisionBadge, decisionAllow, decisionDeny, decisionEscalate,
+  sourceBadge, toggle, toggleOn, toggleOff, deleteButton,
+  formSection, addButton, form as formClass, formTitle, formError as formErrorClass, formGrid, label, input, select,
+  formActions, saveButton, cancelButton,
+} from "./ApprovalRulesPanel.css";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -18,9 +30,9 @@ function decisionLabel(d: AutoDecision): string {
 
 function decisionClass(d: AutoDecision): string {
   switch (d) {
-    case AutoDecision.ALLOW: return styles.decisionAllow;
-    case AutoDecision.DENY:  return styles.decisionDeny;
-    default:                 return styles.decisionEscalate;
+    case AutoDecision.ALLOW: return decisionAllow;
+    case AutoDecision.DENY:  return decisionDeny;
+    default:                 return decisionEscalate;
   }
 }
 
@@ -143,37 +155,37 @@ export function ApprovalRulesPanel() {
   // ── render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className={styles.panel}>
+    <div className={panel}>
       {/* ── Header ── */}
-      <div className={styles.header}>
-        <div className={styles.titleRow}>
-          <h2 className={styles.title}>Approval Rules</h2>
+      <div className={header}>
+        <div className={titleRow}>
+          <h2 className={title}>Approval Rules</h2>
           <button
             onClick={refresh}
-            className={styles.refreshButton}
+            className={refreshButton}
             disabled={loading}
             aria-label="Refresh rules"
           >
             {loading ? "⟳" : "↻"}
           </button>
         </div>
-        <p className={styles.subtitle}>
+        <p className={subtitle}>
           Rules are evaluated in priority order before requests reach the manual review queue.
         </p>
       </div>
 
       {/* ── 7-day analytics summary ── */}
       {!analyticsLoading && summary && total !== null && total > 0 && (
-        <div className={styles.analyticsBar}>
-          <span className={styles.analyticsTotal}>{total} decisions (last 7 days)</span>
-          <span className={`${styles.analyticsRate} ${styles.rateAllow}`}>
+        <div className={analyticsBar}>
+          <span className={analyticsTotal}>{total} decisions (last 7 days)</span>
+          <span className={`${analyticsRate} ${rateAllow}`}>
             {autoAllowRate}% auto-allowed
           </span>
-          <span className={`${styles.analyticsRate} ${styles.rateManual}`}>
+          <span className={`${analyticsRate} ${rateManual}`}>
             {manualRate}% manual review
           </span>
           {summary.topTools.length > 0 && (
-            <span className={styles.analyticsTopTool}>
+            <span className={analyticsTopTool}>
               Top tool: {summary.topTools[0].toolName}
             </span>
           )}
@@ -181,13 +193,13 @@ export function ApprovalRulesPanel() {
       )}
 
       {/* ── Source filter tabs ── */}
-      <div className={styles.tabs}>
+      <div className={tabs}>
         {["all", "user", "seed", "claude-settings"].map((src) => {
           const count = src === "all" ? rules.length : rules.filter((r) => r.source === src).length;
           return (
             <button
               key={src}
-              className={`${styles.tab} ${sourceFilter === src ? styles.tabActive : ""}`}
+              className={`${tab} ${sourceFilter === src ? tabActive : ""}`}
               onClick={() => setSourceFilter(src)}
             >
               {src === "all" ? "All" : sourceLabel(src)}
@@ -199,68 +211,68 @@ export function ApprovalRulesPanel() {
 
       {/* ── Error ── */}
       {error && (
-        <div className={styles.error}>
+        <div className={errorClass}>
           Failed to load rules: {error.message}
-          <button onClick={refresh} className={styles.retryButton}>Retry</button>
+          <button onClick={refresh} className={retryButton}>Retry</button>
         </div>
       )}
 
       {/* ── Rules table ── */}
-      <div className={styles.tableWrapper}>
+      <div className={tableWrapper}>
         {loading && visibleRules.length === 0 ? (
-          <div className={styles.loading}>Loading rules…</div>
+          <div className={loadingClass}>Loading rules…</div>
         ) : visibleRules.length === 0 ? (
-          <div className={styles.empty}>
+          <div className={empty}>
             No rules found.{" "}
             {sourceFilter === "all" || sourceFilter === "user"
               ? "Add a custom rule below."
               : ""}
           </div>
         ) : (
-          <table className={styles.table}>
+          <table className={table}>
             <thead>
               <tr>
-                <th className={styles.th}>Name</th>
-                <th className={styles.th}>Match</th>
-                <th className={styles.th}>Decision</th>
-                <th className={styles.th}>Source</th>
-                <th className={styles.th}>Priority</th>
-                <th className={styles.th}>Enabled</th>
-                <th className={styles.th}></th>
+                <th className={th}>Name</th>
+                <th className={th}>Match</th>
+                <th className={th}>Decision</th>
+                <th className={th}>Source</th>
+                <th className={th}>Priority</th>
+                <th className={th}>Enabled</th>
+                <th className={th}></th>
               </tr>
             </thead>
             <tbody>
               {visibleRules.map((rule) => (
-                <tr key={rule.id} className={`${styles.row} ${!rule.enabled ? styles.rowDisabled : ""}`}>
-                  <td className={styles.td}>
-                    <span className={styles.ruleName}>{rule.name || rule.id}</span>
+                <tr key={rule.id} className={`${row} ${!rule.enabled ? rowDisabled : ""}`}>
+                  <td className={td}>
+                    <span className={ruleName}>{rule.name || rule.id}</span>
                     {rule.reason && (
-                      <span className={styles.ruleReason}>{rule.reason}</span>
+                      <span className={ruleReason}>{rule.reason}</span>
                     )}
                     {rule.alternative && (
-                      <span className={styles.ruleAlt}>Alt: {rule.alternative}</span>
+                      <span className={ruleAlt}>Alt: {rule.alternative}</span>
                     )}
                   </td>
-                  <td className={styles.td}>
-                    <div className={styles.matchInfo}>
-                      {rule.toolName && <code className={styles.matchChip}>{rule.toolName}</code>}
-                      {rule.commandPattern && <code className={styles.matchChip}>{rule.commandPattern}</code>}
-                      {rule.toolPattern && <code className={styles.matchChip}>{rule.toolPattern}</code>}
-                      {rule.filePattern && <code className={styles.matchChip}>{rule.filePattern}</code>}
+                  <td className={td}>
+                    <div className={matchInfo}>
+                      {rule.toolName && <code className={matchChip}>{rule.toolName}</code>}
+                      {rule.commandPattern && <code className={matchChip}>{rule.commandPattern}</code>}
+                      {rule.toolPattern && <code className={matchChip}>{rule.toolPattern}</code>}
+                      {rule.filePattern && <code className={matchChip}>{rule.filePattern}</code>}
                     </div>
                   </td>
-                  <td className={styles.td}>
-                    <span className={`${styles.decisionBadge} ${decisionClass(rule.decision)}`}>
+                  <td className={td}>
+                    <span className={`${decisionBadge} ${decisionClass(rule.decision)}`}>
                       {decisionLabel(rule.decision)}
                     </span>
                   </td>
-                  <td className={styles.td}>
-                    <span className={styles.sourceBadge}>{sourceLabel(rule.source)}</span>
+                  <td className={td}>
+                    <span className={sourceBadge}>{sourceLabel(rule.source)}</span>
                   </td>
-                  <td className={`${styles.td} ${styles.tdCenter}`}>{rule.priority}</td>
-                  <td className={`${styles.td} ${styles.tdCenter}`}>
+                  <td className={`${td} ${tdCenter}`}>{rule.priority}</td>
+                  <td className={`${td} ${tdCenter}`}>
                     <button
-                      className={`${styles.toggle} ${rule.enabled ? styles.toggleOn : styles.toggleOff}`}
+                      className={`${toggle} ${rule.enabled ? toggleOn : toggleOff}`}
                       onClick={() => handleToggle(rule)}
                       disabled={rule.source !== "user"}
                       aria-label={rule.enabled ? "Disable rule" : "Enable rule"}
@@ -269,10 +281,10 @@ export function ApprovalRulesPanel() {
                       {rule.enabled ? "ON" : "OFF"}
                     </button>
                   </td>
-                  <td className={`${styles.td} ${styles.tdCenter}`}>
+                  <td className={`${td} ${tdCenter}`}>
                     {rule.source === "user" && (
                       <button
-                        className={styles.deleteButton}
+                        className={deleteButton}
                         onClick={() => deleteRule(rule.id)}
                         aria-label={`Delete rule ${rule.name}`}
                         title="Delete rule"
@@ -289,32 +301,32 @@ export function ApprovalRulesPanel() {
       </div>
 
       {/* ── Add rule form ── */}
-      <div className={styles.formSection}>
+      <div className={formSection}>
         {!showForm ? (
-          <button className={styles.addButton} onClick={() => setShowForm(true)}>
+          <button className={addButton} onClick={() => setShowForm(true)}>
             + Add Custom Rule
           </button>
         ) : (
-          <div className={styles.form}>
-            <h3 className={styles.formTitle}>New Rule</h3>
+          <div className={formClass}>
+            <h3 className={formTitle}>New Rule</h3>
 
-            {formError && <div className={styles.formError}>{formError}</div>}
+            {formError && <div className={formErrorClass}>{formError}</div>}
 
-            <div className={styles.formGrid}>
-              <label className={styles.label}>
+            <div className={formGrid}>
+              <label className={label}>
                 Name *
                 <input
-                  className={styles.input}
+                  className={input}
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Allow git log"
                 />
               </label>
 
-              <label className={styles.label}>
+              <label className={label}>
                 Decision *
                 <select
-                  className={styles.select}
+                  className={select}
                   value={form.decision}
                   onChange={(e) => setForm((f) => ({ ...f, decision: Number(e.target.value) as AutoDecision }))}
                 >
@@ -324,70 +336,70 @@ export function ApprovalRulesPanel() {
                 </select>
               </label>
 
-              <label className={styles.label}>
+              <label className={label}>
                 Tool Name
                 <input
-                  className={styles.input}
+                  className={input}
                   value={form.toolName}
                   onChange={(e) => setForm((f) => ({ ...f, toolName: e.target.value }))}
                   placeholder="e.g. Bash"
                 />
               </label>
 
-              <label className={styles.label}>
+              <label className={label}>
                 Command Pattern (regex)
                 <input
-                  className={styles.input}
+                  className={input}
                   value={form.commandPattern}
                   onChange={(e) => setForm((f) => ({ ...f, commandPattern: e.target.value }))}
                   placeholder="e.g. ^git log"
                 />
               </label>
 
-              <label className={styles.label}>
+              <label className={label}>
                 Tool Pattern (regex)
                 <input
-                  className={styles.input}
+                  className={input}
                   value={form.toolPattern}
                   onChange={(e) => setForm((f) => ({ ...f, toolPattern: e.target.value }))}
                   placeholder="e.g. Read|Glob"
                 />
               </label>
 
-              <label className={styles.label}>
+              <label className={label}>
                 File Pattern (regex)
                 <input
-                  className={styles.input}
+                  className={input}
                   value={form.filePattern}
                   onChange={(e) => setForm((f) => ({ ...f, filePattern: e.target.value }))}
                   placeholder="e.g. \.md$"
                 />
               </label>
 
-              <label className={styles.label}>
+              <label className={label}>
                 Reason
                 <input
-                  className={styles.input}
+                  className={input}
                   value={form.reason}
                   onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
                   placeholder="Shown to Claude when denied"
                 />
               </label>
 
-              <label className={styles.label}>
+              <label className={label}>
                 Alternative
                 <input
-                  className={styles.input}
+                  className={input}
                   value={form.alternative}
                   onChange={(e) => setForm((f) => ({ ...f, alternative: e.target.value }))}
                   placeholder="Safer command suggestion"
                 />
               </label>
 
-              <label className={styles.label}>
+              <label className={label}>
                 Priority
                 <input
-                  className={styles.input}
+                  className={input}
                   type="number"
                   min={1}
                   max={999}
@@ -397,16 +409,16 @@ export function ApprovalRulesPanel() {
               </label>
             </div>
 
-            <div className={styles.formActions}>
+            <div className={formActions}>
               <button
-                className={styles.saveButton}
+                className={saveButton}
                 onClick={handleSave}
                 disabled={saving}
               >
                 {saving ? "Saving…" : "Save Rule"}
               </button>
               <button
-                className={styles.cancelButton}
+                className={cancelButton}
                 onClick={() => { setShowForm(false); setForm(emptyForm); setFormError(null); }}
               >
                 Cancel

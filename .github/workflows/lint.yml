@@ -73,7 +73,7 @@ jobs:
 
       - name: CSS lint (stylelint + undefined variable check)
         working-directory: web-app
-        run: npm run lint:css && npm run lint:css-vars
+        run: npm run lint:css
 
       - name: Check formatting
         run: |

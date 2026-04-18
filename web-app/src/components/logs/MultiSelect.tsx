@@ -1,7 +1,21 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import styles from './MultiSelect.module.css';
+import {
+  container as containerClass,
+  label as labelClass,
+  trigger,
+  text,
+  chevron,
+  dropdown,
+  actions,
+  actionButton,
+  divider,
+  options as optionsClass,
+  option as optionClass,
+  checkbox,
+  optionLabel,
+} from './MultiSelect.css';
 
 interface MultiSelectOption {
   value: string;
@@ -20,7 +34,7 @@ interface MultiSelectProps {
 
 export function MultiSelect({
   label,
-  options,
+  options: opts,
   value,
   onChange,
   placeholder = 'All',
@@ -33,8 +47,8 @@ export function MultiSelect({
   const getDisplayText = (): string => {
     if (value.length === 0) return placeholder;
     if (value.length === 1) {
-      const option = options.find(o => o.value === value[0]);
-      return option?.label || value[0];
+      const opt = opts.find(o => o.value === value[0]);
+      return opt?.label || value[0];
     }
     return `${value.length} selected`;
   };
@@ -50,7 +64,7 @@ export function MultiSelect({
 
   // Select all
   const selectAll = () => {
-    onChange(options.map(o => o.value));
+    onChange(opts.map(o => o.value));
   };
 
   // Clear all
@@ -85,59 +99,59 @@ export function MultiSelect({
 
   return (
     <div
-      className={`${styles.container} ${className || ''}`}
+      className={`${containerClass} ${className || ''}`}
       ref={containerRef}
       onKeyDown={handleKeyDown}
     >
-      <label className={styles.label}>{label}:</label>
+      <label className={labelClass}>{label}:</label>
       <button
-        className={styles.trigger}
+        className={trigger}
         onClick={() => setIsOpen(!isOpen)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label={`${label}: ${getDisplayText()}`}
         type="button"
       >
-        <span className={styles.text}>{getDisplayText()}</span>
-        <span className={styles.chevron}>{isOpen ? '▲' : '▼'}</span>
+        <span className={text}>{getDisplayText()}</span>
+        <span className={chevron}>{isOpen ? '▲' : '▼'}</span>
       </button>
 
       {isOpen && (
-        <div className={styles.dropdown} role="listbox" aria-label={`Select ${label}`}>
-          <div className={styles.actions}>
+        <div className={dropdown} role="listbox" aria-label={`Select ${label}`}>
+          <div className={actions}>
             <button
-              className={styles.actionButton}
+              className={actionButton}
               onClick={selectAll}
               type="button"
             >
               Select all
             </button>
             <button
-              className={styles.actionButton}
+              className={actionButton}
               onClick={clearAll}
               type="button"
             >
               Clear
             </button>
           </div>
-          <div className={styles.divider} />
-          <div className={styles.options}>
-            {options.map((option) => (
+          <div className={divider} />
+          <div className={optionsClass}>
+            {opts.map((opt) => (
               <label
-                key={option.value}
-                className={styles.option}
+                key={opt.value}
+                className={optionClass}
               >
                 <input
                   type="checkbox"
-                  checked={value.includes(option.value)}
-                  onChange={() => toggleOption(option.value)}
-                  className={styles.checkbox}
+                  checked={value.includes(opt.value)}
+                  onChange={() => toggleOption(opt.value)}
+                  className={checkbox}
                 />
                 <span
-                  className={styles.optionLabel}
-                  style={option.color ? { color: option.color } : undefined}
+                  className={optionLabel}
+                  style={opt.color ? { color: opt.color } : undefined}
                 >
-                  {option.label}
+                  {opt.label}
                 </span>
               </label>
             ))}

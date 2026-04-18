@@ -1,11 +1,16 @@
 package services
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tstapler/stapler-squad/config"
@@ -72,6 +77,9 @@ type SessionService struct {
 	// scrollbackMgr provides access to per-session scrollback sequence numbers
 	// for checkpoint creation. May be nil if not wired (seq defaults to 0).
 	scrollbackMgr scrollbackSequencer
+
+	// branchCache caches git branch lists per repo path. ADR-002.
+	branchCache sync.Map // map[string]branchCacheEntry
 }
 
 // scrollbackSequencer is the minimal interface SessionService needs from ScrollbackManager.
@@ -1836,6 +1844,129 @@ func (s *SessionService) ListWorktrees(
 	req *connect.Request[sessionv1.ListWorktreesRequest],
 ) (*connect.Response[sessionv1.ListWorktreesResponse], error) {
 	return s.pathCompletionSvc.ListWorktrees(ctx, req)
+}
+
+// branchCacheEntry holds a cached branch list for a repository path.
+type branchCacheEntry struct {
+	branches []string
+	cachedAt time.Time
+}
+
+const branchCacheTTL = 5 * time.Minute
+
+// ListBranches returns the git branches for a given repository path.
+// Results are cached per repo path with a 5-minute TTL. ADR-002.
+func (s *SessionService) ListBranches(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ListBranchesRequest],
+) (*connect.Response[sessionv1.ListBranchesResponse], error) {
+	repoPath := req.Msg.GetRepoPath()
+	if repoPath == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("repo_path is required"))
+	}
+
+	// Normalize and validate the path: must resolve within the user's home directory.
+	absPath, err := filepath.Abs(repoPath)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid repo_path: %w", err))
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cannot determine home directory: %w", err))
+	}
+	if !strings.HasPrefix(absPath, homeDir+string(filepath.Separator)) && absPath != homeDir {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("repo_path must be within the user home directory"))
+	}
+	if _, err := os.Stat(absPath); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("repo_path does not exist: %w", err))
+	}
+
+	maxResults := int(req.Msg.GetMaxResults())
+	if maxResults <= 0 {
+		maxResults = 200
+	}
+	filter := req.Msg.GetFilter()
+
+	// Serve from cache if still fresh.
+	if entry, ok := s.branchCache.Load(absPath); ok {
+		cached := entry.(branchCacheEntry)
+		if time.Since(cached.cachedAt) < branchCacheTTL {
+			branches := filterBranches(cached.branches, filter, maxResults)
+			return connect.NewResponse(&sessionv1.ListBranchesResponse{
+				Branches:   branches,
+				TotalCount: int32(len(branches)),
+				Truncated:  false,
+			}), nil
+		}
+	}
+
+	// Run git for-each-ref with a 2-second timeout.
+	cmdCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	refSpec := "refs/heads"
+	if req.Msg.GetIncludeRemote() {
+		refSpec = "refs/"
+	}
+	cmd := exec.CommandContext(cmdCtx, "git", "-C", absPath, "for-each-ref", refSpec, "--format=%(refname:short)")
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	start := time.Now()
+	runErr := cmd.Run()
+	latencyMs := time.Since(start).Milliseconds()
+	log.InfoLog.Printf("[ListBranches] branch_list_latency_ms=%d repo=%s", latencyMs, absPath)
+
+	truncated := false
+	if runErr != nil {
+		if cmdCtx.Err() == context.DeadlineExceeded {
+			// Timeout: return whatever partial output was collected.
+			truncated = true
+		} else {
+			// git failed (not a git repo, etc.): return empty list, not an error.
+			log.InfoLog.Printf("[ListBranches] git for-each-ref failed for %s: %v", absPath, runErr)
+			return connect.NewResponse(&sessionv1.ListBranchesResponse{
+				Branches:   []string{},
+				TotalCount: 0,
+				Truncated:  false,
+			}), nil
+		}
+	}
+
+	var all []string
+	scanner := bufio.NewScanner(&out)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			all = append(all, line)
+		}
+	}
+
+	// Cache the full unfiltered list.
+	s.branchCache.Store(absPath, branchCacheEntry{branches: all, cachedAt: time.Now()})
+
+	branches := filterBranches(all, filter, maxResults)
+	return connect.NewResponse(&sessionv1.ListBranchesResponse{
+		Branches:   branches,
+		TotalCount: int32(len(branches)),
+		Truncated:  truncated,
+	}), nil
+}
+
+// filterBranches applies a case-insensitive substring filter and caps results at maxResults.
+func filterBranches(all []string, filter string, maxResults int) []string {
+	lowerFilter := strings.ToLower(filter)
+	var result []string
+	for _, b := range all {
+		if filter == "" || strings.Contains(strings.ToLower(b), lowerFilter) {
+			result = append(result, b)
+			if len(result) >= maxResults {
+				break
+			}
+		}
+	}
+	return result
 }
 
 // findInstance finds an instance by title using the live in-memory poller.

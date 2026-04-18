@@ -6,7 +6,32 @@ import { useAuditLog } from "@/lib/hooks/useAuditLog";
 import { NotificationData } from "@/lib/types/notification";
 import { toastAutoCloseMs, toastAutoMinimizeMs } from "@/lib/notification-policy";
 import { notificationTypeIcon, notificationTypeLabel, priorityColor } from "@/lib/utils/notificationMapping";
-import styles from "./NotificationToast.module.css";
+import {
+  toast,
+  toastApproval,
+  visible,
+  exiting,
+  minimized,
+  header,
+  icon,
+  titleWrapper,
+  titleRow,
+  typeLabel,
+  subtitleRow,
+  sourceApp,
+  timestamp,
+  closeButton,
+  body,
+  message,
+  workingDir,
+  actions,
+  focusButton,
+  approveButton,
+  denyButton,
+  viewButton,
+  dismissButton,
+  minimizeHint,
+} from "./NotificationToast.css";
 
 export type { NotificationData };
 
@@ -126,31 +151,31 @@ export function NotificationToast({
 
   return (
     <div
-      className={`${styles.toast} ${notification.notificationType === "approval_needed" ? styles.toastApproval : ""} ${isVisible ? styles.visible : ""} ${isExiting ? styles.exiting : ""} ${isMinimized ? styles.minimized : ""}`}
+      className={`${toast} ${notification.notificationType === "approval_needed" ? toastApproval : ""} ${isVisible ? visible : ""} ${isExiting ? exiting : ""} ${isMinimized ? minimized : ""}`}
       style={{ "--priority-color": getPriorityColor() } as React.CSSProperties}
       role="alert"
       aria-live={notification.notificationType === "approval_needed" ? "assertive" : "polite"}
       onClick={isMinimized ? () => setIsMinimized(false) : undefined}
       title={isMinimized ? "Click to expand" : undefined}
     >
-      <div className={styles.header}>
-        <div className={styles.icon}>{getTypeIcon()}</div>
-        <div className={styles.title}>
-          <div className={styles.titleRow}>
+      <div className={header}>
+        <div className={icon}>{getTypeIcon()}</div>
+        <div className={titleWrapper}>
+          <div className={titleRow}>
             <strong>{displayTitle}</strong>
-            <span className={styles.typeLabel}>{getTypeLabel()}</span>
+            <span className={typeLabel}>{getTypeLabel()}</span>
           </div>
-          <div className={styles.subtitleRow}>
+          <div className={subtitleRow}>
             {subtitleText && (
-              <span className={styles.sourceApp}>{subtitleText}</span>
+              <span className={sourceApp}>{subtitleText}</span>
             )}
-            <span className={styles.timestamp} title={new Date(notification.timestamp).toLocaleTimeString()}>
+            <span className={timestamp} title={new Date(notification.timestamp).toLocaleTimeString()}>
               {relativeTime}
             </span>
           </div>
         </div>
         <button
-          className={styles.closeButton}
+          className={closeButton}
           onClick={() => handleClose(false)}
           aria-label="Close notification"
         >
@@ -158,24 +183,24 @@ export function NotificationToast({
         </button>
       </div>
 
-      <div className={styles.body}>
-        <p className={styles.message}>{notification.message}</p>
+      <div className={body}>
+        <p className={message}>{notification.message}</p>
         {notification.sourceWorkingDir && (
-          <p className={styles.workingDir} title={notification.sourceWorkingDir}>
+          <p className={workingDir} title={notification.sourceWorkingDir}>
             📁 {notification.sourceWorkingDir.split('/').slice(-2).join('/')}
           </p>
         )}
       </div>
 
-      <div className={styles.actions}>
+      <div className={actions}>
         {hasSourceApp && notification.onFocusWindow && (
-          <button className={styles.focusButton} onClick={notification.onFocusWindow} title="Focus the source application window">
+          <button className={focusButton} onClick={notification.onFocusWindow} title="Focus the source application window">
             🔗 Focus Window
           </button>
         )}
         {notification.onApprove && (
           <button
-            className={styles.approveButton}
+            className={approveButton}
             onClick={() => { notification.onApprove?.(); handleClose(true); }}
             title="Allow this tool use"
           >
@@ -184,17 +209,17 @@ export function NotificationToast({
         )}
         {notification.onDeny && (
           <button
-            className={styles.denyButton}
+            className={denyButton}
             onClick={() => { notification.onDeny?.(); handleClose(true); }}
             title="Deny this tool use"
           >
             ✗ Deny
           </button>
         )}
-        <button className={styles.viewButton} onClick={handleView}>
+        <button className={viewButton} onClick={handleView}>
           View Session
         </button>
-        <button className={styles.dismissButton} onClick={() => handleClose(true)}>
+        <button className={dismissButton} onClick={() => handleClose(true)}>
           Dismiss
         </button>
       </div>

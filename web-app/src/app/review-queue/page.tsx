@@ -13,7 +13,7 @@ import { getApiBaseUrl } from "@/lib/config";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { useKeyboard } from "@/lib/hooks/useKeyboard";
 import { KeyboardHints } from "@/components/ui/KeyboardHint";
-import styles from "./page.module.css";
+import * as styles from "./page.css";
 
 // Construct a minimal Session from ReviewItem data for immediate modal opening
 // before useSessionService has finished loading.

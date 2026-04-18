@@ -19,7 +19,7 @@ import {
   ProfileDefaultsProtoSchema,
 } from "@/gen/session/v1/session_pb";
 import { getApiBaseUrl } from "@/lib/config";
-import styles from "./SessionWizard.module.css";
+import * as styles from "./SessionWizard.css";
 
 interface SessionWizardProps {
   onComplete: (data: SessionFormData) => Promise<void>;

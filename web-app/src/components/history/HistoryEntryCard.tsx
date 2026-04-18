@@ -2,7 +2,7 @@
 
 import { ClaudeHistoryEntry } from "@/gen/session/v1/session_pb";
 import { formatTimeAgo } from "@/lib/utils/timestamp";
-import styles from "./HistoryEntryCard.module.css";
+import * as styles from "./HistoryEntryCard.css";
 
 interface HistoryEntryCardProps {
   entry: ClaudeHistoryEntry;

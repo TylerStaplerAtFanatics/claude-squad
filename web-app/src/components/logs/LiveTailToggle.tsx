@@ -1,7 +1,24 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import styles from './LiveTailToggle.module.css';
+import {
+  container,
+  toggleButton,
+  toggleButtonActive,
+  indicator,
+  indicatorActive,
+  indicatorPulse,
+  label,
+  pauseButton,
+  settingsButton,
+  dropdown,
+  dropdownHeader,
+  options,
+  option,
+  optionSelected,
+  check,
+  lastUpdate,
+} from './LiveTailToggle.css';
 
 interface LiveTailToggleProps {
   /** Whether live tail is enabled */
@@ -70,18 +87,18 @@ export function LiveTailToggle({
 
   return (
     <div
-      className={`${styles.container} ${className || ''}`}
+      className={`${container} ${className || ''}`}
       ref={containerRef}
     >
       <button
-        className={`${styles.toggleButton} ${isEnabled ? styles.active : ''}`}
+        className={`${toggleButton} ${isEnabled ? toggleButtonActive : ''}`}
         onClick={onToggle}
         aria-pressed={isEnabled}
         aria-label={isEnabled ? 'Stop live tail' : 'Start live tail'}
         title={isEnabled ? 'Click to stop live updates' : 'Click to start live updates'}
       >
-        <span className={`${styles.indicator} ${isEnabled && !isPaused ? styles.pulse : ''}`} />
-        <span className={styles.label}>
+        <span className={`${indicator} ${isEnabled ? indicatorActive : ''} ${isEnabled && !isPaused ? indicatorPulse : ''}`} />
+        <span className={label}>
           {isEnabled ? (isPaused ? 'Paused' : 'Live') : 'Live Tail'}
         </span>
       </button>
@@ -89,7 +106,7 @@ export function LiveTailToggle({
       {isEnabled && (
         <>
           <button
-            className={styles.pauseButton}
+            className={pauseButton}
             onClick={onPauseToggle}
             aria-label={isPaused ? 'Resume live tail' : 'Pause live tail'}
             title={isPaused ? 'Resume updates' : 'Pause updates'}
@@ -98,7 +115,7 @@ export function LiveTailToggle({
           </button>
 
           <button
-            className={styles.settingsButton}
+            className={settingsButton}
             onClick={() => setShowDropdown(!showDropdown)}
             aria-label="Live tail settings"
             aria-expanded={showDropdown}
@@ -108,20 +125,20 @@ export function LiveTailToggle({
           </button>
 
           {showDropdown && (
-            <div className={styles.dropdown}>
-              <div className={styles.dropdownHeader}>Refresh Interval</div>
-              <div className={styles.options}>
-                {INTERVAL_OPTIONS.map((option) => (
+            <div className={dropdown}>
+              <div className={dropdownHeader}>Refresh Interval</div>
+              <div className={options}>
+                {INTERVAL_OPTIONS.map((opt) => (
                   <button
-                    key={option.value}
-                    className={`${styles.option} ${interval === option.value ? styles.selected : ''}`}
+                    key={opt.value}
+                    className={`${option} ${interval === opt.value ? optionSelected : ''}`}
                     onClick={() => {
-                      onIntervalChange(option.value);
+                      onIntervalChange(opt.value);
                       setShowDropdown(false);
                     }}
                   >
-                    {option.label}
-                    {interval === option.value && <span className={styles.check}>✓</span>}
+                    {opt.label}
+                    {interval === opt.value && <span className={check}>✓</span>}
                   </button>
                 ))}
               </div>
@@ -129,7 +146,7 @@ export function LiveTailToggle({
           )}
 
           {lastRefresh && (
-            <span className={styles.lastUpdate} title={lastRefresh.toISOString()}>
+            <span className={lastUpdate} title={lastRefresh.toISOString()}>
               Updated {formatLastRefresh()}
             </span>
           )}

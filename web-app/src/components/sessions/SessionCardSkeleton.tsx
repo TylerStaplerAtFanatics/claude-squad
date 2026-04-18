@@ -1,5 +1,5 @@
 import { Skeleton } from "../ui/Skeleton";
-import styles from "./SessionCard.module.css";
+import * as styles from "./SessionCard.css";
 
 export function SessionCardSkeleton() {
   return (

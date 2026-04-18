@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { loginWithPasskey, registerPasskey } from "@/lib/auth/passkey";
 import { useAuth } from "@/lib/contexts/AuthContext";
-import styles from "./login.module.css";
+import * as styles from "./login.css";
 
 function LoginContent() {
   const router = useRouter();

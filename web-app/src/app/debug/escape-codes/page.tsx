@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getApiBaseUrl } from "@/lib/config";
-import styles from "./page.module.css";
+import * as styles from "./page.css";
 
 interface EscapeCodeEntry {
   code: string;
@@ -246,7 +246,7 @@ export default function EscapeCodesPage() {
                   </td>
                   <td>{entry.humanReadable}</td>
                   <td>
-                    <span className={`${styles.badge} ${styles[`badge${entry.category}`]}`}>
+                    <span className={`${styles.badge} ${(styles as Record<string, string>)[`badge${entry.category}`] ?? ""}`}>
                       {entry.category}
                     </span>
                   </td>

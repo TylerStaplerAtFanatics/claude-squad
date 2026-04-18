@@ -1,7 +1,7 @@
 "use client";
 
 import { Priority, AttentionReason } from "@/gen/session/v1/types_pb";
-import styles from "./ReviewQueueBadge.module.css";
+import * as styles from "./ReviewQueueBadge.css";
 
 interface ReviewQueueBadgeProps {
   priority: Priority;

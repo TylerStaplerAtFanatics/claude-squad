@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useGetFileContent } from "@/lib/hooks/useFileService";
-import styles from "./FileContentViewer.module.css";
+import {
+  container, emptyState, emptyIcon,
+  loading as loadingClass, error as errorClass, spinner,
+  breadcrumb, breadcrumbSegment, breadcrumbCurrent, breadcrumbSep,
+  truncationWarning, viewer, shikiOutput, plainPre, codeMirrorEditor,
+  binaryPlaceholder, binaryIcon, binaryTitle, binaryMeta,
+} from "./FileContentViewer.css";
 
 // Language detection map: file extension → Shiki/CodeMirror language ID.
 const EXT_TO_LANG: Record<string, string> = {
@@ -103,20 +109,20 @@ interface BreadcrumbProps {
 function Breadcrumb({ path, onSegmentClick }: BreadcrumbProps) {
   const segments = path.split("/").filter(Boolean);
   return (
-    <div className={styles.breadcrumb}>
+    <div className={breadcrumb}>
       {segments.map((seg, i) => {
         const segPath = segments.slice(0, i + 1).join("/");
         const isLast = i === segments.length - 1;
         return (
           <span key={segPath}>
             <span
-              className={isLast ? styles.breadcrumbCurrent : styles.breadcrumbSegment}
+              className={isLast ? breadcrumbCurrent : breadcrumbSegment}
               onClick={!isLast && onSegmentClick ? () => onSegmentClick(segPath) : undefined}
               title={segPath}
             >
               {seg}
             </span>
-            {!isLast && <span className={styles.breadcrumbSep}>/</span>}
+            {!isLast && <span className={breadcrumbSep}>/</span>}
           </span>
         );
       })}
@@ -176,7 +182,7 @@ function CodeMirrorViewer({ content, language }: CodeMirrorViewerProps) {
     };
   }, [content, language]);
 
-  return <div ref={editorRef} className={styles.codeMirrorEditor} />;
+  return <div ref={editorRef} className={codeMirrorEditor} />;
 }
 
 async function loadCodemirrorLang(lang: string) {
@@ -270,7 +276,7 @@ function ShikiViewer({ content, language }: ShikiViewerProps) {
   if (error || html === null) {
     // Plain text fallback.
     return (
-      <pre className={styles.plainPre}>
+      <pre className={plainPre}>
         <code>{content}</code>
       </pre>
     );
@@ -278,7 +284,7 @@ function ShikiViewer({ content, language }: ShikiViewerProps) {
 
   return (
     <div
-      className={styles.shikiOutput}
+      className={shikiOutput}
       // Shiki generates safe HTML (no user content, only syntax highlights).
       dangerouslySetInnerHTML={{ __html: html }}
     />
@@ -298,8 +304,8 @@ export function FileContentViewer({ sessionId, filePath, baseUrl }: FileContentV
 
   if (!filePath) {
     return (
-      <div className={styles.emptyState}>
-        <span className={styles.emptyIcon}>📄</span>
+      <div className={emptyState}>
+        <span className={emptyIcon}>📄</span>
         <p>Select a file to view its contents</p>
       </div>
     );
@@ -307,10 +313,10 @@ export function FileContentViewer({ sessionId, filePath, baseUrl }: FileContentV
 
   if (loading) {
     return (
-      <div className={styles.container}>
+      <div className={container}>
         <Breadcrumb path={filePath} />
-        <div className={styles.loading}>
-          <span className={styles.spinner} />
+        <div className={loadingClass}>
+          <span className={spinner} />
           Loading file…
         </div>
       </div>
@@ -319,9 +325,9 @@ export function FileContentViewer({ sessionId, filePath, baseUrl }: FileContentV
 
   if (error) {
     return (
-      <div className={styles.container}>
+      <div className={container}>
         <Breadcrumb path={filePath} />
-        <div className={styles.error}>
+        <div className={errorClass}>
           <span>⚠ {error}</span>
         </div>
       </div>
@@ -333,12 +339,12 @@ export function FileContentViewer({ sessionId, filePath, baseUrl }: FileContentV
   if (data.isBinary) {
     const sizeKb = Number(data.size) / 1024;
     return (
-      <div className={styles.container}>
+      <div className={container}>
         <Breadcrumb path={filePath} />
-        <div className={styles.binaryPlaceholder}>
-          <span className={styles.binaryIcon}>🔒</span>
-          <p className={styles.binaryTitle}>Binary file — cannot display</p>
-          <p className={styles.binaryMeta}>
+        <div className={binaryPlaceholder}>
+          <span className={binaryIcon}>🔒</span>
+          <p className={binaryTitle}>Binary file — cannot display</p>
+          <p className={binaryMeta}>
             {sizeKb >= 1024
               ? `${(sizeKb / 1024).toFixed(1)} MB`
               : `${sizeKb.toFixed(1)} KB`}
@@ -354,14 +360,14 @@ export function FileContentViewer({ sessionId, filePath, baseUrl }: FileContentV
   const useLargeMode = lineCount > LARGE_FILE_LINE_THRESHOLD;
 
   return (
-    <div className={styles.container}>
+    <div className={container}>
       <Breadcrumb path={filePath} />
       {data.isTruncated && (
-        <div className={styles.truncationWarning}>
+        <div className={truncationWarning}>
           ⚠ File truncated to 1 MB — only the first portion is shown
         </div>
       )}
-      <div className={styles.viewer}>
+      <div className={viewer}>
         {useLargeMode ? (
           <CodeMirrorViewer content={data.content} language={lang} />
         ) : (
