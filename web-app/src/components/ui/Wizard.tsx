@@ -3,7 +3,7 @@
 import { ReactNode } from "react";
 import {
   wizard,
-  steps,
+  steps as stepsClass,
   step,
   stepNumber,
   stepLabel,
@@ -29,7 +29,7 @@ interface WizardProps {
 export function Wizard({ currentStep, steps, children }: WizardProps) {
   return (
     <div className={wizard}>
-      <div className={steps}>
+      <div className={stepsClass}>
         {steps.map((stepName, index) => (
           <div
             key={index}
