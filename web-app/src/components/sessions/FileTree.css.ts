@@ -1,4 +1,4 @@
-import { style, keyframes } from "@vanilla-extract/css";
+import { style, keyframes, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 const spin = keyframes({
@@ -95,13 +95,11 @@ export const name = style({
   color: vars.color.terminalForeground,
 });
 
-export const ignored = style({
-  selectors: {
-    [`& .${name}`]: {
-      opacity: 0.45,
-      fontStyle: "italic",
-    },
-  },
+export const ignored = style({});
+
+globalStyle(`${ignored} .${name}`, {
+  opacity: 0.45,
+  fontStyle: "italic",
 });
 
 export const symlinkBadge = style({
@@ -197,12 +195,9 @@ export const toolbarLabel = style({
   fontSize: 11,
   color: vars.color.textMuted,
   cursor: "pointer",
-  selectors: {
-    "& input[type='checkbox']": {
-      cursor: "pointer",
-    },
-  },
 });
+
+globalStyle(`${toolbarLabel} input[type='checkbox']`, { cursor: "pointer" });
 
 export const treeWrapper = style({
   flex: 1,

@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { style, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const panel = style({
@@ -214,21 +214,13 @@ export const tdCenter = style({
   textAlign: "center",
 });
 
-export const row = style({
-  selectors: {
-    "&:last-child td": {
-      borderBottom: "none",
-    },
-  },
-});
+export const row = style({});
 
-export const rowDisabled = style({
-  selectors: {
-    "& td": {
-      opacity: 0.45,
-    },
-  },
-});
+globalStyle(`${row}:last-child td`, { borderBottom: "none" });
+
+export const rowDisabled = style({});
+
+globalStyle(`${rowDisabled} td`, { opacity: 0.45 });
 
 export const ruleName = style({
   display: "block",

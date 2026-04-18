@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { style, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const container = style({
@@ -68,11 +68,12 @@ export const toolbarLabel = style({
     "&:hover": {
       color: vars.color.terminalForeground,
     },
-    "& input[type='checkbox']": {
-      cursor: "pointer",
-      accentColor: vars.color.primary,
-    },
   },
+});
+
+globalStyle(`${toolbarLabel} input[type='checkbox']`, {
+  cursor: "pointer",
+  accentColor: vars.color.primary,
 });
 
 export const toolbarButton = style({

@@ -1,4 +1,4 @@
-import { style, keyframes } from "@vanilla-extract/css";
+import { style, keyframes, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 const spin = keyframes({
@@ -94,30 +94,31 @@ export const viewer = style({
 
 export const shikiOutput = style({
   minHeight: "100%",
-  selectors: {
-    "& pre": {
-      margin: 0,
-      padding: 16,
-      minHeight: "100%",
-      background: "transparent !important",
-      fontSize: 13,
-      lineHeight: 1.6,
-      fontFamily: vars.font.mono,
-    },
-    "& code": {
-      counterReset: "line",
-    },
-    "& .line::before": {
-      counterIncrement: "line",
-      content: "counter(line)",
-      display: "inline-block",
-      width: 40,
-      textAlign: "right",
-      paddingRight: 16,
-      color: vars.color.textMuted,
-      userSelect: "none",
-    },
-  },
+});
+
+globalStyle(`${shikiOutput} pre`, {
+  margin: 0,
+  padding: 16,
+  minHeight: "100%",
+  background: "transparent !important",
+  fontSize: 13,
+  lineHeight: 1.6,
+  fontFamily: vars.font.mono,
+});
+
+globalStyle(`${shikiOutput} code`, {
+  counterReset: "line",
+});
+
+globalStyle(`${shikiOutput} .line::before`, {
+  counterIncrement: "line",
+  content: "counter(line)",
+  display: "inline-block",
+  width: 40,
+  textAlign: "right",
+  paddingRight: 16,
+  color: vars.color.textMuted,
+  userSelect: "none",
 });
 
 export const plainPre = style({
@@ -133,12 +134,11 @@ export const plainPre = style({
 
 export const codeMirrorEditor = style({
   height: "100%",
-  selectors: {
-    "& .cm-editor": {
-      height: "100%",
-      fontSize: 13,
-    },
-  },
+});
+
+globalStyle(`${codeMirrorEditor} .cm-editor`, {
+  height: "100%",
+  fontSize: 13,
 });
 
 export const binaryPlaceholder = style({
