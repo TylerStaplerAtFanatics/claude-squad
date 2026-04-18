@@ -135,6 +135,8 @@ export const toolbarButton = style({
   },
 });
 
+export const debugActive = style({});
+
 export const devOnly = style({
   "@media": {
     "screen and (max-width: 768px)": {
