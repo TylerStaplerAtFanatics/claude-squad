@@ -132,11 +132,6 @@ export const titleRow = style({
   display: "flex",
   alignItems: "center",
   gap: "8px",
-  selectors: {
-    [`${minimized} & strong`]: {
-      fontSize: "13px",
-    },
-  },
 });
 
 globalStyle(`${titleRow} strong`, {
@@ -149,6 +144,8 @@ globalStyle(`${titleRow} strong`, {
   flex: 1,
   minWidth: 0,
 });
+
+globalStyle(`${minimized} ${titleRow} strong`, { fontSize: "13px" });
 
 export const typeLabel = style({
   fontSize: "10px",
