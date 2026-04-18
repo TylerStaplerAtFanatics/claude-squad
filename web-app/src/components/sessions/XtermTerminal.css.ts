@@ -30,19 +30,19 @@ globalStyle(`${terminal} .xterm`, {
   width: "100% !important",
   padding: "0 !important",
   margin: "0 !important",
-  boxSizing: "content-box !important",
+  boxSizing: "content-box !important" as "content-box",
 });
 
 globalStyle(`${terminal} .xterm-screen`, {
   height: "100% !important",
   width: "100% !important",
-  boxSizing: "content-box !important",
+  boxSizing: "content-box !important" as "content-box",
   padding: "0 !important",
   margin: "0 !important",
 });
 
 globalStyle(`${terminal} .xterm-rows`, {
-  boxSizing: "content-box !important",
+  boxSizing: "content-box !important" as "content-box",
 });
 
 globalStyle(`${terminal} .xterm-viewport`, {
