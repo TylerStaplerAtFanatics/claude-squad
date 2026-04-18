@@ -84,6 +84,9 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 		}
 	}
 
+	// History file linkage — path to the Claude JSONL conversation file.
+	protoSession.HistoryFilePath = inst.HistoryFilePath
+
 	return protoSession
 }
 

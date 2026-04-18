@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState, CheckpointProto } from "@/gen/session/v1/types_pb";
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
@@ -10,6 +10,8 @@ import { TagEditor } from "./TagEditor";
 import { useTerminalSnapshot } from "@/lib/hooks/useTerminalSnapshot";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import * as snapshotStyles from "./SessionCard.css";
+import { CheckpointButton } from "./CheckpointButton";
+import { CheckpointList } from "./CheckpointList";
 import styles from "./SessionCard.module.css";
 
 interface SessionCardProps {
@@ -60,9 +62,6 @@ export function SessionCard({
   const [showActions, setShowActions] = useState(false);
   const [newTitle, setNewTitle] = useState(session.title);
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
-  const [isCheckpointOpen, setIsCheckpointOpen] = useState(false);
-  const [checkpointLabel, setCheckpointLabel] = useState("");
-  const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
   const [isForkOpen, setIsForkOpen] = useState(false);
   const [forkCheckpoints, setForkCheckpoints] = useState<CheckpointProto[]>([]);
   const [forkTitle, setForkTitle] = useState("");
@@ -72,29 +71,38 @@ export function SessionCard({
   const [isRestarting, setIsRestarting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [renameError, setRenameError] = useState("");
-  const [checkpointError, setCheckpointError] = useState("");
   const [forkError, setForkError] = useState("");
   const [isSnapshotOpen, setIsSnapshotOpen] = useState(false);
 
   // Refs for focus trap: dialog containers and the buttons that trigger them
   const renameDialogRef = useRef<HTMLDivElement>(null);
   const restartDialogRef = useRef<HTMLDivElement>(null);
-  const checkpointDialogRef = useRef<HTMLDivElement>(null);
   const forkDialogRef = useRef<HTMLDivElement>(null);
   const renameTriggerRef = useRef<HTMLButtonElement>(null);
   const restartTriggerRef = useRef<HTMLButtonElement>(null);
-  const checkpointTriggerRef = useRef<HTMLButtonElement>(null);
   const forkTriggerRef = useRef<HTMLButtonElement>(null);
 
   useFocusTrap(renameDialogRef, isRenameOpen, renameTriggerRef);
   useFocusTrap(restartDialogRef, isRestartConfirmOpen, restartTriggerRef);
-  useFocusTrap(checkpointDialogRef, isCheckpointOpen, checkpointTriggerRef);
   useFocusTrap(forkDialogRef, isForkOpen, forkTriggerRef);
 
   // Only fetch snapshot for running sessions (paused/loading sessions have stale output)
   const isSnapshotEnabled = session.status === SessionStatus.RUNNING && isSnapshotOpen;
   const { html: snapshotHtml, isEmpty: snapshotIsEmpty, loading: snapshotLoading, error: snapshotError } =
     useTerminalSnapshot(session.id, isSnapshotEnabled);
+
+  const [loadedCheckpoints, setLoadedCheckpoints] = useState<CheckpointProto[]>([]);
+
+  // Load checkpoints on mount and refresh when a new checkpoint is created
+  const refreshCheckpoints = useCallback(async () => {
+    if (!onListCheckpoints) return;
+    const cps = await onListCheckpoints(session.id);
+    setLoadedCheckpoints(cps);
+  }, [onListCheckpoints, session.id]);
+
+  useEffect(() => {
+    refreshCheckpoints();
+  }, [refreshCheckpoints]);
 
   const getStatusColor = (status: SessionStatus): string => {
     switch (status) {
@@ -318,37 +326,6 @@ export function SessionCard({
     setIsRestartConfirmOpen(false);
   };
 
-  const handleCheckpointClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCheckpointLabel("");
-    setIsCheckpointOpen(true);
-  };
-
-  const handleCheckpointSubmit = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!checkpointLabel.trim()) return;
-    setIsCreatingCheckpoint(true);
-    setCheckpointError("");
-    try {
-      const success = await onCreateCheckpoint?.(session.id, checkpointLabel.trim());
-      if (success) {
-        setIsCheckpointOpen(false);
-      } else {
-        setCheckpointError("Failed to create checkpoint");
-      }
-    } catch (error) {
-      setCheckpointError(error instanceof Error ? error.message : "Failed to create checkpoint");
-    } finally {
-      setIsCreatingCheckpoint(false);
-    }
-  };
-
-  const handleCheckpointCancel = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsCheckpointOpen(false);
-    setCheckpointError("");
-  };
-
   const handleForkClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const cps = await onListCheckpoints?.(session.id) ?? [];
@@ -461,51 +438,6 @@ export function SessionCard({
               <button
                 onClick={handleRestartCancel}
                 disabled={isRestarting}
-                className={styles.cancelButton}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-      {isCheckpointOpen && createPortal(
-        <div className={styles.renameDialog} onClick={handleCheckpointCancel as unknown as React.MouseEventHandler}>
-          <div
-            ref={checkpointDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="checkpointDialogTitle"
-            className={styles.dialogContent}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 id="checkpointDialogTitle">Create Checkpoint</h3>
-            <p>Enter a label for this checkpoint of &quot;{session.title}&quot;:</p>
-            <input
-              type="text"
-              value={checkpointLabel}
-              onChange={(e) => setCheckpointLabel(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCheckpointSubmit(e as unknown as React.MouseEvent);
-                if (e.key === "Escape") handleCheckpointCancel(e as unknown as React.MouseEvent);
-              }}
-              placeholder="e.g. before refactor, working state"
-              className={styles.renameInput}
-              autoFocus
-            />
-            {checkpointError && <span className={styles.errorMessage}>{checkpointError}</span>}
-            <div className={styles.dialogActions}>
-              <button
-                onClick={handleCheckpointSubmit}
-                disabled={isCreatingCheckpoint || !checkpointLabel.trim()}
-                className={styles.submitButton}
-              >
-                {isCreatingCheckpoint ? "Saving..." : "📍 Save Checkpoint"}
-              </button>
-              <button
-                onClick={handleCheckpointCancel}
-                disabled={isCreatingCheckpoint}
                 className={styles.cancelButton}
               >
                 Cancel
@@ -761,6 +693,15 @@ export function SessionCard({
         )}
       </div>
 
+      {onListCheckpoints && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <CheckpointList
+            sessionId={session.id}
+            checkpoints={loadedCheckpoints}
+          />
+        </div>
+      )}
+
       <div className={styles.footer}>
           {/* Desktop: primary action + overflow menu */}
           <div className={styles.desktopActions}>
@@ -841,15 +782,14 @@ export function SessionCard({
                     <span aria-hidden="true">🔄</span> Restart
                   </button>
                   {onCreateCheckpoint && (
-                    <button
-                      ref={checkpointTriggerRef}
-                      role="menuitem"
-                      className={styles.overflowMenuItem}
-                      onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleCheckpointClick(e); }}
-                      aria-label={`Create checkpoint for session ${session.title}`}
-                    >
-                      <span aria-hidden="true">📍</span> Checkpoint
-                    </button>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <CheckpointButton
+                        sessionId={session.id}
+                        isRunning={session.status === SessionStatus.RUNNING}
+                        onCreateCheckpoint={onCreateCheckpoint}
+                        onCheckpointCreated={() => { setShowOverflow(false); refreshCheckpoints(); }}
+                      />
+                    </div>
                   )}
                   {onForkFromCheckpoint && (
                     <button
@@ -957,14 +897,14 @@ export function SessionCard({
             <span aria-hidden="true">🔄</span> Restart
           </button>
           {onCreateCheckpoint && (
-            <button
-              className={styles.actionButton}
-              onClick={handleCheckpointClick}
-              title="Save a named checkpoint of the current session state"
-              aria-label={`Create checkpoint for session ${session.title}`}
-            >
-              <span aria-hidden="true">📍</span> Checkpoint
-            </button>
+            <div onClick={(e) => e.stopPropagation()}>
+              <CheckpointButton
+                sessionId={session.id}
+                isRunning={session.status === SessionStatus.RUNNING}
+                onCreateCheckpoint={onCreateCheckpoint}
+                onCheckpointCreated={() => refreshCheckpoints()}
+              />
+            </div>
           )}
           {onForkFromCheckpoint && (
             <button
