@@ -36,7 +36,7 @@ export const approvalsApi = connectApi.injectEndpoints({
           const req = create(ListPendingApprovalsRequestSchema, {});
           const response = await client.listPendingApprovals(req);
           // Serialize to plain objects (boundary rule: no protobuf instances in Redux).
-          const approvals = response.approvals.map((a) => toPlainObject(a) as PlainApproval);
+          const approvals = response.approvals.map((a) => toPlainObject(a) as unknown as PlainApproval);
           return { data: { approvals } };
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Failed to fetch approvals";
