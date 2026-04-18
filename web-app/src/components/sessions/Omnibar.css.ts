@@ -1,4 +1,4 @@
-import { style, keyframes } from "@vanilla-extract/css";
+import { style, keyframes, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme-contract.css";
 
 const fadeIn = keyframes({
@@ -204,13 +204,12 @@ export const checkbox = style({
   cursor: "pointer",
   fontSize: 14,
   color: vars.color.textPrimary,
-  selectors: {
-    "& input": {
-      width: 16,
-      height: 16,
-      cursor: "pointer",
-    },
-  },
+});
+
+globalStyle(`${checkbox} input`, {
+  width: 16,
+  height: 16,
+  cursor: "pointer",
 });
 
 export const collapsible = style({
