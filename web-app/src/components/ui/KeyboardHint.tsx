@@ -1,12 +1,12 @@
 import {
-  hint,
-  keys,
-  key,
+  hint as hintClass,
+  keys as keysClass,
+  key as keyClass,
   separator,
-  description,
+  description as descriptionClass,
   hintsContainer,
-  title,
-  hints,
+  title as titleClass,
+  hints as hintsClass,
 } from "./KeyboardHint.css";
 
 interface KeyboardHintProps {
@@ -19,18 +19,18 @@ export function KeyboardHint({ keys, description, className = "" }: KeyboardHint
   const keyArray = Array.isArray(keys) ? keys : [keys];
 
   return (
-    <div className={`${hint} ${className}`}>
-      <div className={keys}>
+    <div className={`${hintClass} ${className}`}>
+      <div className={keysClass}>
         {keyArray.map((key, index) => (
           <span key={index}>
-            <kbd className={key}>{key}</kbd>
+            <kbd className={keyClass}>{key}</kbd>
             {index < keyArray.length - 1 && (
               <span className={separator}>+</span>
             )}
           </span>
         ))}
       </div>
-      <span className={description}>{description}</span>
+      <span className={descriptionClass}>{description}</span>
     </div>
   );
 }
@@ -47,8 +47,8 @@ interface KeyboardHintsProps {
 export function KeyboardHints({ hints, title, className = "" }: KeyboardHintsProps) {
   return (
     <div className={`${hintsContainer} ${className}`}>
-      {title && <h3 className={title}>{title}</h3>}
-      <div className={hints}>
+      {title && <h3 className={titleClass}>{title}</h3>}
+      <div className={hintsClass}>
         {hints.map((hint, index) => (
           <KeyboardHint
             key={index}
