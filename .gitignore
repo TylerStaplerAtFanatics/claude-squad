@@ -4,6 +4,7 @@
 stapler-squad
 claude-squad
 claude-mux
+ssq-hooks
 **.DS_Store
 cs
 stapler-squad-test
