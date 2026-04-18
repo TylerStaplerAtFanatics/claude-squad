@@ -4,7 +4,7 @@ import { ClaudeHistoryEntry, ClaudeMessage } from "@/gen/session/v1/session_pb";
 import { VCSType } from "@/gen/session/v1/types_pb";
 import { formatDate } from "@/lib/utils/timestamp";
 import { VcsStatusDisplay } from "@/components/shared/VcsStatusDisplay";
-import styles from "./HistoryDetailPanel.module.css";
+import * as styles from "./HistoryDetailPanel.css";
 
 interface HistoryDetailPanelProps {
   entry: ClaudeHistoryEntry | null;

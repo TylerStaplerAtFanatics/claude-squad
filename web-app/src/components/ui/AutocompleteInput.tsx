@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
-import styles from "./AutocompleteInput.module.css";
+import {
+  container as containerClass,
+  error as errorClass,
+  suggestions as suggestionsClass,
+  suggestion,
+  highlighted,
+  loading,
+} from "./AutocompleteInput.css";
 
 interface AutocompleteInputProps {
   id: string;
@@ -137,7 +144,7 @@ export function AutocompleteInput({
   };
 
   return (
-    <div className={styles.container}>
+    <div className={containerClass}>
       <input
         ref={inputRef}
         id={id}
@@ -148,33 +155,33 @@ export function AutocompleteInput({
         onFocus={handleFocus}
         onBlur={handleBlur}
         placeholder={placeholder}
-        className={`${className} ${error ? styles.error : ""}`}
+        className={`${className} ${error ? errorClass : ""}`}
         disabled={disabled}
         data-testid={dataTestId}
         autoComplete="off"
       />
 
       {isOpen && filteredSuggestions.length > 0 && (
-        <ul ref={listRef} className={styles.suggestions} role="listbox">
-          {filteredSuggestions.map((suggestion, index) => (
+        <ul ref={listRef} className={suggestionsClass} role="listbox">
+          {filteredSuggestions.map((sugg, index) => (
             <li
-              key={suggestion}
-              className={`${styles.suggestion} ${
-                index === highlightedIndex ? styles.highlighted : ""
+              key={sugg}
+              className={`${suggestion} ${
+                index === highlightedIndex ? highlighted : ""
               }`}
-              onClick={() => handleSuggestionClick(suggestion)}
+              onClick={() => handleSuggestionClick(sugg)}
               onMouseEnter={() => setHighlightedIndex(index)}
               role="option"
               aria-selected={index === highlightedIndex}
             >
-              {suggestion}
+              {sugg}
             </li>
           ))}
         </ul>
       )}
 
       {isOpen && isLoading && (
-        <div className={styles.loading}>Loading suggestions...</div>
+        <div className={loading}>Loading suggestions...</div>
       )}
     </div>
   );

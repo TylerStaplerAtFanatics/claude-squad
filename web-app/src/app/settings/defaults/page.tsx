@@ -3,7 +3,7 @@
 import { GlobalDefaultsForm } from "@/components/settings/GlobalDefaultsForm";
 import { ProfilesManager } from "@/components/settings/ProfilesManager";
 import { DirectoryRulesManager } from "@/components/settings/DirectoryRulesManager";
-import styles from "./defaults.module.css";
+import * as styles from "./defaults.css";
 
 export default function DefaultsPage() {
   return (

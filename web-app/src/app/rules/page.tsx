@@ -2,7 +2,7 @@
 
 import { ApprovalRulesPanel } from "@/components/sessions/ApprovalRulesPanel";
 import { ApprovalAnalyticsPanel } from "@/components/sessions/ApprovalAnalyticsPanel";
-import styles from "./page.module.css";
+import * as styles from "./page.css";
 
 export default function RulesPage() {
   return (

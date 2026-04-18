@@ -6,7 +6,7 @@ import { XtermTerminal, type XtermTerminalHandle } from "./XtermTerminal";
 import { TerminalStreamManager } from "@/lib/terminal/TerminalStreamManager";
 import { getCachedDimensions, saveDimensions } from "@/lib/terminal/TerminalDimensionCache";
 import { track } from "@/lib/telemetry";
-import styles from "./TerminalOutput.module.css";
+import * as styles from "./TerminalOutput.css";
 
 interface TerminalOutputProps {
   sessionId: string;

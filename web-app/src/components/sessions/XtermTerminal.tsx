@@ -5,10 +5,9 @@ import { Terminal } from "@xterm/xterm";
 import { useTouchScroll } from "@/lib/hooks/useTouchScroll";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { WebglAddon } from "@xterm/addon-webgl";
 import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
-import styles from "./XtermTerminal.module.css";
+import * as styles from "./XtermTerminal.css";
 import { loadTerminalConfig, darkTerminalTheme, lightTerminalTheme, type TerminalConfig } from "@/lib/config/terminalConfig";
 
 export interface XtermTerminalProps {
@@ -149,18 +148,25 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, XtermTerminalProps>
     terminal.loadAddon(webLinksAddon);
     terminal.loadAddon(searchAddon);
 
-    // Always enable WebGL renderer for best performance (falls back to canvas if unavailable)
-    try {
-      const webglAddon = new WebglAddon();
-      webglAddon.onContextLoss(() => {
-        console.warn('[XtermTerminal] WebGL context lost, falling back to canvas renderer');
-        webglAddon.dispose();
-      });
-      terminal.loadAddon(webglAddon);
-      console.log("[XtermTerminal] WebGL renderer enabled");
-    } catch (e) {
-      console.warn("[XtermTerminal] WebGL not available, using canvas fallback:", e);
-    }
+    // xterm.js issue #2033 — guard WebGL before loading on Android/mobile
+    (async () => {
+      if (typeof WebGL2RenderingContext !== 'undefined') {
+        try {
+          const { WebglAddon } = await import('@xterm/addon-webgl');
+          const webglAddon = new WebglAddon();
+          webglAddon.onContextLoss(() => {
+            console.warn('[XtermTerminal] WebGL context lost, falling back to canvas renderer');
+            webglAddon.dispose();
+          });
+          terminal.loadAddon(webglAddon);
+          console.log("[XtermTerminal] WebGL renderer enabled");
+        } catch (e) {
+          console.warn("[XtermTerminal] WebGL failed to load:", e);
+        }
+      } else {
+        console.log("[XtermTerminal] WebGL2 unavailable (Android?), using canvas renderer");
+      }
+    })();
 
     // Open terminal in container with error boundary
     try {

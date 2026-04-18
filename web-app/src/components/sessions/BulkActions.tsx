@@ -1,6 +1,8 @@
 "use client";
 
-import styles from "./BulkActions.module.css";
+import {
+  container, selection, count, selectAllButton, clearButton, actions, actionButton, danger, feedback as feedbackClass,
+} from "./BulkActions.css";
 
 interface BulkActionsProps {
   selectedCount: number;
@@ -30,50 +32,50 @@ export function BulkActions({
   if (selectedCount === 0) return null;
 
   return (
-    <div className={styles.container}>
-      {feedback && <div className={styles.feedback}>{feedback}</div>}
-      <div className={styles.selection}>
-        <span className={styles.count}>
+    <div className={container}>
+      {feedback && <div className={feedbackClass}>{feedback}</div>}
+      <div className={selection}>
+        <span className={count}>
           {selectedCount} of {totalCount} selected
         </span>
         {selectedCount < totalCount && (
-          <button onClick={onSelectAll} className={styles.selectAllButton}>
+          <button onClick={onSelectAll} className={selectAllButton}>
             Select All
           </button>
         )}
-        <button onClick={onClearSelection} className={styles.clearButton}>
+        <button onClick={onClearSelection} className={clearButton}>
           Clear Selection
         </button>
       </div>
 
-      <div className={styles.actions}>
+      <div className={actions}>
         <button
           onClick={onPauseAll}
-          className={styles.actionButton}
+          className={actionButton}
         >
           ⏸️ Pause Selected
         </button>
         <button
           onClick={onResumeAll}
-          className={styles.actionButton}
+          className={actionButton}
         >
           ▶️ Resume Selected
         </button>
         <button
           onClick={onStopAll}
-          className={styles.actionButton}
+          className={actionButton}
         >
           ⏹️ Stop Selected
         </button>
         <button
           onClick={onAddTagAll}
-          className={styles.actionButton}
+          className={actionButton}
         >
           🏷️ Add Tag
         </button>
         <button
           onClick={onDeleteAll}
-          className={`${styles.actionButton} ${styles.danger}`}
+          className={`${actionButton} ${danger}`}
         >
           🗑️ Delete Selected
         </button>

@@ -1,6 +1,17 @@
 "use client";
 
-import styles from "./ActionBar.module.css";
+import {
+  actionBar,
+  gapSm,
+  gapMd,
+  gapLg,
+  justifyStart,
+  justifyEnd,
+  justifyBetween,
+  justifyCenter,
+  scroll as scrollClass,
+  compact as compactClass,
+} from "./ActionBar.css";
 
 interface ActionBarProps {
   children: React.ReactNode;
@@ -15,25 +26,25 @@ interface ActionBarProps {
 }
 
 const gapClass = {
-  sm: styles.gapSm,
-  md: styles.gapMd,
-  lg: styles.gapLg,
+  sm: gapSm,
+  md: gapMd,
+  lg: gapLg,
 } as const;
 
 const justifyClass = {
-  start: styles.justifyStart,
-  end: styles.justifyEnd,
-  between: styles.justifyBetween,
-  center: styles.justifyCenter,
+  start: justifyStart,
+  end: justifyEnd,
+  between: justifyBetween,
+  center: justifyCenter,
 } as const;
 
 export function ActionBar({ children, gap = "md", justify = "start", scroll, compact, className, id }: ActionBarProps) {
   const classes = [
-    styles.actionBar,
+    actionBar,
     gapClass[gap],
     justifyClass[justify],
-    scroll ? styles.scroll : undefined,
-    compact ? styles.compact : undefined,
+    scroll ? scrollClass : undefined,
+    compact ? compactClass : undefined,
     className,
   ]
     .filter(Boolean)

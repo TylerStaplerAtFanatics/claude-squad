@@ -2,7 +2,22 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchHistory, type SearchHistoryEntry } from '@/lib/hooks/useSearchHistory';
-import styles from './SearchWithHistory.module.css';
+import {
+  container,
+  inputWrapper,
+  input,
+  clearButton,
+  dropdown,
+  header,
+  clearAllButton,
+  items,
+  item,
+  itemSelected,
+  historyIcon,
+  query,
+  timestamp,
+  removeButton,
+} from './SearchWithHistory.css';
 
 interface SearchWithHistoryProps {
   /** Current search value */
@@ -143,10 +158,10 @@ export function SearchWithHistory({
 
   return (
     <div
-      className={`${styles.container} ${className || ''}`}
+      className={`${container} ${className || ''}`}
       ref={containerRef}
     >
-      <div className={styles.inputWrapper}>
+      <div className={inputWrapper}>
         <input
           ref={inputRef}
           id={id}
@@ -156,7 +171,7 @@ export function SearchWithHistory({
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={styles.input}
+          className={input}
           aria-label="Search logs"
           aria-expanded={showHistory}
           aria-controls="search-history"
@@ -165,7 +180,7 @@ export function SearchWithHistory({
         />
         {value && (
           <button
-            className={styles.clearButton}
+            className={clearButton}
             onClick={handleClear}
             aria-label="Clear search"
             type="button"
@@ -178,13 +193,13 @@ export function SearchWithHistory({
       {showHistory && history.length > 0 && (
         <div
           id="search-history"
-          className={styles.dropdown}
+          className={dropdown}
           role="listbox"
         >
-          <div className={styles.header}>
+          <div className={header}>
             <span>Recent Searches</span>
             <button
-              className={styles.clearAllButton}
+              className={clearAllButton}
               onClick={() => {
                 clearHistory();
                 setShowHistory(false);
@@ -194,20 +209,20 @@ export function SearchWithHistory({
               Clear all
             </button>
           </div>
-          <div className={styles.items}>
+          <div className={items}>
             {history.map((entry, index) => (
               <div
                 key={entry.query}
-                className={`${styles.item} ${index === selectedIndex ? styles.selected : ''}`}
+                className={`${item} ${index === selectedIndex ? itemSelected : ''}`}
                 onClick={() => handleSelect(entry.query)}
                 role="option"
                 aria-selected={index === selectedIndex}
               >
-                <span className={styles.historyIcon}>🕐</span>
-                <span className={styles.query}>{entry.query}</span>
-                <span className={styles.timestamp}>{formatTime(entry.timestamp)}</span>
+                <span className={historyIcon}>🕐</span>
+                <span className={query}>{entry.query}</span>
+                <span className={timestamp}>{formatTime(entry.timestamp)}</span>
                 <button
-                  className={styles.removeButton}
+                  className={removeButton}
                   onClick={(e) => handleRemove(e, entry.query)}
                   aria-label={`Remove "${entry.query}" from history`}
                   type="button"
