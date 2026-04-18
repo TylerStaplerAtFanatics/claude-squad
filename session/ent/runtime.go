@@ -127,29 +127,29 @@ func init() {
 	// session.TitleValidator is a validator for the "title" field. It is called by the builders before save.
 	session.TitleValidator = sessionDescTitle.Validators[0].(func(string) error)
 	// sessionDescPath is the schema descriptor for path field.
-	sessionDescPath := sessionFields[1].Descriptor()
+	sessionDescPath := sessionFields[2].Descriptor()
 	// session.PathValidator is a validator for the "path" field. It is called by the builders before save.
 	session.PathValidator = sessionDescPath.Validators[0].(func(string) error)
 	// sessionDescCreatedAt is the schema descriptor for created_at field.
-	sessionDescCreatedAt := sessionFields[7].Descriptor()
+	sessionDescCreatedAt := sessionFields[8].Descriptor()
 	// session.DefaultCreatedAt holds the default value on creation for the created_at field.
 	session.DefaultCreatedAt = sessionDescCreatedAt.Default.(func() time.Time)
 	// sessionDescUpdatedAt is the schema descriptor for updated_at field.
-	sessionDescUpdatedAt := sessionFields[8].Descriptor()
+	sessionDescUpdatedAt := sessionFields[9].Descriptor()
 	// session.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	session.DefaultUpdatedAt = sessionDescUpdatedAt.Default.(func() time.Time)
 	// session.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	session.UpdateDefaultUpdatedAt = sessionDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// sessionDescAutoYes is the schema descriptor for auto_yes field.
-	sessionDescAutoYes := sessionFields[9].Descriptor()
+	sessionDescAutoYes := sessionFields[10].Descriptor()
 	// session.DefaultAutoYes holds the default value on creation for the auto_yes field.
 	session.DefaultAutoYes = sessionDescAutoYes.Default.(bool)
 	// sessionDescProgram is the schema descriptor for program field.
-	sessionDescProgram := sessionFields[11].Descriptor()
+	sessionDescProgram := sessionFields[12].Descriptor()
 	// session.ProgramValidator is a validator for the "program" field. It is called by the builders before save.
 	session.ProgramValidator = sessionDescProgram.Validators[0].(func(string) error)
 	// sessionDescIsExpanded is the schema descriptor for is_expanded field.
-	sessionDescIsExpanded := sessionFields[14].Descriptor()
+	sessionDescIsExpanded := sessionFields[15].Descriptor()
 	// session.DefaultIsExpanded holds the default value on creation for the is_expanded field.
 	session.DefaultIsExpanded = sessionDescIsExpanded.Default.(bool)
 	tagFields := schema.Tag{}.Fields()

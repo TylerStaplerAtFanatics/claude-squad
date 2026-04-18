@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -173,4 +174,74 @@ func TestDiffStatsDataRoundTrip(t *testing.T) {
 
 	// Content should NOT be preserved (this is the desired behavior)
 	assert.Empty(t, loaded.Content, "content should be empty after round trip")
+}
+
+// TestLoadInstances_UUIDStabilityAcrossLoads verifies that a legacy session stored
+// without a UUID gets a stable UUID assigned on first load and that UUID is persisted
+// so subsequent loads return the same ID.
+//
+// This is a regression test for the bug where FromInstanceData assigned a fresh random
+// UUID on every call, causing the same session to appear with a different proto ID on
+// each LoadInstances call.  The symptom was duplicate sessions in the web UI and
+// sessions disappearing on page reload.
+func TestLoadInstances_UUIDStabilityAcrossLoads(t *testing.T) {
+	repo, cleanup := createTestEntRepository(t)
+	defer cleanup()
+
+	// Store a legacy session with no UUID — simulates sessions created before UUID support.
+	legacy := createTestSession("legacy-no-uuid")
+	legacy.UUID = "" // ensure no UUID
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, legacy))
+
+	storage, err := NewStorageWithRepository(repo)
+	require.NoError(t, err)
+
+	// First load: UUID should be assigned and persisted.
+	firstLoad, err := storage.LoadInstances()
+	require.NoError(t, err)
+	require.Len(t, firstLoad, 1)
+	firstID := firstLoad[0].GetStableID()
+	assert.NotEmpty(t, firstID, "first load should produce a non-empty stable ID")
+
+	// Second load: must return the same ID — not a newly generated one.
+	secondLoad, err := storage.LoadInstances()
+	require.NoError(t, err)
+	require.Len(t, secondLoad, 1)
+	secondID := secondLoad[0].GetStableID()
+
+	assert.Equal(t, firstID, secondID,
+		"stable ID must not change between loads (duplicate sessions / disappearing sessions bug)")
+
+	// Also confirm the UUID was persisted back to the DB.
+	stored, err := repo.Get(ctx, "legacy-no-uuid")
+	require.NoError(t, err)
+	assert.Equal(t, firstID, stored.UUID,
+		"migrated UUID should be written back to the repository")
+}
+
+// TestLoadInstances_ExistingUUIDUnchanged verifies that sessions already stored with
+// a UUID are never reassigned a different one.
+func TestLoadInstances_ExistingUUIDUnchanged(t *testing.T) {
+	repo, cleanup := createTestEntRepository(t)
+	defer cleanup()
+
+	const fixedUUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	session := createTestSession("has-uuid")
+	session.UUID = fixedUUID
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, session))
+
+	storage, err := NewStorageWithRepository(repo)
+	require.NoError(t, err)
+
+	load1, err := storage.LoadInstances()
+	require.NoError(t, err)
+	require.Len(t, load1, 1)
+	assert.Equal(t, fixedUUID, load1[0].GetStableID())
+
+	load2, err := storage.LoadInstances()
+	require.NoError(t, err)
+	require.Len(t, load2, 1)
+	assert.Equal(t, fixedUUID, load2[0].GetStableID())
 }
