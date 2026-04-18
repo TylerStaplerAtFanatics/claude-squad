@@ -3,7 +3,6 @@ package services
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -79,20 +78,46 @@ func (h *ImageUploadHandler) HandleUpload(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if req.Data == "" {
+		http.Error(w, "data is required", http.StatusBadRequest)
+		return
+	}
+	ext := extensionFor(req.ContentType)
+	if ext == "" {
+		http.Error(w, "unsupported content type", http.StatusBadRequest)
+		return
+	}
+
 	data, err := base64.StdEncoding.DecodeString(req.Data)
 	if err != nil {
 		http.Error(w, "invalid base64 data", http.StatusBadRequest)
 		return
 	}
+	if len(data) == 0 {
+		http.Error(w, "image data is empty", http.StatusBadRequest)
+		return
+	}
 
-	ext := extensionFor(req.ContentType)
-	name := fmt.Sprintf("paste-%d%s", time.Now().UnixMilli(), ext)
-	path := filepath.Join(h.dir, name)
+	// Use os.CreateTemp so the kernel guarantees a unique filename (no collision risk).
+	f, err := os.CreateTemp(h.dir, "paste-*"+ext)
+	if err != nil {
+		log.ErrorLog.Printf("[ImageUpload] create temp file failed: %v", err)
+		http.Error(w, "failed to save image", http.StatusInternalServerError)
+		return
+	}
+	path := f.Name()
 
-	if err := os.WriteFile(path, data, imageFileMode); err != nil {
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(path)
 		log.ErrorLog.Printf("[ImageUpload] write failed: %v", err)
 		http.Error(w, "failed to save image", http.StatusInternalServerError)
 		return
+	}
+	f.Close()
+
+	if err := os.Chmod(path, imageFileMode); err != nil {
+		log.ErrorLog.Printf("[ImageUpload] chmod failed: %v", err)
 	}
 
 	log.InfoLog.Printf("[ImageUpload] saved %d bytes → %s", len(data), path)
@@ -101,8 +126,12 @@ func (h *ImageUploadHandler) HandleUpload(w http.ResponseWriter, r *http.Request
 	_ = json.NewEncoder(w).Encode(imageUploadResponse{Path: path})
 }
 
+// extensionFor maps an image content-type to a file extension.
+// Returns "" for unrecognised types so the caller can reject them.
 func extensionFor(contentType string) string {
 	switch strings.ToLower(strings.TrimSpace(contentType)) {
+	case "image/png":
+		return ".png"
 	case "image/jpeg", "image/jpg":
 		return ".jpg"
 	case "image/gif":
@@ -110,6 +139,6 @@ func extensionFor(contentType string) string {
 	case "image/webp":
 		return ".webp"
 	default:
-		return ".png"
+		return ""
 	}
 }

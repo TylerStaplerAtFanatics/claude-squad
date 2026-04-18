@@ -331,17 +331,21 @@ export function useTerminalFlowControl({
       return;
     }
 
-    // Large input: send in chunks to avoid tmux/WebSocket buffer limits
+    // Large input: send in chunks to avoid tmux/WebSocket buffer limits.
+    // Capture sessionId at call-time — if the session changes mid-paste the
+    // pending chunks are aborted (sessionIdAtStart !== current sessionId).
+    const sessionIdAtStart = sessionId;
     let offset = 0;
     const sendChunk = () => {
       if (!pushMessageRef.current || !isConnectedRef.current) return;
+      if (sessionId !== sessionIdAtStart) return; // session changed; abort
       if (offset >= inputBytes.length) return;
       const chunk = inputBytes.slice(offset, offset + PASTE_CHUNK_SIZE);
       offset += PASTE_CHUNK_SIZE;
       try {
         pushMessage(
           create(TerminalDataSchema, {
-            sessionId,
+            sessionId: sessionIdAtStart,
             data: {
               case: "input",
               value: create(TerminalInputSchema, { data: chunk }),

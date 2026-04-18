@@ -69,9 +69,13 @@ export function useMobileTerminalGestures({
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
       const t = e.touches[0];
-      touchState.startX = t.clientX;
-      touchState.startY = t.clientY;
-      touchState.lastY = t.clientY;
+      // Capture primitives immediately — Touch objects are event-scoped and
+      // may be recycled/invalid after the handler returns (especially in Safari).
+      const startX = t.clientX;
+      const startY = t.clientY;
+      touchState.startX = startX;
+      touchState.startY = startY;
+      touchState.lastY = startY;
       touchState.isSelecting = false;
       clearSelectionTimer();
 
@@ -80,7 +84,7 @@ export function useMobileTerminalGestures({
         if (getMouseTracking() !== 'none') return;
         touchState.isSelecting = true;
         getScreenEl()?.dispatchEvent(new MouseEvent('mousedown', {
-          clientX: t.clientX, clientY: t.clientY,
+          clientX: startX, clientY: startY,
           bubbles: true, cancelable: true, button: 0, buttons: 1,
         }));
       }, longPressMsRef.current);
