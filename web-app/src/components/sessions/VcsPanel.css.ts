@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { style, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const container = style({
@@ -304,47 +304,29 @@ export const filePath = style({
   whiteSpace: "nowrap",
 });
 
-export const modified = style({
-  selectors: {
-    [`& .${fileStatus}`]: { color: "#f7cb68" },
-    [`& .${filePath}`]: { color: "#f7cb68" },
-  },
-});
+export const modified = style({});
+globalStyle(`${modified} .${fileStatus}`, { color: "#f7cb68" });
+globalStyle(`${modified} .${filePath}`, { color: "#f7cb68" });
 
-export const added = style({
-  selectors: {
-    [`& .${fileStatus}`]: { color: "#7ee787" },
-    [`& .${filePath}`]: { color: "#7ee787" },
-  },
-});
+export const added = style({});
+globalStyle(`${added} .${fileStatus}`, { color: "#7ee787" });
+globalStyle(`${added} .${filePath}`, { color: "#7ee787" });
 
-export const deleted = style({
-  selectors: {
-    [`& .${fileStatus}`]: { color: "#f97583" },
-    [`& .${filePath}`]: { color: "#f97583" },
-  },
-});
+export const deleted = style({});
+globalStyle(`${deleted} .${fileStatus}`, { color: "#f97583" });
+globalStyle(`${deleted} .${filePath}`, { color: "#f97583" });
 
-export const renamed = style({
-  selectors: {
-    [`& .${fileStatus}`]: { color: "#d2a8ff" },
-    [`& .${filePath}`]: { color: "#d2a8ff" },
-  },
-});
+export const renamed = style({});
+globalStyle(`${renamed} .${fileStatus}`, { color: "#d2a8ff" });
+globalStyle(`${renamed} .${filePath}`, { color: "#d2a8ff" });
 
-export const untracked = style({
-  selectors: {
-    [`& .${fileStatus}`]: { color: "#888" },
-    [`& .${filePath}`]: { color: "#888" },
-  },
-});
+export const untracked = style({});
+globalStyle(`${untracked} .${fileStatus}`, { color: "#888" });
+globalStyle(`${untracked} .${filePath}`, { color: "#888" });
 
-export const conflict = style({
-  selectors: {
-    [`& .${fileStatus}`]: { color: "#f97583", fontWeight: "bold" },
-    [`& .${filePath}`]: { color: "#f97583", fontWeight: "bold" },
-  },
-});
+export const conflict = style({});
+globalStyle(`${conflict} .${fileStatus}`, { color: "#f97583", fontWeight: "bold" });
+globalStyle(`${conflict} .${filePath}`, { color: "#f97583", fontWeight: "bold" });
 
 export const filePathClickable = style({
   cursor: "pointer",

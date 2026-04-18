@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { style, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const actionBar = style({
@@ -29,10 +29,13 @@ export const compact = style({
       scrollbarWidth: "none",
       selectors: {
         "&::-webkit-scrollbar": { display: "none" },
-        "& > *": { flexShrink: 0 },
       },
     },
   },
+});
+
+globalStyle(`${compact} > *`, {
+  "@media": { "screen and (max-width: 768px)": { flexShrink: 0 } },
 });
 
 export const scroll = style({
@@ -46,10 +49,11 @@ export const scroll = style({
         "&::-webkit-scrollbar": {
           display: "none",
         },
-        "& > *": {
-          flexShrink: 0,
-        },
       },
     },
   },
+});
+
+globalStyle(`${scroll} > *`, {
+  "@media": { "screen and (max-width: 640px)": { flexShrink: 0 } },
 });
