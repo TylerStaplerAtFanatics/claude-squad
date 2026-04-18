@@ -416,3 +416,48 @@ export const noTerminalSubtext = style({
   maxWidth: "400px",
   lineHeight: 1.5,
 });
+
+// Mobile-fullscreen overrides — applied when isFullscreen is true.
+// Vanilla-extract can't express @media inside compound selectors, so we use
+// separate exported classes that SessionDetail.tsx applies conditionally.
+
+export const fullscreenMobileHeader = style({
+  "@media": {
+    "screen and (max-width: 768px)": {
+      padding: "0.25rem 0.5rem",
+      flexWrap: "nowrap",
+      rowGap: 0,
+    },
+  },
+});
+
+export const fullscreenMobileTitle = style({
+  "@media": {
+    "screen and (max-width: 768px)": {
+      flex: "1 1 auto",
+      fontSize: "0.875rem",
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      minWidth: 0,
+    },
+  },
+});
+
+export const fullscreenMobileHeaderActions = style({
+  "@media": {
+    "screen and (max-width: 768px)": {
+      width: "auto",
+      flexShrink: 0,
+    },
+  },
+});
+
+// Hides tabs in fullscreen mode on mobile to reclaim ~45px of vertical space.
+export const fullscreenMobileTabs = style({
+  "@media": {
+    "screen and (max-width: 768px)": {
+      display: "none",
+    },
+  },
+});

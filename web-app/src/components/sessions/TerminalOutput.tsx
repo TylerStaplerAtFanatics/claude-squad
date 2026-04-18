@@ -1,6 +1,32 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
+
+// xterm modifier key sequences (CSI parameter convention: modifier 5=Ctrl, 3=Alt).
+// Defined at module level to avoid per-render allocation inside sendKey.
+const CTRL_KEY_MAP: Record<string, string> = {
+  '\x1b[A': '\x1b[1;5A',  // Ctrl+Up
+  '\x1b[B': '\x1b[1;5B',  // Ctrl+Down
+  '\x1b[C': '\x1b[1;5C',  // Ctrl+Right (word forward)
+  '\x1b[D': '\x1b[1;5D',  // Ctrl+Left (word back)
+  '\x1b[H': '\x1b[1;5H',  // Ctrl+Home
+  '\x1b[F': '\x1b[1;5F',  // Ctrl+End
+  '\x1b[5~': '\x1b[5;5~', // Ctrl+PgUp
+  '\x1b[6~': '\x1b[6;5~', // Ctrl+PgDn
+  '/': '\x1f',             // Ctrl+/ (unit separator)
+  '-': '\x1f',             // Ctrl+- (maps to Ctrl+_)
+};
+
+const ALT_KEY_MAP: Record<string, string> = {
+  '\x1b[A': '\x1b[1;3A',  // Alt+Up
+  '\x1b[B': '\x1b[1;3B',  // Alt+Down
+  '\x1b[C': '\x1b[1;3C',  // Alt+Right (word forward)
+  '\x1b[D': '\x1b[1;3D',  // Alt+Left (word back)
+  '\x1b[H': '\x1b[1;3H',  // Alt+Home
+  '\x1b[F': '\x1b[1;3F',  // Alt+End
+  '\x1b[5~': '\x1b[5;3~', // Alt+PgUp
+  '\x1b[6~': '\x1b[6;3~', // Alt+PgDn
+};
 import { useTerminalStream } from "@/lib/hooks/useTerminalStream";
 import { XtermTerminal, type XtermTerminalHandle } from "./XtermTerminal";
 import { TerminalStreamManager } from "@/lib/terminal/TerminalStreamManager";
@@ -102,6 +128,15 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     return false;
   });
 
+  // Sticky modifier keys — CTRL and ALT arm on first tap, fire+clear on the next key.
+  // Mutually exclusive: arming one disarms the other.
+  const [ctrlActive, setCtrlActive] = useState(false);
+  const [altActive, setAltActive] = useState(false);
+
+  // Transient paste error shown briefly when clipboard access is denied.
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const pasteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Mobile keyboard visibility — persisted in localStorage
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(() => {
     if (typeof window === 'undefined') return true;
@@ -123,6 +158,33 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       }
       return next;
     });
+  }, []);
+
+  // Mobile detection — used to default mouse tracking mode
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 768px)').matches || 'ontouchstart' in window;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handle = () => setIsMobile(mq.matches || 'ontouchstart' in window);
+    mq.addEventListener('change', handle);
+    return () => mq.removeEventListener('change', handle);
+  }, []);
+
+  // Mouse tracking mode: "none" on mobile (enables xterm selection + touch scroll),
+  // "any" on desktop (forwards mouse events to terminal app for vim/tmux mouse support).
+  // User can toggle this via the ⌨️ toolbar to switch modes.
+  const [mouseMode, setMouseMode] = useState<'none' | 'any'>('any');
+
+  useEffect(() => {
+    setMouseMode(isMobile ? 'none' : 'any');
+  }, [isMobile]);
+
+  const toggleMouseMode = useCallback(() => {
+    setMouseMode(prev => prev === 'none' ? 'any' : 'none');
   }, []);
 
   // Streaming mode selection
@@ -278,6 +340,24 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       sendInput(data);
     }
   }, [sendInput, sendInputWithEcho, sspNegotiated]);
+
+  // Send a key sequence, applying any active sticky modifier (CTRL or ALT) first.
+  // Modifier sequences follow xterm's parameter convention:
+  //   modifier 3 = Alt (escape prefix or CSI param ;3)
+  //   modifier 5 = Ctrl (CSI param ;5)
+  const sendKey = useCallback((keyData: string) => {
+    let data = keyData;
+
+    if (ctrlActive) {
+      data = CTRL_KEY_MAP[keyData] ?? keyData;
+      setCtrlActive(false);
+    } else if (altActive) {
+      data = ALT_KEY_MAP[keyData] ?? '\x1b' + keyData;
+      setAltActive(false);
+    }
+
+    handleTerminalData(data);
+  }, [ctrlActive, altActive, handleTerminalData]);
 
   // Handle terminal resize with size stability detection
   const handleTerminalResize = useCallback((cols: number, rows: number) => {
@@ -537,6 +617,57 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     }
   };
 
+  // Read from clipboard and inject into the terminal.
+  // Text is sent directly; images are uploaded to the server and the resulting
+  // file path is inserted so the terminal process (e.g. Claude Code) can read
+  // the image from disk via normal file path conventions.
+  const handlePaste = useCallback(async () => {
+    try {
+      // navigator.clipboard.read() supports both text and image items
+      if (navigator.clipboard?.read) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const imageType = item.types.find(t => t.startsWith('image/'));
+          if (imageType) {
+            const blob = await item.getType(imageType);
+            // Convert to base64 (strip the "data:image/...;base64," prefix)
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve((reader.result as string).split(',')[1]);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+            const resp = await fetch('/api/upload/image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ data: base64, contentType: imageType }),
+            });
+            if (resp.ok) {
+              const { path } = await resp.json();
+              handleTerminalData(path);
+            }
+            return;
+          }
+          if (item.types.includes('text/plain')) {
+            const blob = await item.getType('text/plain');
+            const text = await blob.text();
+            if (text) handleTerminalData(text);
+            return;
+          }
+        }
+      } else {
+        // Fallback: text-only clipboard API
+        const text = await navigator.clipboard.readText();
+        if (text) handleTerminalData(text);
+      }
+    } catch (err) {
+      console.warn('[TerminalOutput] Clipboard access failed:', err);
+      if (pasteErrorTimerRef.current) clearTimeout(pasteErrorTimerRef.current);
+      setPasteError('Clipboard access denied');
+      pasteErrorTimerRef.current = setTimeout(() => setPasteError(null), 2500);
+    }
+  }, [handleTerminalData]);
+
   const handleScrollToBottom = () => {
     if (xtermRef.current?.terminal) {
       xtermRef.current.terminal.scrollToBottom();
@@ -686,13 +817,39 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
           >
             ↔️ Resize
           </button>
+          {/* Mobile-primary buttons first so they're always visible at 375px */}
+          <button
+            className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle}`}
+            onClick={toggleMobileKeyboard}
+            aria-label={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
+            aria-expanded={isKeyboardVisible}
+            title={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
+          >
+            ⌨️ {isKeyboardVisible ? 'Hide Keys' : 'Show Keys'}
+          </button>
+          <button
+            className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle} ${mouseMode === 'any' ? styles.mouseModeActive : ''}`}
+            onClick={toggleMouseMode}
+            aria-label={mouseMode === 'none' ? 'Enable mouse mode for terminal apps (vim, tmux)' : 'Disable mouse mode — enables text selection'}
+            title={mouseMode === 'none' ? 'Mouse OFF — tap to enable for vim/tmux' : 'Mouse ON — tap to disable, enables selection'}
+          >
+            🖱️ {mouseMode === 'none' ? 'Mouse' : 'Mouse ON'}
+          </button>
           <button
             className={styles.toolbarButton}
-            onClick={handleClear}
-            title="Clear terminal"
-            aria-label="Clear terminal"
+            onClick={handlePaste}
+            title="Paste from clipboard — text is sent directly, images are saved to a temp file and the path is inserted"
+            aria-label="Paste from clipboard"
           >
-            🗑️ Clear
+            {pasteError ? `⚠️ ${pasteError}` : '📎 Paste'}
+          </button>
+          <button
+            className={styles.toolbarButton}
+            onClick={handleCopyOutput}
+            title="Copy selected terminal text to clipboard"
+            aria-label="Copy terminal output to clipboard"
+          >
+            📋 Copy
           </button>
           <button
             className={styles.toolbarButton}
@@ -704,20 +861,11 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
           </button>
           <button
             className={styles.toolbarButton}
-            onClick={handleCopyOutput}
-            title="Copy output"
-            aria-label="Copy terminal output to clipboard"
+            onClick={handleClear}
+            title="Clear terminal"
+            aria-label="Clear terminal"
           >
-            📋 Copy
-          </button>
-          <button
-            className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle}`}
-            onClick={toggleMobileKeyboard}
-            aria-label={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
-            aria-expanded={isKeyboardVisible}
-            title={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
-          >
-            ⌨️ {isKeyboardVisible ? 'Hide Keys' : 'Show Keys'}
+            🗑️ Clear
           </button>
         </div>
       </div>
@@ -744,23 +892,46 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
   theme={theme}
   fontSize={14}
   scrollback={5000}
-  mouseTracking="any"
+  mouseTracking={mouseMode}
 />
       </div>
-      {/* Mobile keyboard toolbar — visibility controlled by toggle (persisted in localStorage) */}
+      {/* Mobile keyboard toolbar — Termux-compatible extra-keys layout.
+          Row 1: ESC / - HOME ↑ END PGUP
+          Row 2: TAB CTRL ALT ← ↓ → PGDN
+          CTRL and ALT are sticky: tap to arm, next key fires the modified sequence. */}
       {isKeyboardVisible && (
         <div className={styles.mobileKeyboard}>
           <div className={styles.mobileKeyRow}>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b'); }} aria-label="Escape">Esc</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\t'); }} aria-label="Tab">Tab</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x03'); }} aria-label="Control C">Ctrl+C</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x04'); }} aria-label="Control D">Ctrl+D</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b'); }} aria-label="Escape">Esc</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('/'); }} aria-label="Forward slash">/</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('-'); }} aria-label="Hyphen">-</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[H'); }} aria-label="Home">Home</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[A'); }} aria-label="Up arrow">↑</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[F'); }} aria-label="End">End</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[5~'); }} aria-label="Page up">PgUp</button>
           </div>
           <div className={styles.mobileKeyRow}>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[D'); }} aria-label="Left arrow">←</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[A'); }} aria-label="Up arrow">↑</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[B'); }} aria-label="Down arrow">↓</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); handleTerminalData('\x1b[C'); }} aria-label="Right arrow">→</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\t'); }} aria-label="Tab">Tab</button>
+            <button
+              className={`${styles.mobileKey} ${ctrlActive ? styles.mobileKeyActive : ''}`}
+              onPointerDown={(e) => { e.preventDefault(); setCtrlActive(p => !p); setAltActive(false); }}
+              aria-label={ctrlActive ? 'Ctrl active — press next key' : 'Control modifier'}
+              aria-pressed={ctrlActive}
+            >
+              Ctrl
+            </button>
+            <button
+              className={`${styles.mobileKey} ${altActive ? styles.mobileKeyActive : ''}`}
+              onPointerDown={(e) => { e.preventDefault(); setAltActive(p => !p); setCtrlActive(false); }}
+              aria-label={altActive ? 'Alt active — press next key' : 'Alt modifier'}
+              aria-pressed={altActive}
+            >
+              Alt
+            </button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[D'); }} aria-label="Left arrow">←</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[B'); }} aria-label="Down arrow">↓</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[C'); }} aria-label="Right arrow">→</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[6~'); }} aria-label="Page down">PgDn</button>
           </div>
         </div>
       )}

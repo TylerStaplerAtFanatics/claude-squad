@@ -145,16 +145,30 @@ export const devOnly = style({
   },
 });
 
+// Always visible — keyboard toggle and mouse mode toggle are useful on all screen sizes.
 export const mobileKeyboardToggle = style({
-  display: "none",
+  display: "inline-flex",
+  alignItems: "center",
   "@media": {
     "screen and (max-width: 768px)": {
-      display: "inline-flex",
-      alignItems: "center",
       minHeight: "var(--min-touch-target, 44px)",
       minWidth: "var(--min-touch-target, 44px)",
     },
   },
+});
+
+// Sticky modifier active state (CTRL / ALT armed)
+export const mobileKeyActive = style({
+  background: "#1e4976 !important",
+  borderColor: "#4a8fc7 !important",
+  color: "#93d0ff !important",
+});
+
+// Mouse-mode toolbar button active state
+export const mouseModeActive = style({
+  background: "#1e4976 !important",
+  borderColor: "#4a8fc7 !important",
+  color: "#93d0ff !important",
 });
 
 export const error = style({
@@ -268,20 +282,23 @@ export const mobileKeyRow = style({
 
 export const mobileKey = style({
   flex: 1,
-  padding: "0.55rem 0.4rem",
+  // Tighter padding so 7 keys fit per row on a 375 px screen
+  padding: "0.45rem 0.25rem",
+  minWidth: 0, // allow flex shrink below content width
   background: "#3c3c3c",
   border: "1px solid #555",
   borderBottom: "3px solid #333",
   borderRadius: "5px",
   color: "#d4d4d4",
   fontFamily: "inherit",
-  fontSize: "0.85rem",
+  fontSize: "0.78rem",
   fontWeight: 500,
   cursor: "pointer",
   userSelect: "none",
   WebkitUserSelect: "none",
   touchAction: "manipulation",
   textAlign: "center",
+  whiteSpace: "nowrap",
   transition: "background 0.08s, border-bottom-width 0.08s, transform 0.08s",
   selectors: {
     "&:active": {

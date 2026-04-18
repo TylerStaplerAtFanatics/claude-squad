@@ -53,6 +53,9 @@ export const modal = style({
     "screen and (max-width: 768px)": {
       padding: "0",
       paddingTop: "var(--header-height)",
+      // Stretch instead of center — modal fills from header down, no gap above terminal
+      alignItems: "stretch",
+      justifyContent: "flex-start",
     },
   },
 });
@@ -73,6 +76,7 @@ export const modalContent = style({
       maxHeight: "calc(var(--viewport-height, 100dvh) - var(--header-height))",
       height: "calc(var(--viewport-height, 100dvh) - var(--header-height))",
       borderRadius: "0",
+      maxWidth: "100%",
     },
   },
 });
@@ -87,6 +91,8 @@ export const modalContentFullscreen = style({
     "screen and (max-width: 768px)": {
       maxHeight: "calc(var(--viewport-height, 100dvh) - var(--header-height))",
       height: "calc(var(--viewport-height, 100dvh) - var(--header-height))",
+      // aspect-ratio constraint defeats portrait layout on mobile; disable it
+      aspectRatio: "auto",
     },
   },
 });

@@ -241,6 +241,13 @@ func NewServer(addr string) *Server {
 		log.InfoLog.Printf("Registered Circuit Breaker debug handler at /api/debug/circuit-breakers")
 	}
 
+	// Register image upload endpoint — saves clipboard images to a temp directory
+	// so the terminal process can reference them by path (e.g. for Claude Code image paste).
+	pasteDir := filepath.Join(os.TempDir(), "stapler-paste")
+	imageHandler := services.NewImageUploadHandler(pasteDir)
+	srv.mux.HandleFunc("/api/upload/image", imageHandler.HandleUpload)
+	log.InfoLog.Printf("Registered image upload handler at /api/upload/image (dir: %s)", pasteDir)
+
 	// Register server-info endpoint for settings UI
 	srv.registerServerInfoHandler()
 	log.InfoLog.Printf("Registered server-info handler at /api/server-info")
