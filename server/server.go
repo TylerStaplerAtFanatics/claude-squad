@@ -227,6 +227,11 @@ func NewServer(addr string) *Server {
 		srv.mux.HandleFunc("/api/hooks/permission-request", approvalHandler.HandlePermissionRequest)
 		log.InfoLog.Printf("Registered Claude Code hook approval handler at /api/hooks/permission-request")
 
+		// Register non-approval hook receivers (stop, pre/post-tool-use, prompt-submit)
+		hookReceiver := services.NewHookReceiver()
+		hookReceiver.RegisterRoutes(srv.mux)
+		log.InfoLog.Printf("Registered Claude Code hook receivers at /api/hooks/{stop,pre-tool-use,post-tool-use,prompt-submit}")
+
 		// Start background expiration cleanup for pending approvals
 		services.StartExpirationCleanup(context.Background(), deps.SessionService.GetApprovalStore())
 
