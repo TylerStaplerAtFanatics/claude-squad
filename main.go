@@ -13,9 +13,12 @@ import (
 	"github.com/tstapler/stapler-squad/profiling"
 	"github.com/tstapler/stapler-squad/server"
 	serverauth "github.com/tstapler/stapler-squad/server/auth"
+	mcpserver "github.com/tstapler/stapler-squad/server/mcp"
 	"github.com/tstapler/stapler-squad/server/middleware"
+	"github.com/tstapler/stapler-squad/server/services"
 	"github.com/tstapler/stapler-squad/session"
 	"github.com/tstapler/stapler-squad/session/git"
+	"github.com/tstapler/stapler-squad/session/scrollback"
 	"github.com/tstapler/stapler-squad/session/tmux"
 	"github.com/tstapler/stapler-squad/telemetry"
 	"net"
@@ -33,6 +36,7 @@ import (
 var (
 	version            = "1.1.2"
 	daemonFlag         bool
+	mcpFlag            bool
 	testModeFlag       bool
 	testDirFlag        string
 	discoveryModeFlag  string
@@ -64,6 +68,19 @@ var (
 				log.LogSessionPathsToStderr()
 				cancel()
 			}()
+
+			// MCP mode: initialize logging to stderr, load storage, run MCP server.
+			// Mutually exclusive with HTTP server mode — returns when stdin closes.
+			if mcpFlag {
+				mcpserver.InitMCPLogging()
+				cfg := config.LoadConfig()
+				_ = cfg // config loaded for side effects (e.g. workspace detection)
+				store, svc, sbMgr, mcpErr := buildMCPDeps()
+				if mcpErr != nil {
+					return fmt.Errorf("mcp: init deps: %w", mcpErr)
+				}
+				return mcpserver.RunServer(ctx, store, svc, sbMgr)
+			}
 
 			// Enable test mode if flag is set
 			if testModeFlag {
@@ -602,6 +619,9 @@ var (
 )
 
 func init() {
+	rootCmd.Flags().BoolVar(&mcpFlag, "mcp", false,
+		"Run as an MCP server (stdio transport). Reads MCP JSON-RPC from stdin, writes to stdout. "+
+			"Log output goes to stderr. Mutually exclusive with web server mode.")
 	rootCmd.Flags().BoolVar(&daemonFlag, "daemon", false, "Run a program that loads all sessions"+
 		" and runs autoyes mode on them.")
 	rootCmd.Flags().BoolVar(&testModeFlag, "test-mode", false, "Run in test mode with isolated data directory")
@@ -895,4 +915,25 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 	}
+}
+
+// buildMCPDeps creates the minimal server dependencies needed by the MCP server.
+// Uses Phase 1+2 only (no tmux startup, no HTTP listener, no background pollers).
+// The ScrollbackManager is read-only in MCP mode — it reads from the same storage
+// path written by the HTTP server process.
+func buildMCPDeps() (session.InstanceStore, *services.SessionService, *scrollback.ScrollbackManager, error) {
+	core, err := server.BuildCoreDeps()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot determine home directory for scrollback storage: %w", err)
+	}
+	sbConfig := scrollback.DefaultScrollbackConfig()
+	sbConfig.StoragePath = filepath.Join(homeDir, ".stapler-squad", "sessions")
+	sbMgr := scrollback.NewScrollbackManager(sbConfig)
+
+	return core.Storage, core.SessionService, sbMgr, nil
 }

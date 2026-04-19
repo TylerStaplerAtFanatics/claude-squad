@@ -78,6 +78,10 @@ type SessionService struct {
 	// for checkpoint creation. May be nil if not wired (seq defaults to 0).
 	scrollbackMgr scrollbackSequencer
 
+	// mcpServerURL is the URL of the stapler-squad HTTP MCP endpoint.
+	// When non-empty, passed to new sessions via InstanceOptions.MCPServerURL.
+	mcpServerURL string
+
 	// branchCache caches git branch lists per repo path. ADR-002.
 	branchCache sync.Map // map[string]branchCacheEntry
 }
@@ -326,6 +330,12 @@ func (s *SessionService) GetReviewQueueInstance() *session.ReviewQueue {
 // This must be called before WatchReviewQueue is used.
 func (s *SessionService) SetReactiveQueueManager(mgr ReactiveQueueManager) {
 	s.reviewQueueSvc.SetReactiveQueueManager(mgr)
+}
+
+// SetMCPServerURL configures the HTTP MCP endpoint URL passed to new sessions.
+// Call this during server startup after the listen address is known.
+func (s *SessionService) SetMCPServerURL(url string) {
+	s.mcpServerURL = url
 }
 
 // SetReviewQueuePoller wires the ReviewQueuePoller so new/deleted sessions are
@@ -582,6 +592,7 @@ func (s *SessionService) CreateSession(
 		SessionType:      sessionType,
 		TmuxPrefix:       "", // Use default from config
 		ResumeId:         req.Msg.ResumeId,
+		MCPServerURL:     s.mcpServerURL,
 	}
 
 	// Add GitHub metadata if this was a GitHub URL
