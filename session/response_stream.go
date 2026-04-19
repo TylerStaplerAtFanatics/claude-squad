@@ -199,11 +199,13 @@ func (rs *ResponseStream) streamLoop() {
 
 			if n > 0 {
 				// Update rolling pre-exit tail buffer (keeps last exitTailSize bytes).
+				rs.mu.Lock()
 				combined := append(rs.exitTail, readBuf[:n]...)
 				if len(combined) > exitTailSize {
 					combined = combined[len(combined)-exitTailSize:]
 				}
 				rs.exitTail = combined
+				rs.mu.Unlock()
 
 				// Got some data, broadcast to subscribers
 				chunk := ResponseChunk{
