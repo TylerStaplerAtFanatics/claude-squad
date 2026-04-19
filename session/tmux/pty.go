@@ -20,13 +20,6 @@ func (pt Pty) Start(cmd *exec.Cmd) (*os.File, *exec.Cmd, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-
-	// Start a goroutine to reap the process when it exits
-	// This prevents zombie processes from accumulating
-	go func() {
-		_ = cmd.Wait() // Reap the process
-	}()
-
 	return ptmx, cmd, nil
 }
 
