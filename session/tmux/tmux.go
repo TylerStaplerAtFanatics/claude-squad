@@ -481,10 +481,6 @@ func (t *TmuxSession) AttachToExisting() error {
 		}
 		t.ptmx = ptmx
 		t.attachCmd = cmd // CRITICAL: Save command so we can kill it on cleanup
-		// Drain PTY output so tmux attach-session never blocks on write.
-		// Without this, once the kernel PTY buffer fills the process stalls,
-		// SIGWINCH is never processed, and resize stops working.
-		go io.Copy(io.Discard, ptmx)
 		log.InfoLog.Printf("Successfully attached PTY to existing tmux session '%s' (pid=%d)", t.sanitizedName, cmd.Process.Pid)
 	}
 
@@ -731,8 +727,6 @@ func (t *TmuxSession) RestoreWithWorkDir(workDir string) error {
 			}
 			t.ptmx = ptmx
 			t.attachCmd = attachCmd // CRITICAL: track so it can be killed on cleanup
-			// Drain PTY output so tmux attach-session never blocks on write.
-			go io.Copy(io.Discard, ptmx)
 			log.InfoLog.Printf("Successfully restored PTY connection for tmux session '%s'", t.sanitizedName)
 			lastPTYErr = nil
 			break
@@ -1284,14 +1278,14 @@ func (t *TmuxSession) SetWindowSize(cols, rows int) error {
 		return fmt.Errorf("failed to resize tmux window: %w", err)
 	}
 
-	// Save dimensions so future PTY attach connections start at the correct size.
-	t.lastKnownCols.Store(int32(cols))
-	t.lastKnownRows.Store(int32(rows))
-
-	// Verify the resize actually worked
+	// Verify the resize actually worked and save the actual dimensions for future
+	// PTY attach connections (via attach-session -x/-y).
 	newWidth, newHeight, err := t.GetPaneDimensions()
 	if err != nil {
 		log.WarningLog.Printf("⚠️ Could not verify resize for '%s': %v", t.sanitizedName, err)
+		// Store requested dims — resize-window succeeded even if we can't verify.
+		t.lastKnownCols.Store(int32(cols))
+		t.lastKnownRows.Store(int32(rows))
 	} else {
 		log.InfoLog.Printf("📏 New tmux pane dimensions for '%s': %dx%d (expected %dx%d)",
 			t.sanitizedName, newWidth, newHeight, cols, rows)
@@ -1299,6 +1293,9 @@ func (t *TmuxSession) SetWindowSize(cols, rows int) error {
 			log.ErrorLog.Printf("❌ Dimension mismatch after resize for '%s': got %dx%d, expected %dx%d",
 				t.sanitizedName, newWidth, newHeight, cols, rows)
 		}
+		// Store actual dimensions so reconnects start at the real size.
+		t.lastKnownCols.Store(int32(newWidth))
+		t.lastKnownRows.Store(int32(newHeight))
 	}
 
 	log.InfoLog.Printf("✅ Resized tmux session '%s' to %dx%d", t.sanitizedName, cols, rows)
