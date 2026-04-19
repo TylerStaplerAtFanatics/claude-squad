@@ -96,7 +96,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$bin_path
+ExecStart=$bin_path --remote-access
 WorkingDirectory=$HOME
 Restart=on-failure
 RestartSec=5s
