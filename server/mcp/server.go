@@ -14,36 +14,41 @@ import (
 	"github.com/tstapler/stapler-squad/session/scrollback"
 )
 
-// RunServer initializes and starts the MCP stdio server.
-// It blocks until the context is cancelled or stdin is closed.
-// store is used for read-only discovery tools. svc provides lifecycle operations.
-// sbMgr provides read access to terminal scrollback data persisted on disk.
-func RunServer(ctx context.Context, store session.InstanceStore, svc *services.SessionService, sbMgr *scrollback.ScrollbackManager) error {
+// NewCore creates an MCPServer with all 15 tools registered.
+// Shared by the stdio path (RunServer) and the HTTP path (NewHTTPHandler).
+func NewCore(store session.InstanceStore, svc *services.SessionService, sbMgr *scrollback.ScrollbackManager) *mcpserver.MCPServer {
 	s := mcpserver.NewMCPServer(
 		"stapler-squad",
 		"1.0.0",
 		mcpserver.WithToolCapabilities(false),
 	)
 
-	d := &discoveryHandlers{store: store}
-	registerDiscoveryTools(s, d)
-
-	lh := &lifecycleHandlers{store: store, svc: svc}
-	registerLifecycleTools(s, lh)
-
-	th := &terminalHandlers{
+	registerDiscoveryTools(s, &discoveryHandlers{store: store})
+	registerLifecycleTools(s, &lifecycleHandlers{store: store, svc: svc})
+	registerTerminalTools(s, &terminalHandlers{
 		store:      store,
 		scrollback: sbMgr,
 		writeLim:   newTokenBucket(writeRateLimitPerSec, writeRateLimitPerSec),
-	}
-	registerTerminalTools(s, th)
+	})
+	registerVCSTools(s, &vcsHandlers{store: store})
+	return s
+}
 
-	vh := &vcsHandlers{store: store}
-	registerVCSTools(s, vh)
+// NewHTTPHandler returns an http.Handler that serves the MCP protocol over
+// Streamable HTTP (the MCP 2025-03-26 transport). Mount it at /mcp on the
+// existing HTTP server so Claude sessions can connect without spawning a
+// subprocess.
+func NewHTTPHandler(store session.InstanceStore, svc *services.SessionService, sbMgr *scrollback.ScrollbackManager) *mcpserver.StreamableHTTPServer {
+	return mcpserver.NewStreamableHTTPServer(NewCore(store, svc, sbMgr))
+}
 
+// RunServer initializes and starts the MCP stdio server.
+// It blocks until the context is cancelled or stdin is closed.
+// store is used for read-only discovery tools. svc provides lifecycle operations.
+// sbMgr provides read access to terminal scrollback data persisted on disk.
+func RunServer(ctx context.Context, store session.InstanceStore, svc *services.SessionService, sbMgr *scrollback.ScrollbackManager) error {
 	log.InfoLog.Printf("[mcp] server starting on stdio transport")
-
-	stdio := mcpserver.NewStdioServer(s)
+	stdio := mcpserver.NewStdioServer(NewCore(store, svc, sbMgr))
 	return stdio.Listen(ctx, os.Stdin, os.Stdout)
 }
 

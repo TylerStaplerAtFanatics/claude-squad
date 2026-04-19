@@ -182,6 +182,11 @@ type Instance struct {
 	// Set by HistoryLinker when it correlates this session to an open JSONL file.
 	HistoryFilePath string
 
+	// MCPServerURL is the URL of the stapler-squad HTTP MCP endpoint.
+	// When set, passed as --mcp-server to claude on session start so no
+	// settings-file injection is needed.
+	MCPServerURL string `json:"mcp_server_url,omitempty"`
+
 	// historyDetector is used by tryExtractConversationUUID. When nil the
 	// production inspector is used. Set in tests to inject a fake home dir.
 	historyDetector *HistoryFileDetector
@@ -569,6 +574,10 @@ type InstanceOptions struct {
 	// ResumeId is the Claude conversation ID to resume (from history browser).
 	// When set, the session will start with --resume <id> flag.
 	ResumeId string
+	// MCPServerURL, when non-empty and the program is claude, passes
+	// --mcp-server '{"stapler-squad":{"url":"<MCPServerURL>"}}' so the
+	// session can call back into stapler-squad without any file injection.
+	MCPServerURL string
 }
 
 func NewInstance(opts InstanceOptions) (*Instance, error) {
@@ -643,6 +652,7 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 		GitHubRepo:      opts.GitHubRepo,
 		GitHubSourceRef: opts.GitHubSourceRef,
 		ClonedRepoPath:  opts.ClonedRepoPath,
+		MCPServerURL:    opts.MCPServerURL,
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice
@@ -1509,6 +1519,13 @@ func (i *Instance) Restart(preserveOutput bool) error {
 	if claudeSessionID != "" && strings.Contains(program, "claude") {
 		// Add --resume flag for Claude sessions
 		program = fmt.Sprintf("%s --resume %s", program, claudeSessionID)
+	}
+
+	// Inject MCP server URL via CLI flag so no settings-file write is needed.
+	// Only for claude commands; other programs (aider, etc.) don't support this flag.
+	if i.MCPServerURL != "" && strings.Contains(program, "claude") {
+		mcpFlag := fmt.Sprintf(`--mcp-server '{"stapler-squad":{"type":"http","url":%q}}'`, i.MCPServerURL)
+		program = program + " " + mcpFlag
 	}
 
 	// Add AutoYes flag if needed
