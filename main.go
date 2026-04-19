@@ -927,7 +927,10 @@ func buildMCPDeps() (session.InstanceStore, *services.SessionService, *scrollbac
 		return nil, nil, nil, err
 	}
 
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot determine home directory for scrollback storage: %w", err)
+	}
 	sbConfig := scrollback.DefaultScrollbackConfig()
 	sbConfig.StoragePath = filepath.Join(homeDir, ".stapler-squad", "sessions")
 	sbMgr := scrollback.NewScrollbackManager(sbConfig)
