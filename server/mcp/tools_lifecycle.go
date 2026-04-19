@@ -436,4 +436,3 @@ func (lh *lifecycleHandlers) findAndHydrate(sessionID string) (*session.Instance
 	return nil, nil, 0, errResult(ErrSessionNotFound, fmt.Sprintf("session %q not found", sessionID),
 		"Use list_sessions or search_sessions to find valid session IDs.")
 }
-

@@ -623,5 +623,3 @@ func bytesChecksum(b []byte) uint64 {
 	}
 	return h
 }
-
-
