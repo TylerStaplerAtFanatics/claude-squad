@@ -40,6 +40,15 @@ func (tm *TmuxProcessManager) SetSession(s *tmux.TmuxSession) {
 	tm.session = s
 }
 
+// GetTmuxSessionName returns the sanitized tmux session name for reconciliation.
+// Returns empty string when no session has been initialized.
+func (tm *TmuxProcessManager) GetTmuxSessionName() string {
+	if tm.session == nil {
+		return ""
+	}
+	return tm.session.GetSanitizedName()
+}
+
 // IsAlive reports whether the tmux session process is still running.
 func (tm *TmuxProcessManager) IsAlive() bool {
 	if tm.session == nil {
@@ -275,3 +284,102 @@ func (tm *TmuxProcessManager) GetPanePID() (int32, error) {
 	}
 	return tm.session.GetPanePID()
 }
+
+// SetOnExitCallback registers a callback that fires when the tmux session exits
+// unexpectedly. No-op if no session is initialized.
+func (tm *TmuxProcessManager) SetOnExitCallback(fn func(string)) {
+	if tm.session == nil {
+		return
+	}
+	tm.session.SetOnExitCallback(fn)
+}
+
+// ResetExitOnce resets the sync.Once guard so that the exit callback can fire
+// again on the next start cycle (e.g., after a restart). No-op if no session.
+func (tm *TmuxProcessManager) ResetExitOnce() {
+	if tm.session == nil {
+		return
+	}
+	tm.session.ResetExitOnce()
+}
+
+// StartControlMode starts the tmux control mode stream.
+// Returns nil if no session is initialized.
+func (tm *TmuxProcessManager) StartControlMode() error {
+	if tm.session == nil {
+		return nil
+	}
+	return tm.session.StartControlMode()
+}
+
+// StopControlMode stops the tmux control mode stream.
+// Returns nil if no session is initialized.
+func (tm *TmuxProcessManager) StopControlMode() error {
+	if tm.session == nil {
+		return nil
+	}
+	return tm.session.StopControlMode()
+}
+
+// SubscribeToControlModeUpdates registers a new subscriber for real-time terminal output.
+// Returns a pre-closed channel if no session is initialized.
+func (tm *TmuxProcessManager) SubscribeToControlModeUpdates() (string, chan []byte) {
+	if tm.session == nil {
+		ch := make(chan []byte)
+		close(ch)
+		return "", ch
+	}
+	return tm.session.SubscribeToControlModeUpdates()
+}
+
+// UnsubscribeFromControlModeUpdates removes a subscriber by ID.
+// No-op if no session is initialized.
+func (tm *TmuxProcessManager) UnsubscribeFromControlModeUpdates(id string) {
+	if tm.session == nil {
+		return
+	}
+	tm.session.UnsubscribeFromControlModeUpdates(id)
+}
+
+// TmuxManager is the interface satisfied by *TmuxProcessManager.
+// It covers all tmux session operations used by Instance and can be implemented
+// by test doubles to avoid requiring a real tmux server.
+type TmuxManager interface {
+	HasSession() bool
+	Session() *tmux.TmuxSession
+	SetSession(*tmux.TmuxSession)
+	GetTmuxSessionName() string
+	IsAlive() bool
+	Close() error
+	DetachSafely() error
+	DoesSessionExist() bool
+	SetDetachedSize(width, height int, instanceTitle string) error
+	Attach() (chan struct{}, error)
+	CapturePaneContent() (string, error)
+	CapturePaneContentRaw() (string, error)
+	CapturePaneContentWithOptions(startLine, endLine string) (string, error)
+	GetPaneDimensions() (width, height int, err error)
+	GetCursorPosition() (x, y int, err error)
+	GetPTY() (*os.File, error)
+	SendKeys(keys string) (int, error)
+	SetWindowSize(cols, rows int) error
+	RefreshClient() error
+	TapEnter() error
+	HasUpdated() (updated bool, hasPrompt bool)
+	RestoreWithWorkDir(workDir string) error
+	Start(dir string) error
+	FilterBanners(content string) (string, int)
+	HasMeaningfulContent(content string) bool
+	CaptureViewport(lines int) (string, error)
+	SendPromptWithEnter(prompt string) error
+	GetPanePID() (int32, error)
+	SetOnExitCallback(fn func(string))
+	ResetExitOnce()
+	StartControlMode() error
+	StopControlMode() error
+	SubscribeToControlModeUpdates() (string, chan []byte)
+	UnsubscribeFromControlModeUpdates(id string)
+}
+
+// compile-time check that *TmuxProcessManager satisfies TmuxManager.
+var _ TmuxManager = (*TmuxProcessManager)(nil)

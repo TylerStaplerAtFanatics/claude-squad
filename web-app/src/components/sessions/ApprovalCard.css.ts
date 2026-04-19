@@ -6,6 +6,11 @@ const pulse = keyframes({
   "50%": { opacity: 0.7 },
 });
 
+export const cardExpired = style({
+  opacity: 0.6,
+  borderLeftColor: vars.color.borderColor,
+});
+
 export const card = style({
   background: vars.color.background,
   border: `1px solid ${vars.color.borderColor}`,

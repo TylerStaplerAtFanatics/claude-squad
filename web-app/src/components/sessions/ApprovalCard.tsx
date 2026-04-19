@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import type { PlainApproval } from "@/lib/api/approvalsApi";
 import {
   card,
+  cardExpired,
   header,
   toolName,
   toolIcon,
@@ -29,6 +30,7 @@ interface ApprovalCardProps {
   approval: PlainApproval;
   onApprove: () => void;
   onDeny: () => void;
+  sessionTitle?: string; // Human-readable session name; falls back to approval.sessionId
 }
 
 /**
@@ -37,7 +39,7 @@ interface ApprovalCardProps {
  * Shows the tool name, relevant input preview, working directory,
  * and a live countdown timer. Provides Approve (green) and Deny (red) buttons.
  */
-export function ApprovalCard({ approval, onApprove, onDeny }: ApprovalCardProps) {
+export function ApprovalCard({ approval, onApprove, onDeny, sessionTitle }: ApprovalCardProps) {
   const [secondsLeft, setSecondsLeft] = useState(approval.secondsRemaining);
   const [showDetails, setShowDetails] = useState(false);
   const toggleDetails = useCallback(() => setShowDetails((v) => !v), []);
@@ -97,8 +99,10 @@ export function ApprovalCard({ approval, onApprove, onDeny }: ApprovalCardProps)
     return `${secs}s`;
   };
 
+  const isExpired = secondsLeft <= 0;
+
   return (
-    <div className={card} data-testid={`approval-card-${approval.id}`}>
+    <div className={`${card} ${isExpired ? cardExpired : ""}`} data-testid={`approval-card-${approval.id}`}>
       <div className={header}>
         <div className={toolName}>
           <span className={toolIcon} aria-hidden="true">&#x1F527;</span>
@@ -113,11 +117,11 @@ export function ApprovalCard({ approval, onApprove, onDeny }: ApprovalCardProps)
       </div>
 
       <div className={body}>
-        {approval.sessionId && (
+        {(sessionTitle || approval.sessionId) && (
           <div className={detail}>
             <span className={detailLabel}>Session:</span>
             <span className={detailValue} title={approval.sessionId}>
-              {approval.sessionId}
+              {sessionTitle || approval.sessionId}
             </span>
           </div>
         )}
@@ -154,25 +158,7 @@ export function ApprovalCard({ approval, onApprove, onDeny }: ApprovalCardProps)
       )}
 
       <div className={actions}>
-        <button
-          className={approveButton}
-          onClick={onApprove}
-          disabled={secondsLeft <= 0}
-          title="Allow this tool use"
-          aria-label={`Approve ${approval.toolName}`}
-        >
-          Approve
-        </button>
-        <button
-          className={denyButton}
-          onClick={onDeny}
-          disabled={secondsLeft <= 0}
-          title="Deny this tool use"
-          aria-label={`Deny ${approval.toolName}`}
-        >
-          Deny
-        </button>
-        {secondsLeft <= 0 && (
+        {isExpired ? (
           <button
             className={dismissButton}
             onClick={onDeny}
@@ -181,6 +167,25 @@ export function ApprovalCard({ approval, onApprove, onDeny }: ApprovalCardProps)
           >
             Dismiss
           </button>
+        ) : (
+          <>
+            <button
+              className={approveButton}
+              onClick={onApprove}
+              title="Allow this tool use"
+              aria-label={`Approve ${approval.toolName}`}
+            >
+              Approve
+            </button>
+            <button
+              className={denyButton}
+              onClick={onDeny}
+              title="Deny this tool use"
+              aria-label={`Deny ${approval.toolName}`}
+            >
+              Deny
+            </button>
+          </>
         )}
       </div>
     </div>

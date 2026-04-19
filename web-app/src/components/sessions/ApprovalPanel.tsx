@@ -10,6 +10,7 @@ import {
 
 interface ApprovalPanelProps {
   sessionId?: string; // if provided, filter to this session
+  sessionTitle?: string; // human-readable session name to display in approval cards
   onResolved?: () => void; // fires when all approvals for this session are resolved
 }
 
@@ -28,7 +29,7 @@ interface ApprovalPanelProps {
  * <ApprovalPanel sessionId="session-123" />
  * ```
  */
-export function ApprovalPanel({ sessionId, onResolved }: ApprovalPanelProps) {
+export function ApprovalPanel({ sessionId, sessionTitle, onResolved }: ApprovalPanelProps) {
   const { approvals, loading, error, approve, deny, refresh } = useApprovals({
     sessionId,
   });
@@ -42,27 +43,6 @@ export function ApprovalPanel({ sessionId, onResolved }: ApprovalPanelProps) {
       onResolved?.();
     }
   }, [approvals, onResolved]);
-
-  // Keyboard shortcuts: Enter = Approve, Shift+Enter = Deny
-  // Only active when exactly one approval is pending and terminal is not focused.
-  useEffect(() => {
-    if (approvals.length !== 1) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Enter") return;
-      if (e.ctrlKey || e.altKey || e.metaKey) return;
-      // Guard: do not fire when an input field or the terminal (textarea) has focus
-      const tag = (document.activeElement as HTMLElement)?.tagName?.toUpperCase();
-      if (tag === "INPUT" || tag === "TEXTAREA" || (document.activeElement as HTMLElement)?.isContentEditable) return;
-      e.preventDefault();
-      if (e.shiftKey) {
-        deny(approvals[0].id);
-      } else {
-        approve(approvals[0].id);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [approvals, approve, deny]);
 
   if (error) {
     return (
@@ -112,6 +92,7 @@ export function ApprovalPanel({ sessionId, onResolved }: ApprovalPanelProps) {
               approval={approval}
               onApprove={() => approve(approval.id)}
               onDeny={() => deny(approval.id)}
+              sessionTitle={sessionTitle}
             />
           ))
         )}

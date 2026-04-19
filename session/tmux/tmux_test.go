@@ -179,10 +179,21 @@ func TestTmuxCircuitBreakerConfig(t *testing.T) {
 			"list-sessions with empty output (no sessions) should NOT trip the circuit breaker")
 	})
 
-	t.Run("non_list_sessions_commands_trip_on_any_error", func(t *testing.T) {
-		require.True(t, cfg.IsFailure("tmux-has-session", nil, someErr))
-		require.True(t, cfg.IsFailure("tmux-new-session", nil, someErr))
-		require.True(t, cfg.IsFailure("tmux-kill-session", nil, someErr))
+	t.Run("non_list_sessions_server_down_is_failure", func(t *testing.T) {
+		// Server-down output trips the breaker for any command class.
+		serverDown := []byte("no server running on /tmp/tmux-501/default")
+		require.True(t, cfg.IsFailure("tmux-has-session", serverDown, someErr))
+		require.True(t, cfg.IsFailure("tmux-new-session", serverDown, someErr))
+		require.True(t, cfg.IsFailure("tmux-capture-pane", serverDown, someErr))
+	})
+
+	t.Run("non_list_sessions_per_target_errors_not_failure", func(t *testing.T) {
+		// Per-target errors (pane/session not found) must NOT trip the breaker —
+		// the server is healthy; only that specific session/pane is missing.
+		require.False(t, cfg.IsFailure("tmux-capture-pane", []byte("can't find pane: staplersquad_mysession"), someErr))
+		require.False(t, cfg.IsFailure("tmux-display-message", []byte("session not found: staplersquad_mysession"), someErr))
+		require.False(t, cfg.IsFailure("tmux-has-session", nil, someErr))
+		require.False(t, cfg.IsFailure("tmux-new-session", []byte(""), someErr))
 	})
 }
 

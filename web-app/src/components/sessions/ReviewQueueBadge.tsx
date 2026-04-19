@@ -1,6 +1,7 @@
 "use client";
 
 import { Priority, AttentionReason } from "@/gen/session/v1/types_pb";
+import { StatusBadge, getAttentionReasonInfo } from "./StatusBadge";
 import * as styles from "./ReviewQueueBadge.css";
 
 interface ReviewQueueBadgeProps {
@@ -34,6 +35,21 @@ export function ReviewQueueBadge({
     }
   };
 
+  const getPriorityAbbr = (p: Priority): string => {
+    switch (p) {
+      case Priority.URGENT:
+        return "URG";
+      case Priority.HIGH:
+        return "HIGH";
+      case Priority.MEDIUM:
+        return "MED";
+      case Priority.LOW:
+        return "LOW";
+      default:
+        return "";
+    }
+  };
+
   const getPriorityClass = (p: Priority): string => {
     switch (p) {
       case Priority.URGENT:
@@ -64,62 +80,18 @@ export function ReviewQueueBadge({
     }
   };
 
-  const getReasonText = (r: AttentionReason): string => {
-    switch (r) {
-      case AttentionReason.APPROVAL_PENDING:
-        return "Approval Pending";
-      case AttentionReason.INPUT_REQUIRED:
-        return "Input Required";
-      case AttentionReason.ERROR_STATE:
-        return "Error";
-      case AttentionReason.IDLE_TIMEOUT:
-      case AttentionReason.IDLE:
-        return "Idle";
-      case AttentionReason.TASK_COMPLETE:
-        return "Complete";
-      case AttentionReason.UNCOMMITTED_CHANGES:
-        return "Uncommitted Changes";
-      case AttentionReason.STALE:
-        return "Stale";
-      case AttentionReason.WAITING_FOR_USER:
-        return "Waiting";
-      default:
-        return "Unknown";
-    }
-  };
-
-  const getReasonClass = (r: AttentionReason): string => {
-    switch (r) {
-      case AttentionReason.APPROVAL_PENDING:
-        return styles.reasonApproval;
-      case AttentionReason.INPUT_REQUIRED:
-        return styles.reasonInput;
-      case AttentionReason.ERROR_STATE:
-        return styles.reasonError;
-      case AttentionReason.IDLE_TIMEOUT:
-      case AttentionReason.IDLE:
-        return styles.reasonIdle;
-      case AttentionReason.TASK_COMPLETE:
-        return styles.reasonComplete;
-      case AttentionReason.UNCOMMITTED_CHANGES:
-        return styles.reasonUnspecified;
-      case AttentionReason.STALE:
-        return styles.reasonUnspecified;
-      case AttentionReason.WAITING_FOR_USER:
-        return styles.reasonInput;
-      default:
-        return styles.reasonUnspecified;
-    }
-  };
+  const reasonLabel = getAttentionReasonInfo(reason).label;
 
   if (compact) {
+    const abbr = getPriorityAbbr(priority);
     return (
       <span
         className={`${styles.badgeCompact} ${getPriorityClass(priority)}`}
-        title={`${getPriorityText(priority)}: ${getReasonText(reason)}`}
-        aria-label={`${getPriorityText(priority)} priority: ${getReasonText(reason)}`}
+        title={`${getPriorityText(priority)}: ${reasonLabel}`}
+        aria-label={`${getPriorityText(priority)} priority: ${reasonLabel}`}
       >
-        {getPriorityEmoji(priority)}
+        <span aria-hidden="true">{getPriorityEmoji(priority)}</span>
+        {abbr && <span className={styles.priorityAbbr} aria-hidden="true">{abbr}</span>}
       </span>
     );
   }
@@ -132,12 +104,7 @@ export function ReviewQueueBadge({
       >
         {getPriorityEmoji(priority)} {getPriorityText(priority)}
       </span>
-      <span
-        className={`${styles.reason} ${getReasonClass(reason)}`}
-        aria-label={`Reason: ${getReasonText(reason)}`}
-      >
-        {getReasonText(reason)}
-      </span>
+      <StatusBadge reason={reason} />
     </div>
   );
 }

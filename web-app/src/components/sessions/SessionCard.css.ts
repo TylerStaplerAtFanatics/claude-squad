@@ -1,4 +1,4 @@
-import { style, keyframes, globalStyle } from "@vanilla-extract/css";
+import { style, keyframes, globalStyle, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 const cardFadeSlideIn = keyframes({
@@ -358,6 +358,27 @@ export const diffRemoved = style({
   fontWeight: 600,
 });
 
+export const lastActivityRow = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "4px",
+  marginTop: "6px",
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textSecondary,
+});
+
+export const lastActivityLabel = style({
+  fontWeight: 600,
+  color: vars.color.textMuted,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  fontSize: vars.fontSize.xs,
+});
+
+export const lastActivityTime = style({
+  color: vars.color.textSecondary,
+});
+
 export const footer = style({
   display: "flex",
   justifyContent: "space-between",
@@ -382,6 +403,81 @@ export const timestamps = style({
 export const timestamp = style({
   fontSize: vars.fontSize.sm,
   color: vars.color.textSecondary,
+});
+
+export const desktopActions = style({
+  display: "flex",
+  alignItems: "center",
+  gap: vars.space["2"],
+  "@media": {
+    "(max-width: 768px)": {
+      display: "none",
+    },
+  },
+});
+
+export const overflowContainer = style({
+  position: "relative",
+});
+
+export const overflowButton = style({
+  padding: `6px 10px`,
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: vars.radii.md,
+  background: vars.color.cardBackground,
+  color: vars.color.textPrimary,
+  fontSize: "1.1rem",
+  fontWeight: 700,
+  cursor: "pointer",
+  letterSpacing: "2px",
+  lineHeight: 1,
+  minHeight: "44px",
+  transition: "background 0.2s ease",
+  selectors: {
+    "&:hover": { background: vars.color.hoverBackground },
+  },
+});
+
+export const overflowMenu = style({
+  position: "absolute",
+  right: 0,
+  top: "calc(100% + 4px)",
+  minWidth: "180px",
+  background: vars.color.cardBackground,
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: vars.radii.lg,
+  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.15)",
+  zIndex: 200,
+  padding: "4px",
+  display: "flex",
+  flexDirection: "column",
+});
+
+export const overflowMenuItem = style({
+  display: "flex",
+  alignItems: "center",
+  gap: vars.space["2"],
+  padding: `8px 12px`,
+  border: "none",
+  borderRadius: vars.radii.md,
+  background: "transparent",
+  color: vars.color.textPrimary,
+  fontSize: "0.875rem",
+  textAlign: "left",
+  cursor: "pointer",
+  width: "100%",
+  transition: "background 0.15s ease",
+  selectors: {
+    "&:hover": { background: vars.color.hoverBackground },
+    "&:disabled": { opacity: 0.5, cursor: "not-allowed" },
+  },
+});
+
+export const overflowMenuItemDanger = style({
+  color: "#991b1b",
+  selectors: {
+    "&:hover": { background: "#fee2e2" },
+  },
 });
 
 export const actions = style({
@@ -693,4 +789,96 @@ export const forkGitSha = style({
   background: vars.color.surfaceSubtle,
   padding: `1px ${vars.space["1"]}`,
   borderRadius: vars.radii.sm,
+});
+
+// ── Terminal snapshot preview (from upstream) ────────────────────────────────
+
+/** Container for the terminal snapshot preview section */
+export const snapshotSection = style({
+  margin: "8px 0 0",
+  borderRadius: 6,
+  overflow: "hidden",
+  border: `1px solid ${vars.color.borderColor}`,
+});
+
+/** Toggle button row */
+export const snapshotToggle = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "4px 10px",
+  background: vars.color.cardBackground,
+  border: "none",
+  cursor: "pointer",
+  width: "100%",
+  fontSize: "0.7rem",
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  color: vars.color.textSecondary,
+  userSelect: "none",
+  selectors: {
+    "&:hover": { opacity: 0.85 },
+    "&:focus-visible": {
+      outline: `2px solid ${vars.color.primary}`,
+      outlineOffset: "-2px",
+    },
+  },
+});
+
+export const snapshotToggleIcon = style({
+  fontSize: "0.65rem",
+  lineHeight: 1,
+});
+
+/** Fixed-height preview pane */
+export const snapshotPane = style({
+  height: 120,
+  overflowY: "hidden",
+  padding: "6px 10px",
+  fontFamily: '"Menlo", "Monaco", "Courier New", monospace',
+  fontSize: "0.72rem",
+  lineHeight: 1.5,
+  background: "#1e1e1e",
+  color: "#d4d4d4",
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-all",
+});
+
+/** Placeholder shown when terminal was cleared */
+export const snapshotEmpty = style({
+  height: 120,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "0.75rem",
+  color: vars.color.textSecondary,
+  background: vars.color.cardBackground,
+  fontStyle: "italic",
+});
+
+/** Loading skeleton */
+export const snapshotLoading = style({
+  height: 120,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "0.75rem",
+  color: vars.color.textSecondary,
+  background: vars.color.cardBackground,
+});
+
+/** Error state */
+export const snapshotError = styleVariants({
+  base: {
+    height: 120,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "0.72rem",
+    color: vars.color.error,
+    background: vars.color.cardBackground,
+    padding: "0 10px",
+    textAlign: "center",
+  },
 });

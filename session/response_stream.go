@@ -25,6 +25,9 @@ type Subscriber struct {
 	created time.Time
 }
 
+// exitTailSize is the number of bytes kept in the rolling pre-exit buffer.
+const exitTailSize = 2048
+
 // ResponseStream manages real-time streaming of Claude instance responses to multiple subscribers.
 // It reads from the PTY access layer and broadcasts output to all active subscribers.
 type ResponseStream struct {
@@ -39,6 +42,8 @@ type ResponseStream struct {
 	bufferSize   int                         // Channel buffer size for each subscriber
 	escapeParser *analytics.EscapeCodeParser // For escape code analytics
 	onOutput     func()                      // Called on every PTY read with data (for event-driven activity tracking)
+	OnEOF        func()                      // Called when the PTY exits unexpectedly (program exit, not Stop())
+	exitTail     []byte                      // Rolling buffer of last exitTailSize bytes; logged on PTY EOF
 }
 
 // NewResponseStream creates a new response stream for the given session.
@@ -147,8 +152,19 @@ func (rs *ResponseStream) streamLoop() {
 
 			if err != nil {
 				if err == io.EOF {
-					// PTY closed
+					// PTY closed - the tmux session's program has exited
+					log.InfoLog.Printf("Session '%s': PTY reached EOF - program exited", rs.sessionName)
+					log.ForSession(rs.sessionName).Info("Session program exited (PTY EOF)")
+					if len(rs.exitTail) > 0 {
+						log.InfoLog.Printf("Session '%s': last output before exit:\n%s", rs.sessionName, string(rs.exitTail))
+					}
 					rs.closeAllSubscribers()
+					rs.mu.Lock()
+					rs.started = false
+					rs.mu.Unlock()
+					if rs.OnEOF != nil {
+						rs.OnEOF()
+					}
 					return
 				}
 				// Check if it's a timeout error
@@ -161,8 +177,19 @@ func (rs *ResponseStream) streamLoop() {
 				if strings.Contains(errMsg, "file already closed") ||
 					strings.Contains(errMsg, "bad file descriptor") ||
 					strings.Contains(errMsg, "input/output error") {
-					// PTY has been closed, stop streaming
+					// PTY has been closed - the tmux session's program has exited
+					log.InfoLog.Printf("Session '%s': PTY closed (%v) - program exited", rs.sessionName, err)
+					log.ForSession(rs.sessionName).Info("Session program exited (PTY closed: %v)", err)
+					if len(rs.exitTail) > 0 {
+						log.InfoLog.Printf("Session '%s': last output before exit:\n%s", rs.sessionName, string(rs.exitTail))
+					}
 					rs.closeAllSubscribers()
+					rs.mu.Lock()
+					rs.started = false
+					rs.mu.Unlock()
+					if rs.OnEOF != nil {
+						rs.OnEOF()
+					}
 					return
 				}
 				// Other errors - log and continue
@@ -171,6 +198,15 @@ func (rs *ResponseStream) streamLoop() {
 			}
 
 			if n > 0 {
+				// Update rolling pre-exit tail buffer (keeps last exitTailSize bytes).
+				rs.mu.Lock()
+				combined := append(rs.exitTail, readBuf[:n]...)
+				if len(combined) > exitTailSize {
+					combined = combined[len(combined)-exitTailSize:]
+				}
+				rs.exitTail = combined
+				rs.mu.Unlock()
+
 				// Got some data, broadcast to subscribers
 				chunk := ResponseChunk{
 					Data:      make([]byte, n),
@@ -343,4 +379,17 @@ func (rs *ResponseStream) GetBufferSize() int {
 	rs.mu.RLock()
 	defer rs.mu.RUnlock()
 	return rs.bufferSize
+}
+
+// GetExitTail returns a copy of the last bytes seen before the PTY exited.
+// Returns nil if the stream has not yet exited or no output was captured.
+func (rs *ResponseStream) GetExitTail() []byte {
+	rs.mu.RLock()
+	defer rs.mu.RUnlock()
+	if len(rs.exitTail) == 0 {
+		return nil
+	}
+	out := make([]byte, len(rs.exitTail))
+	copy(out, rs.exitTail)
+	return out
 }

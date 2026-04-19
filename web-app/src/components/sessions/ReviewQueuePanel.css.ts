@@ -403,3 +403,84 @@ export const visuallyHidden = style({
   whiteSpace: "nowrap",
   border: 0,
 });
+
+export const oldestCallout = style({
+  marginTop: vars.space["2"],
+  padding: `${vars.space["1"]} ${vars.space["3"]}`,
+  background: vars.color.warningBg,
+  border: `1px solid ${vars.color.warning}`,
+  borderRadius: vars.radii.md,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textPrimary,
+  fontWeight: 500,
+});
+
+export const newItemsBanner = style({
+  display: "block",
+  width: "100%",
+  marginTop: vars.space["2"],
+  padding: `${vars.space["2"]} ${vars.space["3"]}`,
+  background: vars.color.accentBg,
+  border: `1px solid ${vars.color.primary}`,
+  borderRadius: vars.radii.md,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.primary,
+  fontWeight: 600,
+  textAlign: "center",
+  cursor: "pointer",
+  transition: "all 0.2s ease",
+  selectors: {
+    "&:hover": {
+      background: vars.color.primary,
+      color: "white",
+    },
+  },
+});
+
+export const filterToggleRow = style({
+  display: "flex",
+  alignItems: "center",
+  gap: vars.space["2"],
+  marginBottom: vars.space["3"],
+});
+
+export const filterToggle = style({
+  padding: `6px 12px`,
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: vars.radii.md,
+  background: vars.color.cardBackground,
+  color: vars.color.textPrimary,
+  fontSize: vars.fontSize.base,
+  fontWeight: 500,
+  cursor: "pointer",
+  transition: "all 0.2s ease",
+  selectors: {
+    "&:hover": {
+      background: vars.color.hoverBackground,
+      borderColor: vars.color.borderHover,
+    },
+  },
+});
+
+export const filterToggleActive = style({
+  background: vars.color.accentBg,
+  borderColor: vars.color.primary,
+  color: vars.color.primary,
+});
+
+export const filterClear = style({
+  padding: `6px 10px`,
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: vars.radii.md,
+  background: "transparent",
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+  cursor: "pointer",
+  transition: "all 0.2s ease",
+  selectors: {
+    "&:hover": {
+      background: vars.color.hoverBackground,
+      color: vars.color.textPrimary,
+    },
+  },
+});

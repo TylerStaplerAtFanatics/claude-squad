@@ -89,6 +89,12 @@ func (g *GitWorktree) Diff() *DiffStats {
 			// The directory lost its git status or was corrupted, return empty stats
 			return stats
 		}
+		// Stored SHA is no longer readable (e.g., after repo rename, rebase, or gc).
+		// Clear it so the next call re-resolves via resolveBaseCommitSHA().
+		if strings.Contains(err.Error(), "unable to read") {
+			g.baseCommitSHA = ""
+			return stats
+		}
 		stats.Error = err
 		return stats
 	}
