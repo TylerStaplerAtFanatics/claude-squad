@@ -107,8 +107,8 @@ func TestHandleUpload_ContentTypeExtensions(t *testing.T) {
 		{"gif", "image/gif", ".gif"},
 		{"webp", "image/webp", ".webp"},
 		{"png", "image/png", ".png"},
-		{"unknown_bmp", "image/bmp", ""},  // unknown → empty (rejected by handler)
-		{"empty", "", ""},                  // empty → empty (rejected by handler)
+		{"unknown_bmp", "image/bmp", ""}, // unknown → empty (rejected by handler)
+		{"empty", "", ""},                // empty → empty (rejected by handler)
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
