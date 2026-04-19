@@ -34,13 +34,13 @@ type ClaudeController struct {
 	statusDetector   *detection.StatusDetector
 	idleDetector     *detection.IdleDetector // NEW: Idle state detection
 	rateLimitHandler *ratelimit.PTYConsumer  // Rate limit detection
-	queue           *CommandQueue
-	executor        *CommandExecutor
-	history         *CommandHistory
-	onEOFCallback   func() // Fired when the ResponseStream PTY exits unexpectedly
-	mu              sync.RWMutex
-	ctx             context.Context
-	cancel          context.CancelFunc
+	queue            *CommandQueue
+	executor         *CommandExecutor
+	history          *CommandHistory
+	onEOFCallback    func() // Fired when the ResponseStream PTY exits unexpectedly
+	mu               sync.RWMutex
+	ctx              context.Context
+	cancel           context.CancelFunc
 }
 
 // SetOnEOFCallback registers a function called when the PTY backing this controller
