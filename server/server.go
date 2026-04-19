@@ -11,6 +11,7 @@ import (
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/server/events"
+	servermcp "github.com/tstapler/stapler-squad/server/mcp"
 	"github.com/tstapler/stapler-squad/server/middleware"
 	"github.com/tstapler/stapler-squad/server/notifications"
 	"github.com/tstapler/stapler-squad/server/services"
@@ -223,6 +224,16 @@ func NewServer(addr string) *Server {
 		hookReceiver := services.NewHookReceiver()
 		hookReceiver.RegisterRoutes(srv.mux)
 		log.InfoLog.Printf("Registered Claude Code hook receivers at /api/hooks/{stop,pre-tool-use,post-tool-use,prompt-submit}")
+
+		// Register MCP HTTP transport at /mcp so Claude sessions can connect
+		// without spawning a subprocess. The URL is passed via --mcp-server to
+		// claude when creating new sessions (no settings-file injection needed).
+		mcpHTTPHandler := servermcp.NewHTTPHandler(deps.Storage, deps.SessionService, deps.ScrollbackManager)
+		srv.mux.Handle("/mcp", mcpHTTPHandler)
+		srv.mux.Handle("/mcp/", mcpHTTPHandler)
+		mcpURL := "http://localhost" + srv.addr + "/mcp"
+		deps.SessionService.SetMCPServerURL(mcpURL)
+		log.InfoLog.Printf("Registered MCP HTTP handler at /mcp (URL: %s)", mcpURL)
 
 		// Start background expiration cleanup for pending approvals
 		services.StartExpirationCleanup(context.Background(), deps.SessionService.GetApprovalStore())
