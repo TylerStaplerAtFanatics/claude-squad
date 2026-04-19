@@ -469,8 +469,8 @@ func installServiceLinux(home, binPath, logDir, envPath string, uninstall bool) 
 		exec.Command("systemctl", "--user", "stop", "stapler-squad").Run()    //nolint:errcheck
 		exec.Command("systemctl", "--user", "disable", "stapler-squad").Run() //nolint:errcheck
 		if _, err := os.Stat(serviceFile); err == nil {
-			os.Remove(serviceFile)                                                    //nolint:errcheck
-			exec.Command("systemctl", "--user", "daemon-reload").Run()               //nolint:errcheck
+			os.Remove(serviceFile)                                     //nolint:errcheck
+			exec.Command("systemctl", "--user", "daemon-reload").Run() //nolint:errcheck
 			fmt.Printf("Removed: %s\n", serviceFile)
 		} else {
 			fmt.Printf("Service file not found (already removed?): %s\n", serviceFile)
