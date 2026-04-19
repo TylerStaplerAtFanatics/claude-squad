@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useReviewQueueContext } from "@/lib/contexts/ReviewQueueContext";
 import { useApprovalsContext } from "@/lib/contexts/ApprovalsContext";
 import { useReviewQueueNavigation } from "@/lib/hooks/useReviewQueueNavigation";
@@ -52,6 +52,12 @@ import {
   completionIcon,
   retryButton,
   visuallyHidden,
+  oldestCallout,
+  newItemsBanner,
+  filterToggleRow,
+  filterToggle,
+  filterToggleActive,
+  filterClear,
 } from "./ReviewQueuePanel.css";
 import { Button } from "@/components/ui";
 
@@ -95,6 +101,7 @@ export function ReviewQueuePanel({
   const [reasonFilter, setReasonFilter] = useState<AttentionReason | undefined>(
     undefined
   );
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   // Track whether queue ever had items so we can show "all done" vs generic empty state
   const [hadItems, setHadItems] = useState(false);
 
@@ -116,8 +123,37 @@ export function ReviewQueuePanel({
     acknowledgeSession,
   } = useReviewQueueContext();
 
-  // Apply client-side filtering
-  const items = useMemo(() => {
+  // ─── Snapshot-on-enter pattern ────────────────────────────────────────────
+  // Captures the session IDs present when the user enters the queue.
+  // New items arriving while reviewing appear in a banner rather than being
+  // injected mid-list, preventing queue jumps during triage (Twitter-style).
+  const [reviewingIdsSnapshot, setReviewingIdsSnapshot] = useState<Set<string> | null>(null);
+
+  // Initialize snapshot when the queue first loads with items
+  useEffect(() => {
+    if (reviewingIdsSnapshot === null && allItems.length > 0) {
+      setReviewingIdsSnapshot(new Set(allItems.map((item) => item.sessionId)));
+    }
+  }, [allItems, reviewingIdsSnapshot]);
+
+  // Remove acknowledged/resolved items from snapshot (forward-only — no re-injection)
+  useEffect(() => {
+    if (reviewingIdsSnapshot === null) return;
+    const liveIds = new Set(allItems.map((item) => item.sessionId));
+    const pruned = new Set([...reviewingIdsSnapshot].filter((id) => liveIds.has(id)));
+    if (pruned.size !== reviewingIdsSnapshot.size) {
+      setReviewingIdsSnapshot(pruned);
+    }
+  }, [allItems, reviewingIdsSnapshot]);
+
+  const refreshSnapshot = useCallback(() => {
+    setReviewingIdsSnapshot(new Set(allItems.map((item) => item.sessionId)));
+    refresh();
+  }, [allItems, refresh]);
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Apply client-side filtering to all live items
+  const allFilteredItems = useMemo(() => {
     let filtered = allItems;
     if (priorityFilter !== undefined) {
       filtered = filtered.filter((item) => item.priority === priorityFilter);
@@ -127,6 +163,18 @@ export function ReviewQueuePanel({
     }
     return filtered;
   }, [allItems, priorityFilter, reasonFilter]);
+
+  // Items that are in the snapshot (stable ordered list for the main queue)
+  const items = useMemo(() => {
+    if (reviewingIdsSnapshot === null) return allFilteredItems;
+    return allFilteredItems.filter((item) => reviewingIdsSnapshot.has(item.sessionId));
+  }, [allFilteredItems, reviewingIdsSnapshot]);
+
+  // New items not yet in snapshot — shown in the refresh banner
+  const newItemsCount = useMemo(() => {
+    if (reviewingIdsSnapshot === null) return 0;
+    return allFilteredItems.filter((item) => !reviewingIdsSnapshot.has(item.sessionId)).length;
+  }, [allFilteredItems, reviewingIdsSnapshot]);
 
   // Approval actions for APPROVAL_PENDING items
   const { approve: approveRequest, deny: denyRequest } = useApprovalsContext();
@@ -239,6 +287,32 @@ export function ReviewQueuePanel({
     setPriorityFilter(undefined); // Clear priority filter when changing reason
   };
 
+  const summaryCount = useMemo(() => {
+    const parts: string[] = [];
+    const reasonEntries: [AttentionReason, string][] = [
+      [AttentionReason.APPROVAL_PENDING, "approval"],
+      [AttentionReason.INPUT_REQUIRED, "input needed"],
+      [AttentionReason.ERROR_STATE, "error"],
+      [AttentionReason.IDLE_TIMEOUT, "timed out"],
+      [AttentionReason.IDLE, "idle"],
+      [AttentionReason.STALE, "stale"],
+      [AttentionReason.TASK_COMPLETE, "complete"],
+    ];
+    for (const [reason, label] of reasonEntries) {
+      const count = byReason.get(reason) ?? 0;
+      if (count > 0) parts.push(`${count} ${label}${count !== 1 ? "s" : ""}`);
+    }
+    return parts.join(", ");
+  }, [byReason]);
+
+  const activeFilterLabel = useMemo(() => {
+    if (priorityFilter !== undefined) return `Filter: ${getPriorityLabel(priorityFilter)}`;
+    if (reasonFilter !== undefined) return `Filter: ${getReasonLabel(reasonFilter)}`;
+    return "Filter";
+  }, [priorityFilter, reasonFilter]);
+
+  const hasActiveFilter = priorityFilter !== undefined || reasonFilter !== undefined;
+
   if (error) {
     return (
       <div className={errorClass}>
@@ -266,99 +340,132 @@ export function ReviewQueuePanel({
               </span>
             )}
           </h2>
-          <Button
-            onClick={refresh}
-            intent="secondary"
-            size="md"
+          <button
+            onClick={refreshSnapshot}
+            className={refreshButton}
             disabled={loading}
             aria-label="Refresh review queue"
           >
             {loading ? "⟳" : "↻"}
-          </Button>
+          </button>
         </div>
 
         {totalItems > 0 && (
           <div className={stats} data-testid="queue-statistics">
             <span className={stat} data-testid="total-items">
-              {totalItems} {totalItems === 1 ? "item" : "items"} need attention
+              {summaryCount || `${totalItems} ${totalItems === 1 ? "item" : "items"}`}
             </span>
-            <span className={stat}>
-              Avg age: {formatDuration(averageAgeSeconds)}
-            </span>
-            {oldestAgeSeconds > BigInt(0) && (
-              <span className={stat}>
-                Oldest: {formatDuration(oldestAgeSeconds)}
-              </span>
-            )}
           </div>
+        )}
+
+        {/* Heads-up callout when oldest item is over 5 minutes old */}
+        {oldestAgeSeconds > BigInt(300) && (
+          <div className={oldestCallout} role="status">
+            Oldest item: {formatDuration(oldestAgeSeconds)}
+          </div>
+        )}
+
+        {/* New-items banner: shows when items arrive after snapshot was taken */}
+        {newItemsCount > 0 && (
+          <button
+            className={newItemsBanner}
+            onClick={refreshSnapshot}
+            aria-label={`${newItemsCount} new item${newItemsCount !== 1 ? "s" : ""} added. Click to refresh the list.`}
+          >
+            {newItemsCount} new item{newItemsCount !== 1 ? "s" : ""} added — click to refresh
+          </button>
         )}
       </div>
 
-      <div className={filters}>
-        <div className={filterGroup}>
-          <label className={filterLabel}>Priority:</label>
-          <div className={filterButtons}>
+      {totalItems > 0 && (
+        <div className={filterToggleRow}>
+          <button
+            className={`${filterToggle} ${hasActiveFilter ? filterToggleActive : ""}`}
+            onClick={() => setIsFiltersOpen((o) => !o)}
+            aria-expanded={isFiltersOpen}
+            aria-controls="review-queue-filters"
+          >
+            {activeFilterLabel} {isFiltersOpen ? "▲" : "▼"}
+          </button>
+          {hasActiveFilter && (
             <button
-              className={`${filterButton} ${priorityFilter === undefined ? filterButtonActive : ""}`}
-              onClick={() => handleFilterByPriority(undefined)}
-              aria-pressed={priorityFilter === undefined}
+              className={filterClear}
+              onClick={() => { setPriorityFilter(undefined); setReasonFilter(undefined); }}
+              aria-label="Clear active filter"
             >
-              All ({totalItems})
+              ✕ Clear
             </button>
-            {[Priority.URGENT, Priority.HIGH, Priority.MEDIUM, Priority.LOW].map(
-              (priority) => {
-                const priorityCount = byPriority.get(priority) ?? 0;
+          )}
+        </div>
+      )}
+
+      {isFiltersOpen && (
+        <div id="review-queue-filters" className={filters}>
+          <div className={filterGroup}>
+            <label className={filterLabel}>Priority:</label>
+            <div className={filterButtons}>
+              <button
+                className={`${filterButton} ${priorityFilter === undefined ? filterButtonActive : ""}`}
+                onClick={() => handleFilterByPriority(undefined)}
+                aria-pressed={priorityFilter === undefined}
+              >
+                All ({totalItems})
+              </button>
+              {[Priority.URGENT, Priority.HIGH, Priority.MEDIUM, Priority.LOW].map(
+                (priority) => {
+                  const priorityCount = byPriority.get(priority) ?? 0;
+                  return (
+                    <button
+                      key={priority}
+                      className={`${filterButton} ${priorityFilter === priority ? filterButtonActive : ""}`}
+                      onClick={() => handleFilterByPriority(priority)}
+                      disabled={priorityCount === 0}
+                      aria-pressed={priorityFilter === priority}
+                    >
+                      {getPriorityLabel(priority)} ({priorityCount})
+                    </button>
+                  );
+                }
+              )}
+            </div>
+          </div>
+
+          <div className={filterGroup}>
+            <label className={filterLabel}>Reason:</label>
+            <div className={filterButtons}>
+              <button
+                className={`${filterButton} ${reasonFilter === undefined ? filterButtonActive : ""}`}
+                onClick={() => handleFilterByReason(undefined)}
+                aria-pressed={reasonFilter === undefined}
+              >
+                All ({totalItems})
+              </button>
+              {[
+                AttentionReason.APPROVAL_PENDING,
+                AttentionReason.INPUT_REQUIRED,
+                AttentionReason.ERROR_STATE,
+                AttentionReason.IDLE_TIMEOUT,
+                AttentionReason.IDLE,
+                AttentionReason.STALE,
+                AttentionReason.TASK_COMPLETE,
+              ].map((reason) => {
+                const reasonCount = byReason.get(reason) ?? 0;
                 return (
                   <button
-                    key={priority}
-                    className={`${filterButton} ${priorityFilter === priority ? filterButtonActive : ""}`}
-                    onClick={() => handleFilterByPriority(priority)}
-                    disabled={priorityCount === 0}
-                    aria-pressed={priorityFilter === priority}
+                    key={reason}
+                    className={`${filterButton} ${reasonFilter === reason ? filterButtonActive : ""}`}
+                    onClick={() => handleFilterByReason(reason)}
+                    disabled={reasonCount === 0}
+                    aria-pressed={reasonFilter === reason}
                   >
-                    {getPriorityLabel(priority)} ({priorityCount})
+                    {getReasonLabel(reason)} ({reasonCount})
                   </button>
                 );
-              }
-            )}
+              })}
+            </div>
           </div>
         </div>
-
-        <div className={filterGroup}>
-          <label className={filterLabel}>Reason:</label>
-          <div className={filterButtons}>
-            <button
-              className={`${filterButton} ${reasonFilter === undefined ? filterButtonActive : ""}`}
-              onClick={() => handleFilterByReason(undefined)}
-              aria-pressed={reasonFilter === undefined}
-            >
-              All ({totalItems})
-            </button>
-            {[
-              AttentionReason.APPROVAL_PENDING,
-              AttentionReason.INPUT_REQUIRED,
-              AttentionReason.ERROR_STATE,
-              AttentionReason.IDLE_TIMEOUT,
-              AttentionReason.IDLE,
-              AttentionReason.STALE,
-              AttentionReason.TASK_COMPLETE,
-            ].map((reason) => {
-              const reasonCount = byReason.get(reason) ?? 0;
-              return (
-                <button
-                  key={reason}
-                  className={`${filterButton} ${reasonFilter === reason ? filterButtonActive : ""}`}
-                  onClick={() => handleFilterByReason(reason)}
-                  disabled={reasonCount === 0}
-                  aria-pressed={reasonFilter === reason}
-                >
-                  {getReasonLabel(reason)} ({reasonCount})
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      )}
 
       <div className={itemsClass}>
         {loading && items.length === 0 ? (
@@ -392,6 +499,14 @@ export function ReviewQueuePanel({
                 <div
                   className={`${itemClickable} ${index === currentIndex ? currentItem : ""}`}
                   onClick={() => onSessionClick?.(queueItem.sessionId)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSessionClick?.(queueItem.sessionId);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                   data-testid={`review-item-${queueItem.sessionId}`}
                   data-current={index === currentIndex ? "true" : undefined}
                 >

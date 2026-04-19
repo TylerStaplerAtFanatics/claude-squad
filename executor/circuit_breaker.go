@@ -44,8 +44,9 @@ type Resettable interface {
 
 // CircuitBreakerConfig holds configuration for a circuit breaker.
 type CircuitBreakerConfig struct {
-	FailureThreshold int           // Number of consecutive failures to trip the breaker
-	RecoveryTimeout  time.Duration // Time to wait before probing in HALF-OPEN
+	FailureThreshold   int           // Number of consecutive failures to trip the breaker
+	RecoveryTimeout    time.Duration // Base time to wait before probing in HALF-OPEN
+	MaxRecoveryTimeout time.Duration // Cap on exponential backoff (0 = no cap)
 	// IsFailure classifies whether a command result counts as a circuit breaker failure.
 	// Receives the command class, combined output (nil for Run calls), and the error.
 	// If nil, any non-nil error is treated as a failure (default behavior).
@@ -55,8 +56,9 @@ type CircuitBreakerConfig struct {
 // DefaultCircuitBreakerConfig returns the default configuration.
 func DefaultCircuitBreakerConfig() CircuitBreakerConfig {
 	return CircuitBreakerConfig{
-		FailureThreshold: 3,
-		RecoveryTimeout:  30 * time.Second,
+		FailureThreshold:   3,
+		RecoveryTimeout:    30 * time.Second,
+		MaxRecoveryTimeout: 5 * time.Minute,
 	}
 }
 
@@ -72,13 +74,32 @@ func (realClock) Now() time.Time { return time.Now() }
 
 // circuitBreaker tracks state for a single command-class.
 type circuitBreaker struct {
-	mu                  sync.Mutex
-	state               CircuitState
-	consecutiveFailures int
-	lastStateChange     time.Time
-	probeInFlight       bool // true when a HALF-OPEN probe is currently executing
-	config              CircuitBreakerConfig
-	clock               Clock
+	mu                   sync.Mutex
+	state                CircuitState
+	consecutiveFailures  int
+	consecutiveOpenTrips int // number of failed HALF-OPEN probes; drives exponential backoff
+	lastStateChange      time.Time
+	probeInFlight        bool // true when a HALF-OPEN probe is currently executing
+	config               CircuitBreakerConfig
+	clock                Clock
+}
+
+// effectiveRecoveryTimeout returns the current recovery wait time, doubling for each
+// consecutive failed probe (exponential backoff), capped at MaxRecoveryTimeout.
+// The caller MUST hold cb.mu.
+func (cb *circuitBreaker) effectiveRecoveryTimeout() time.Duration {
+	if cb.consecutiveOpenTrips == 0 {
+		return cb.config.RecoveryTimeout
+	}
+	shift := cb.consecutiveOpenTrips
+	if shift > 10 {
+		shift = 10 // guard against overflow; 2^10 * 30s ≈ 8.5h, well beyond any sensible cap
+	}
+	timeout := cb.config.RecoveryTimeout << uint(shift)
+	if cb.config.MaxRecoveryTimeout > 0 && timeout > cb.config.MaxRecoveryTimeout {
+		return cb.config.MaxRecoveryTimeout
+	}
+	return timeout
 }
 
 // allowRequest checks whether a request should be allowed through.
@@ -89,7 +110,7 @@ func (cb *circuitBreaker) allowRequest() bool {
 		return true
 	case CircuitOpen:
 		elapsed := cb.clock.Now().Sub(cb.lastStateChange)
-		if elapsed >= cb.config.RecoveryTimeout {
+		if elapsed >= cb.effectiveRecoveryTimeout() {
 			cb.state = CircuitHalfOpen
 			cb.lastStateChange = cb.clock.Now()
 			cb.probeInFlight = true
@@ -115,6 +136,7 @@ func (cb *circuitBreaker) allowRequest() bool {
 func (cb *circuitBreaker) recordResult(success bool) {
 	if success {
 		cb.consecutiveFailures = 0
+		cb.consecutiveOpenTrips = 0 // reset backoff on successful recovery
 		if cb.state != CircuitClosed {
 			cb.state = CircuitClosed
 			cb.lastStateChange = cb.clock.Now()
@@ -126,10 +148,13 @@ func (cb *circuitBreaker) recordResult(success bool) {
 		case CircuitClosed:
 			if cb.consecutiveFailures >= cb.config.FailureThreshold {
 				cb.state = CircuitOpen
+				cb.consecutiveOpenTrips = 0 // fresh trip, reset backoff
 				cb.lastStateChange = cb.clock.Now()
 			}
 		case CircuitHalfOpen:
-			// Failed probe: revert to OPEN and restart the recovery timer.
+			// Failed probe: revert to OPEN and increase the backoff so the next
+			// recovery wait is doubled (exponential backoff).
+			cb.consecutiveOpenTrips++
 			cb.state = CircuitOpen
 			cb.lastStateChange = cb.clock.Now()
 			cb.probeInFlight = false
@@ -144,6 +169,7 @@ func (cb *circuitBreaker) reset() {
 	defer cb.mu.Unlock()
 	cb.state = CircuitClosed
 	cb.consecutiveFailures = 0
+	cb.consecutiveOpenTrips = 0
 	cb.lastStateChange = cb.clock.Now()
 	cb.probeInFlight = false
 }
@@ -325,10 +351,12 @@ func (e *CircuitBreakerExecutor) AllBreakers() map[string]CircuitBreakerSnapshot
 	for k, cb := range e.breakers {
 		cb.mu.Lock()
 		result[k] = CircuitBreakerSnapshot{
-			State:               cb.state,
-			ConsecutiveFailures: cb.consecutiveFailures,
-			LastStateChange:     cb.lastStateChange,
-			Config:              cb.config,
+			State:                cb.state,
+			ConsecutiveFailures:  cb.consecutiveFailures,
+			ConsecutiveOpenTrips: cb.consecutiveOpenTrips,
+			EffectiveRecovery:    cb.effectiveRecoveryTimeout(),
+			LastStateChange:      cb.lastStateChange,
+			Config:               cb.config,
 		}
 		cb.mu.Unlock()
 	}
@@ -337,8 +365,10 @@ func (e *CircuitBreakerExecutor) AllBreakers() map[string]CircuitBreakerSnapshot
 
 // CircuitBreakerSnapshot holds a point-in-time view of a circuit breaker's state.
 type CircuitBreakerSnapshot struct {
-	State               CircuitState
-	ConsecutiveFailures int
-	LastStateChange     time.Time
-	Config              CircuitBreakerConfig
+	State                CircuitState
+	ConsecutiveFailures  int
+	ConsecutiveOpenTrips int           // number of failed HALF-OPEN probes (backoff depth)
+	EffectiveRecovery    time.Duration // current recovery wait including backoff
+	LastStateChange      time.Time
+	Config               CircuitBreakerConfig
 }

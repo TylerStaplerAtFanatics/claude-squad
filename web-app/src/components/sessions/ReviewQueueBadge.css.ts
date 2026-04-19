@@ -12,6 +12,18 @@ export const badge = style({
   flexWrap: "wrap",
 });
 
+export const priorityAbbr = style({
+  display: "none",
+  fontSize: "10px",
+  fontWeight: 700,
+  letterSpacing: "0.02em",
+  "@media": {
+    "(min-width: 768px)": {
+      display: "inline",
+    },
+  },
+});
+
 export const badgeCompact = style({
   display: "inline-flex",
   alignItems: "center",

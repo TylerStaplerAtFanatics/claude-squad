@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/tstapler/stapler-squad/log"
 )
 
@@ -32,8 +33,8 @@ type ExternalTmuxStreamer struct {
 	lastContent   string
 	lastContentMu sync.RWMutex
 
-	// Consumers receive content updates
-	consumers   []func(content string)
+	// Consumers receive content updates (keyed by token for reliable removal)
+	consumers   map[string]func(content string)
 	consumersMu sync.RWMutex
 
 	// Lifecycle
@@ -129,9 +130,15 @@ func (s *ExternalTmuxStreamer) IsRunning() bool {
 
 // AddConsumer registers a callback to receive content updates.
 // The consumer will be called with the full terminal content whenever it changes.
-func (s *ExternalTmuxStreamer) AddConsumer(consumer func(content string)) {
+// Returns a token that must be passed to RemoveConsumer to deregister.
+func (s *ExternalTmuxStreamer) AddConsumer(consumer func(content string)) string {
+	key := uuid.New().String()
+
 	s.consumersMu.Lock()
-	s.consumers = append(s.consumers, consumer)
+	if s.consumers == nil {
+		s.consumers = make(map[string]func(content string))
+	}
+	s.consumers[key] = consumer
 	s.consumersMu.Unlock()
 
 	// Send current content immediately to the new consumer
@@ -142,20 +149,15 @@ func (s *ExternalTmuxStreamer) AddConsumer(consumer func(content string)) {
 	if content != "" {
 		go consumer(content)
 	}
+
+	return key
 }
 
-// RemoveConsumer removes a consumer. Note: this uses pointer comparison
-// which may not work for closures.
-func (s *ExternalTmuxStreamer) RemoveConsumer(consumer func(content string)) {
+// RemoveConsumer deregisters a consumer by the token returned from AddConsumer.
+func (s *ExternalTmuxStreamer) RemoveConsumer(key string) {
 	s.consumersMu.Lock()
 	defer s.consumersMu.Unlock()
-
-	for i := range s.consumers {
-		// Can't reliably compare function pointers, but this is the best we can do
-		// In practice, consumers should track their own lifecycle
-		_ = i
-	}
-	// For now, consumers are not removed - they'll fail silently if channel is closed
+	delete(s.consumers, key)
 }
 
 // GetContent returns the current terminal content.
@@ -429,8 +431,10 @@ func (s *ExternalTmuxStreamer) capturePane() (string, error) {
 // notifyConsumers sends content to all registered consumers.
 func (s *ExternalTmuxStreamer) notifyConsumers(content string) {
 	s.consumersMu.RLock()
-	consumers := make([]func(string), len(s.consumers))
-	copy(consumers, s.consumers)
+	consumers := make([]func(string), 0, len(s.consumers))
+	for _, c := range s.consumers {
+		consumers = append(consumers, c)
+	}
 	s.consumersMu.RUnlock()
 
 	for _, consumer := range consumers {

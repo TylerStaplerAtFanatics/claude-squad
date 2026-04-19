@@ -44,6 +44,44 @@ function HomeContent() {
   // Track whether wizard was opened via query params so we clean up URL on close
   const openedViaQueryParam = useRef(false);
 
+  // Focus management: modal containers (tabIndex={-1}) and trigger element refs
+  const sessionModalContentRef = useRef<HTMLDivElement>(null);
+  const wizardModalContentRef = useRef<HTMLDivElement>(null);
+  const helpModalContentRef = useRef<HTMLDivElement>(null);
+  const sessionTriggerRef = useRef<HTMLElement | null>(null);
+  const wizardTriggerRef = useRef<HTMLElement | null>(null);
+  const helpTriggerRef = useRef<HTMLElement | null>(null);
+
+  // Focus session modal when it opens; return focus on close
+  useEffect(() => {
+    if (selectedSession) {
+      sessionModalContentRef.current?.focus();
+    } else if (sessionTriggerRef.current) {
+      sessionTriggerRef.current.focus();
+      sessionTriggerRef.current = null;
+    }
+  }, [selectedSession]);
+
+  // Focus wizard modal when it opens; return focus on close
+  useEffect(() => {
+    if (showWizard) {
+      wizardModalContentRef.current?.focus();
+    } else if (wizardTriggerRef.current) {
+      wizardTriggerRef.current.focus();
+      wizardTriggerRef.current = null;
+    }
+  }, [showWizard]);
+
+  // Focus help modal when it opens; return focus on close
+  useEffect(() => {
+    if (isHelpOpen) {
+      helpModalContentRef.current?.focus();
+    } else if (helpTriggerRef.current) {
+      helpTriggerRef.current.focus();
+      helpTriggerRef.current = null;
+    }
+  }, [isHelpOpen]);
+
   // Valid tab values for URL parsing
   const validTabs: SessionDetailTab[] = ["terminal", "diff", "vcs", "logs", "info"];
   const isValidTab = (tab: string | null): tab is SessionDetailTab =>
@@ -258,6 +296,7 @@ function HomeContent() {
 
   // Handle new workspace on same project - open wizard with path/program/category pre-filled but fresh title
   const handleNewWorkspaceSession = (sessionId: string) => {
+    wizardTriggerRef.current = document.activeElement as HTMLElement;
     openedViaQueryParam.current = false;
     getSession(sessionId).then((session) => {
       if (session) {
@@ -281,6 +320,7 @@ function HomeContent() {
 
   // Handle session duplication - open wizard modal with session data
   const handleDuplicateSession = (sessionId: string) => {
+    wizardTriggerRef.current = document.activeElement as HTMLElement;
     openedViaQueryParam.current = false;
     getSession(sessionId).then((session) => {
       if (session) {
@@ -303,6 +343,7 @@ function HomeContent() {
 
   // Handle new session - open wizard modal
   const handleNewSession = () => {
+    wizardTriggerRef.current = document.activeElement as HTMLElement;
     openedViaQueryParam.current = false;
     setWizardInitialData(undefined);
     setShowWizard(true);
@@ -380,6 +421,7 @@ function HomeContent() {
 
   // Handle session selection with URL update
   const handleSessionClick = (session: Session) => {
+    sessionTriggerRef.current = document.activeElement as HTMLElement;
     setSelectedSession(session);
     setActiveTab("info");
     updateUrl(session.id, "info");
@@ -395,7 +437,7 @@ function HomeContent() {
 
   // Keyboard shortcuts
   useKeyboard({
-    "?": () => setShowHelp(true),
+    "?": () => { helpTriggerRef.current = document.activeElement as HTMLElement; setShowHelp(true); },
     Escape: () => {
       if (resumeTarget) {
         setResumeTarget(null);
@@ -450,6 +492,8 @@ function HomeContent() {
         onClick={closeSession}
       >
         <div
+          ref={sessionModalContentRef}
+          tabIndex={-1}
           className={`${styles.modalContent} ${isSessionFullscreen ? styles.modalContentFullscreen : ""}`}
           onClick={(e) => e.stopPropagation()}
         >
@@ -468,7 +512,7 @@ function HomeContent() {
       {/* Session creation wizard modal */}
       {showWizard && (
         <div className={styles.modal} onClick={handleWizardCancel}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+          <div ref={wizardModalContentRef} tabIndex={-1} className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>{wizardInitialData ? "Duplicate Session" : "Create New Session"}</h2>
               <button
@@ -504,7 +548,7 @@ function HomeContent() {
       {/* Keyboard shortcuts help modal */}
       {isHelpOpen && (
         <div className={styles.modal} onClick={() => setShowHelp(false)}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+          <div ref={helpModalContentRef} tabIndex={-1} className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>Keyboard Shortcuts</h2>
               <button
@@ -522,8 +566,6 @@ function HomeContent() {
                   { keys: "Escape", description: "Close modal / dialog" },
                   { keys: "R", description: "Refresh session list" },
                   { keys: "Enter", description: "Open selected session" },
-                  { keys: "/", description: "Focus search (coming soon)" },
-                  { keys: ["↑", "↓"], description: "Navigate sessions (coming soon)" },
                 ]}
               />
             </div>
@@ -531,15 +573,6 @@ function HomeContent() {
         </div>
       )}
 
-      {/* Floating help button */}
-      <button
-        className={styles.helpButton}
-        onClick={() => setShowHelp(true)}
-        aria-label="Show keyboard shortcuts"
-        title="Keyboard shortcuts (?)"
-      >
-        ?
-      </button>
     </div>
   );
 }

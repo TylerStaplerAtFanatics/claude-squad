@@ -10,6 +10,7 @@ import (
 // InstanceData represents the serializable data of an Instance
 type InstanceData struct {
 	Title      string    `json:"title"`
+	UUID       string    `json:"uuid,omitempty"`
 	Path       string    `json:"path"`
 	WorkingDir string    `json:"working_dir"`
 	Branch     string    `json:"branch"`

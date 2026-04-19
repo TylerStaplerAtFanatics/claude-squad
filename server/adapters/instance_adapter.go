@@ -13,7 +13,7 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 	}
 
 	protoSession := &sessionv1.Session{
-		Id:          inst.Title, // Using Title as ID
+		Id:          inst.GetStableID(),
 		Title:       inst.Title,
 		Path:        inst.Workspace().EffectivePath,
 		WorkingDir:  inst.WorkingDir,

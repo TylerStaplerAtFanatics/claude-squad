@@ -163,12 +163,12 @@ func (rs *ReviewState) UpdateTimestamps(rawContent, filteredContent string, shou
 		if signature != rs.LastOutputSignature {
 			rs.LastMeaningfulOutput = now
 			rs.LastOutputSignature = signature
-			log.LogForSession(sessionTitle, "debug", "Updated LastMeaningfulOutput timestamp")
+			log.ForSession(sessionTitle).Debug("Updated LastMeaningfulOutput timestamp")
 		} else {
-			log.LogForSession(sessionTitle, "debug", "Skipped LastMeaningfulOutput update (content unchanged since last update)")
+			log.ForSession(sessionTitle).Debug("Skipped LastMeaningfulOutput update (content unchanged since last update)")
 		}
 	} else {
-		log.LogForSession(sessionTitle, "debug", "NOT updating LastMeaningfulOutput - content classified as non-meaningful (banners only)")
+		log.ForSession(sessionTitle).Debug("NOT updating LastMeaningfulOutput - content classified as non-meaningful (banners only)")
 	}
 }
 
