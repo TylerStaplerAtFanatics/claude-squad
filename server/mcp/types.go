@@ -59,14 +59,14 @@ type SearchSessionsResult struct {
 
 // Error code constants — machine-readable identifiers for all tool failures.
 const (
-	ErrSessionNotFound      = "SESSION_NOT_FOUND"
-	ErrInvalidArgument      = "INVALID_ARGUMENT"
-	ErrInternalError        = "INTERNAL_ERROR"
-	ErrConfirmationRequired = "CONFIRMATION_REQUIRED"
-	ErrInvalidStatusTrans   = "INVALID_STATUS_TRANSITION"
-	ErrSessionNotRunning    = "SESSION_NOT_RUNNING"
-	ErrRateLimitExceeded    = "RATE_LIMIT_EXCEEDED"
+	ErrSessionNotFound       = "SESSION_NOT_FOUND"
+	ErrInvalidArgument       = "INVALID_ARGUMENT"
+	ErrInternalError         = "INTERNAL_ERROR"
+	ErrConfirmationRequired  = "CONFIRMATION_REQUIRED"
+	ErrInvalidStatusTrans    = "INVALID_STATUS_TRANSITION"
+	ErrSessionNotRunning     = "SESSION_NOT_RUNNING"
+	ErrRateLimitExceeded     = "RATE_LIMIT_EXCEEDED"
 	ErrSessionStartupTimeout = "SESSION_STARTUP_TIMEOUT"
-	ErrInvalidPath          = "INVALID_PATH"
-	ErrPTYWriteTimeout      = "PTY_WRITE_TIMEOUT"
+	ErrInvalidPath           = "INVALID_PATH"
+	ErrPTYWriteTimeout       = "PTY_WRITE_TIMEOUT"
 )
