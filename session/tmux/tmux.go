@@ -27,6 +27,11 @@ const ProgramClaude = "claude"
 const ProgramAider = "aider"
 const ProgramGemini = "gemini"
 
+// defaultAttachCols/Rows are the initial PTY dimensions used before the real browser
+// size is known. They are also the fallback if no client has ever connected.
+const defaultAttachCols = 220
+const defaultAttachRows = 50
+
 // TmuxSession represents a managed tmux session
 type TmuxSession struct {
 	// Initialized by NewTmuxSession
@@ -77,6 +82,13 @@ type TmuxSession struct {
 	// registryKey is the key used to register this session's circuit breaker executor
 	// in the global registry. Stored here so Close() can unregister it on teardown.
 	registryKey string
+
+	// lastKnownCols/Rows hold the terminal dimensions from the most recent successful
+	// resize. Used to pre-size new PTY attach connections (via attach-session -x/-y)
+	// so the tmux session immediately reflects the correct browser window size on
+	// reconnect rather than starting at the tmux default of 80×24.
+	lastKnownCols atomic.Int32
+	lastKnownRows atomic.Int32
 
 	// Session existence caching to avoid repeated list-sessions calls
 	existsCacheMutex sync.RWMutex
@@ -411,7 +423,7 @@ func newTmuxSession(name string, program string, ptyFactory PtyFactory, cmdExec 
 
 // newTmuxSessionWithSocket creates a TmuxSession with both prefix and server socket isolation
 func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory, cmdExec executor.Executor, prefix string, serverSocket string) *TmuxSession {
-	return &TmuxSession{
+	s := &TmuxSession{
 		sanitizedName:    toStaplerSquadTmuxNameWithPrefix(name, prefix),
 		program:          program,
 		serverSocket:     serverSocket,
@@ -421,6 +433,9 @@ func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory
 		externalResizeCh: make(chan windowSize, 10), // Buffered channel for resize events
 		existsCacheTTL:   existsCacheDefaultTTL,
 	}
+	s.lastKnownCols.Store(defaultAttachCols)
+	s.lastKnownRows.Store(defaultAttachRows)
+	return s
 }
 
 // NewTmuxSessionFromExisting creates a TmuxSession that wraps an existing tmux session by its exact name.
@@ -433,7 +448,7 @@ func NewTmuxSessionFromExisting(exactSessionName string) *TmuxSession {
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
 	key := "tmux-ext-" + exactSessionName
 	executor.GetGlobalRegistry().Register(key, cbExec)
-	return &TmuxSession{
+	s := &TmuxSession{
 		sanitizedName:    exactSessionName, // Use exact name - no prefix transformation
 		program:          "",               // Unknown - external session
 		serverSocket:     "",               // Use default server
@@ -444,6 +459,9 @@ func NewTmuxSessionFromExisting(exactSessionName string) *TmuxSession {
 		externalResizeCh: make(chan windowSize, 10),
 		existsCacheTTL:   existsCacheDefaultTTL,
 	}
+	s.lastKnownCols.Store(defaultAttachCols)
+	s.lastKnownRows.Store(defaultAttachRows)
+	return s
 }
 
 // AttachToExisting connects to an already-running tmux session and establishes the PTY connection.
@@ -463,6 +481,10 @@ func (t *TmuxSession) AttachToExisting() error {
 		}
 		t.ptmx = ptmx
 		t.attachCmd = cmd // CRITICAL: Save command so we can kill it on cleanup
+		// Drain PTY output so tmux attach-session never blocks on write.
+		// Without this, once the kernel PTY buffer fills the process stalls,
+		// SIGWINCH is never processed, and resize stops working.
+		go io.Copy(io.Discard, ptmx)
 		log.InfoLog.Printf("Successfully attached PTY to existing tmux session '%s' (pid=%d)", t.sanitizedName, cmd.Process.Pid)
 	}
 
@@ -488,9 +510,14 @@ func (t *TmuxSession) buildTmuxCommand(args ...string) *exec.Cmd {
 	return exec.Command("tmux", cmdArgs...)
 }
 
-// buildAttachCommand creates a tmux attach-session command for PTY operations
+// buildAttachCommand creates a tmux attach-session command for PTY operations.
+// -x/-y pre-declare the client's terminal size to tmux (tmux 3.2+), so the
+// session starts at the correct dimensions rather than the 80×24 default.
 func (t *TmuxSession) buildAttachCommand() *exec.Cmd {
-	return t.buildTmuxCommand("attach-session", "-t", t.sanitizedName)
+	cols := t.lastKnownCols.Load()
+	rows := t.lastKnownRows.Load()
+	return t.buildTmuxCommand("attach-session", "-t", t.sanitizedName,
+		"-x", fmt.Sprintf("%d", cols), "-y", fmt.Sprintf("%d", rows))
 }
 
 // Start creates and starts a new tmux session, then attaches to it. Program is the command to run in
@@ -697,12 +724,15 @@ func (t *TmuxSession) RestoreWithWorkDir(workDir string) error {
 				log.InfoLog.Printf("Retrying PTY attach for session '%s' (attempt %d/%d, waiting %v)", t.sanitizedName, attempt+1, ptyMaxRetries, delay)
 				time.Sleep(delay)
 			}
-			ptmx, _, err := t.ptyFactory.Start(t.buildAttachCommand())
+			ptmx, attachCmd, err := t.ptyFactory.Start(t.buildAttachCommand())
 			if err != nil {
 				lastPTYErr = err
 				continue
 			}
 			t.ptmx = ptmx
+			t.attachCmd = attachCmd // CRITICAL: track so it can be killed on cleanup
+			// Drain PTY output so tmux attach-session never blocks on write.
+			go io.Copy(io.Discard, ptmx)
 			log.InfoLog.Printf("Successfully restored PTY connection for tmux session '%s'", t.sanitizedName)
 			lastPTYErr = nil
 			break
@@ -1253,6 +1283,10 @@ func (t *TmuxSession) SetWindowSize(cols, rows int) error {
 		log.ErrorLog.Printf("❌ tmux resize-window failed for '%s': %v", t.sanitizedName, err)
 		return fmt.Errorf("failed to resize tmux window: %w", err)
 	}
+
+	// Save dimensions so future PTY attach connections start at the correct size.
+	t.lastKnownCols.Store(int32(cols))
+	t.lastKnownRows.Store(int32(rows))
 
 	// Verify the resize actually worked
 	newWidth, newHeight, err := t.GetPaneDimensions()
