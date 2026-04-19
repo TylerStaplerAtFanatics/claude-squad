@@ -3,7 +3,7 @@
 import { useRef, useEffect, useMemo } from "react";
 import { ClaudeMessage } from "@/gen/session/v1/session_pb";
 import { formatDate } from "@/lib/utils/timestamp";
-import styles from "./HistoryMessagesModal.module.css";
+import * as styles from "./HistoryMessagesModal.css";
 
 interface HistoryMessagesModalProps {
   open: boolean;

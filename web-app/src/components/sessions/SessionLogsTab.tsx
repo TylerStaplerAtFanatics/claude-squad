@@ -11,7 +11,7 @@ import { useDebounce } from "@/lib/hooks/useDebounce";
 import { MultiSelect, LOG_LEVEL_OPTIONS } from "@/components/logs/MultiSelect";
 import { LiveTailToggle } from "@/components/logs/LiveTailToggle";
 import { useLiveTail } from "@/lib/hooks/useLiveTail";
-import styles from "./SessionLogsTab.module.css";
+import * as styles from "./SessionLogsTab.css";
 
 interface SessionLogsTabProps {
   sessionId: string;

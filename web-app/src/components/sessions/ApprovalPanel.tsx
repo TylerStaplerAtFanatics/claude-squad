@@ -3,7 +3,10 @@
 import { useEffect, useRef } from "react";
 import { useApprovals } from "@/lib/hooks/useApprovals";
 import { ApprovalCard } from "./ApprovalCard";
-import styles from "./ApprovalPanel.module.css";
+import {
+  panel, header, title, countBadge, refreshButton,
+  list, empty, error as errorClass, retryButton,
+} from "./ApprovalPanel.css";
 
 interface ApprovalPanelProps {
   sessionId?: string; // if provided, filter to this session
@@ -63,11 +66,11 @@ export function ApprovalPanel({ sessionId, onResolved }: ApprovalPanelProps) {
 
   if (error) {
     return (
-      <div className={styles.panel}>
-        <div className={styles.error}>
+      <div className={panel}>
+        <div className={errorClass}>
           Failed to load approvals: {error.message}
           <br />
-          <button onClick={refresh} className={styles.retryButton}>
+          <button onClick={refresh} className={retryButton}>
             Retry
           </button>
         </div>
@@ -81,17 +84,17 @@ export function ApprovalPanel({ sessionId, onResolved }: ApprovalPanelProps) {
   }
 
   return (
-    <div className={styles.panel} data-testid="approval-panel">
-      <div className={styles.header}>
-        <h3 className={styles.title}>
+    <div className={panel} data-testid="approval-panel">
+      <div className={header}>
+        <h3 className={title}>
           Pending Approvals
           {approvals.length > 0 && (
-            <span className={styles.countBadge}>{approvals.length}</span>
+            <span className={countBadge}>{approvals.length}</span>
           )}
         </h3>
         <button
           onClick={refresh}
-          className={styles.refreshButton}
+          className={refreshButton}
           disabled={loading}
           aria-label="Refresh approvals"
         >
@@ -99,9 +102,9 @@ export function ApprovalPanel({ sessionId, onResolved }: ApprovalPanelProps) {
         </button>
       </div>
 
-      <div className={styles.list}>
+      <div className={list}>
         {loading && approvals.length === 0 ? (
-          <div className={styles.empty}>Loading approvals...</div>
+          <div className={empty}>Loading approvals...</div>
         ) : (
           approvals.map((approval) => (
             <ApprovalCard

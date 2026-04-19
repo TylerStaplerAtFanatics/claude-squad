@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { Session } from "@/gen/session/v1/types_pb";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { generateUniqueName } from "@/utils/sessionNameUtils";
-import styles from "./ResumeSessionModal.module.css";
+import * as styles from "./ResumeSessionModal.css";
 
 interface ResumeSessionModalProps {
   session: Session;

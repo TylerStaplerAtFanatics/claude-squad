@@ -6,7 +6,10 @@ import { useVcsStatus } from "@/lib/hooks/useVcsStatus";
 import { FileTree } from "./FileTree";
 import { FileContentViewer } from "./FileContentViewer";
 import { useSessionVcsContext } from "@/lib/contexts/SessionVcsContext";
-import styles from "./FilesTab.module.css";
+import {
+  container, treePane, contentPane, toolbar, searchInput,
+  toolbarLabel, toolbarButton, searchCount, treeWrapper,
+} from "./FilesTab.css";
 
 // ---- Git status helpers ----
 
@@ -98,25 +101,25 @@ export function FilesTab({
   }, []);
 
   return (
-    <div className={styles.container}>
+    <div className={container}>
       {/* Left pane: file tree */}
-      <div className={styles.treePane}>
-        <div className={styles.toolbar}>
+      <div className={treePane}>
+        <div className={toolbar}>
           <input
             ref={searchInputRef}
             type="search"
-            className={styles.searchInput}
+            className={searchInput}
             placeholder="Search files… (⌘F)"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             aria-label="Search files"
           />
           {searchResultCount !== null && searchTerm.length >= 2 && (
-            <span className={styles.searchCount} title={searchResultTruncated ? "Results truncated at 500" : undefined}>
+            <span className={searchCount} title={searchResultTruncated ? "Results truncated at 500" : undefined}>
               {searchResultCount}{searchResultTruncated ? "+" : ""} match{searchResultCount !== 1 ? "es" : ""}
             </span>
           )}
-          <label className={styles.toolbarLabel} title="Show gitignored files">
+          <label className={toolbarLabel} title="Show gitignored files">
             <input
               type="checkbox"
               checked={includeIgnored}
@@ -125,14 +128,14 @@ export function FilesTab({
             Ignored
           </label>
           <button
-            className={styles.toolbarButton}
+            className={toolbarButton}
             onClick={() => fileTreeCollapseRef.current?.()}
             title="Collapse all directories"
           >
             ⊟
           </button>
           <button
-            className={styles.toolbarButton}
+            className={toolbarButton}
             onClick={() => refreshStatus()}
             title="Refresh git status"
             disabled={vcsLoading}
@@ -140,7 +143,7 @@ export function FilesTab({
             {vcsLoading ? "⟳" : "↺"}
           </button>
         </div>
-        <div className={styles.treeWrapper}>
+        <div className={treeWrapper}>
           <FileTree
             sessionId={sessionId}
             baseUrl={baseUrl}
@@ -159,7 +162,7 @@ export function FilesTab({
       </div>
 
       {/* Right pane: file content */}
-      <div className={styles.contentPane}>
+      <div className={contentPane}>
         <FileContentViewer
           sessionId={sessionId}
           filePath={selectedPath}

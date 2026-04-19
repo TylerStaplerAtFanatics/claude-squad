@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { SearchResultItem, SearchSnippetItem } from "@/lib/hooks/useHistoryFullTextSearch";
-import styles from "./HistorySearchResults.module.css";
+import * as styles from "./HistorySearchResults.css";
 
 interface HistorySearchResultsProps {
   /** Search results to display */

@@ -1,10 +1,15 @@
-// Identity proxy for CSS modules: returns the class name as-is so tests can
-// query by className without needing a real CSS build.
+// Mock for CSS files in Jest. Returns callable functions so vanilla-extract
+// recipe() imports (e.g. `button({ intent })`) don't throw in tests.
+// The function returns the prop name string so className values stay readable.
 module.exports = new Proxy(
   {},
   {
     get: function (_, prop) {
-      return prop;
+      if (typeof prop === "symbol") return undefined;
+      const fn = (..._args) => String(prop);
+      fn.toString = () => String(prop);
+      fn.valueOf = () => String(prop);
+      return fn;
     },
   }
 );

@@ -4,7 +4,7 @@ import { ClaudeHistoryEntry } from "@/gen/session/v1/session_pb";
 import { HistoryGroupingStrategy } from "@/lib/hooks/useHistoryFilters";
 import type { HistoryGroup } from "@/lib/hooks/useHistoryGrouping";
 import { HistoryEntryCard } from "./HistoryEntryCard";
-import styles from "./HistoryGroupView.module.css";
+import * as styles from "./HistoryGroupView.css";
 
 interface HistoryGroupViewProps {
   groupedEntries: HistoryGroup[];

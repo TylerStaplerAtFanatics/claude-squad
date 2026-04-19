@@ -1,4 +1,13 @@
-import styles from "./KeyboardHint.module.css";
+import {
+  hint as hintClass,
+  keys as keysClass,
+  key as keyClass,
+  separator,
+  description as descriptionClass,
+  hintsContainer,
+  title as titleClass,
+  hints as hintsClass,
+} from "./KeyboardHint.css";
 
 interface KeyboardHintProps {
   keys: string | string[];
@@ -10,18 +19,18 @@ export function KeyboardHint({ keys, description, className = "" }: KeyboardHint
   const keyArray = Array.isArray(keys) ? keys : [keys];
 
   return (
-    <div className={`${styles.hint} ${className}`}>
-      <div className={styles.keys}>
+    <div className={`${hintClass} ${className}`}>
+      <div className={keysClass}>
         {keyArray.map((key, index) => (
           <span key={index}>
-            <kbd className={styles.key}>{key}</kbd>
+            <kbd className={keyClass}>{key}</kbd>
             {index < keyArray.length - 1 && (
-              <span className={styles.separator}>+</span>
+              <span className={separator}>+</span>
             )}
           </span>
         ))}
       </div>
-      <span className={styles.description}>{description}</span>
+      <span className={descriptionClass}>{description}</span>
     </div>
   );
 }
@@ -37,9 +46,9 @@ interface KeyboardHintsProps {
 
 export function KeyboardHints({ hints, title, className = "" }: KeyboardHintsProps) {
   return (
-    <div className={`${styles.hintsContainer} ${className}`}>
-      {title && <h3 className={styles.title}>{title}</h3>}
-      <div className={styles.hints}>
+    <div className={`${hintsContainer} ${className}`}>
+      {title && <h3 className={titleClass}>{title}</h3>}
+      <div className={hintsClass}>
         {hints.map((hint, index) => (
           <KeyboardHint
             key={index}

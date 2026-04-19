@@ -3,7 +3,7 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useDatabases } from "@/lib/hooks/useDatabase";
 import { DatabaseInfo } from "@/gen/session/v1/types_pb";
-import styles from "./WorkspaceSwitcher.module.css";
+import * as styles from "./WorkspaceSwitcher.css";
 
 /**
  * WorkspaceSwitcher — header dropdown for switching between workspace databases.

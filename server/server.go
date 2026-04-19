@@ -11,6 +11,7 @@ import (
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/server/events"
+	"github.com/tstapler/stapler-squad/server/handlers"
 	servermcp "github.com/tstapler/stapler-squad/server/mcp"
 	"github.com/tstapler/stapler-squad/server/middleware"
 	"github.com/tstapler/stapler-squad/server/notifications"
@@ -247,7 +248,19 @@ func NewServer(addr string) *Server {
 		cbHandler := services.NewCircuitBreakerHandler()
 		cbHandler.RegisterRoutes(srv.mux)
 		log.InfoLog.Printf("Registered Circuit Breaker debug handler at /api/debug/circuit-breakers")
+
+		// Register telemetry handler for frontend performance events
+		telemetryHandler := handlers.NewTelemetryHandler()
+		srv.mux.HandleFunc("POST /api/telemetry", telemetryHandler.HandleTelemetry)
+		log.InfoLog.Printf("Registered telemetry handler at POST /api/telemetry")
 	}
+
+	// Register image upload endpoint — saves clipboard images to a temp directory
+	// so the terminal process can reference them by path (e.g. for Claude Code image paste).
+	pasteDir := filepath.Join(os.TempDir(), "stapler-paste")
+	imageHandler := services.NewImageUploadHandler(pasteDir)
+	srv.mux.HandleFunc("/api/upload/image", imageHandler.HandleUpload)
+	log.InfoLog.Printf("Registered image upload handler at /api/upload/image (dir: %s)", pasteDir)
 
 	// Register server-info endpoint for settings UI
 	srv.registerServerInfoHandler()

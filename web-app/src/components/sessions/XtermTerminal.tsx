@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
+import { useMobileTerminalGestures } from "@/lib/hooks/useMobileTerminalGestures";
 import { Terminal } from "@xterm/xterm";
+import { useTouchScroll } from "@/lib/hooks/useTouchScroll";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { WebglAddon } from "@xterm/addon-webgl";
 import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
-import styles from "./XtermTerminal.module.css";
+import * as styles from "./XtermTerminal.css";
 import { loadTerminalConfig, darkTerminalTheme, lightTerminalTheme, type TerminalConfig } from "@/lib/config/terminalConfig";
 
 export interface XtermTerminalProps {
@@ -107,11 +108,37 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, XtermTerminalProps>
   // Store callbacks in refs to avoid recreating terminal on callback changes
   const onDataRef = useRef(onData);
   const onResizeRef = useRef(onResize);
+  // Ref so touch handlers always read the latest mouseTracking value without recreating terminal
+  const mouseTrackingRef = useRef(mouseTracking);
+
+  // Enable touch-based scrolling on mobile devices
+  useTouchScroll(containerRef, () => terminalRef.current);
 
   useEffect(() => {
     onDataRef.current = onData;
     onResizeRef.current = onResize;
   }, [onData, onResize]);
+
+  // Keep mouseTrackingRef in sync and try to update terminal option dynamically
+  useEffect(() => {
+    mouseTrackingRef.current = mouseTracking;
+    if (terminalRef.current) {
+      try {
+        (terminalRef.current as any).options.mouseTracking = mouseTracking;
+      } catch {
+        // Proposed API may not support dynamic updates on all xterm.js builds
+      }
+    }
+  }, [mouseTracking]);
+
+  // Mobile touch gestures — scroll and long-press selection.
+  // Extracted to a hook so gesture logic stays separate from terminal lifecycle.
+  useMobileTerminalGestures({
+    containerRef,
+    getTerminal: useCallback(() => terminalRef.current, []),
+    getMouseTracking: useCallback(() => mouseTrackingRef.current, []),
+    fontSize,
+  });
 
   // Initialize terminal on mount
   useEffect(() => {
@@ -145,18 +172,25 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, XtermTerminalProps>
     terminal.loadAddon(webLinksAddon);
     terminal.loadAddon(searchAddon);
 
-    // Always enable WebGL renderer for best performance (falls back to canvas if unavailable)
-    try {
-      const webglAddon = new WebglAddon();
-      webglAddon.onContextLoss(() => {
-        console.warn('[XtermTerminal] WebGL context lost, falling back to canvas renderer');
-        webglAddon.dispose();
-      });
-      terminal.loadAddon(webglAddon);
-      console.log("[XtermTerminal] WebGL renderer enabled");
-    } catch (e) {
-      console.warn("[XtermTerminal] WebGL not available, using canvas fallback:", e);
-    }
+    // xterm.js issue #2033 — guard WebGL before loading on Android/mobile
+    (async () => {
+      if (typeof WebGL2RenderingContext !== 'undefined') {
+        try {
+          const { WebglAddon } = await import('@xterm/addon-webgl');
+          const webglAddon = new WebglAddon();
+          webglAddon.onContextLoss(() => {
+            console.warn('[XtermTerminal] WebGL context lost, falling back to canvas renderer');
+            webglAddon.dispose();
+          });
+          terminal.loadAddon(webglAddon);
+          console.log("[XtermTerminal] WebGL renderer enabled");
+        } catch (e) {
+          console.warn("[XtermTerminal] WebGL failed to load:", e);
+        }
+      } else {
+        console.log("[XtermTerminal] WebGL2 unavailable (Android?), using canvas renderer");
+      }
+    })();
 
     // Open terminal in container with error boundary
     try {
