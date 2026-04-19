@@ -101,7 +101,6 @@ func (lh *lifecycleHandlers) createSession(ctx context.Context, req mcpgo.CallTo
 	branch, _ := args["branch"].(string)
 	program, _ := args["program"].(string)
 	sessionTypeStr, _ := args["session_type"].(string)
-	injectMCP, _ := args["inject_mcp"].(bool)
 
 	if title == "" {
 		return errResult(ErrInvalidArgument, "title is required", ""), nil
@@ -180,8 +179,6 @@ func (lh *lifecycleHandlers) createSession(ctx context.Context, req mcpgo.CallTo
 	if v, ok := args["inject_mcp"].(bool); ok {
 		shouldInjectMCP = v
 	}
-	_ = injectMCP // shadowed by shouldInjectMCP check above
-
 	var mcpInjectionFailed bool
 	if shouldInjectMCP {
 		if injErr := injectMCPConfig(inst.GetEffectiveRootDir()); injErr != nil {

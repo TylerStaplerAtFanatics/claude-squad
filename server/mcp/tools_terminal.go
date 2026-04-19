@@ -218,7 +218,7 @@ type WriteSessionResult struct {
 	BytesWritten int `json:"bytes_written"`
 }
 
-func (th *terminalHandlers) writeToSession(_ context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+func (th *terminalHandlers) writeToSession(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	args := req.GetArguments()
 	sessionID, ok := args["session_id"].(string)
 	if !ok || sessionID == "" {
@@ -253,10 +253,11 @@ func (th *terminalHandlers) writeToSession(_ context.Context, req mcpgo.CallTool
 	}
 
 	// Wrap SendKeys in a goroutine with a 5-second timeout to prevent PTY write deadlock.
+	// Use the request context so caller cancellation propagates; add a hard 5s cap.
 	errCh := make(chan error, 1)
 	go func() { errCh <- inst.SendKeys(text) }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	select {
@@ -469,7 +470,7 @@ type RunCommandResult struct {
 	LastSequence uint64 `json:"last_sequence"`
 }
 
-func (th *terminalHandlers) runCommand(_ context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+func (th *terminalHandlers) runCommand(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	args := req.GetArguments()
 	sessionID, ok := args["session_id"].(string)
 	if !ok || sessionID == "" {
@@ -509,7 +510,7 @@ func (th *terminalHandlers) runCommand(_ context.Context, req mcpgo.CallToolRequ
 	sendErrCh := make(chan error, 1)
 	go func() { sendErrCh <- inst.SendKeys(command + "\n") }()
 
-	sendCtx, sendCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	sendCtx, sendCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer sendCancel()
 
 	select {
