@@ -163,9 +163,9 @@ export function SessionDetail({
 
   return (
     <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ""}`}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>{session.title}</h2>
-        <ActionBar gap="sm" justify="end" scroll className={styles.headerActions}>
+      <div className={`${styles.header} ${isFullscreen ? styles.fullscreenMobileHeader : ""}`}>
+        <h2 className={`${styles.title} ${isFullscreen ? styles.fullscreenMobileTitle : ""}`}>{session.title}</h2>
+        <ActionBar gap="sm" justify="end" scroll className={`${styles.headerActions} ${isFullscreen ? styles.fullscreenMobileHeaderActions : ""}`}>
           {/* Fullscreen — most used when viewing terminal/diff/vcs */}
           {(activeTab === "terminal" || activeTab === "diff" || activeTab === "vcs") && (
             <button
@@ -236,7 +236,7 @@ export function SessionDetail({
         </ActionBar>
       </div>
 
-      <div className={styles.tabs}>
+      <div className={`${styles.tabs} ${isFullscreen ? styles.fullscreenMobileTabs : ""}`}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
