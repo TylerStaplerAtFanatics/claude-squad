@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -198,9 +199,24 @@ func (r *TmuxServerRegistry) syncSessions() error {
 		}
 	}
 
+	// Identify sessions that existed before but are now gone. We fire
+	// pane-exit for them after releasing the lock so subscribers are
+	// notified even when control-mode events were missed (e.g. in a
+	// headless environment where the control-mode connection is short-lived).
 	r.mu.Lock()
+	var disappeared []string
+	for name := range r.sessions {
+		if !sessions[name] {
+			disappeared = append(disappeared, name)
+		}
+	}
 	r.sessions = sessions
 	r.mu.Unlock()
+
+	for _, name := range disappeared {
+		r.firePaneExit(name)
+	}
+
 	return nil
 }
 
@@ -255,11 +271,21 @@ func (r *TmuxServerRegistry) reconnectLoop() {
 			continue
 		}
 
+		// Resync the session map before marking healthy so that sessions
+		// created while the control-mode connection was down are not missed.
+		if err := r.syncSessions(); err != nil {
+			log.WarningLog.Printf("[registry] syncSessions on reconnect failed: %v", err)
+		}
+
 		// Mark healthy now that the control-mode process is running.
 		r.healthMu.Lock()
 		r.healthy = true
 		r.healthMu.Unlock()
 		backoff = backoffBase // reset backoff on successful connect
+
+		// Yield so that other goroutines can observe the healthy state before
+		// readLines processes the first event (which may immediately clear it).
+		runtime.Gosched()
 
 		log.InfoLog.Printf("[registry] control-mode connected (socket=%q)", r.serverSocket)
 
@@ -375,9 +401,6 @@ func (r *TmuxServerRegistry) handleEvent(line string) {
 		r.healthMu.Lock()
 		r.healthy = false
 		r.healthMu.Unlock()
-
-	case strings.HasPrefix(line, "%output"):
-		// Per-session output events — handled by per-session control mode; drop here.
 
 	default:
 		// Unknown event — ignore, no panic.

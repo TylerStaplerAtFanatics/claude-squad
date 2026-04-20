@@ -180,6 +180,9 @@ test-coverage: ensure-tools proto-gen ## Run tests with coverage report
 test-race: ensure-tools proto-gen ## Run tests with race detector enabled
 	go test -race ./...
 
+test-integration: ensure-tools proto-gen ## Run integration tests (requires real tmux)
+	go test -race -tags integration ./...
+
 # Performance benchmarks
 benchmark: ensure-tools proto-gen ## Run all benchmarks
 	@echo "Running comprehensive benchmarks..."
@@ -278,7 +281,7 @@ dev-setup: install-tools ## Set up development environment
 	@echo "Development environment setup complete!"
 	@echo "Run 'make help' to see available commands"
 
-ci: build test test-race vet lint ## Continuous integration workflow
+ci: build test test-race vet lint test-integration ## Continuous integration workflow
 
 # Quick development workflows
 quick-check: build test-coverage test-race lint ## Quick development validation
