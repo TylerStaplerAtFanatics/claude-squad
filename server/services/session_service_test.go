@@ -2,8 +2,6 @@ package services
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -19,13 +17,11 @@ import (
 func createTestStorage(t *testing.T) *session.Storage {
 	t.Helper()
 
-	testDir := filepath.Join(os.TempDir(), "stapler-squad-test-delete-session")
-	if err := os.MkdirAll(testDir, 0755); err != nil {
-		t.Fatalf("Failed to create test directory: %v", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(testDir) })
+	// Use t.TempDir() for automatic, unique-per-test cleanup that prevents
+	// stale SQLite files from a previous crashed run from causing flakiness.
+	testDir := t.TempDir()
 
-	repo, err := session.NewEntRepository(session.WithDatabasePath(filepath.Join(testDir, "sessions.db")))
+	repo, err := session.NewEntRepository(session.WithDatabasePath(testDir + "/sessions.db"))
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
