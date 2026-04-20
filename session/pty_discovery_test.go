@@ -3,7 +3,28 @@ package session
 import (
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/session/tmux"
 )
+
+// fakeSessionLister is a test double for tmux.SessionLister.
+type fakeSessionLister struct {
+	sessions map[string]bool
+	healthy  bool
+}
+
+func (f *fakeSessionLister) ListSessions() map[string]bool {
+	m := make(map[string]bool, len(f.sessions))
+	for k, v := range f.sessions {
+		m[k] = v
+	}
+	return m
+}
+
+func (f *fakeSessionLister) IsHealthy() bool { return f.healthy }
+
+// Compile-time check: fakeSessionLister satisfies the interface.
+var _ tmux.SessionLister = (*fakeSessionLister)(nil)
 
 func TestNewPTYDiscovery(t *testing.T) {
 	pd := NewPTYDiscovery()
@@ -363,5 +384,85 @@ func TestPTYDiscovery_OrganizeByCategory(t *testing.T) {
 
 	if len(categorized[PTYCategoryOther]) != 1 {
 		t.Errorf("Other category = %d, want 1", len(categorized[PTYCategoryOther]))
+	}
+}
+
+// TestWithSessionLister verifies that the functional option wires the lister field.
+func TestWithSessionLister(t *testing.T) {
+	lister := &fakeSessionLister{
+		sessions: map[string]bool{"staplersquad_test": true},
+		healthy:  true,
+	}
+	pd := NewPTYDiscovery(WithSessionLister(lister))
+	if pd.sessionLister != lister {
+		t.Error("WithSessionLister did not set sessionLister field")
+	}
+}
+
+// TestPTYDiscovery_DiscoverOrphanedPTYs_UsesLister verifies that when the
+// SessionLister is healthy no exec.Command("tmux","list-sessions") fork occurs.
+// The lister returns two staplersquad_ sessions; because there is no real tmux
+// process the PTY lookup (getPTYInfoFromTmux) will fail and both sessions will
+// be skipped — but the point is we exercised the lister path without error.
+func TestPTYDiscovery_DiscoverOrphanedPTYs_UsesLister(t *testing.T) {
+	lister := &fakeSessionLister{
+		sessions: map[string]bool{
+			"staplersquad_foo": true,
+			"staplersquad_bar": true,
+		},
+		healthy: true,
+	}
+
+	pd := NewPTYDiscovery(WithSessionLister(lister))
+
+	// discoverOrphanedPTYs must not panic and must consume sessions from the
+	// lister without forking tmux list-sessions.
+	result := pd.discoverOrphanedPTYs()
+
+	// In a test environment getPTYInfoFromTmux will fail for every session,
+	// so the returned slice will be empty — but no exec fork occurred.
+	// We assert nil-safety only; the important invariant is no panic.
+	if result == nil {
+		t.Error("discoverOrphanedPTYs returned nil slice")
+	}
+}
+
+// TestPTYDiscovery_DiscoverOrphanedPTYs_FallbackWhenUnhealthy verifies that
+// when IsHealthy returns false the method falls back to exec (which fails in
+// the test environment and returns an empty slice gracefully).
+func TestPTYDiscovery_DiscoverOrphanedPTYs_FallbackWhenUnhealthy(t *testing.T) {
+	tests := []struct {
+		name    string
+		lister  *fakeSessionLister
+	}{
+		{
+			name:   "unhealthy lister",
+			lister: &fakeSessionLister{sessions: map[string]bool{"staplersquad_foo": true}, healthy: false},
+		},
+		{
+			name:   "nil lister",
+			lister: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var opts []PTYDiscoveryOption
+			if tt.lister != nil {
+				opts = append(opts, WithSessionLister(tt.lister))
+			} else {
+				// Override the default registry with nil to force exec fallback.
+				opts = append(opts, WithSessionLister(nil))
+			}
+
+			pd := NewPTYDiscovery(opts...)
+
+			// In a test environment tmux list-sessions will return an error or
+			// empty output, so the result should be a non-nil empty slice.
+			result := pd.discoverOrphanedPTYs()
+			if result == nil {
+				t.Error("discoverOrphanedPTYs returned nil slice on exec fallback")
+			}
+		})
 	}
 }

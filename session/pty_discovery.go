@@ -80,36 +80,57 @@ func (c PTYCategory) String() string {
 	}
 }
 
+// PTYDiscoveryOption is a functional option for PTYDiscovery construction.
+type PTYDiscoveryOption func(*PTYDiscovery)
+
+// WithSessionLister injects a SessionLister; used in tests to avoid exec.Command forks.
+func WithSessionLister(l tmux.SessionLister) PTYDiscoveryOption {
+	return func(pd *PTYDiscovery) { pd.sessionLister = l }
+}
+
 // PTYDiscovery manages PTY discovery and monitoring
 type PTYDiscovery struct {
-	mu          sync.RWMutex
-	connections []*PTYConnection
-	sessionMap  map[string]*Instance // Session name -> Instance
-	stopCh      chan struct{}
-	refreshRate time.Duration
-	config      PTYDiscoveryConfig // Discovery configuration
+	mu            sync.RWMutex
+	connections   []*PTYConnection
+	sessionMap    map[string]*Instance // Session name -> Instance
+	stopCh        chan struct{}
+	refreshRate   time.Duration
+	config        PTYDiscoveryConfig // Discovery configuration
+	sessionLister tmux.SessionLister // nil = use exec fallback
 }
 
-// NewPTYDiscovery creates a new PTY discovery service with default configuration
-func NewPTYDiscovery() *PTYDiscovery {
-	return &PTYDiscovery{
-		connections: make([]*PTYConnection, 0),
-		sessionMap:  make(map[string]*Instance),
-		stopCh:      make(chan struct{}),
-		refreshRate: 5 * time.Second,
-		config:      DefaultPTYDiscoveryConfig(),
+// NewPTYDiscovery creates a new PTY discovery service with default configuration.
+// Optional PTYDiscoveryOption values are applied after initialization.
+func NewPTYDiscovery(opts ...PTYDiscoveryOption) *PTYDiscovery {
+	pd := &PTYDiscovery{
+		connections:   make([]*PTYConnection, 0),
+		sessionMap:    make(map[string]*Instance),
+		stopCh:        make(chan struct{}),
+		refreshRate:   5 * time.Second,
+		config:        DefaultPTYDiscoveryConfig(),
+		sessionLister: tmux.GetServerRegistry(""),
 	}
+	for _, opt := range opts {
+		opt(pd)
+	}
+	return pd
 }
 
-// NewPTYDiscoveryWithConfig creates a new PTY discovery service with custom configuration
-func NewPTYDiscoveryWithConfig(config PTYDiscoveryConfig) *PTYDiscovery {
-	return &PTYDiscovery{
-		connections: make([]*PTYConnection, 0),
-		sessionMap:  make(map[string]*Instance),
-		stopCh:      make(chan struct{}),
-		refreshRate: config.DiscoveryInterval,
-		config:      config,
+// NewPTYDiscoveryWithConfig creates a new PTY discovery service with custom configuration.
+// Optional PTYDiscoveryOption values are applied after initialization.
+func NewPTYDiscoveryWithConfig(config PTYDiscoveryConfig, opts ...PTYDiscoveryOption) *PTYDiscovery {
+	pd := &PTYDiscovery{
+		connections:   make([]*PTYConnection, 0),
+		sessionMap:    make(map[string]*Instance),
+		stopCh:        make(chan struct{}),
+		refreshRate:   config.DiscoveryInterval,
+		config:        config,
+		sessionLister: tmux.GetServerRegistry(""),
 	}
+	for _, opt := range opts {
+		opt(pd)
+	}
+	return pd
 }
 
 // Start begins PTY discovery monitoring
@@ -320,17 +341,28 @@ func (pd *PTYDiscovery) getPTYInfoFromTmux(sessionName string) (string, int, err
 func (pd *PTYDiscovery) discoverOrphanedPTYs() []*PTYConnection {
 	connections := make([]*PTYConnection, 0)
 
-	// Get all tmux sessions with stapler-squad prefix
-	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
-	output, err := cmd.Output()
-	if err != nil {
-		// No tmux sessions found (normal case)
-		return connections
+	// Collect session names: prefer the injected SessionLister to avoid exec forks.
+	var sessionNames []string
+	if pd.sessionLister != nil && pd.sessionLister.IsHealthy() {
+		m := pd.sessionLister.ListSessions()
+		for name := range m {
+			sessionNames = append(sessionNames, name)
+		}
+	} else {
+		// Fallback: exec tmux list-sessions directly.
+		cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
+		output, err := cmd.Output()
+		if err != nil {
+			// No tmux sessions found (normal case)
+			return connections
+		}
+		scanner := bufio.NewScanner(strings.NewReader(string(output)))
+		for scanner.Scan() {
+			sessionNames = append(sessionNames, strings.TrimSpace(scanner.Text()))
+		}
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	for scanner.Scan() {
-		sessionName := strings.TrimSpace(scanner.Text())
+	for _, sessionName := range sessionNames {
 
 		// Only check sessions with stapler-squad prefix (also accept legacy claudesquad_ for migration)
 		if !strings.HasPrefix(sessionName, "staplersquad_") && !strings.HasPrefix(sessionName, "claudesquad_") {
@@ -393,23 +425,34 @@ func (pd *PTYDiscovery) isClaudeProcess(pid int) bool {
 func (pd *PTYDiscovery) discoverExternalClaude(socket string) []*PTYConnection {
 	connections := make([]*PTYConnection, 0)
 
-	// Build tmux command based on socket
-	var cmd *exec.Cmd
-	if socket != "" {
-		cmd = exec.Command("tmux", "-L", socket, "list-sessions", "-F", "#{session_name}")
+	// Collect session names.
+	// For the default socket (empty string) we can use the injected SessionLister when healthy.
+	var sessionNames []string
+	if socket == "" && pd.sessionLister != nil && pd.sessionLister.IsHealthy() {
+		m := pd.sessionLister.ListSessions()
+		for name := range m {
+			sessionNames = append(sessionNames, name)
+		}
 	} else {
-		cmd = exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
+		// Fallback: exec tmux list-sessions (with optional -L socket flag).
+		var cmd *exec.Cmd
+		if socket != "" {
+			cmd = exec.Command("tmux", "-L", socket, "list-sessions", "-F", "#{session_name}")
+		} else {
+			cmd = exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
+		}
+		output, err := cmd.Output()
+		if err != nil {
+			// No tmux sessions found on this server (normal case)
+			return connections
+		}
+		scanner := bufio.NewScanner(strings.NewReader(string(output)))
+		for scanner.Scan() {
+			sessionNames = append(sessionNames, strings.TrimSpace(scanner.Text()))
+		}
 	}
 
-	output, err := cmd.Output()
-	if err != nil {
-		// No tmux sessions found on this server (normal case)
-		return connections
-	}
-
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	for scanner.Scan() {
-		sessionName := strings.TrimSpace(scanner.Text())
+	for _, sessionName := range sessionNames {
 
 		// Skip squad-managed sessions (they're handled by discoverSquadPTYs and discoverOrphanedPTYs)
 		if strings.HasPrefix(sessionName, pd.config.ManagedPrefix) {
