@@ -396,9 +396,14 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 	// Perform heavy initialization (tmux starting, controllers, scanning) in the background
 	// so the HTTP server can bind and start immediately.
 	go func() {
-		// Step 6: start tmux sessions for loaded instances (non-fatal failures)
-		for _, inst := range instances {
+		// Step 6: start tmux sessions for loaded instances (non-fatal failures).
+		// Stagger starts by 200ms each to avoid a fork burst that saturates the
+		// cgroup pids.max limit when many sessions restore simultaneously.
+		for i, inst := range instances {
 			if !inst.Started() {
+				if i > 0 {
+					time.Sleep(200 * time.Millisecond)
+				}
 				if err := inst.Start(false); err != nil {
 					log.ErrorLog.Printf("Failed to start loaded instance '%s': %v", inst.Title, err)
 				} else {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -220,22 +221,44 @@ func (r *TmuxServerRegistry) syncSessions() error {
 	return nil
 }
 
-// startControlMode launches "tmux [-L socket] -C attach-session -t keepalive -r"
-// and returns the command along with a scanner for its stdout. It does NOT block.
-func (r *TmuxServerRegistry) startControlMode() (*exec.Cmd, *bufio.Scanner, error) {
+// startControlMode ensures the keepalive sentinel session exists, then launches
+// "tmux [-L socket] -C attach-session -t keepalive" and returns the command
+// along with a scanner for its stdout. It does NOT block.
+//
+// IMPORTANT: tmux control-mode exits with %exit when it reads EOF on stdin.
+// We must create a stdin pipe and hold it open for the lifetime of the process.
+// The returned io.WriteCloser is the stdin pipe; Close() it to signal shutdown.
+func (r *TmuxServerRegistry) startControlMode() (*exec.Cmd, *bufio.Scanner, io.WriteCloser, error) {
 	keepaliveName := TmuxPrefix + "keepalive"
-	baseArgs := []string{"-C", "attach-session", "-t", keepaliveName, "-r"}
+
+	// Ensure the sentinel session exists so attach-session doesn't exit immediately.
+	// "new-session -d -s <name>" is idempotent: if the session already exists tmux
+	// exits with a non-zero code which we intentionally ignore.
+	createArgs := prependSocket(r.serverSocket, []string{"new-session", "-d", "-s", keepaliveName})
+	_ = exec.Command("tmux", createArgs...).Run()
+
+	// No -r flag: read-only is irrelevant for event monitoring, and it caused
+	// immediate %exit on some tmux versions.
+	baseArgs := []string{"-C", "attach-session", "-t", keepaliveName}
 	args := prependSocket(r.serverSocket, baseArgs)
 	cmd := exec.Command("tmux", args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("StdoutPipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("StdoutPipe: %w", err)
+	}
+	// Hold stdin open — tmux sends %exit and terminates when it reads EOF on stdin.
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		stdout.Close()
+		return nil, nil, nil, fmt.Errorf("StdinPipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("cmd.Start: %w", err)
+		stdout.Close()
+		stdin.Close()
+		return nil, nil, nil, fmt.Errorf("cmd.Start: %w", err)
 	}
-	return cmd, bufio.NewScanner(stdout), nil
+	return cmd, bufio.NewScanner(stdout), stdin, nil
 }
 
 // reconnectLoop starts the control-mode process and reconnects with exponential
@@ -254,7 +277,7 @@ func (r *TmuxServerRegistry) reconnectLoop() {
 		default:
 		}
 
-		cmd, scanner, err := r.startControlMode()
+		cmd, scanner, stdin, err := r.startControlMode()
 		if err != nil {
 			log.WarningLog.Printf("[registry] control-mode start failed: %v; retrying in %v", err, backoff)
 			select {
@@ -292,6 +315,8 @@ func (r *TmuxServerRegistry) reconnectLoop() {
 		// readLines blocks until the process exits or the context is cancelled.
 		r.readLines(scanner)
 
+		// Closing stdin signals tmux to exit cleanly (it sends %exit on EOF).
+		stdin.Close()
 		// Clean up the process.
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
