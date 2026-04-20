@@ -3,7 +3,6 @@ package tmux
 import (
 	"bufio"
 	"context"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -37,11 +36,6 @@ func newTestRegistry(t *testing.T) (*TmuxServerRegistry, func(line string)) {
 		_, _ = pipeW.Write([]byte(line + "\n"))
 	}
 	return r, feed
-}
-
-// pipeReadWriter wraps a pipe for reading and writing in tests.
-type pipeReadWriter struct {
-	*strings.Reader
 }
 
 // newPipe returns a synchronised reader/writer pair backed by a strings.Builder
