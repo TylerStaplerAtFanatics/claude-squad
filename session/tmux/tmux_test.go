@@ -590,3 +590,81 @@ func TestGetPaneCurrentPath_ReturnsError(t *testing.T) {
 	require.Empty(t, path)
 	require.Contains(t, err.Error(), "failed to get pane path")
 }
+
+// --- T3: DoesSessionExist registry integration tests ---
+
+// TestDoesSessionExist_UsesRegistry verifies that when the registry is healthy,
+// DoesSessionExist returns the registry answer without executing any tmux subprocess.
+func TestDoesSessionExist_UsesRegistry(t *testing.T) {
+	forkCount := 0
+	cmdExec := MockCmdExec{
+		CombinedOutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+			forkCount++ // Any exec call increments this.
+			return []byte(""), nil
+		},
+		RunFunc:    func(cmd *exec.Cmd) error { forkCount++; return nil },
+		OutputFunc: func(cmd *exec.Cmd) ([]byte, error) { forkCount++; return []byte(""), nil },
+	}
+
+	reg := NewFakeTmuxRegistry()
+	reg.SetHealthy(true)
+	reg.SetSessions([]string{TmuxPrefix + "reg-test"})
+
+	session := newTmuxSessionWithSocket("reg-test", "echo", NewMockPtyFactory(t), cmdExec, TmuxPrefix, "", WithRegistry(reg))
+
+	result := session.DoesSessionExist()
+
+	require.True(t, result, "DoesSessionExist should return true from healthy registry")
+	require.Equal(t, 0, forkCount, "no exec forks should occur when registry is healthy")
+}
+
+// TestDoesSessionExist_FallsBackWhenRegistryUnhealthy verifies that when the
+// registry reports unhealthy, DoesSessionExist falls back to the exec path.
+func TestDoesSessionExist_FallsBackWhenRegistryUnhealthy(t *testing.T) {
+	execCalled := false
+	cmdExec := MockCmdExec{
+		CombinedOutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+			if strings.Contains(cmd.String(), "list-sessions") {
+				execCalled = true
+				return []byte(TmuxPrefix + "fallback-test"), nil
+			}
+			return []byte(""), nil
+		},
+		RunFunc:    func(cmd *exec.Cmd) error { return nil },
+		OutputFunc: func(cmd *exec.Cmd) ([]byte, error) { return []byte(""), nil },
+	}
+
+	reg := NewFakeTmuxRegistry()
+	reg.SetHealthy(false) // Registry is unhealthy — must fall back.
+
+	session := newTmuxSessionWithSocket("fallback-test", "echo", NewMockPtyFactory(t), cmdExec, TmuxPrefix, "", WithRegistry(reg))
+
+	// The exec fallback returns the session name in the list-sessions output.
+	result := session.DoesSessionExist()
+
+	require.True(t, result, "DoesSessionExist should return true from exec fallback")
+	require.True(t, execCalled, "exec list-sessions should be called when registry is unhealthy")
+}
+
+// TestDoesSessionExist_NilRegistry verifies that a nil registry falls back to exec.
+func TestDoesSessionExist_NilRegistry(t *testing.T) {
+	execCalled := false
+	cmdExec := MockCmdExec{
+		CombinedOutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+			if strings.Contains(cmd.String(), "list-sessions") {
+				execCalled = true
+				return []byte(TmuxPrefix + "nil-reg-test"), nil
+			}
+			return []byte(""), nil
+		},
+		RunFunc:    func(cmd *exec.Cmd) error { return nil },
+		OutputFunc: func(cmd *exec.Cmd) ([]byte, error) { return []byte(""), nil },
+	}
+
+	session := newTmuxSessionWithSocket("nil-reg-test", "echo", NewMockPtyFactory(t), cmdExec, TmuxPrefix, "", WithRegistry(nil))
+
+	result := session.DoesSessionExist()
+
+	require.True(t, result)
+	require.True(t, execCalled, "exec list-sessions should be called when registry is nil")
+}

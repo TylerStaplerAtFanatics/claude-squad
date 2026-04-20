@@ -79,6 +79,11 @@ type TmuxSession struct {
 	detachMutex sync.Mutex
 	detaching   bool
 
+	// registry is an optional SessionExistenceChecker backed by the server-level
+	// control-mode event stream. When healthy, DoesSessionExist queries it directly
+	// instead of forking a tmux subprocess. Nil means use the exec fallback.
+	registry SessionExistenceChecker
+
 	// registryKey is the key used to register this session's circuit breaker executor
 	// in the global registry. Stored here so Close() can unregister it on teardown.
 	registryKey string
@@ -421,8 +426,17 @@ func newTmuxSession(name string, program string, ptyFactory PtyFactory, cmdExec 
 	return newTmuxSessionWithSocket(name, program, ptyFactory, cmdExec, prefix, "")
 }
 
+// TmuxSessionOption is a functional option for TmuxSession construction.
+type TmuxSessionOption func(*TmuxSession)
+
+// WithRegistry injects a SessionExistenceChecker; used in tests to avoid
+// the global GetServerRegistry accessor.
+func WithRegistry(r SessionExistenceChecker) TmuxSessionOption {
+	return func(t *TmuxSession) { t.registry = r }
+}
+
 // newTmuxSessionWithSocket creates a TmuxSession with both prefix and server socket isolation
-func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory, cmdExec executor.Executor, prefix string, serverSocket string) *TmuxSession {
+func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory, cmdExec executor.Executor, prefix string, serverSocket string, opts ...TmuxSessionOption) *TmuxSession {
 	s := &TmuxSession{
 		sanitizedName:    toStaplerSquadTmuxNameWithPrefix(name, prefix),
 		program:          program,
@@ -435,6 +449,12 @@ func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory
 	}
 	s.lastKnownCols.Store(defaultAttachCols)
 	s.lastKnownRows.Store(defaultAttachRows)
+	// Inject the server-level registry for fork-free session existence checks.
+	// Tests may override this via WithRegistry.
+	s.registry = GetServerRegistry(serverSocket)
+	for _, opt := range opts {
+		opt(s)
+	}
 	return s
 }
 
@@ -1370,6 +1390,12 @@ func (t *TmuxSession) listSessionsRaw(ctx context.Context) ([]byte, error) {
 func (t *TmuxSession) DoesSessionExist() bool {
 	if t == nil {
 		return false
+	}
+
+	// Fast path: use the push-based registry when it is healthy.
+	// This avoids an exec.Command fork entirely.
+	if t.registry != nil && t.registry.IsHealthy() {
+		return t.registry.SessionExists(t.sanitizedName)
 	}
 
 	// Check cache first (read lock)
