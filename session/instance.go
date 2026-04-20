@@ -187,6 +187,11 @@ type Instance struct {
 	// settings-file injection is needed.
 	MCPServerURL string `json:"mcp_server_url,omitempty"`
 
+	// LaunchCommand is the full command passed to tmux on session start, including
+	// any injected flags (--resume, --mcp-server, -y, initial prompt). Set once on
+	// first start and updated on restart. Empty for external (mux-discovered) sessions.
+	LaunchCommand string `json:"launch_command,omitempty"`
+
 	// historyDetector is used by tryExtractConversationUUID. When nil the
 	// production inspector is used. Set in tests to inject a fake home dir.
 	historyDetector *HistoryFileDetector
@@ -297,6 +302,8 @@ func (i *Instance) ToInstanceData() InstanceData {
 		ForkedFromID:     i.ForkedFromID,
 		// History file linkage
 		HistoryFilePath: i.HistoryFilePath,
+		// Full launch command for diagnostics
+		LaunchCommand: i.LaunchCommand,
 	}
 
 	// Only include worktree data if gitWorktree is initialized
@@ -428,6 +435,8 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		ForkedFromID:     data.ForkedFromID,
 		// History file linkage
 		HistoryFilePath: data.HistoryFilePath,
+		// Launch command for diagnostics
+		LaunchCommand: data.LaunchCommand,
 	}
 
 	// MIGRATION: Assign UUID to existing sessions that pre-date UUID assignment
@@ -979,6 +988,7 @@ func (i *Instance) initTmuxSession() {
 	}
 	commandBuilder := NewClaudeCommandBuilder(i.Program, i.claudeSession)
 	enrichedProgram := commandBuilder.Build()
+	i.LaunchCommand = enrichedProgram
 	log.InfoLog.Printf("Creating tmux session for instance '%s' with program '%s'", i.Title, enrichedProgram)
 
 	tmuxPrefix := i.TmuxPrefix
@@ -1544,6 +1554,9 @@ func (i *Instance) Restart(preserveOutput bool) error {
 	if tmuxPrefix == "" {
 		tmuxPrefix = "staplersquad_" // Default fallback
 	}
+
+	// Record the full launch command for diagnostics (MCP injection verification, etc.)
+	i.LaunchCommand = program
 
 	// Use server socket isolation if specified, otherwise use prefix-only isolation
 	if i.TmuxServerSocket != "" {

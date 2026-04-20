@@ -44,6 +44,8 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 		// Instance type and external metadata
 		InstanceType:     instanceTypeToProto(inst.InstanceType),
 		ExternalMetadata: externalMetadataToProto(inst.ExternalMetadata),
+		// Full launch command for diagnostics (MCP injection, flags verification)
+		LaunchCommand: inst.LaunchCommand,
 		// PR status fields (populated by PRStatusPoller)
 		GithubPrState:         inst.GitHubPRState,
 		GithubPrIsDraft:       inst.GitHubPRIsDraft,

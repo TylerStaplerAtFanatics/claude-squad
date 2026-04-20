@@ -98,6 +98,10 @@ type InstanceData struct {
 
 	// History file linkage for cold restore
 	HistoryFilePath string `json:"history_file_path,omitempty"`
+
+	// LaunchCommand is the full command passed to tmux on session start, including
+	// any injected flags (--resume, --mcp-server, -y, initial prompt).
+	LaunchCommand string `json:"launch_command,omitempty"`
 }
 
 // GitWorktreeData represents the serializable data of a GitWorktree

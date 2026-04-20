@@ -420,6 +420,14 @@ export function SessionDetail({
                   )}
                 </div>
               )}
+              {session.launchCommand && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Launch Command:</span>
+                  <span className={styles.infoValue} style={{ fontFamily: 'monospace', wordBreak: 'break-all', fontSize: '0.85em' }}>
+                    {session.launchCommand}
+                  </span>
+                </div>
+              )}
               {session.instanceType === InstanceType.EXTERNAL && (
                 <>
                   <div className={styles.infoItem}>
