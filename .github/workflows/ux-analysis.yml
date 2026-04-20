@@ -1,0 +1,157 @@
+name: UX Analysis
+
+# Story 5: UX Analysis Automation
+# Runs on PRs touching web-app/src. Non-blocking advisory step.
+# - Axe Core: WCAG 2.1 AA (critical/serious violations block)
+# - Lighthouse CI: performance score < 70 warns
+# - Claude vision: advisory UX analysis (skipped if no API key)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web-app/src/**'
+
+jobs:
+  ux-analysis:
+    name: UX Analysis (Axe + Lighthouse + Claude)
+    runs-on: ubuntu-latest
+    # This job runs in parallel with other jobs, never blocks main build
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate protos and build web UI
+        uses: ./.github/actions/prepare
+
+      - name: Download generated files
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-files
+        continue-on-error: true
+
+      - name: Build binary
+        run: go build -o stapler-squad .
+
+      - name: Install Playwright + test dependencies
+        run: |
+          cd tests/e2e
+          npm install
+          npx playwright install chromium --with-deps
+
+      - name: Start test server
+        run: |
+          STAPLER_SQUAD_USE_CONTROL_MODE=false STAPLER_SQUAD_INSTANCE=ux-${{ github.run_id }} \
+            ./stapler-squad --tmux-keep-server &
+          echo $! > /tmp/server.pid
+
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8543/ > /dev/null 2>&1; then
+              echo "Server ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Run Axe accessibility tests
+        id: axe
+        run: |
+          cd tests/e2e
+          npx playwright test accessibility.spec.ts --reporter=list
+        # Axe test failures block merge (critical/serious violations)
+        continue-on-error: false
+
+      - name: Run Lighthouse CI
+        id: lighthouse
+        run: |
+          cd tests/e2e
+          npx lhci autorun --config=lighthouse.config.js 2>&1 | tee /tmp/lighthouse-output.txt || true
+          # Extract score for PR comment
+          SCORE=$(grep -oP 'performance.*?\K[0-9]+' /tmp/lighthouse-output.txt | head -1 || echo "unknown")
+          echo "score=${SCORE}" >> $GITHUB_OUTPUT
+        continue-on-error: true  # Lighthouse is non-blocking (warning only)
+
+      - name: Capture screenshots for Claude analysis
+        id: screenshots
+        if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd tests/e2e
+          # Capture screenshots of primary routes
+          npx playwright screenshot --browser=chromium \
+            http://localhost:8543 \
+            /tmp/screenshot-main.png 2>/dev/null || true
+          npx playwright screenshot --browser=chromium \
+            http://localhost:8543/review-queue \
+            /tmp/screenshot-review-queue.png 2>/dev/null || true
+
+          # Run Claude UX analysis
+          mkdir -p docs/qa
+          cd ..
+          if command -v ts-node >/dev/null 2>&1; then
+            ts-node tools/ux-analysis/analyze.ts \
+              /tmp/screenshot-main.png \
+              /tmp/screenshot-review-queue.png \
+              --pr ${{ github.event.number }} \
+              --feature ui:main-page \
+              --output docs/qa || true
+          fi
+        continue-on-error: true
+
+      - name: Stop test server
+        if: always()
+        run: |
+          if [ -f /tmp/server.pid ]; then
+            kill "$(cat /tmp/server.pid)" 2>/dev/null || true
+          fi
+          pkill -f "stapler-squad.*ux-${{ github.run_id }}" 2>/dev/null || true
+
+      - name: Post UX analysis PR comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          LIGHTHOUSE_SCORE: ${{ steps.lighthouse.outputs.score }}
+        with:
+          script: |
+            const lighthouseScore = process.env.LIGHTHOUSE_SCORE || 'unknown';
+            const axeResult = '${{ steps.axe.outcome }}';
+            const axeEmoji = axeResult === 'success' ? '✅' : '❌';
+
+            let lighthouseEmoji = '✅';
+            const score = parseInt(lighthouseScore, 10);
+            if (isNaN(score)) {
+              lighthouseEmoji = '⚠️';
+            } else if (score < 70) {
+              lighthouseEmoji = '⚠️';
+            }
+
+            const body = `## UX Analysis
+
+            | Check | Status | Details |
+            |-------|--------|---------|
+            | ${axeEmoji} Axe Core (WCAG 2.1 AA) | ${axeResult} | Critical/serious violations block merge |
+            | ${lighthouseEmoji} Lighthouse Performance | Score: ${lighthouseScore} | Warning if < 70 (non-blocking) |
+            | 🤖 Claude UX Analysis | Advisory | See docs/qa/ for findings |
+
+            > Axe Core excludes terminal rendering areas (intentional design).
+            > Lighthouse runs in desktop preset for this developer tool.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.replace(/^            /gm, ''),
+            });

@@ -1,0 +1,150 @@
+name: E2E Feature Video Capture
+
+# Story 6: Feature Flow Video Capture
+# Runs on PRs that touch feature-marked files and records Playwright videos.
+# Videos are uploaded as GitHub Actions artifacts (30-day retention).
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  detect-feature-changes:
+    name: Detect Feature Changes
+    runs-on: ubuntu-latest
+    outputs:
+      record_features: ${{ steps.detect.outputs.record_features }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect feature-marked file changes
+        id: detect
+        run: |
+          set +e
+          ./tools/ci/detect-feature-changes.sh origin/main
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "record_features=true" >> $GITHUB_OUTPUT
+            echo "Feature changes detected — video recording will be enabled"
+          else
+            echo "record_features=false" >> $GITHUB_OUTPUT
+            echo "No feature changes — skipping video recording"
+          fi
+
+  e2e-video:
+    name: Record E2E Feature Videos
+    runs-on: ubuntu-22.04  # Pinned to avoid VP8/VP9 codec surprises
+    needs: detect-feature-changes
+    if: needs.detect-feature-changes.outputs.record_features == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate protos and build web UI
+        uses: ./.github/actions/prepare
+
+      - name: Download generated files
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-files
+        continue-on-error: true
+
+      - name: Build binary
+        run: go build -o stapler-squad .
+
+      - name: Install Playwright dependencies
+        run: |
+          cd tests/e2e
+          npm install
+          npx playwright install chromium --with-deps
+
+      - name: Run E2E tests with video recording
+        env:
+          RECORD_FEATURES: 'true'
+          STAPLER_SQUAD_INSTANCE: test-${{ github.run_id }}
+        run: |
+          # Start test server in background
+          STAPLER_SQUAD_USE_CONTROL_MODE=false STAPLER_SQUAD_INSTANCE=test-${{ github.run_id }} \
+            ./stapler-squad --tmux-keep-server &
+          SERVER_PID=$!
+
+          # Wait for server to be ready
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8543/ > /dev/null 2>&1; then
+              echo "Server ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+          # Run tests
+          cd tests/e2e
+          npx playwright test --reporter=list || true
+
+          kill $SERVER_PID 2>/dev/null || true
+
+      - name: Validate video files were created
+        id: validate-videos
+        run: |
+          VIDEO_COUNT=$(find tests/e2e/test-results -name "*.webm" 2>/dev/null | wc -l || echo 0)
+          echo "video_count=${VIDEO_COUNT}" >> $GITHUB_OUTPUT
+          if [ "${VIDEO_COUNT}" -eq 0 ]; then
+            echo "Warning: No .webm video files found after recording"
+          else
+            echo "Found ${VIDEO_COUNT} video file(s)"
+          fi
+
+      - name: Upload E2E videos as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-videos-${{ github.event.number }}-${{ github.sha }}
+          path: tests/e2e/test-results/
+          retention-days: 30
+        continue-on-error: true
+
+      - name: Post PR comment with artifact link
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const videoCount = '${{ steps.validate-videos.outputs.video_count }}';
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let body;
+            if (videoCount === '0') {
+              body = `## ⚠️ E2E Video Recording
+
+              Video recording was triggered but no .webm files were produced.
+              This may indicate a VP8/VP9 codec issue on the runner.
+
+              [View workflow run](${runUrl})`;
+            } else {
+              body = `## 🎬 E2E Feature Videos Recorded
+
+              **${videoCount} video(s)** captured for feature-marked changes in this PR.
+
+              [Download artifacts](${runUrl}) (30-day retention)
+
+              > Videos capture test execution for UI paths touched by feature markers (\`// +feature:\`, \`// +api:\`).`;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.replace(/^              /gm, ''),
+            });

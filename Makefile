@@ -41,13 +41,50 @@ endif
 		touch $(ASDF_STAMP); \
 	fi
 
-.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service
+.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse
 
 # Default target
 help: ## Show this help message
 	@echo "Stapler Squad Development Makefile"
 	@echo "================================="
 	@grep -E '^[a-zA-Z0-9._-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+# Registry targets
+REGISTRY_OUTPUT_DIR ?= docs/registry
+BACKEND_SCANNER_BIN := tools/scanner/backend/cmd/scanner
+FRONTEND_SCANNER := tools/scanner/frontend/src/main.ts
+
+registry-generate-backend: ## Generate backend feature registry from proto + handler markers
+	@echo "Building backend scanner..."
+	@cd tools/scanner && go build -o backend/cmd/scanner ./backend/cmd/
+	@echo "Scanning backend features..."
+	@./$(BACKEND_SCANNER_BIN) proto/session/v1/session.proto server/services/ $(REGISTRY_OUTPUT_DIR)/backend-features.json
+	@echo "✅ Backend registry written to $(REGISTRY_OUTPUT_DIR)/backend-features.json"
+
+registry-generate-frontend: ## Generate frontend feature registry from React component markers
+	@echo "Installing frontend scanner dependencies..."
+	@cd tools/scanner/frontend && npm install --silent
+	@echo "Scanning frontend features..."
+	@node tools/scanner/frontend/node_modules/.bin/ts-node \
+		tools/scanner/frontend/src/main.ts \
+		web-app/src \
+		$(REGISTRY_OUTPUT_DIR)/frontend-features.json \
+		$(REGISTRY_OUTPUT_DIR)/backend-features.json \
+		$(REGISTRY_OUTPUT_DIR)/coverage-gaps.json
+	@echo "✅ Frontend registry written to $(REGISTRY_OUTPUT_DIR)/frontend-features.json"
+
+registry-generate: registry-generate-backend registry-generate-frontend ## Generate both backend and frontend registries
+
+registry-diff: ## Show what would change in registry without writing files (dry run)
+	@echo "Comparing current code against committed registries..."
+	@./tools/scanner/validate-registry.sh
+
+e2e-report: ## Generate Allure HTML report from last test run
+	@cd tests/e2e && npx allure generate allure-results --clean -o allure-report
+	@echo "✅ Report generated at tests/e2e/allure-report/index.html"
+
+e2e-lighthouse: ## Run Lighthouse CI performance audit
+	@cd tests/e2e && npx lhci autorun --config=lighthouse.config.js
 
 # Build targets
 build: stapler-squad ## Build the Go application

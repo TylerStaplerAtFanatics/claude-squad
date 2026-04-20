@@ -379,6 +379,7 @@ func (s *SessionService) SetConfigService(svc *ConfigService) {
 
 // ListSessions returns all sessions with optional filtering.
 // This includes both managed sessions and external mux-enabled sessions.
+// +api: session:list
 func (s *SessionService) ListSessions(
 	ctx context.Context,
 	req *connect.Request[sessionv1.ListSessionsRequest],
@@ -487,6 +488,7 @@ func (s *SessionService) GetSession(
 }
 
 // CreateSession initializes a new AI agent session with tmux and git worktree.
+// +api: session:create
 func (s *SessionService) CreateSession(
 	ctx context.Context,
 	req *connect.Request[sessionv1.CreateSessionRequest],
@@ -652,6 +654,7 @@ func (s *SessionService) CreateSession(
 }
 
 // UpdateSession modifies session properties (pause/resume, category, title).
+// +api: session:update
 func (s *SessionService) UpdateSession(
 	ctx context.Context,
 	req *connect.Request[sessionv1.UpdateSessionRequest],
@@ -787,6 +790,7 @@ func (s *SessionService) UpdateSession(
 }
 
 // DeleteSession stops and removes a session, cleaning up resources.
+// +api: session:delete
 func (s *SessionService) DeleteSession(
 	ctx context.Context,
 	req *connect.Request[sessionv1.DeleteSessionRequest],
@@ -854,6 +858,7 @@ func (s *SessionService) DeleteSession(
 
 // WatchSessions streams real-time session events (created/updated/deleted).
 // Sends initial snapshot of all sessions, then subscribes to real-time updates.
+// +api: session:watch
 func (s *SessionService) WatchSessions(
 	ctx context.Context,
 	req *connect.Request[sessionv1.WatchSessionsRequest],
@@ -1372,6 +1377,7 @@ func (s *SessionService) GetClaudeHistoryMessages(
 }
 
 // SearchClaudeHistory performs full-text search across Claude conversation history.
+// +api: history:search
 func (s *SessionService) SearchClaudeHistory(
 	ctx context.Context,
 	req *connect.Request[sessionv1.SearchClaudeHistoryRequest],
@@ -1591,6 +1597,7 @@ func (s *SessionService) GetWorkspaceInfo(
 }
 
 // ListWorkspaceTargets returns available switch targets for a session.
+// +api: workspace:list-targets
 func (s *SessionService) ListWorkspaceTargets(
 	ctx context.Context,
 	req *connect.Request[sessionv1.ListWorkspaceTargetsRequest],
@@ -1599,6 +1606,7 @@ func (s *SessionService) ListWorkspaceTargets(
 }
 
 // SwitchWorkspace switches a session's workspace to a different branch, revision, or worktree.
+// +api: workspace:switch
 func (s *SessionService) SwitchWorkspace(
 	ctx context.Context,
 	req *connect.Request[sessionv1.SwitchWorkspaceRequest],

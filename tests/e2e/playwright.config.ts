@@ -29,6 +29,7 @@ export default defineConfig({
   reporter: [
     ['list'], // Console output
     ['html', { outputFolder: './playwright-report' }],
+    ['allure-playwright', { outputFolder: 'allure-results' }],
   ],
 
   // Global test setup
@@ -42,8 +43,11 @@ export default defineConfig({
     // Screenshot on failure
     screenshot: 'only-on-failure',
 
-    // Video on failure
-    video: 'retain-on-failure',
+    // Video: always-on when RECORD_FEATURES=true, otherwise retain on failure
+    video: process.env.RECORD_FEATURES === 'true' ? 'on' : 'retain-on-failure',
+
+    // Test results output directory
+    outputDir: 'test-results/',
 
     // Test timeout
     actionTimeout: 10000,
