@@ -97,8 +97,8 @@ type TmuxSession struct {
 	// onExit is called at most once per TmuxSession lifetime (guarded by onExitOnce).
 	// intentionalStop distinguishes operator-initiated StopControlMode() from crashes.
 	// Must not be called while stateMutex (on the owning Instance) is held.
-	onExit         func(reason string)
-	onExitOnce     sync.Once
+	onExit          func(reason string)
+	onExitOnce      sync.Once
 	intentionalStop atomic.Bool
 }
 

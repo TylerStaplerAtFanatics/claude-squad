@@ -31,16 +31,16 @@ import (
 
 // Server manages the HTTP server with ConnectRPC handlers.
 type Server struct {
-	addr             string
-	httpServer       *http.Server
-	mux              *http.ServeMux
-	tlsConfig        *tls.Config                     // non-nil when TLS is enabled
-	authMiddleware   func(http.Handler) http.Handler // nil when auth is disabled
-	httpsURL         string                          // set when remote access is enabled
-	hostnames        []string                        // detected LAN hostnames
-	origins          []string                        // allowed CORS origins
-	shutdownHooks    []func()                        // called before HTTP server stops
-	connCtxCancel    context.CancelFunc              // cancels BaseContext → closes active streams on shutdown
+	addr           string
+	httpServer     *http.Server
+	mux            *http.ServeMux
+	tlsConfig      *tls.Config                     // non-nil when TLS is enabled
+	authMiddleware func(http.Handler) http.Handler // nil when auth is disabled
+	httpsURL       string                          // set when remote access is enabled
+	hostnames      []string                        // detected LAN hostnames
+	origins        []string                        // allowed CORS origins
+	shutdownHooks  []func()                        // called before HTTP server stops
+	connCtxCancel  context.CancelFunc              // cancels BaseContext → closes active streams on shutdown
 }
 
 // NewServer creates a new HTTP server instance with SessionService registered.
