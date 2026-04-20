@@ -74,9 +74,10 @@ type SessionLister interface {
     ListSessions() map[string]bool
 }
 
-// PaneExitSubscriber delivers a one-shot callback when a named pane exits.
+// PaneExitSubscriber delivers a channel closed when the named pane exits.
+// Channel-based signaling is idiomatic Go (see Go Idioms section).
 type PaneExitSubscriber interface {
-    SubscribePaneExit(sessionName string, cb func())
+    SubscribePaneExit(ctx context.Context, sessionName string) <-chan struct{}
 }
 ```
 
@@ -134,12 +135,14 @@ type SessionLister interface {
     IsHealthy() bool
 }
 
-// PaneExitSubscriber delivers a one-shot callback when a named pane exits.
-// Used by Multiplexer.monitorTmuxSession to replace its polling loop.
-// The callback is called at most once. Cancel by closing the returned
-// cancel func; calling cancel after the callback has fired is a no-op.
+// PaneExitSubscriber delivers a channel that is closed when the named pane
+// exits. Used by Multiplexer.monitorTmuxSession to replace its polling loop.
+// The caller selects on the returned channel alongside ctx.Done(). Cancelling
+// ctx unregisters the subscription; the channel is then closed immediately
+// without firing. Using a channel (not a callback) is the idiomatic Go
+// approach: it composes with select and avoids holding locks during delivery.
 type PaneExitSubscriber interface {
-    SubscribePaneExit(sessionName string, cb func()) (cancel func())
+    SubscribePaneExit(ctx context.Context, sessionName string) <-chan struct{}
 }
 
 // TmuxStatePort is the full registry interface. Callers that need all
@@ -176,18 +179,25 @@ type TmuxStatePort interface {
 
 **Internal state**:
 ```go
+// Receiver name: r (consistent throughout; see Go Idioms section)
 type TmuxServerRegistry struct {
     serverSocket string
 
     mu       sync.RWMutex
     sessions map[string]bool  // live session names
 
+    // subsMu guards subscribers. IMPORTANT: never call close(ch) while
+    // holding subsMu — that would block if the receiver's select is also
+    // trying to acquire subsMu, causing deadlock. Copy the channels out
+    // under the lock, release the lock, then close. See Known Issues.
     subsMu      sync.Mutex
-    subscribers map[string][]func()  // sessionName -> one-shot callbacks
+    subscribers map[string][]chan struct{}  // sessionName -> one-shot signal channels
 
     healthMu sync.RWMutex
     healthy  bool
 
+    // ctx is the lifetime context passed to Start; cancel is called by Stop.
+    // Every goroutine spawned by the registry selects on ctx.Done().
     ctx    context.Context
     cancel context.CancelFunc
 }
@@ -233,13 +243,19 @@ var (
 )
 
 // GetServerRegistry returns the singleton registry for the given server
-// socket (empty = default socket). Creates it on first call.
+// socket (empty = default socket). Creates it on first call via sync.Once
+// semantics under defaultRegistryMu.
 func GetServerRegistry(serverSocket string) *TmuxServerRegistry
 ```
 
-This is the only package-level var for the registry. Tests override it by
-calling `NewTmuxServerRegistryWithDeps` and passing it via constructor
-injection to `TmuxSession`.
+**Go idiom note**: The preferred pattern is constructor injection — callers
+receive a `TmuxStatePort` interface, not a concrete type fetched from a
+package-level var. `GetServerRegistry` is a convenience shim for production
+wiring only (e.g., `RunWithName` defaulting to the standard socket). It must
+never be called from `init()`. The var is initialised lazily on first call,
+protected by `defaultRegistryMu`. Tests construct a `TmuxServerRegistry`
+directly via `NewTmuxServerRegistry` and inject it — they do not use the
+global accessor.
 
 ---
 
@@ -280,16 +296,24 @@ Add field:
 paneExitSub tmux.PaneExitSubscriber  // nil = use polling fallback
 ```
 
-Replace `monitorTmuxSession()` polling loop:
+Replace `monitorTmuxSession()` polling loop using idiomatic channel-based
+signaling (see Go Idioms section — channels for ownership transfer, not callbacks):
+
 ```go
+// Receiver name: m (consistent throughout)
 func (m *Multiplexer) startSessionMonitor() {
     if m.paneExitSub != nil {
-        cancel := m.paneExitSub.SubscribePaneExit(m.tmuxSession, func() {
-            m.Shutdown()
-        })
+        // SubscribePaneExit returns a channel closed on pane exit.
+        // Passing m.ctx propagates cancellation; the registry cleans up
+        // the subscription when the context is done.
+        exitCh := m.paneExitSub.SubscribePaneExit(m.ctx, m.tmuxSession)
         go func() {
-            <-m.ctx.Done()
-            cancel()
+            select {
+            case <-exitCh:
+                m.Shutdown()
+            case <-m.ctx.Done():
+                // context cancelled; registry already cleaned up subscription
+            }
         }()
         return
     }
@@ -375,17 +399,21 @@ at least one of these events.
 
 **Severity**: Low
 
-**Description**: `SubscribePaneExit` stores a callback in
+**Description**: `SubscribePaneExit` stores a channel in
 `subscribers[sessionName]`. If the registry shuts down before the session
-exits, the callback is never called and the Multiplexer's cleanup
-goroutine (`<-m.ctx.Done(); cancel()`) would block if `cancel()` is a
-no-op instead of signalling the waiting goroutine.
+exits, the channel is never closed and the Multiplexer's goroutine
+(`select { case <-exitCh: ... case <-m.ctx.Done(): ... }`) would leak if
+the registry context is not the same as the multiplexer's context.
 
 **Mitigation**:
-- On registry `Stop()`, flush all pending subscribers by calling each
-  callback immediately (callers must be idempotent)
-- `cancel()` function returned by `SubscribePaneExit` removes the
-  callback from the map; multiple calls are a no-op
+- `SubscribePaneExit` accepts `ctx context.Context`; when the caller's
+  context is cancelled, the registry removes the subscription and closes
+  the channel immediately — no goroutine leak is possible as long as the
+  caller passes its own context
+- On registry `Stop()` (context cancellation), all pending subscriber
+  channels are closed outside `subsMu` (copy-under-lock pattern)
+- Multiple `close` calls on the same channel are guarded by removing the
+  entry from the map before closing
 
 **Files affected**: `session/tmux/server_registry.go`
 
@@ -430,6 +458,183 @@ is 10 execs — better than today's 500ms polling but still a burst.
 
 ---
 
+### Potential Bug: Deadlock from Closing Subscriber Channels Under Lock [SEVERITY: High]
+
+**Description**: This is a Go-specific concurrency hazard. If the registry
+holds `subsMu` while calling `close(ch)` on a subscriber channel, and the
+subscriber goroutine is simultaneously blocked waiting for `subsMu` (e.g.,
+in a concurrent `SubscribePaneExit` call), the two goroutines deadlock. Even
+without direct mutex contention, closing a channel while holding a lock can
+produce subtle ordering bugs that `go test -race` may or may not surface.
+
+**Mitigation**:
+- The event-processing loop must copy the subscriber channels out of the map
+  **under** `subsMu`, then release the lock, then close each channel outside
+  the lock:
+
+```go
+r.subsMu.Lock()
+chs := r.subscribers[sessionName]
+delete(r.subscribers, sessionName)
+r.subsMu.Unlock()
+// Lock is NOT held here. close() called outside the critical section.
+for _, ch := range chs {
+    close(ch)
+}
+```
+
+- This pattern is enforced via code review checklist and a `go test -race`
+  integration test that simultaneously creates subscriptions and fires events.
+- The same rule applies to registry shutdown: `Stop()` must copy all
+  subscriber channels, clear the map, release `subsMu`, then close all channels.
+
+**Files affected**: `session/tmux/server_registry.go`
+
+---
+
+## Go Idioms
+
+This section maps Go-specific best practices to the concrete types and files in
+this feature. Every implementation task below references these by name.
+
+### Interface Placement
+
+Interfaces are defined in the **consuming** package, not the producer
+(`session/tmux/registry_port.go` is in the `tmux` package, which is the
+package that also contains `TmuxSession` — the primary consumer). Callers in
+`session/mux` and `session/` receive the narrower interface they need via
+constructor injection, so they depend on the `tmux` package's interface
+declaration, not on the concrete `TmuxServerRegistry` type.
+
+Compile-time interface satisfaction checks go in `server_registry.go`:
+
+```go
+var _ SessionExistenceChecker = (*TmuxServerRegistry)(nil)
+var _ SessionLister            = (*TmuxServerRegistry)(nil)
+var _ PaneExitSubscriber       = (*TmuxServerRegistry)(nil)
+var _ TmuxStatePort            = (*TmuxServerRegistry)(nil)
+```
+
+Single-method interfaces use the `-er` suffix (`SessionExistenceChecker`,
+`SessionLister`) per Go convention.
+
+### Channel-Based Subscriptions (not callbacks)
+
+`PaneExitSubscriber` must be redesigned to transfer ownership via a channel
+rather than registering a callback function. Channels are the idiomatic Go
+mechanism for signaling, and they compose naturally with `select`:
+
+```go
+// PaneExitSubscriber delivers a channel that is closed when the named pane exits.
+// The caller selects on the returned channel alongside its own ctx.Done().
+// Cancelling ctx unregisters the subscription; the channel is then closed
+// immediately without firing. Reading from a closed channel returns immediately.
+type PaneExitSubscriber interface {
+    SubscribePaneExit(ctx context.Context, sessionName string) <-chan struct{}
+}
+```
+
+The registry allocates a `make(chan struct{})` per subscription and stores it in
+`subscribers[sessionName]`. On the relevant event it calls `close(ch)` — a
+single close signals all `range` / `<-ch` readers without needing a loop.
+
+This replaces the `cb func()` + `cancel func()` pair from the original design.
+
+### Context Propagation
+
+Every method that performs I/O or spawns goroutines accepts `context.Context`
+as its first parameter:
+
+```go
+func (r *TmuxServerRegistry) Start(ctx context.Context) error
+func (r *TmuxServerRegistry) SubscribePaneExit(ctx context.Context, sessionName string) <-chan struct{}
+```
+
+Immediately after acquiring a derived context:
+
+```go
+ctx, cancel := context.WithTimeout(parent, 2*time.Second)
+defer cancel()
+```
+
+Every goroutine inside the registry selects on `ctx.Done()` as its exit
+condition. No goroutine is permitted to block indefinitely without a documented
+exit path.
+
+### Error Wrapping
+
+All errors returned from registry methods wrap their cause with context:
+
+```go
+fmt.Errorf("start control mode for socket %q: %w", r.serverSocket, err)
+```
+
+Sentinel errors are declared at package level:
+
+```go
+var ErrRegistryUnavailable = errors.New("tmux registry unavailable")
+```
+
+Internal errors that cannot be surfaced to callers (event-parse failures,
+background reconnect failures) must be **logged**, not silently dropped.
+`IsHealthy()` returning false is not a substitute for logging root cause.
+
+### Receiver Naming
+
+Consistent short receiver names throughout:
+- `TmuxServerRegistry` methods: `r`
+- `Multiplexer` methods: `m`
+- `TmuxSession` methods: `t`
+- `PTYDiscovery` methods: `pd`
+
+### Anti-Patterns to Avoid
+
+**No global mutable state.** The `GetServerRegistry` accessor documented in the
+Component Design section is a convenience shim only. The preferred path is
+constructor injection. If the global accessor is retained, it must be
+initialised lazily under a `sync.Once` — never in `init()`. Tests must not
+rely on the global; they construct a `TmuxServerRegistry` directly via
+`NewTmuxServerRegistry` and inject it.
+
+**No goroutine variable capture bugs.** Any loop that spawns goroutines must
+capture the loop variable explicitly:
+
+```go
+for _, name := range names {
+    name := name  // capture
+    go func() { ... use name ... }()
+}
+```
+
+Document this explicitly wherever the event-parsing loop fires subscriber
+channels.
+
+**Documented goroutine exit conditions.** Every goroutine spawned by the
+registry has exactly one exit path: cancellation of the context passed to
+`Start`. The reconnect loop, the stdout-reader goroutine, and the
+`%sessions-changed` debounce timer goroutine all select on `ctx.Done()`.
+
+### Testing
+
+Table-driven tests are required for in-memory state transitions (event →
+sessions map → subscriber channel state). Use `t.Cleanup` to stop registry
+goroutines so subtests do not leak:
+
+```go
+func TestRegistry_EventParsing(t *testing.T) {
+    r := NewTmuxServerRegistry("")
+    ctx, cancel := context.WithCancel(context.Background())
+    t.Cleanup(cancel)
+    r.Start(ctx)
+    ...
+}
+```
+
+`go test -race ./...` must pass for all tasks that touch shared state (T2 and
+T6 are the highest-risk; all tasks must satisfy this requirement).
+
+---
+
 ## Implementation Tasks
 
 ### Task dependencies
@@ -454,15 +659,27 @@ T1 (interfaces + stubs)
 
 Create the three interfaces (`SessionExistenceChecker`, `SessionLister`,
 `PaneExitSubscriber`) and the combined `TmuxStatePort` in
-`registry_port.go`.
+`registry_port.go`. All interfaces are defined in the `tmux` package (the
+consuming package), not in a separate `registry` package.
+
+`PaneExitSubscriber.SubscribePaneExit` accepts `context.Context` as its
+first parameter and returns `<-chan struct{}` (channel-based signaling, not
+a callback — see Go Idioms section).
 
 Create `FakeTmuxRegistry` in `fake_registry_test.go` that implements
 `TmuxStatePort` with an in-memory map, for use in unit tests of T3–T5.
+Add compile-time interface satisfaction checks in `fake_registry_test.go`:
+
+```go
+var _ tmux.TmuxStatePort = (*FakeTmuxRegistry)(nil)
+```
 
 Acceptance criteria:
 - `go build ./session/tmux/...` passes
 - `FakeTmuxRegistry` implements `TmuxStatePort` (compile-time check)
 - No existing tests break
+- `go test -race ./session/tmux/...` passes (no state in interfaces, but
+  establishes the baseline for T2)
 
 ---
 
@@ -473,27 +690,44 @@ Acceptance criteria:
 `session/tmux/server_registry_test.go` (new)
 
 Implement `TmuxServerRegistry` with:
-1. `Start(ctx)` — launch `tmux [-L socket] -C attach-session -t
-   <keepalive> -r`, parse output lines, populate `sessions` map from
-   `list-sessions` before marking healthy
-2. `Stop()` — kill control-mode process, flush subscriber callbacks
-3. `SessionExists(name)`, `ListSessions()`, `SubscribePaneExit()` as
-   specified above
-4. Auto-reconnect goroutine with exponential backoff (100ms base, 30s
-   cap)
-5. `GetServerRegistry(socket)` global accessor
+1. `Start(ctx context.Context) error` — launch `tmux [-L socket] -C
+   attach-session -t <keepalive> -r`, parse output lines, populate
+   `sessions` map from `list-sessions` before marking healthy. Use
+   `errgroup` for the parallel stdout-reader and reconnect goroutines.
+   Use `ctx, cancel := context.WithTimeout(...); defer cancel()` for the
+   initial `list-sessions` bootstrap call.
+2. `Stop()` — cancel the registry's context; all goroutines exit via
+   `ctx.Done()`. Copy subscriber channels out from under `subsMu`, then
+   close each outside the lock (deadlock prevention — see Known Issues).
+3. `SessionExists(name string) bool`, `ListSessions() map[string]bool`,
+   `SubscribePaneExit(ctx context.Context, sessionName string) <-chan struct{}`
+4. Auto-reconnect goroutine — selects on `ctx.Done()` and a backoff
+   timer; exponential backoff (100ms base, 30s cap). Documented exit
+   condition: `ctx.Done()`.
+5. `GetServerRegistry(socket string)` global accessor — lazy init under
+   `defaultRegistryMu`; never called from `init()`.
+6. Compile-time checks: `var _ SessionExistenceChecker = (*TmuxServerRegistry)(nil)` etc.
+
+Go idioms in this task:
+- Receiver name `r` throughout
+- `fmt.Errorf("start control mode for %q: %w", r.serverSocket, err)` error wrapping
+- `var ErrRegistryUnavailable = errors.New("tmux registry unavailable")` sentinel
+- Close subscriber channels **outside** `subsMu` (copy-under-lock, close-outside pattern)
+- Loop variable capture: `for _, ch := range chs { ch := ch; ... }`
 
 Unit tests (no real tmux needed, use a fake stdout pipe):
-- Parse `%session-created`, `%session-closed`, `%sessions-changed`,
-  `%pane-exited`, `%exit` lines correctly
-- `SessionExists` returns true after `%session-created`, false after
-  `%session-closed`
-- Subscriber callback fires on `%pane-exited` and `%session-closed`
-- Cancel function removes subscriber before callback fires
+- Table-driven tests for event parsing: `%session-created`, `%session-closed`,
+  `%sessions-changed`, `%pane-exited`, `%exit` → expected sessions map state
+- `SessionExists` returns true after `%session-created`, false after `%session-closed`
+- Subscriber channel is closed on `%pane-exited` and `%session-closed`
+- Cancelling the subscription context closes the channel immediately without
+  waiting for the event
 - Unhealthy registry causes `IsHealthy()` to return false
+- Use `t.Cleanup(cancel)` to stop registry goroutines after each subtest
 
 Acceptance criteria:
 - All unit tests pass
+- `go test -race ./session/tmux/...` passes (mandatory for this task)
 - `go vet ./session/tmux/...` clean
 - `golangci-lint run ./session/tmux/...` clean
 
@@ -505,21 +739,29 @@ Acceptance criteria:
 **Files**: `session/tmux/tmux.go`,
 `session/tmux/tmux_test.go` (extend)
 
-Add `registry SessionExistenceChecker` field to `TmuxSession`.
+Add `registry SessionExistenceChecker` field to `TmuxSession`. Receiver
+name `t` throughout (consistent with existing code).
 
 Modify `newTmuxSessionWithSocket()` to call
 `GetServerRegistry(serverSocket)` and assign the result.
 
 Add `WithRegistry(r SessionExistenceChecker)` option so tests can inject
-a `FakeTmuxRegistry`.
+a `FakeTmuxRegistry` — tests must not use the global accessor.
 
 Modify `DoesSessionExist()`:
 ```go
+// t is the receiver (TmuxSession)
 if t.registry != nil && t.registry.IsHealthy() {
     return t.registry.SessionExists(t.sanitizedName)
 }
 // existing path unchanged
 ```
+
+Go idioms in this task:
+- Constructor injection via `WithRegistry` option; no package-level state
+  touched in tests
+- `IsHealthy()` called on every invocation (no caching the delegation
+  decision)
 
 Add unit test: `DoesSessionExist` returns fake registry result when
 healthy, falls back to exec path when `IsHealthy()` is false.
@@ -530,6 +772,7 @@ Acceptance criteria:
   registry is healthy
 - No change to `DoesSessionExistNoCache()` (critical validation, always
   execs)
+- `go test -race ./session/tmux/...` passes
 
 ---
 
@@ -539,12 +782,36 @@ Acceptance criteria:
 **Files**: `session/mux/multiplexer.go`,
 `session/mux/multiplexer_test.go` (extend)
 
-Add `paneExitSub tmux.PaneExitSubscriber` field to `Multiplexer`.
+Add `paneExitSub tmux.PaneExitSubscriber` field to `Multiplexer`. Receiver
+name `m` throughout.
 
 Extract the fallback ticker logic from `monitorTmuxSession()` into a
 private `monitorTmuxSessionPolling()` method (rename, no logic change).
 
 Add `startSessionMonitor()` as described in the design section above.
+The implementation uses channel-based signaling (not a callback):
+
+```go
+// m is the receiver (Multiplexer)
+func (m *Multiplexer) startSessionMonitor() {
+    if m.paneExitSub != nil {
+        exitCh := m.paneExitSub.SubscribePaneExit(m.ctx, m.tmuxSession)
+        go func() {
+            select {
+            case <-exitCh:
+                m.Shutdown()
+            case <-m.ctx.Done():
+            }
+        }()
+        return
+    }
+    m.wg.Add(1)
+    go m.monitorTmuxSessionPolling()
+}
+```
+
+The goroutine's exit condition is documented: it exits on either `exitCh`
+close or `m.ctx.Done()`, whichever comes first.
 
 Call `startSessionMonitor()` from `Start()` instead of
 `go m.monitorTmuxSession()`.
@@ -552,18 +819,19 @@ Call `startSessionMonitor()` from `Start()` instead of
 Wire `tmux.GetServerRegistry("")` as the default subscriber in
 `RunWithName()`.
 
-Add a constructor option `WithPaneExitSubscriber(s
-tmux.PaneExitSubscriber)` for test injection.
+Add a constructor option `WithPaneExitSubscriber(s tmux.PaneExitSubscriber)`
+for test injection — tests inject `FakeTmuxRegistry` directly.
 
 Unit test: verify `Shutdown()` is called exactly once when the fake
-registry fires the pane-exit callback.
+registry closes the pane-exit channel. Use `t.Cleanup` to cancel the
+multiplexer context after each subtest.
 
 Acceptance criteria:
 - All existing `multiplexer_test.go` tests pass
 - New test demonstrates no `exec.Command` fork for session monitoring when
   subscriber is provided
-- Fallback polling path still reachable (used in tests with nil
-  subscriber)
+- Fallback polling path still reachable (used in tests with nil subscriber)
+- `go test -race ./session/mux/...` passes
 
 ---
 
@@ -573,7 +841,8 @@ Acceptance criteria:
 **Files**: `session/pty_discovery.go`, `session/pty_discovery_test.go`
 (new or extend)
 
-Add `sessionLister tmux.SessionLister` field to `PTYDiscovery`.
+Add `sessionLister tmux.SessionLister` field to `PTYDiscovery`. Receiver
+name `pd` throughout.
 
 Modify `discoverOrphanedPTYs()`: replace the `exec.Command("tmux",
 "list-sessions", ...)` call with `pd.sessionLister.ListSessions()` (when
@@ -583,17 +852,26 @@ are unchanged.
 Modify `discoverExternalClaude()` similarly.
 
 Add `WithSessionLister(l tmux.SessionLister)` option to
-`NewPTYDiscoveryWithConfig`.
+`NewPTYDiscoveryWithConfig`. Tests inject `FakeTmuxRegistry` — they do
+not use the global accessor.
 
 Wire `tmux.GetServerRegistry("")` as default lister in `NewPTYDiscovery`.
 
-Unit test with `FakeTmuxRegistry`: `discoverOrphanedPTYs` returns
-connections only for sessions reported by the lister (no exec needed).
+Go idioms in this task:
+- `pd.sessionLister.ListSessions()` returns a copy of the map; no lock held
+  by the caller. `PTYDiscovery` must not retain the returned map between
+  calls (treat it as a snapshot).
+- Internal errors from `ListSessions` when unhealthy are logged, not silently
+  swallowed; the fallback exec path produces its own errors separately.
+
+Unit test with `FakeTmuxRegistry` (table-driven): `discoverOrphanedPTYs`
+returns connections only for sessions reported by the lister (no exec needed).
 
 Acceptance criteria:
 - All existing PTY discovery tests pass
 - New test demonstrates zero `list-sessions` exec when lister is healthy
 - `ps` and `display-message` execs are unaffected (still present)
+- `go test -race ./session/...` passes
 
 ---
 
@@ -609,17 +887,31 @@ Test cases:
 1. `TmuxServerRegistry` starts and becomes healthy within 2 seconds
 2. Creating a tmux session results in `SessionExists` returning true
    within 500ms (event-driven, not poll-based)
-3. Killing a tmux session fires a `SubscribePaneExit` callback within
-   500ms
+3. Killing a tmux session closes the `SubscribePaneExit` channel within
+   500ms (channel-based, not callback-based)
 4. Registry reconnects after the tmux server is killed and restarted
 5. `ListSessions()` returns the correct set after multiple
    create/destroy cycles
 
+Go idioms in this task:
+- Each test uses `t.Cleanup(cancel)` to cancel the registry context on
+  teardown — no explicit `Stop()` call needed in the happy path
+- `ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)` for
+  health-check assertions
+- `go test -race -tags integration ./session/tmux/...` is the canonical
+  run command; race detector must pass (this is the highest-risk task for
+  the deadlock hazard documented in Known Issues)
+- Concurrent subscription test: spawn 10 goroutines each calling
+  `SubscribePaneExit` for the same session simultaneously while the event
+  loop fires — verifies no deadlock and no double-close panic
+
 Build tag: `//go:build integration` (skipped by default `go test`;
-run via `go test -tags integration ./session/tmux/...`).
+run via `go test -race -tags integration ./session/tmux/...`).
 
 Acceptance criteria:
 - All 5 test cases pass against a real tmux binary
+- Concurrent subscription test passes under `-race`
+- `go test -race ./session/tmux/...` (unit tests) also passes in this task
 - Tests clean up their isolated socket on success and failure
 - Test file is excluded from regular `make test` by build tag
 
