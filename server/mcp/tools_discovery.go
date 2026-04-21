@@ -167,7 +167,7 @@ func (d *discoveryHandlers) getSession(ctx context.Context, req mcpgo.CallToolRe
 	}
 
 	for _, inst := range instances {
-		if inst.Title == sessionID {
+		if inst.MatchesID(sessionID) {
 			detail := instanceToDetail(inst)
 			return okResult(GetSessionResult{
 				MCPResult: MCPResult{Success: true},

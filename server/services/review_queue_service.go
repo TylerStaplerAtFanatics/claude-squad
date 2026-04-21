@@ -153,7 +153,7 @@ func (rqs *ReviewQueueService) AcknowledgeSession(
 	var instance *session.Instance
 	var instanceIndex int
 	for i, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			instance = inst
 			instanceIndex = i
 			break

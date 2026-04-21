@@ -311,7 +311,7 @@ func (lh *lifecycleHandlers) stopSession(ctx context.Context, req mcpgo.CallTool
 	var inst *session.Instance
 	var idx int
 	for i, candidate := range instances {
-		if candidate.Title == sessionID {
+		if candidate.MatchesID(sessionID) {
 			inst = candidate
 			idx = i
 			break
@@ -356,7 +356,7 @@ func (lh *lifecycleHandlers) updateSession(ctx context.Context, req mcpgo.CallTo
 	var inst *session.Instance
 	var idx int
 	for i, candidate := range instances {
-		if candidate.Title == sessionID {
+		if candidate.MatchesID(sessionID) {
 			inst = candidate
 			idx = i
 			break
@@ -419,7 +419,7 @@ func (lh *lifecycleHandlers) findAndHydrate(sessionID string) (*session.Instance
 	}
 
 	for i, inst := range instances {
-		if inst.Title == sessionID {
+		if inst.MatchesID(sessionID) {
 			if !inst.Started() && inst.Status != session.Paused {
 				if startErr := inst.Start(false); startErr != nil {
 					return nil, nil, 0, errResult(ErrInternalError,
