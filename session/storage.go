@@ -146,6 +146,10 @@ type ClaudeSettings struct {
 // depending on the full Storage implementation.
 type InstanceStore interface {
 	LoadInstances() ([]*Instance, error)
+	// ListInstanceData returns raw persisted InstanceData without constructing Instance
+	// objects or spawning PTY processes. Use this for read-only existence/title checks
+	// where calling LoadInstances() would create unnecessary side effects.
+	ListInstanceData() ([]InstanceData, error)
 	SaveInstances([]*Instance) error
 	AddInstance(*Instance) error
 	DeleteInstance(title string) error
@@ -220,6 +224,13 @@ func (s *Storage) LoadInstances() ([]*Instance, error) {
 	return instances, nil
 }
 
+// ListInstanceData returns raw InstanceData from the repository without constructing
+// Instance objects. This avoids the side effect of FromInstanceData() calling Start()
+// (which spawns PTY processes). Use for read-only existence and title checks.
+func (s *Storage) ListInstanceData() ([]InstanceData, error) {
+	return s.repo.List(context.Background())
+}
+
 // DeleteInstance removes an instance from storage.
 func (s *Storage) DeleteInstance(title string) error {
 	return s.repo.Delete(context.Background(), title)
@@ -290,6 +301,13 @@ func (s *Storage) UpdateInstanceLastAddedToQueue(title string, lastAddedToQueue 
 // UpdateInstanceLastUserResponse updates just the LastUserResponse timestamp for a specific instance.
 func (s *Storage) UpdateInstanceLastUserResponse(title string, lastUserResponse time.Time) error {
 	return s.updateFieldInRepo(title, func(d *InstanceData) { d.LastUserResponse = lastUserResponse })
+}
+
+// UpdateInstanceAcknowledged sets the LastAcknowledged timestamp to now for a specific instance.
+// Used by AcknowledgeSession when the instance is not available in the live poller.
+func (s *Storage) UpdateInstanceAcknowledged(title string) error {
+	now := time.Now()
+	return s.updateFieldInRepo(title, func(d *InstanceData) { d.LastAcknowledged = now })
 }
 
 // UpdateInstanceProcessingGrace updates just the ProcessingGraceUntil timestamp for a specific instance.

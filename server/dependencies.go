@@ -426,7 +426,7 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 		for _, inst := range instances {
 			started := inst.Started()
 			paused := inst.Paused()
-			if started && !paused {
+			if started && !paused && inst.Status != session.Stopped {
 				if inst.GetController() == nil {
 					if err := inst.StartController(); err != nil {
 						log.WarningLog.Printf("Failed to start controller for '%s': %v", inst.Title, err)

@@ -241,6 +241,17 @@ func (s *SessionService) GetInstanceStore() session.InstanceStore {
 	return s.storage
 }
 
+// FindLiveInstance returns the live in-memory instance held by the ReviewQueuePoller,
+// or nil if the poller is not wired or the session is not found. Use this instead of
+// LoadInstances() for read-only and mutation operations that need the live instance
+// (with its PTY handles and controller state).
+func (s *SessionService) FindLiveInstance(id string) *session.Instance {
+	if s.reviewQueuePoller == nil {
+		return nil
+	}
+	return s.reviewQueuePoller.FindInstance(id)
+}
+
 // GetApprovalStore returns the approval store for wiring up the HTTP hook handler.
 func (s *SessionService) GetApprovalStore() *ApprovalStore {
 	return s.approvalStore

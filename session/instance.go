@@ -483,20 +483,22 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 	_ = log.GetSessionLoggers
 
 	// Check if the worktree still exists on disk if the instance is not paused.
-	// NOTE: This is a recovery path during deserialization. We bypass the state machine
-	// because the instance may be in any state (e.g., Ready, Loading) from which
-	// Paused is not a valid transition, yet the worktree is physically gone.
 	// No mutex is needed here because the instance is not yet shared.
 	if !instance.Paused() && instance.gitManager.HasWorktree() {
 		worktreePath := instance.gitManager.GetWorktreePath()
 		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-			// Worktree has been deleted, mark instance as paused
+			// Worktree has been deleted — use transitionTo so the state machine is respected.
+			// Ready → Paused and Loading → Paused are explicitly allowed for this case.
 			log.ForSession(instance.Title).Warning("Worktree directory doesn't exist at '%s', marking as paused", worktreePath)
-			instance.setStatus(Paused)
+			if err := instance.transitionTo(Paused); err != nil {
+				// If the transition is somehow invalid (e.g. already Stopped), fall back to setStatus.
+				log.ForSession(instance.Title).Warning("Could not transition to Paused via state machine (%v), using setStatus", err)
+				instance.setStatus(Paused)
+			}
 		}
 	}
 
-	if instance.Paused() {
+	if instance.Paused() || instance.Status == Stopped {
 		instance.started = true
 		// Use configurable prefix or default
 		tmuxPrefix := instance.TmuxPrefix
