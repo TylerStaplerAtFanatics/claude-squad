@@ -1,5 +1,18 @@
 import { ErrorInfo } from "react";
-import styles from "./ErrorState.module.css";
+import {
+  container,
+  content,
+  icon,
+  title,
+  message,
+  retryButton,
+  details,
+  detailsSummary,
+  detailsContent,
+  errorBlock,
+  errorText,
+  stackTrace,
+} from "./ErrorState.css";
 
 interface ErrorStateProps {
   error?: Error | null;
@@ -21,9 +34,9 @@ export function ErrorState({
   actionLabel = "Try Again",
 }: ErrorStateProps) {
   return (
-    <div className={styles.container}>
-      <div className={styles.content}>
-        <div className={styles.icon}>
+    <div className={container}>
+      <div className={content}>
+        <div className={icon}>
           <svg
             width="64"
             height="64"
@@ -48,29 +61,29 @@ export function ErrorState({
           </svg>
         </div>
 
-        <h2 className={styles.title}>{title}</h2>
-        <p className={styles.message}>{message}</p>
+        <h2 className={title}>{title}</h2>
+        <p className={message}>{message}</p>
 
         {showDetails && error && (
-          <details className={styles.details}>
-            <summary className={styles.detailsSummary}>Error Details</summary>
-            <div className={styles.detailsContent}>
-              <div className={styles.errorBlock}>
+          <details className={details}>
+            <summary className={detailsSummary}>Error Details</summary>
+            <div className={detailsContent}>
+              <div className={errorBlock}>
                 <strong>Error:</strong>
-                <pre className={styles.errorText}>{error.message}</pre>
+                <pre className={errorText}>{error.message}</pre>
               </div>
 
               {error.stack && (
-                <div className={styles.errorBlock}>
+                <div className={errorBlock}>
                   <strong>Stack Trace:</strong>
-                  <pre className={styles.stackTrace}>{error.stack}</pre>
+                  <pre className={stackTrace}>{error.stack}</pre>
                 </div>
               )}
 
               {errorInfo?.componentStack && (
-                <div className={styles.errorBlock}>
+                <div className={errorBlock}>
                   <strong>Component Stack:</strong>
-                  <pre className={styles.stackTrace}>
+                  <pre className={stackTrace}>
                     {errorInfo.componentStack}
                   </pre>
                 </div>
@@ -80,7 +93,7 @@ export function ErrorState({
         )}
 
         {onRetry && (
-          <button className={styles.retryButton} onClick={onRetry}>
+          <button className={retryButton} onClick={onRetry}>
             {actionLabel}
           </button>
         )}

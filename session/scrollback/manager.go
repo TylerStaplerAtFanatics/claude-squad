@@ -141,7 +141,11 @@ func (m *ScrollbackManager) GetRecentBytes(sessionID string, bytes int64) ([]byt
 		m.mutex.RUnlock()
 
 		if exists {
-			entries := buffer.GetAll()
+			// Phase 1 limit: cap in-memory entries at 500 lines to bound initial
+			// payload size. See ADR-001 (lazy scrollback delivery strategy) for
+			// the full phased plan; a server-side streaming approach will lift
+			// this cap in Phase 2.
+			entries := buffer.GetLastN(500)
 			memData := m.entriesToBytes(entries)
 			// Combine storage and memory data
 			data = append(data, memData...)

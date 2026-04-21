@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -339,7 +341,7 @@ func shellEscape(arg string) string {
 func handleInstall() {
 	if len(os.Args) < 3 {
 		fmt.Fprintln(os.Stderr, "Usage: ssq-hooks install <target>")
-		fmt.Fprintln(os.Stderr, "Targets: gemini, open-code")
+		fmt.Fprintln(os.Stderr, "Targets: gemini, open-code, service")
 		os.Exit(1)
 	}
 
@@ -349,6 +351,8 @@ func handleInstall() {
 		installGemini()
 	case "open-code":
 		installOpenCode()
+	case "service":
+		installService()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown install target: %s\n", target)
 		os.Exit(1)
@@ -413,6 +417,206 @@ eval "$CMD"
 
 	fmt.Fprintf(os.Stderr, "Successfully installed open-code wrapper to %s\n", wrapperPath)
 	fmt.Fprintf(os.Stderr, "Ensure %s is in your PATH.\n", binDir)
+}
+
+func installService() {
+	installCmd := flag.NewFlagSet("service", flag.ExitOnError)
+	uninstall := installCmd.Bool("uninstall", false, "Remove the service and disable auto-start")
+	installCmd.Parse(os.Args[3:])
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error resolving home directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	logDir := filepath.Join(home, ".stapler-squad", "logs")
+	currentPath := os.Getenv("PATH")
+
+	// Resolve binary path: STAPLER_SQUAD_BIN env > which > os.Executable
+	binPath := os.Getenv("STAPLER_SQUAD_BIN")
+	if binPath == "" {
+		if p, err := exec.LookPath("stapler-squad"); err == nil {
+			binPath = p
+		}
+	}
+	if binPath == "" {
+		if p, err := os.Executable(); err == nil {
+			binPath = p
+		} else {
+			fmt.Fprintln(os.Stderr, "Cannot find stapler-squad binary. Set STAPLER_SQUAD_BIN or ensure it is in PATH.")
+			os.Exit(1)
+		}
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		installServiceLinux(home, binPath, logDir, currentPath, *uninstall)
+	case "darwin":
+		installServiceMacOS(home, binPath, logDir, currentPath, *uninstall)
+	default:
+		fmt.Fprintf(os.Stderr, "Unsupported platform: %s\n", runtime.GOOS)
+		fmt.Fprintln(os.Stderr, "Supported platforms: Linux (systemd user), macOS (LaunchAgent)")
+		os.Exit(1)
+	}
+}
+
+func installServiceLinux(home, binPath, logDir, envPath string, uninstall bool) {
+	serviceDir := filepath.Join(home, ".config", "systemd", "user")
+	serviceFile := filepath.Join(serviceDir, "stapler-squad.service")
+
+	if uninstall {
+		exec.Command("systemctl", "--user", "stop", "stapler-squad").Run()    //nolint:errcheck
+		exec.Command("systemctl", "--user", "disable", "stapler-squad").Run() //nolint:errcheck
+		if _, err := os.Stat(serviceFile); err == nil {
+			os.Remove(serviceFile)                                     //nolint:errcheck
+			exec.Command("systemctl", "--user", "daemon-reload").Run() //nolint:errcheck
+			fmt.Printf("Removed: %s\n", serviceFile)
+		} else {
+			fmt.Printf("Service file not found (already removed?): %s\n", serviceFile)
+		}
+		fmt.Println("stapler-squad will no longer start automatically on login.")
+		fmt.Println("Your data in ~/.stapler-squad/ has not been touched.")
+		return
+	}
+
+	if err := os.MkdirAll(serviceDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating %s: %v\n", serviceDir, err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating %s: %v\n", logDir, err)
+		os.Exit(1)
+	}
+
+	serviceLog := filepath.Join(logDir, "service.log")
+	content := fmt.Sprintf(`[Unit]
+Description=Stapler Squad — AI Agent Session Manager
+Documentation=https://github.com/tstapler/stapler-squad
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%s
+WorkingDirectory=%s
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:%s
+StandardError=append:%s
+Environment=HOME=%s
+Environment=PATH=%s
+
+[Install]
+WantedBy=default.target
+`, binPath, home, serviceLog, serviceLog, home, envPath)
+
+	if err := os.WriteFile(serviceFile, []byte(content), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing service file: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Service file written to: %s\n\n", serviceFile)
+	fmt.Println("Enable and start now:")
+	fmt.Println("    systemctl --user daemon-reload")
+	fmt.Println("    systemctl --user enable --now stapler-squad")
+	fmt.Println()
+	fmt.Println("Check status:")
+	fmt.Println("    systemctl --user status stapler-squad")
+	fmt.Println()
+	fmt.Printf("View logs:\n    tail -f %s\n\n", serviceLog)
+	fmt.Println("Optional — keep service running after logout (one-time setup):")
+	fmt.Println("    loginctl enable-linger $USER")
+	fmt.Println()
+	fmt.Println("If you rebuild or move the binary, re-run this command to update the service file.")
+}
+
+func installServiceMacOS(home, binPath, logDir, envPath string, uninstall bool) {
+	plistDir := filepath.Join(home, "Library", "LaunchAgents")
+	plistFile := filepath.Join(plistDir, "com.stapler-squad.plist")
+
+	if uninstall {
+		exec.Command("launchctl", "unload", plistFile).Run() //nolint:errcheck
+		if _, err := os.Stat(plistFile); err == nil {
+			os.Remove(plistFile) //nolint:errcheck
+			fmt.Printf("Removed: %s\n", plistFile)
+		} else {
+			fmt.Printf("Plist not found (already removed?): %s\n", plistFile)
+		}
+		fmt.Println("stapler-squad will no longer start automatically on login.")
+		fmt.Println("Your data in ~/.stapler-squad/ has not been touched.")
+		return
+	}
+
+	if err := os.MkdirAll(plistDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating %s: %v\n", plistDir, err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating %s: %v\n", logDir, err)
+		os.Exit(1)
+	}
+
+	serviceLog := filepath.Join(logDir, "service.log")
+	content := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.stapler-squad</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>%s</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>%s</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>%s</string>
+        <key>PATH</key>
+        <string>%s</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>%s</string>
+
+    <key>StandardErrorPath</key>
+    <string>%s</string>
+
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+</dict>
+</plist>
+`, binPath, home, home, envPath, serviceLog, serviceLog)
+
+	if err := os.WriteFile(plistFile, []byte(content), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing plist: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("LaunchAgent plist written to: %s\n\n", plistFile)
+	fmt.Println("Load and start now (macOS 12 and earlier):")
+	fmt.Printf("    launchctl load -w %s\n\n", plistFile)
+	fmt.Println("Load and start now (macOS 13 Ventura and later):")
+	fmt.Printf("    launchctl bootstrap gui/$(id -u) %s\n\n", plistFile)
+	fmt.Println("Check status:")
+	fmt.Println("    launchctl list | grep stapler-squad")
+	fmt.Println()
+	fmt.Printf("View logs:\n    tail -f %s\n\n", serviceLog)
+	fmt.Println("If you rebuild or move the binary, re-run this command to update the plist.")
 }
 
 func getDefaultDBPath() string {

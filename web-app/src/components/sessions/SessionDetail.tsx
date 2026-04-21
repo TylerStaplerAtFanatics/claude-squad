@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { Session, InstanceType } from "@/gen/session/v1/types_pb";
-import { DiffViewer, prefetchDiff } from "./DiffViewer";
+import { DiffViewer } from "./DiffViewer";
 import { VcsPanel } from "./VcsPanel";
 import { prefetchVcsStatus } from "@/lib/hooks/useVcsStatus";
 import { WorkspaceSwitchModal } from "./WorkspaceSwitchModal";
@@ -11,9 +11,10 @@ import { SessionLogsTab } from "./SessionLogsTab";
 import { FilesTab } from "./FilesTab";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { useSessionService } from "@/lib/hooks/useSessionService";
+import { SessionVcsProvider } from "@/lib/contexts/SessionVcsContext";
 import { getApiBaseUrl } from "@/lib/config";
 import { getProgramDisplay, isKnownProgram, PROGRAMS } from "@/lib/constants/programs";
-import styles from "./SessionDetail.module.css";
+import * as styles from "./SessionDetail.css";
 
 // Dynamically import TerminalOutput with SSR disabled (xterm.js requires browser environment)
 const TerminalOutput = dynamic(
@@ -91,10 +92,9 @@ export function SessionDetail({
     });
   }, [session.externalMetadata?.muxSocketPath]);
 
-  // Prefetch diff and VCS data as soon as a session is selected so tabs load instantly.
+  // Prefetch VCS data as soon as a session is selected so tabs load instantly.
   useEffect(() => {
     const baseUrl = getApiBaseUrl();
-    prefetchDiff(session.id, baseUrl);
     prefetchVcsStatus(session.id, baseUrl);
   }, [session.id]);
 
@@ -162,9 +162,9 @@ export function SessionDetail({
 
   return (
     <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ""}`}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>{session.title}</h2>
-        <ActionBar gap="sm" justify="end" scroll className={styles.headerActions}>
+      <div className={`${styles.header} ${isFullscreen ? styles.fullscreenMobileHeader : ""}`}>
+        <h2 className={`${styles.title} ${isFullscreen ? styles.fullscreenMobileTitle : ""}`}>{session.title}</h2>
+        <ActionBar gap="sm" justify="end" scroll className={`${styles.headerActions} ${isFullscreen ? styles.fullscreenMobileHeaderActions : ""}`}>
           {/* Fullscreen — most used when viewing terminal/diff/vcs */}
           {(activeTab === "terminal" || activeTab === "diff" || activeTab === "vcs") && (
             <button
@@ -235,7 +235,7 @@ export function SessionDetail({
         </ActionBar>
       </div>
 
-      <div className={styles.tabs}>
+      <div className={`${styles.tabs} ${isFullscreen ? styles.fullscreenMobileTabs : ""}`}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -248,6 +248,7 @@ export function SessionDetail({
         ))}
       </div>
 
+      <SessionVcsProvider sessionId={session.id} baseUrl={getApiBaseUrl()}>
       <div className={`${styles.content} ${isFullscreen ? styles.fullscreenContent : ""}`}>
         {/* Terminal tab: kept mounted but hidden via display:none to preserve xterm.js instances */}
         <div
@@ -309,14 +310,12 @@ export function SessionDetail({
         </div>
         {activeTab === "diff" && (
           <div className={styles.tabContent}>
-            <DiffViewer sessionId={session.id} baseUrl={getApiBaseUrl()} />
+            <DiffViewer />
           </div>
         )}
         {activeTab === "vcs" && (
           <div className={styles.tabContent}>
             <VcsPanel
-              sessionId={session.id}
-              baseUrl={getApiBaseUrl()}
               onNavigateToFile={(path) => {
                 setFilesSelectedPath(path);
                 handleTabChange("files");
@@ -457,6 +456,7 @@ export function SessionDetail({
           </div>
         )}
       </div>
+      </SessionVcsProvider>
 
       {/* Workspace Switch Modal */}
       {showWorkspaceSwitchModal && (

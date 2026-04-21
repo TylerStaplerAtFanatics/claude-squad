@@ -1,32 +1,12 @@
 "use client";
 
-import { useEffect, useCallback, useRef, useMemo } from "react";
-import { createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-web";
-import { SessionService } from "@/gen/session/v1/session_pb";
-import { PendingApprovalProto } from "@/gen/session/v1/types_pb";
-import {
-  ListPendingApprovalsRequest,
-  ListPendingApprovalsRequestSchema,
-  ResolveApprovalRequest,
-  ResolveApprovalRequestSchema,
-} from "@/gen/session/v1/session_pb";
-import { create } from "@bufbuild/protobuf";
-import { getApiBaseUrl } from "@/lib/config";
-import { useAppDispatch, useAppSelector } from "@/lib/store";
-import {
-  setApprovals,
-  setLoading,
-  setError,
-  removeApproval,
-  selectApprovals,
-  selectApprovalsLoading,
-  selectApprovalsError,
-} from "@/lib/store/approvalsSlice";
+import { useCallback, useMemo } from "react";
+import { useGetApprovalsQuery, useResolveApprovalMutation } from "@/lib/api/approvalsApi";
+import type { PlainApproval } from "@/lib/api/approvalsApi";
 
 interface UseApprovalsOptions {
   sessionId?: string;
-  pollInterval?: number; // in milliseconds, default 30000
+  pollInterval?: number; // in milliseconds, default 5000
   /**
    * Increment this counter externally to trigger an immediate refresh.
    * Use when the parent receives an APPROVAL_NEEDED notification so the
@@ -36,7 +16,7 @@ interface UseApprovalsOptions {
 }
 
 interface UseApprovalsReturn {
-  approvals: PendingApprovalProto[];
+  approvals: PlainApproval[];
   loading: boolean;
   error: Error | null;
   approve: (approvalId: string) => Promise<void>;
@@ -47,7 +27,7 @@ interface UseApprovalsReturn {
 /**
  * React hook for managing pending tool-use approval requests.
  *
- * Polls `listPendingApprovals` every 3 seconds and exposes approve/deny actions
+ * Polls `listPendingApprovals` (via RTK Query) and exposes approve/deny actions
  * that call `resolveApproval` on the ConnectRPC SessionService.
  *
  * Pass `notificationTrigger` (increment it on APPROVAL_NEEDED events) to get
@@ -67,140 +47,54 @@ interface UseApprovalsReturn {
 export function useApprovals(
   options: UseApprovalsOptions = {}
 ): UseApprovalsReturn {
-  const { sessionId, pollInterval = 30000, notificationTrigger } = options;
+  const { sessionId, pollInterval = 5000 } = options;
 
-  const dispatch = useAppDispatch();
-  const approvals = useAppSelector(selectApprovals);
-  const loading = useAppSelector(selectApprovalsLoading);
-  const errorStr = useAppSelector(selectApprovalsError);
+  const { data, isLoading, error: queryError, refetch } = useGetApprovalsQuery(undefined, {
+    pollingInterval: pollInterval,
+  });
 
-  const clientRef = useRef<ReturnType<typeof createClient<typeof SessionService>> | null>(null);
+  const [resolveApproval] = useResolveApprovalMutation();
 
-  // Initialize ConnectRPC client
-  useEffect(() => {
-    const transport = createConnectTransport({
-      baseUrl: getApiBaseUrl(),
-    });
-    clientRef.current = createClient(SessionService, transport);
-  }, []);
+  // Filter by sessionId if provided
+  const allApprovals = data?.approvals ?? [];
+  const approvals = useMemo(
+    () =>
+      sessionId
+        ? allApprovals.filter((a) => a.sessionId === sessionId)
+        : allApprovals,
+    [allApprovals, sessionId]
+  );
 
-  // Fetch pending approvals
-  const fetchApprovals = useCallback(async () => {
-    if (!clientRef.current) return;
-
-    dispatch(setLoading(true));
-    dispatch(setError(null));
-
-    try {
-      const request = create(ListPendingApprovalsRequestSchema, {});
-      if (sessionId !== undefined) {
-        request.sessionId = sessionId;
-      }
-
-      const response = await clientRef.current.listPendingApprovals(request);
-      dispatch(setApprovals(response.approvals ?? []));
-      dispatch(setError(null));
-    } catch (err) {
-      const error =
-        err instanceof Error
-          ? err
-          : new Error("Failed to fetch pending approvals");
-      dispatch(setError(error.message));
-      console.error("Failed to fetch pending approvals:", error);
-    } finally {
-      dispatch(setLoading(false));
-    }
-  }, [sessionId, dispatch]);
-
-  // Refresh alias
-  const refresh = useCallback(async () => {
-    await fetchApprovals();
-  }, [fetchApprovals]);
-
-  // Setup polling
-  useEffect(() => {
-    // Initial fetch
-    refresh();
-
-    const interval = setInterval(() => {
-      refresh();
-    }, pollInterval);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [pollInterval, refresh]);
-
-  // Immediate refresh when a notification arrives (via notificationTrigger counter)
-  useEffect(() => {
-    if (notificationTrigger === undefined || notificationTrigger === 0) return;
-    refresh();
-  }, [notificationTrigger, refresh]);
-
-  // Approve a pending approval
   const approve = useCallback(
     async (approvalId: string) => {
-      if (!clientRef.current) return;
-
-      // Optimistic update - remove from list immediately
-      dispatch(removeApproval(approvalId));
-
-      try {
-        const request = create(ResolveApprovalRequestSchema, {
-          approvalId,
-          decision: "allow",
-        });
-        await clientRef.current.resolveApproval(request);
-      } catch (err) {
-        console.error("Failed to approve:", err);
-        dispatch(
-          setError(
-            err instanceof Error ? err.message : "Failed to approve request"
-          )
-        );
-        // Rollback - refetch to get correct state
-        await refresh();
-      }
+      await resolveApproval({ approvalId, decision: "allow" });
     },
-    [refresh, dispatch]
+    [resolveApproval]
   );
 
-  // Deny a pending approval
   const deny = useCallback(
     async (approvalId: string, message?: string) => {
-      if (!clientRef.current) return;
-
-      // Optimistic update - remove from list immediately
-      dispatch(removeApproval(approvalId));
-
-      try {
-        const request = create(ResolveApprovalRequestSchema, {
-          approvalId,
-          decision: "deny",
-          message,
-        });
-        await clientRef.current.resolveApproval(request);
-      } catch (err) {
-        console.error("Failed to deny:", err);
-        dispatch(
-          setError(
-            err instanceof Error ? err.message : "Failed to deny request"
-          )
-        );
-        // Rollback - refetch to get correct state
-        await refresh();
-      }
+      await resolveApproval({ approvalId, decision: "deny", message });
     },
-    [refresh, dispatch]
+    [resolveApproval]
   );
 
-  // Convert error string back to Error object for backward compatibility.
-  // Memoised so the Error identity stays stable across renders.
-  const error = useMemo(() => (errorStr ? new Error(errorStr) : null), [errorStr]);
+  const refresh = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
+
+  const error = useMemo(() => {
+    if (!queryError) return null;
+    const msg =
+      typeof queryError === "object" && "error" in queryError
+        ? String((queryError as { error: unknown }).error)
+        : "Unknown error";
+    return new Error(msg);
+  }, [queryError]);
 
   return {
     approvals,
-    loading,
+    loading: isLoading,
     error,
     approve,
     deny,

@@ -2,7 +2,26 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { TIME_RANGE_PRESETS, TimeRangePreset } from '@/lib/utils/datetime';
-import styles from './TimeRangePicker.module.css';
+import {
+  container,
+  trigger,
+  icon,
+  label,
+  chevron,
+  dropdown,
+  presets,
+  presetButton,
+  presetButtonActive,
+  divider,
+  customButton,
+  customRange,
+  customHeader,
+  backButton,
+  customInputs,
+  inputGroup,
+  dateInput,
+  applyButton,
+} from './TimeRangePicker.css';
 
 export interface TimeRange {
   start: Date;
@@ -90,32 +109,32 @@ export function TimeRangePicker({ value, onChange, className }: TimeRangePickerP
 
   return (
     <div
-      className={`${styles.container} ${className || ''}`}
+      className={`${container} ${className || ''}`}
       ref={dropdownRef}
       onKeyDown={handleKeyDown}
     >
       <button
-        className={styles.trigger}
+        className={trigger}
         onClick={() => setIsOpen(!isOpen)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label={`Time range: ${getDisplayLabel()}`}
         type="button"
       >
-        <span className={styles.icon}>🕐</span>
-        <span className={styles.label}>{getDisplayLabel()}</span>
-        <span className={styles.chevron}>{isOpen ? '▲' : '▼'}</span>
+        <span className={icon}>🕐</span>
+        <span className={label}>{getDisplayLabel()}</span>
+        <span className={chevron}>{isOpen ? '▲' : '▼'}</span>
       </button>
 
       {isOpen && (
-        <div className={styles.dropdown} role="listbox" aria-label="Select time range">
+        <div className={dropdown} role="listbox" aria-label="Select time range">
           {!showCustom ? (
             <>
-              <div className={styles.presets}>
+              <div className={presets}>
                 {TIME_RANGE_PRESETS.map((preset) => (
                   <button
                     key={preset.value}
-                    className={`${styles.presetButton} ${value.preset === preset.value ? styles.active : ''}`}
+                    className={`${presetButton} ${value.preset === preset.value ? presetButtonActive : ''}`}
                     onClick={() => handlePresetClick(preset)}
                     role="option"
                     aria-selected={value.preset === preset.value}
@@ -124,9 +143,9 @@ export function TimeRangePicker({ value, onChange, className }: TimeRangePickerP
                   </button>
                 ))}
               </div>
-              <div className={styles.divider} />
+              <div className={divider} />
               <button
-                className={styles.customButton}
+                className={customButton}
                 onClick={() => setShowCustom(true)}
                 type="button"
               >
@@ -134,10 +153,10 @@ export function TimeRangePicker({ value, onChange, className }: TimeRangePickerP
               </button>
             </>
           ) : (
-            <div className={styles.customRange}>
-              <div className={styles.customHeader}>
+            <div className={customRange}>
+              <div className={customHeader}>
                 <button
-                  className={styles.backButton}
+                  className={backButton}
                   onClick={() => setShowCustom(false)}
                   type="button"
                   aria-label="Back to presets"
@@ -146,30 +165,30 @@ export function TimeRangePicker({ value, onChange, className }: TimeRangePickerP
                 </button>
                 <span>Custom Range</span>
               </div>
-              <div className={styles.customInputs}>
-                <label className={styles.inputGroup}>
+              <div className={customInputs}>
+                <label className={inputGroup}>
                   <span>Start:</span>
                   <input
                     type="datetime-local"
                     value={customStart}
                     onChange={(e) => setCustomStart(e.target.value)}
-                    className={styles.dateInput}
+                    className={dateInput}
                     aria-label="Start date and time"
                   />
                 </label>
-                <label className={styles.inputGroup}>
+                <label className={inputGroup}>
                   <span>End:</span>
                   <input
                     type="datetime-local"
                     value={customEnd}
                     onChange={(e) => setCustomEnd(e.target.value)}
-                    className={styles.dateInput}
+                    className={dateInput}
                     aria-label="End date and time"
                   />
                 </label>
               </div>
               <button
-                className={styles.applyButton}
+                className={applyButton}
                 onClick={handleCustomSubmit}
                 disabled={!customStart || !customEnd}
                 type="button"

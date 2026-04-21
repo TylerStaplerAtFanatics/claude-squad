@@ -1,5 +1,5 @@
 import { SessionCardSkeleton } from "./SessionCardSkeleton";
-import styles from "./SessionList.module.css";
+import * as styles from "./SessionList.css";
 
 interface SessionListSkeletonProps {
   count?: number;

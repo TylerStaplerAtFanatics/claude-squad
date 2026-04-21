@@ -21,9 +21,6 @@ const nextConfig: NextConfig = {
     // Optimize package imports to reduce CSS chunking and preload warnings
     optimizePackageImports: ['@/components', '@/lib'],
   },
-  turbopack: {
-    resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
-  },
   // Disable minification for development builds (better debugging)
   ...(isDevelopmentBuild ? {
     compiler: {

@@ -46,26 +46,6 @@ func (_u *SessionUpdate) SetNillableTitle(v *string) *SessionUpdate {
 	return _u
 }
 
-// SetUUID sets the "uuid" field.
-func (_u *SessionUpdate) SetUUID(v string) *SessionUpdate {
-	_u.mutation.SetUUID(v)
-	return _u
-}
-
-// SetNillableUUID sets the "uuid" field if the given value is not nil.
-func (_u *SessionUpdate) SetNillableUUID(v *string) *SessionUpdate {
-	if v != nil {
-		_u.SetUUID(*v)
-	}
-	return _u
-}
-
-// ClearUUID clears the value of the "uuid" field.
-func (_u *SessionUpdate) ClearUUID() *SessionUpdate {
-	_u.mutation.ClearUUID()
-	return _u
-}
-
 // SetPath sets the "path" field.
 func (_u *SessionUpdate) SetPath(v string) *SessionUpdate {
 	_u.mutation.SetPath(v)
@@ -650,12 +630,6 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Title(); ok {
 		_spec.SetField(session.FieldTitle, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.UUID(); ok {
-		_spec.SetField(session.FieldUUID, field.TypeString, value)
-	}
-	if _u.mutation.UUIDCleared() {
-		_spec.ClearField(session.FieldUUID, field.TypeString)
-	}
 	if value, ok := _u.mutation.Path(); ok {
 		_spec.SetField(session.FieldPath, field.TypeString, value)
 	}
@@ -936,26 +910,6 @@ func (_u *SessionUpdateOne) SetNillableTitle(v *string) *SessionUpdateOne {
 	if v != nil {
 		_u.SetTitle(*v)
 	}
-	return _u
-}
-
-// SetUUID sets the "uuid" field.
-func (_u *SessionUpdateOne) SetUUID(v string) *SessionUpdateOne {
-	_u.mutation.SetUUID(v)
-	return _u
-}
-
-// SetNillableUUID sets the "uuid" field if the given value is not nil.
-func (_u *SessionUpdateOne) SetNillableUUID(v *string) *SessionUpdateOne {
-	if v != nil {
-		_u.SetUUID(*v)
-	}
-	return _u
-}
-
-// ClearUUID clears the value of the "uuid" field.
-func (_u *SessionUpdateOne) ClearUUID() *SessionUpdateOne {
-	_u.mutation.ClearUUID()
 	return _u
 }
 
@@ -1572,12 +1526,6 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 	}
 	if value, ok := _u.mutation.Title(); ok {
 		_spec.SetField(session.FieldTitle, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.UUID(); ok {
-		_spec.SetField(session.FieldUUID, field.TypeString, value)
-	}
-	if _u.mutation.UUIDCleared() {
-		_spec.ClearField(session.FieldUUID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Path(); ok {
 		_spec.SetField(session.FieldPath, field.TypeString, value)

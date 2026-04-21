@@ -305,23 +305,62 @@ export function useTerminalFlowControl({
 
   // ---- Message dispatch functions ----
 
+  const PASTE_CHUNK_SIZE = 512; // bytes — fits within tmux's pty write buffer
+  const CHUNK_DELAY_MS = 10;   // ms between chunks — yields event loop without stalling input
+
   const sendInput = useCallback((input: string) => {
     if (!pushMessageRef.current || !isConnectedRef.current) return;
 
-    try {
-      const inputBytes = new TextEncoder().encode(input);
-      pushMessage(
-        create(TerminalDataSchema, {
-          sessionId,
-          data: {
-            case: "input",
-            value: create(TerminalInputSchema, { data: inputBytes }),
-          },
-        })
-      );
-    } catch (err) {
-      handleError(err);
+    const encoder = new TextEncoder();
+    const inputBytes = encoder.encode(input);
+
+    if (inputBytes.length <= PASTE_CHUNK_SIZE) {
+      try {
+        pushMessage(
+          create(TerminalDataSchema, {
+            sessionId,
+            data: {
+              case: "input",
+              value: create(TerminalInputSchema, { data: inputBytes }),
+            },
+          })
+        );
+      } catch (err) {
+        handleError(err);
+      }
+      return;
     }
+
+    // Large input: send in chunks to avoid tmux/WebSocket buffer limits.
+    // Capture sessionId at call-time — if the session changes mid-paste the
+    // pending chunks are aborted (sessionIdAtStart !== current sessionId).
+    const sessionIdAtStart = sessionId;
+    let offset = 0;
+    const sendChunk = () => {
+      if (!pushMessageRef.current || !isConnectedRef.current) return;
+      if (sessionId !== sessionIdAtStart) return; // session changed; abort
+      if (offset >= inputBytes.length) return;
+      const chunk = inputBytes.slice(offset, offset + PASTE_CHUNK_SIZE);
+      offset += PASTE_CHUNK_SIZE;
+      try {
+        pushMessage(
+          create(TerminalDataSchema, {
+            sessionId: sessionIdAtStart,
+            data: {
+              case: "input",
+              value: create(TerminalInputSchema, { data: chunk }),
+            },
+          })
+        );
+      } catch (err) {
+        handleError(err);
+        return;
+      }
+      if (offset < inputBytes.length) {
+        setTimeout(sendChunk, CHUNK_DELAY_MS);
+      }
+    };
+    sendChunk();
   }, [sessionId, pushMessage, pushMessageRef, isConnectedRef, handleError]);
 
   const sendInputWithEcho = useCallback((input: string): bigint => {

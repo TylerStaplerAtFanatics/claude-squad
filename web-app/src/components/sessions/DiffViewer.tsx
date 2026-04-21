@@ -1,54 +1,38 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-web";
-import { SessionService } from "@/gen/session/v1/session_pb";
-import styles from "./DiffViewer.module.css";
+import { useState, useMemo } from "react";
+import { useSessionVcsContext } from "@/lib/contexts/SessionVcsContext";
+import {
+  container,
+  toolbar,
+  stats,
+  filesChanged,
+  additions,
+  deletions,
+  viewModeToggle,
+  viewModeButton,
+  viewModeButtonActive,
+  diffContent,
+  file,
+  fileHeader,
+  filename,
+  fileStats,
+  hunk,
+  hunkHeader,
+  lines,
+  line,
+  lineAdd,
+  lineDelete,
+  lineContext,
+  lineNumber,
+  lineContent,
+  loading as loadingClass,
+  empty as emptyClass,
+  emptyHint,
+} from "./DiffViewer.css";
 
 interface DiffViewerProps {
-  sessionId: string;
-  baseUrl: string;
-}
-
-// ---- Module-level diff cache ----
-
-interface DiffCacheEntry {
-  files: DiffFile[];
-  additions: number;
-  deletions: number;
-  rawContent: string;
-  timestamp: number;
-}
-
-const diffCache = new Map<string, DiffCacheEntry>();
-const DIFF_CACHE_TTL_MS = 30_000;
-
-function getDiffCached(sessionId: string): DiffCacheEntry | null {
-  const entry = diffCache.get(sessionId);
-  if (entry && Date.now() - entry.timestamp < DIFF_CACHE_TTL_MS) return entry;
-  return null;
-}
-
-/**
- * Warm the diff cache for a session without rendering anything.
- * Call from SessionDetail when a session is selected.
- */
-export async function prefetchDiff(sessionId: string, baseUrl: string): Promise<void> {
-  if (getDiffCached(sessionId)) return;
-  try {
-    const client = createClient(SessionService, createConnectTransport({ baseUrl }));
-    const response = await client.getSessionDiff({ id: sessionId });
-    diffCache.set(sessionId, {
-      files: parseDiff(response.diffStats?.content ?? ""),
-      additions: response.diffStats?.added ?? 0,
-      deletions: response.diffStats?.removed ?? 0,
-      rawContent: response.diffStats?.content ?? "",
-      timestamp: Date.now(),
-    });
-  } catch {
-    // Prefetch failures are silent – the component will retry on mount.
-  }
+  // Props kept for backward compatibility but data now comes from SessionVcsContext.
 }
 
 interface DiffFile {
@@ -168,86 +152,35 @@ function parseDiff(diffContent: string): DiffFile[] {
   return files;
 }
 
-export function DiffViewer({ sessionId, baseUrl }: DiffViewerProps) {
-  const initialCached = getDiffCached(sessionId);
-  const [diff, setDiff] = useState<DiffFile[]>(initialCached?.files ?? []);
-  const [loading, setLoading] = useState(!initialCached);
-  const [error, setError] = useState<string | null>(null);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function DiffViewer(_props: DiffViewerProps) {
+  const { diff: rawDiff, diffLoading: loading, refreshDiff } = useSessionVcsContext();
   const [viewMode, setViewMode] = useState<"split" | "unified">("unified");
-  const [rawDiffContent, setRawDiffContent] = useState<string>(initialCached?.rawContent ?? "");
-  const [totalAdditions, setTotalAdditions] = useState(initialCached?.additions ?? 0);
-  const [totalDeletions, setTotalDeletions] = useState(initialCached?.deletions ?? 0);
 
-  useEffect(() => {
-    const fetchDiff = async () => {
-      // Use cache if fresh – avoids refetch on tab re-entry.
-      const cached = getDiffCached(sessionId);
-      if (cached) {
-        setDiff(cached.files);
-        setTotalAdditions(cached.additions);
-        setTotalDeletions(cached.deletions);
-        setRawDiffContent(cached.rawContent);
-        setLoading(false);
-        return;
-      }
+  const diff = useMemo(() => parseDiff(rawDiff?.content ?? ""), [rawDiff?.content]);
+  const totalAdditions = rawDiff?.added ?? 0;
+  const totalDeletions = rawDiff?.removed ?? 0;
 
-      setLoading(true);
-      setError(null);
-
-      try {
-        const client = createClient(
-          SessionService,
-          createConnectTransport({ baseUrl })
-        );
-
-        const response = await client.getSessionDiff({ id: sessionId });
-
-        const entry: DiffCacheEntry = {
-          files: parseDiff(response.diffStats?.content ?? ""),
-          additions: response.diffStats?.added ?? 0,
-          deletions: response.diffStats?.removed ?? 0,
-          rawContent: response.diffStats?.content ?? "",
-          timestamp: Date.now(),
-        };
-        diffCache.set(sessionId, entry);
-
-        setTotalAdditions(entry.additions);
-        setTotalDeletions(entry.deletions);
-        setRawDiffContent(entry.rawContent);
-        setDiff(entry.files);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load diff");
-        console.error("Error fetching diff:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDiff();
-  }, [sessionId, baseUrl]);
+  const getLineClass = (type: DiffLine["type"]): string => {
+    if (type === "add") return lineAdd;
+    if (type === "delete") return lineDelete;
+    return lineContext;
+  };
 
   if (loading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.loading}>Loading diff...</div>
+      <div className={container}>
+        <div className={loadingClass}>Loading diff...</div>
       </div>
     );
   }
 
-  if (error) {
+  if (diff.length === 0 && !loading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.error}>{error}</div>
-      </div>
-    );
-  }
-
-  if (diff.length === 0 && !loading && !error) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.empty}>
+      <div className={container}>
+        <div className={emptyClass}>
           <p>No changes to display</p>
-          <p className={styles.emptyHint}>
+          <p className={emptyHint}>
             Diff will show here when there are uncommitted changes in the session.
           </p>
         </div>
@@ -256,29 +189,28 @@ export function DiffViewer({ sessionId, baseUrl }: DiffViewerProps) {
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.toolbar}>
-        <div className={styles.stats}>
-          <span className={styles.filesChanged}>
+    <div className={container}>
+      <div className={toolbar}>
+        <div className={stats}>
+          <span className={filesChanged}>
             {diff.length} {diff.length === 1 ? "file" : "files"} changed
           </span>
-          <span className={styles.additions}>+{totalAdditions}</span>
-          <span className={styles.deletions}>-{totalDeletions}</span>
+          <span className={additions}>+{totalAdditions}</span>
+          <span className={deletions}>-{totalDeletions}</span>
         </div>
-        <div className={styles.viewModeToggle}>
+        <button className={viewModeButton} onClick={refreshDiff} title="Refresh diff">
+          ↺
+        </button>
+        <div className={viewModeToggle}>
           <button
-            className={`${styles.viewModeButton} ${
-              viewMode === "unified" ? styles.active : ""
-            }`}
+            className={`${viewModeButton} ${viewMode === "unified" ? viewModeButtonActive : ""}`}
             onClick={() => setViewMode("unified")}
             aria-label="Unified diff view"
           >
             Unified
           </button>
           <button
-            className={`${styles.viewModeButton} ${
-              viewMode === "split" ? styles.active : ""
-            }`}
+            className={`${viewModeButton} ${viewMode === "split" ? viewModeButtonActive : ""}`}
             onClick={() => setViewMode("split")}
             disabled
             title="Split view coming soon"
@@ -289,40 +221,40 @@ export function DiffViewer({ sessionId, baseUrl }: DiffViewerProps) {
         </div>
       </div>
 
-      <div className={styles.diffContent}>
-        {diff.map((file, fileIndex) => (
-          <div key={fileIndex} className={styles.file}>
-            <div className={styles.fileHeader}>
-              <span className={styles.filename}>{file.filename}</span>
-              <span className={styles.fileStats}>
-                <span className={styles.additions}>+{file.additions}</span>
-                <span className={styles.deletions}>-{file.deletions}</span>
+      <div className={diffContent}>
+        {diff.map((diffFile, fileIndex) => (
+          <div key={fileIndex} className={file}>
+            <div className={fileHeader}>
+              <span className={filename}>{diffFile.filename}</span>
+              <span className={fileStats}>
+                <span className={additions}>+{diffFile.additions}</span>
+                <span className={deletions}>-{diffFile.deletions}</span>
               </span>
             </div>
 
-            {file.changes.map((hunk, hunkIndex) => (
-              <div key={hunkIndex} className={styles.hunk}>
-                <div className={styles.hunkHeader}>
-                  @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},
-                  {hunk.newLines} @@
+            {diffFile.changes.map((diffHunk, hunkIndex) => (
+              <div key={hunkIndex} className={hunk}>
+                <div className={hunkHeader}>
+                  @@ -{diffHunk.oldStart},{diffHunk.oldLines} +{diffHunk.newStart},
+                  {diffHunk.newLines} @@
                 </div>
-                <div className={styles.lines}>
-                  {hunk.lines.map((line, lineIndex) => (
+                <div className={lines}>
+                  {diffHunk.lines.map((diffLine, lineIndex) => (
                     <div
                       key={lineIndex}
-                      className={`${styles.line} ${styles[line.type]}`}
+                      className={`${line} ${getLineClass(diffLine.type)}`}
                     >
                       {viewMode === "unified" && (
                         <>
-                          <span className={styles.lineNumber}>
-                            {line.oldLineNumber !== undefined ? line.oldLineNumber : " "}
+                          <span className={lineNumber}>
+                            {diffLine.oldLineNumber !== undefined ? diffLine.oldLineNumber : " "}
                           </span>
-                          <span className={styles.lineNumber}>
-                            {line.newLineNumber !== undefined ? line.newLineNumber : " "}
+                          <span className={lineNumber}>
+                            {diffLine.newLineNumber !== undefined ? diffLine.newLineNumber : " "}
                           </span>
                         </>
                       )}
-                      <span className={styles.lineContent}>{line.content}</span>
+                      <span className={lineContent}>{diffLine.content}</span>
                     </div>
                   ))}
                 </div>

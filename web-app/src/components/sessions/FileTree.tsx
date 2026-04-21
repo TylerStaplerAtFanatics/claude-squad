@@ -5,7 +5,13 @@ import { Tree } from "react-arborist";
 import type { NodeApi, TreeApi } from "react-arborist";
 import type { FileNode } from "@/gen/session/v1/types_pb";
 import { fetchDirectoryFiles, searchFiles } from "@/lib/hooks/useFileService";
-import styles from "./FileTree.module.css";
+import {
+  container, loading as loadingClass, error as errorClass, retryButton, empty,
+  node as nodeClass, selected, nodeInner, icon as iconClass, name as nameClass, ignored,
+  symlinkBadge, statusBadge, spinner, inlineError,
+  searchContainer, searchInput, toolbar, toolbarButton, toolbarLabel,
+  treeWrapper, mark, searchEmpty, searchTruncated as searchTruncatedClass,
+} from "./FileTree.css";
 
 // ---- Data model ----
 
@@ -201,7 +207,7 @@ function highlightMatch(name: string, term: string): React.ReactNode {
   return (
     <>
       {name.slice(0, idx)}
-      <mark className={styles.mark}>{name.slice(idx, idx + term.length)}</mark>
+      <mark className={mark}>{name.slice(idx, idx + term.length)}</mark>
       {name.slice(idx + term.length)}
     </>
   );
@@ -239,29 +245,29 @@ function NodeRenderer({
   return (
     <div
       style={style}
-      className={`${styles.node} ${isSelected ? styles.selected : ""} ${data.isIgnored ? styles.ignored : ""}`}
+      className={`${nodeClass} ${isSelected ? selected : ""} ${data.isIgnored ? ignored : ""}`}
       onClick={() => node.activate()}
     >
       <div
-        className={styles.nodeInner}
+        className={nodeInner}
         style={{ paddingLeft: `${node.level * 16 + 8}px` }}
       >
-        <span className={styles.icon}>{icon}</span>
-        <span className={styles.name}>{highlightMatch(data.name, searchTerm)}</span>
+        <span className={iconClass}>{icon}</span>
+        <span className={nameClass}>{highlightMatch(data.name, searchTerm)}</span>
         {data.isSymlink && (
-          <span className={styles.symlinkBadge} title={`→ ${data.symlinkTarget}`}>
+          <span className={symlinkBadge} title={`→ ${data.symlinkTarget}`}>
             symlink
           </span>
         )}
-        {isLoading && <span className={styles.spinner} />}
+        {isLoading && <span className={spinner} />}
         {loadError && (
-          <span className={styles.inlineError} title={loadError}>
+          <span className={inlineError} title={loadError}>
             ⚠
           </span>
         )}
         {statusLetter && (
           <span
-            className={styles.statusBadge}
+            className={statusBadge}
             style={{ color: statusColor }}
             title={`Git status: ${statusLetter}`}
           >
@@ -533,9 +539,9 @@ export function FileTree({
 
   if (rootLoading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <span className={styles.spinner} />
+      <div className={container}>
+        <div className={loadingClass}>
+          <span className={spinner} />
           Loading files…
         </div>
       </div>
@@ -544,11 +550,11 @@ export function FileTree({
 
   if (rootError) {
     return (
-      <div className={styles.container}>
-        <div className={styles.error}>
+      <div className={container}>
+        <div className={errorClass}>
           <span>⚠ {rootError}</span>
           <button
-            className={styles.retryButton}
+            className={retryButton}
             onClick={() => {
               setRootLoading(true);
               setRootError(null);
@@ -573,9 +579,9 @@ export function FileTree({
   // Search loading overlay.
   if (searchLoading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <span className={styles.spinner} />
+      <div className={container}>
+        <div className={loadingClass}>
+          <span className={spinner} />
           Searching…
         </div>
       </div>
@@ -585,24 +591,24 @@ export function FileTree({
   // Search empty state.
   if (searchResults !== null && searchResults.length === 0) {
     return (
-      <div className={styles.container}>
-        <div className={styles.searchEmpty}>No files match &ldquo;{searchTerm}&rdquo;</div>
+      <div className={container}>
+        <div className={searchEmpty}>No files match &ldquo;{searchTerm}&rdquo;</div>
       </div>
     );
   }
 
   if (treeData.length === 0 && searchResults === null) {
     return (
-      <div className={styles.container}>
-        <div className={styles.empty}>This directory is empty.</div>
+      <div className={container}>
+        <div className={empty}>This directory is empty.</div>
       </div>
     );
   }
 
   return (
-    <div className={styles.container}>
+    <div className={container}>
       {searchTruncated && (
-        <div className={styles.searchTruncated}>
+        <div className={searchTruncatedClass}>
           Showing first 500 results — refine your search for more specific matches.
         </div>
       )}

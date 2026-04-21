@@ -110,10 +110,6 @@ func (r *EntRepository) Create(ctx context.Context, data InstanceData) error {
 		SetProgram(data.Program).
 		SetIsExpanded(data.IsExpanded)
 
-	if data.UUID != "" {
-		sessionCreate.SetUUID(data.UUID)
-	}
-
 	// Set optional fields
 	if data.WorkingDir != "" {
 		sessionCreate.SetWorkingDir(data.WorkingDir)
@@ -289,10 +285,6 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 		SetAutoYes(data.AutoYes).
 		SetProgram(data.Program).
 		SetIsExpanded(data.IsExpanded)
-
-	if data.UUID != "" {
-		sessionUpdate.SetUUID(data.UUID)
-	}
 
 	// Update optional fields
 	if data.WorkingDir != "" {
@@ -721,7 +713,6 @@ func (r *EntRepository) Close() error {
 func (r *EntRepository) sessionToInstanceData(sess *ent.Session) *InstanceData {
 	data := &InstanceData{
 		Title:               sess.Title,
-		UUID:                sess.UUID,
 		Path:                sess.Path,
 		WorkingDir:          sess.WorkingDir,
 		Branch:              sess.Branch,

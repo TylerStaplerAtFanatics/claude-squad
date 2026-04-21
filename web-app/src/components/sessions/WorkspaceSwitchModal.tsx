@@ -17,7 +17,7 @@ import {
   WorkspaceSwitchType,
   ChangeStrategy,
 } from "@/gen/session/v1/types_pb";
-import styles from "./WorkspaceSwitchModal.module.css";
+import * as styles from "./WorkspaceSwitchModal.css";
 
 interface WorkspaceSwitchModalProps {
   sessionId: string;

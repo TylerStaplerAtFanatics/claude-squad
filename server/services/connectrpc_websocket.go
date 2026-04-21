@@ -549,6 +549,8 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 
 		log.InfoLog.Printf("[streamViaControlMode] Sent initial snapshot (%d bytes) for session '%s'",
 			len(initialContent), sessionID)
+		log.InfoLog.Printf("[streamViaControlMode] scrollback_lines_sent=%d for session '%s'",
+			strings.Count(initialContent, "\n")+1, sessionID)
 
 		instance.UpdateTerminalTimestamps(initialContent, true)
 	}
