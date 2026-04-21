@@ -97,6 +97,12 @@ type InstanceData struct {
 
 	// History file linkage for cold restore
 	HistoryFilePath string `json:"history_file_path,omitempty"`
+
+	// OneShot runs claude in -p mode; session exits after task completes.
+	OneShot bool `json:"one_shot,omitempty"`
+
+	// ProjectID is the optional project this session belongs to.
+	ProjectID string `json:"project_id,omitempty"`
 }
 
 // GitWorktreeData represents the serializable data of a GitWorktree
@@ -368,4 +374,31 @@ func (s *Storage) RecordAnalytics(ctx context.Context, data AnalyticsData) error
 // ListAnalytics retrieves recent classification decisions from the repository.
 func (s *Storage) ListAnalytics(ctx context.Context, limit int) ([]AnalyticsData, error) {
 	return s.repo.ListAnalytics(ctx, limit)
+}
+
+// --- Projects ---
+
+// CreateProject inserts a new project into storage.
+func (s *Storage) CreateProject(ctx context.Context, data ProjectData) (*ProjectData, error) {
+	return s.repo.CreateProject(ctx, data)
+}
+
+// ListProjects returns all projects from storage.
+func (s *Storage) ListProjects(ctx context.Context) ([]ProjectData, error) {
+	return s.repo.ListProjects(ctx)
+}
+
+// UpdateProject modifies an existing project in storage.
+func (s *Storage) UpdateProject(ctx context.Context, data ProjectData) (*ProjectData, error) {
+	return s.repo.UpdateProject(ctx, data)
+}
+
+// DeleteProject removes a project from storage (sessions are unassigned).
+func (s *Storage) DeleteProject(ctx context.Context, name string) error {
+	return s.repo.DeleteProject(ctx, name)
+}
+
+// AssignSessionsToProject links sessions to a project in storage.
+func (s *Storage) AssignSessionsToProject(ctx context.Context, projectName string, sessionTitles []string) error {
+	return s.repo.AssignSessionsToProject(ctx, projectName, sessionTitles)
 }

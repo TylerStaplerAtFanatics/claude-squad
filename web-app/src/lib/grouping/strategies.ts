@@ -12,13 +12,17 @@ export enum GroupingStrategy {
   Program = "program",
   Status = "status",
   SessionType = "session_type",
+  Project = "project",
   None = "none",
 }
 
 /**
- * Display labels for grouping strategies
+ * Display labels for grouping strategies shown in the UI dropdown.
+ * GroupingStrategy.Project is intentionally omitted until ProjectPanel UI
+ * is implemented — without it every session lands in "No Project" which
+ * is identical to the flat list but confusing.
  */
-export const GroupingStrategyLabels: Record<GroupingStrategy, string> = {
+export const GroupingStrategyLabels: Partial<Record<GroupingStrategy, string>> = {
   [GroupingStrategy.Category]: "Category",
   [GroupingStrategy.Tag]: "Tags",
   [GroupingStrategy.Branch]: "Branch",
@@ -124,6 +128,11 @@ export function groupSessions(
         groupKeys = [getSessionTypeDisplayName(session.sessionType)];
         break;
 
+      case GroupingStrategy.Project:
+        // Single-membership: One project per session (empty project_id = No Project)
+        groupKeys = [session.projectId || "No Project"];
+        break;
+
       default:
         // Fallback for unknown strategies
         groupKeys = ["Uncategorized"];
@@ -145,7 +154,7 @@ export function groupSessions(
   // Sort logic ensures consistent ordering with special groups at the end
   const sortedGroups = Array.from(grouped.keys()).sort((a, b) => {
     // Special groups (empty/missing fields) always appear at the end
-    const specialGroups = ["Uncategorized", "Untagged", "No Branch", "No Path", "No Program"];
+    const specialGroups = ["Uncategorized", "Untagged", "No Branch", "No Path", "No Program", "No Project"];
     if (specialGroups.includes(a)) return 1;
     if (specialGroups.includes(b)) return -1;
     // Regular groups sorted alphabetically

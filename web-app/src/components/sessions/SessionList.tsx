@@ -26,6 +26,7 @@ interface SessionListProps {
   onCreateCheckpoint?: (sessionId: string, label: string) => Promise<boolean>;
   onListCheckpoints?: (sessionId: string) => Promise<CheckpointProto[]>;
   onForkFromCheckpoint?: (sessionId: string, checkpointId: string, newTitle: string) => Promise<Session | null>;
+  onRunOneShot?: (sessionId: string) => Promise<void>;
 }
 
 type SortField = 'lastActivity' | 'name' | 'createdAt' | 'updatedAt';
@@ -85,6 +86,7 @@ export function SessionList({
   onCreateCheckpoint,
   onListCheckpoints,
   onForkFromCheckpoint,
+  onRunOneShot,
 }: SessionListProps) {
   // Initialize state from local storage
   const [searchQuery, setSearchQuery] = useState(() => loadFromStorage(STORAGE_KEYS.SEARCH_QUERY, ""));
@@ -544,6 +546,7 @@ export function SessionList({
                       onCreateCheckpoint={onCreateCheckpoint}
                       onListCheckpoints={onListCheckpoints}
                       onForkFromCheckpoint={onForkFromCheckpoint}
+                      onRunOneShot={onRunOneShot}
                       selectMode={selectMode}
                       isSelected={selectedSessions.has(session.id)}
                       onToggleSelect={() => handleToggleSession(session.id)}

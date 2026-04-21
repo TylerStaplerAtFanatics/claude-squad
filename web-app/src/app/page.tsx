@@ -71,6 +71,7 @@ function HomeContent() {
     createCheckpoint,
     listCheckpoints,
     forkSession,
+    runOneShot,
     listSessions,
     updateSession,
     getSession,
@@ -351,6 +352,11 @@ function HomeContent() {
     }
   };
 
+  // Handle one-shot PR creation (S3-3)
+  const handleRunOneShot = useCallback(async (sessionId: string): Promise<void> => {
+    await runOneShot(sessionId, "Create a pull request for the changes in this session.", 0);
+  }, [runOneShot]);
+
   // Handle resume request - show modal for user to edit title/tags before resuming
   const handleResumeRequest = useCallback((session: Session) => {
     setResumeTarget(session);
@@ -439,6 +445,7 @@ function HomeContent() {
             onCreateCheckpoint={createCheckpoint}
             onListCheckpoints={listCheckpoints}
             onForkFromCheckpoint={forkSession}
+            onRunOneShot={handleRunOneShot}
           />
         )}
       </main>

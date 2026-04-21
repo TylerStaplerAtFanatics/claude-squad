@@ -174,6 +174,12 @@ type Instance struct {
 	ActiveCheckpoint string
 	ForkedFromID     string
 
+	// OneShot runs claude in -p mode; the session exits after the task completes.
+	OneShot bool
+
+	// ProjectID is the optional project this session belongs to.
+	ProjectID string
+
 	// HistoryFilePath is the path to the Claude conversation JSONL history file.
 	// Set by HistoryLinker when it correlates this session to an open JSONL file.
 	HistoryFilePath string
@@ -287,6 +293,10 @@ func (i *Instance) ToInstanceData() InstanceData {
 		ForkedFromID:     i.ForkedFromID,
 		// History file linkage
 		HistoryFilePath: i.HistoryFilePath,
+		// One-shot mode
+		OneShot: i.OneShot,
+		// Project association
+		ProjectID: i.ProjectID,
 	}
 
 	// Only include worktree data if gitWorktree is initialized
@@ -417,6 +427,10 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		ForkedFromID:     data.ForkedFromID,
 		// History file linkage
 		HistoryFilePath: data.HistoryFilePath,
+		// One-shot mode
+		OneShot: data.OneShot,
+		// Project association
+		ProjectID: data.ProjectID,
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice
@@ -558,6 +572,12 @@ type InstanceOptions struct {
 	// ResumeId is the Claude conversation ID to resume (from history browser).
 	// When set, the session will start with --resume <id> flag.
 	ResumeId string
+
+	// OneShot runs claude in -p mode; the session exits after the task completes.
+	OneShot bool
+
+	// ProjectID associates the session with a project.
+	ProjectID string
 }
 
 func NewInstance(opts InstanceOptions) (*Instance, error) {
@@ -631,6 +651,9 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 		GitHubRepo:      opts.GitHubRepo,
 		GitHubSourceRef: opts.GitHubSourceRef,
 		ClonedRepoPath:  opts.ClonedRepoPath,
+		// One-shot mode and project
+		OneShot: opts.OneShot,
+		ProjectID:     opts.ProjectID,
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice

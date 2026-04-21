@@ -21,6 +21,7 @@ interface SessionCardProps {
   onCreateCheckpoint?: (sessionId: string, label: string) => Promise<boolean>;
   onListCheckpoints?: (sessionId: string) => Promise<CheckpointProto[]>;
   onForkFromCheckpoint?: (sessionId: string, checkpointId: string, newTitle: string) => Promise<Session | null>;
+  onRunOneShot?: (sessionId: string) => Promise<void>;
   selectMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: () => void;
@@ -41,6 +42,7 @@ export function SessionCard({
   onCreateCheckpoint,
   onListCheckpoints,
   onForkFromCheckpoint,
+  onRunOneShot,
   selectMode = false,
   isSelected = false,
   onToggleSelect,
@@ -59,6 +61,8 @@ export function SessionCard({
   const [forkTitle, setForkTitle] = useState("");
   const [activeForkCheckpointId, setActiveForkCheckpointId] = useState("");
   const [isForking, setIsForking] = useState(false);
+  const [isRunningOneShot, setIsRunningOneShot] = useState(false);
+  const [oneShotResult, setOneShotResult] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -331,6 +335,21 @@ export function SessionCard({
     e.stopPropagation();
     setIsForkOpen(false);
     setForkError("");
+  };
+
+  const handleRunOneShot = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onRunOneShot) return;
+    setIsRunningOneShot(true);
+    setOneShotResult(null);
+    try {
+      await onRunOneShot(session.id);
+      setOneShotResult("done");
+    } catch {
+      setOneShotResult("error");
+    } finally {
+      setIsRunningOneShot(false);
+    }
   };
 
   return (
@@ -788,6 +807,17 @@ export function SessionCard({
               aria-label={`Fork session ${session.title} from checkpoint`}
             >
               🍴 Fork
+            </button>
+          )}
+          {onRunOneShot && (
+            <button
+              className={styles.actionButton}
+              onClick={handleRunOneShot}
+              disabled={isRunningOneShot}
+              title="Run claude one-shot to create a PR for this session"
+              aria-label={`Create PR for session ${session.title}`}
+            >
+              {isRunningOneShot ? "Creating PR…" : oneShotResult === "done" ? "✅ PR Created" : oneShotResult === "error" ? "❌ Failed – Retry?" : "🚀 Create PR"}
             </button>
           )}
           <button

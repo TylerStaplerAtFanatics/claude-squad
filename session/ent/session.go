@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 	"github.com/tstapler/stapler-squad/session/ent/diffstats"
+	"github.com/tstapler/stapler-squad/session/ent/project"
 	"github.com/tstapler/stapler-squad/session/ent/session"
 	"github.com/tstapler/stapler-squad/session/ent/worktree"
 )
@@ -66,10 +67,15 @@ type Session struct {
 	LastViewed *time.Time `json:"last_viewed,omitempty"`
 	// LastAcknowledged holds the value of the "last_acknowledged" field.
 	LastAcknowledged *time.Time `json:"last_acknowledged,omitempty"`
+	// Prompt injected via CLAUDE.md at first-time session creation.
+	InitialPrompt string `json:"initial_prompt,omitempty"`
+	// When true, runs claude in -p mode; session exits after task completes.
+	OneShot bool `json:"one_shot,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SessionQuery when eager-loading is set.
-	Edges        SessionEdges `json:"edges"`
-	selectValues sql.SelectValues
+	Edges            SessionEdges `json:"edges"`
+	project_sessions *int
+	selectValues     sql.SelectValues
 }
 
 // SessionEdges holds the relations/edges for other nodes in the graph.
@@ -82,9 +88,11 @@ type SessionEdges struct {
 	Tags []*Tag `json:"tags,omitempty"`
 	// ClaudeSession holds the value of the claude_session edge.
 	ClaudeSession *ClaudeSession `json:"claude_session,omitempty"`
+	// Project holds the value of the project edge.
+	Project *Project `json:"project,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [5]bool
 }
 
 // WorktreeOrErr returns the Worktree value or an error if the edge
@@ -129,19 +137,32 @@ func (e SessionEdges) ClaudeSessionOrErr() (*ClaudeSession, error) {
 	return nil, &NotLoadedError{edge: "claude_session"}
 }
 
+// ProjectOrErr returns the Project value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e SessionEdges) ProjectOrErr() (*Project, error) {
+	if e.Project != nil {
+		return e.Project, nil
+	} else if e.loadedTypes[4] {
+		return nil, &NotFoundError{label: project.Label}
+	}
+	return nil, &NotLoadedError{edge: "project"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Session) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case session.FieldAutoYes, session.FieldIsExpanded:
+		case session.FieldAutoYes, session.FieldIsExpanded, session.FieldOneShot:
 			values[i] = new(sql.NullBool)
 		case session.FieldID, session.FieldStatus, session.FieldHeight, session.FieldWidth:
 			values[i] = new(sql.NullInt64)
-		case session.FieldTitle, session.FieldPath, session.FieldWorkingDir, session.FieldBranch, session.FieldPrompt, session.FieldProgram, session.FieldExistingWorktree, session.FieldCategory, session.FieldSessionType, session.FieldTmuxPrefix, session.FieldLastOutputSignature:
+		case session.FieldTitle, session.FieldPath, session.FieldWorkingDir, session.FieldBranch, session.FieldPrompt, session.FieldProgram, session.FieldExistingWorktree, session.FieldCategory, session.FieldSessionType, session.FieldTmuxPrefix, session.FieldLastOutputSignature, session.FieldInitialPrompt:
 			values[i] = new(sql.NullString)
 		case session.FieldCreatedAt, session.FieldUpdatedAt, session.FieldLastTerminalUpdate, session.FieldLastMeaningfulOutput, session.FieldLastAddedToQueue, session.FieldLastViewed, session.FieldLastAcknowledged:
 			values[i] = new(sql.NullTime)
+		case session.ForeignKeys[0]: // project_sessions
+			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -306,6 +327,25 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 				_m.LastAcknowledged = new(time.Time)
 				*_m.LastAcknowledged = value.Time
 			}
+		case session.FieldInitialPrompt:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field initial_prompt", values[i])
+			} else if value.Valid {
+				_m.InitialPrompt = value.String
+			}
+		case session.FieldOneShot:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field one_shot", values[i])
+			} else if value.Valid {
+				_m.OneShot = value.Bool
+			}
+		case session.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for edge-field project_sessions", value)
+			} else if value.Valid {
+				_m.project_sessions = new(int)
+				*_m.project_sessions = int(value.Int64)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -337,6 +377,11 @@ func (_m *Session) QueryTags() *TagQuery {
 // QueryClaudeSession queries the "claude_session" edge of the Session entity.
 func (_m *Session) QueryClaudeSession() *ClaudeSessionQuery {
 	return NewSessionClient(_m.config).QueryClaudeSession(_m)
+}
+
+// QueryProject queries the "project" edge of the Session entity.
+func (_m *Session) QueryProject() *ProjectQuery {
+	return NewSessionClient(_m.config).QueryProject(_m)
 }
 
 // Update returns a builder for updating this Session.
@@ -440,6 +485,12 @@ func (_m *Session) String() string {
 		builder.WriteString("last_acknowledged=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("initial_prompt=")
+	builder.WriteString(_m.InitialPrompt)
+	builder.WriteString(", ")
+	builder.WriteString("one_shot=")
+	builder.WriteString(fmt.Sprintf("%v", _m.OneShot))
 	builder.WriteByte(')')
 	return builder.String()
 }

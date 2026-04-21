@@ -14,6 +14,7 @@ import (
 	"github.com/tstapler/stapler-squad/session/ent/claudemetadata"
 	"github.com/tstapler/stapler-squad/session/ent/claudesession"
 	"github.com/tstapler/stapler-squad/session/ent/diffstats"
+	"github.com/tstapler/stapler-squad/session/ent/project"
 	"github.com/tstapler/stapler-squad/session/ent/session"
 	"github.com/tstapler/stapler-squad/session/ent/tag"
 	"github.com/tstapler/stapler-squad/session/ent/worktree"
@@ -155,6 +156,18 @@ func (r *EntRepository) Create(ctx context.Context, data InstanceData) error {
 	}
 	if !data.LastAcknowledged.IsZero() {
 		sessionCreate.SetLastAcknowledged(data.LastAcknowledged)
+	}
+	if data.OneShot {
+		sessionCreate.SetOneShot(data.OneShot)
+	}
+
+	// Link project if specified (look up by name)
+	if data.ProjectID != "" {
+		proj, err := tx.Project.Query().Where(project.Name(data.ProjectID)).Only(ctx)
+		if err == nil {
+			sessionCreate.SetProjectID(proj.ID)
+		}
+		// If project not found, silently continue (session created without project link)
 	}
 
 	sess, err := sessionCreate.Save(ctx)
@@ -331,6 +344,17 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 	}
 	if !data.LastAcknowledged.IsZero() {
 		sessionUpdate.SetLastAcknowledged(data.LastAcknowledged)
+	}
+	sessionUpdate.SetOneShot(data.OneShot)
+
+	// Update project link (look up by name or clear if empty)
+	if data.ProjectID != "" {
+		proj, err := tx.Project.Query().Where(project.Name(data.ProjectID)).Only(ctx)
+		if err == nil {
+			sessionUpdate.SetProjectID(proj.ID)
+		}
+	} else {
+		sessionUpdate.ClearProject()
 	}
 
 	if err := sessionUpdate.Exec(ctx); err != nil {
@@ -583,6 +607,7 @@ func (r *EntRepository) Get(ctx context.Context, title string) (*InstanceData, e
 		WithWorktree().
 		WithDiffStats().
 		WithTags().
+		WithProject().
 		WithClaudeSession(func(q *ent.ClaudeSessionQuery) {
 			q.WithMetadata()
 		}).
@@ -605,6 +630,7 @@ func (r *EntRepository) List(ctx context.Context) ([]InstanceData, error) {
 		WithWorktree().
 		WithDiffStats().
 		WithTags().
+		WithProject().
 		WithClaudeSession(func(q *ent.ClaudeSessionQuery) {
 			q.WithMetadata()
 		}).
@@ -630,6 +656,7 @@ func (r *EntRepository) ListByStatus(ctx context.Context, status Status) ([]Inst
 		WithWorktree().
 		WithDiffStats().
 		WithTags().
+		WithProject().
 		WithClaudeSession(func(q *ent.ClaudeSessionQuery) {
 			q.WithMetadata()
 		}).
@@ -655,6 +682,7 @@ func (r *EntRepository) ListByTag(ctx context.Context, tagName string) ([]Instan
 		WithWorktree().
 		WithDiffStats().
 		WithTags().
+		WithProject().
 		WithClaudeSession(func(q *ent.ClaudeSessionQuery) {
 			q.WithMetadata()
 		}).
@@ -729,6 +757,7 @@ func (r *EntRepository) sessionToInstanceData(sess *ent.Session) *InstanceData {
 		IsExpanded:          sess.IsExpanded,
 		TmuxPrefix:          sess.TmuxPrefix,
 		LastOutputSignature: sess.LastOutputSignature,
+		OneShot:             sess.OneShot,
 	}
 
 	// Set optional time fields
@@ -779,6 +808,11 @@ func (r *EntRepository) sessionToInstanceData(sess *ent.Session) *InstanceData {
 		for i, t := range sess.Edges.Tags {
 			data.Tags[i] = t.Name
 		}
+	}
+
+	// Populate project ID from project edge (stored as name for string compatibility)
+	if sess.Edges.Project != nil {
+		data.ProjectID = sess.Edges.Project.Name
 	}
 
 	// Convert Claude session if present
@@ -987,4 +1021,91 @@ func (r *EntRepository) ListAnalytics(ctx context.Context, limit int) ([]Analyti
 		}
 	}
 	return result, nil
+}
+
+// --- Project CRUD ---
+
+func projectToData(p *ent.Project) ProjectData {
+	return ProjectData{
+		ID:          p.Name, // Name is the string external ID
+		Name:        p.Name,
+		Description: p.Description,
+		CreatedAt:   p.CreatedAt,
+		UpdatedAt:   p.UpdatedAt,
+	}
+}
+
+// CreateProject inserts a new project.
+func (r *EntRepository) CreateProject(ctx context.Context, data ProjectData) (*ProjectData, error) {
+	c := r.client.Project.Create().
+		SetName(data.Name).
+		SetCreatedAt(data.CreatedAt).
+		SetUpdatedAt(data.UpdatedAt)
+	if data.Description != "" {
+		c.SetDescription(data.Description)
+	}
+	p, err := c.Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project: %w", err)
+	}
+	result := projectToData(p)
+	return &result, nil
+}
+
+// ListProjects returns all projects.
+func (r *EntRepository) ListProjects(ctx context.Context) ([]ProjectData, error) {
+	projects, err := r.client.Project.Query().All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list projects: %w", err)
+	}
+	result := make([]ProjectData, len(projects))
+	for i, p := range projects {
+		result[i] = projectToData(p)
+	}
+	return result, nil
+}
+
+// UpdateProject modifies an existing project.
+func (r *EntRepository) UpdateProject(ctx context.Context, data ProjectData) (*ProjectData, error) {
+	p, err := r.client.Project.Query().Where(project.Name(data.Name)).Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find project '%s': %w", data.Name, err)
+	}
+	u := r.client.Project.UpdateOne(p).SetUpdatedAt(data.UpdatedAt)
+	if data.Description != "" {
+		u.SetDescription(data.Description)
+	}
+	updated, err := u.Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update project: %w", err)
+	}
+	result := projectToData(updated)
+	return &result, nil
+}
+
+// DeleteProject removes a project; sessions are unassigned (FK cleared).
+func (r *EntRepository) DeleteProject(ctx context.Context, name string) error {
+	p, err := r.client.Project.Query().Where(project.Name(name)).Only(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to find project '%s': %w", name, err)
+	}
+	return r.client.Project.DeleteOne(p).Exec(ctx)
+}
+
+// AssignSessionsToProject links sessions (by title) to a project (by name).
+func (r *EntRepository) AssignSessionsToProject(ctx context.Context, projectName string, sessionTitles []string) error {
+	proj, err := r.client.Project.Query().Where(project.Name(projectName)).Only(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to find project '%s': %w", projectName, err)
+	}
+	for _, title := range sessionTitles {
+		sess, err := r.client.Session.Query().Where(session.Title(title)).Only(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to find session '%s': %w", title, err)
+		}
+		if err := r.client.Session.UpdateOne(sess).SetProjectID(proj.ID).Exec(ctx); err != nil {
+			return fmt.Errorf("failed to assign session '%s' to project '%s': %w", title, projectName, err)
+		}
+	}
+	return nil
 }

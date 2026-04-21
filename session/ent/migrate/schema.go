@@ -177,6 +177,27 @@ var (
 			},
 		},
 	}
+	// ProjectsColumns holds the columns for the "projects" table.
+	ProjectsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "name", Type: field.TypeString, Unique: true},
+		{Name: "description", Type: field.TypeString, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// ProjectsTable holds the schema information for the "projects" table.
+	ProjectsTable = &schema.Table{
+		Name:       "projects",
+		Columns:    ProjectsColumns,
+		PrimaryKey: []*schema.Column{ProjectsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "project_name",
+				Unique:  false,
+				Columns: []*schema.Column{ProjectsColumns[1]},
+			},
+		},
+	}
 	// SessionsColumns holds the columns for the "sessions" table.
 	SessionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -203,12 +224,23 @@ var (
 		{Name: "last_added_to_queue", Type: field.TypeTime, Nullable: true},
 		{Name: "last_viewed", Type: field.TypeTime, Nullable: true},
 		{Name: "last_acknowledged", Type: field.TypeTime, Nullable: true},
+		{Name: "initial_prompt", Type: field.TypeString, Nullable: true},
+		{Name: "one_shot", Type: field.TypeBool, Default: false},
+		{Name: "project_sessions", Type: field.TypeInt, Nullable: true},
 	}
 	// SessionsTable holds the schema information for the "sessions" table.
 	SessionsTable = &schema.Table{
 		Name:       "sessions",
 		Columns:    SessionsColumns,
 		PrimaryKey: []*schema.Column{SessionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "sessions_projects_sessions",
+				Columns:    []*schema.Column{SessionsColumns[26]},
+				RefColumns: []*schema.Column{ProjectsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "session_title",
@@ -316,6 +348,7 @@ var (
 		ClaudeMetadataTable,
 		ClaudeSessionsTable,
 		DiffStatsTable,
+		ProjectsTable,
 		SessionsTable,
 		TagsTable,
 		WorktreesTable,
@@ -327,6 +360,7 @@ func init() {
 	ClaudeMetadataTable.ForeignKeys[0].RefTable = ClaudeSessionsTable
 	ClaudeSessionsTable.ForeignKeys[0].RefTable = SessionsTable
 	DiffStatsTable.ForeignKeys[0].RefTable = SessionsTable
+	SessionsTable.ForeignKeys[0].RefTable = ProjectsTable
 	WorktreesTable.ForeignKeys[0].RefTable = SessionsTable
 	SessionTagsTable.ForeignKeys[0].RefTable = SessionsTable
 	SessionTagsTable.ForeignKeys[1].RefTable = TagsTable
