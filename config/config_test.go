@@ -544,3 +544,56 @@ func TestTimeoutCommandExecutor_RealBehavior(t *testing.T) {
 		assert.NotContains(t, err.Error(), "timed out")
 	})
 }
+
+// ─── UT-4.x: NotificationPrefs ───────────────────────────────────────────────
+
+// UT-4.1 — NotificationPrefs round-trip in Config [R8]
+func TestNotificationPrefsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	cfg := &Config{
+		ConfigVersion: 2,
+		Notifications: NotificationPrefs{PushEnabled: true},
+	}
+	require.NoError(t, saveConfig(cfg, path))
+
+	loaded, err := LoadConfigFromPath(path)
+	require.NoError(t, err)
+	assert.True(t, loaded.Notifications.PushEnabled)
+}
+
+// UT-4.2 — v1 config loads with NotificationPrefs defaults [R8]
+func TestV1ConfigLoadsWithNotificationDefaults(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	v1JSON := `{"configVersion": 1, "session_defaults": {}}`
+	require.NoError(t, os.WriteFile(path, []byte(v1JSON), 0600))
+
+	cfg, err := LoadConfigFromPath(path)
+	require.NoError(t, err)
+	assert.False(t, cfg.Notifications.PushEnabled, "default must be push disabled")
+}
+
+// UT-4.3 — PushEnabled=false is the zero-value default [R8]
+func TestNotificationPrefsDefault(t *testing.T) {
+	var prefs NotificationPrefs
+	assert.False(t, prefs.PushEnabled, "push must be disabled by default")
+}
+
+// UT-4.4 — saveConfig is atomic: no .tmp file left on disk after success [R9]
+func TestSaveConfigAtomic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+
+	initial := &Config{ConfigVersion: 2}
+	require.NoError(t, saveConfig(initial, path))
+
+	// No .tmp file must remain after a successful write.
+	_, err := os.Stat(path + ".tmp")
+	assert.True(t, os.IsNotExist(err), ".tmp file must be cleaned up after successful save")
+
+	// The config file must be valid JSON.
+	loaded, err := LoadConfigFromPath(path)
+	require.NoError(t, err)
+	assert.Equal(t, 2, loaded.ConfigVersion)
+}
