@@ -125,25 +125,25 @@ jobs:
             const videoCount = '${{ steps.validate-videos.outputs.video_count }}';
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
-            let content;
-            if (videoCount === '0') {
-              content = `## ⚠️ E2E Video Recording
-
-Video recording was triggered but no .webm files were produced.
-This may indicate a VP8/VP9 codec issue on the runner.
-
-[View workflow run](${runUrl})`;
-            } else {
-              content = `## 🎬 E2E Feature Videos Recorded
-
-**${videoCount} video(s)** captured for feature-marked changes in this PR.
-
-[Download artifacts](${runUrl}) (30-day retention)
-
-> Videos capture test execution for UI paths touched by feature markers (\`// +feature:\`, \`// +api:\`).`;
-            }
-
-            const body = `${marker}\n${content}`;
+            const lines = videoCount === '0'
+              ? [
+                  '## ⚠️ E2E Video Recording',
+                  '',
+                  'Video recording was triggered but no .webm files were produced.',
+                  'This may indicate a VP8/VP9 codec issue on the runner.',
+                  '',
+                  `[View workflow run](${runUrl})`,
+                ]
+              : [
+                  '## 🎬 E2E Feature Videos Recorded',
+                  '',
+                  `**${videoCount} video(s)** captured for feature-marked changes in this PR.`,
+                  '',
+                  `[Download artifacts](${runUrl}) (30-day retention)`,
+                  '',
+                  '> Videos capture test execution for UI paths touched by feature markers (`// +feature:`, `// +api:`).',
+                ];
+            const body = [marker, ...lines].join('\n');
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
