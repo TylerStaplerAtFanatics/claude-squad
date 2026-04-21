@@ -120,9 +120,15 @@ jobs:
             dir=$(basename "$(dirname "$webm")")
             name=$(echo "$dir" | sed 's/-chromium$//;s/-firefox$//;s/-webkit$//')
             gif="docs/demos/${name}.gif"
+            # Skip near-empty recordings (< 1s) - palette generation fails on single-frame clips
+            duration=$(ffprobe -v quiet -show_entries format=duration \
+              -of default=noprint_wrappers=1:nokey=1 "$webm" 2>/dev/null)
+            if [ -z "$duration" ] || awk "BEGIN{exit !(${duration:-0} < 1.0)}"; then
+              echo "Skipping $webm (too short: ${duration:-unknown}s)"
+              continue
+            fi
             palette=$(mktemp --suffix=.png)
             echo "Converting $webm -> $gif"
-            # Two-pass palette GIF: better quality, more reliable than single-pass complex filter
             if ffmpeg -y -i "$webm" -vf "fps=8,scale=960:-2,palettegen=max_colors=128" -t 30 "$palette" 2>&1 \
                && ffmpeg -y -i "$webm" -i "$palette" \
                  -lavfi "fps=8,scale=960:-2[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3" \
@@ -135,16 +141,21 @@ jobs:
             rm -f "$palette"
           done
           echo "names=${NAMES%,}" >> $GITHUB_OUTPUT
+          if [ -z "$NAMES" ]; then
+            echo "::error::No GIFs were produced — all video conversions failed or were skipped"
+            exit 1
+          fi
 
       - name: Commit GIFs to docs/demos on PR branch
         if: steps.convert-gifs.outputs.names != ''
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
+          git pull --rebase origin ${{ github.head_ref }}
           git add docs/demos/*.gif
           git diff --cached --quiet && echo "No GIF changes to commit" && exit 0
           git commit -m "chore(demos): update E2E feature GIFs [skip ci]"
-          git push origin HEAD:${{ github.head_ref }} || echo "Warning: push failed (GIFs still available as artifacts)"
+          git push origin HEAD:${{ github.head_ref }}
 
       - name: Upload E2E videos as artifacts
         id: upload-videos
