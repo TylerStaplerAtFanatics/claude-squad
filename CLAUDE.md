@@ -849,6 +849,25 @@ Add via: `gh pr edit <number> --add-label "patch"` (create label first if it doe
 4. Generate client code with `make generate-proto`
 5. Call from web UI
 
+### Modifying the ent ORM Schema
+
+**CRITICAL**: Always use the command from `session/ent/generate.go`, not the bare `ent generate` command.
+The `--feature sql/upsert` flag is required or `OnConflictColumns` will be missing and builds will fail.
+
+```bash
+# CORRECT - includes required sql/upsert feature flag
+go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/upsert ./session/ent/schema
+
+# WRONG - generates code without OnConflictColumns, breaks UpsertRule and similar methods
+go run entgo.io/ent/cmd/ent generate ./session/ent/schema
+```
+
+Workflow for schema changes:
+1. Edit `session/ent/schema/<entity>.go`
+2. Run the correct generate command above from the repo root
+3. Verify with `go build ./...`
+4. Commit all changed files under `session/ent/` together
+
 ## Performance Optimization
 
 ### Web UI Performance
