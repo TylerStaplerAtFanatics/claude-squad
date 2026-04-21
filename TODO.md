@@ -2,17 +2,19 @@
 
 ## Priority Summary
 
-**P1** - BUG-013: xterm.js viewport jump on Claude repaints (High, 2-3h fix, confirmed root cause)
-**P2** - Backend Architecture Improvements (Story 1: InstanceStore abstraction leak) — P1 structural risk
-**P3** - BUG-010: tmux prompt detection (High, needs investigation) / BUG-012: testutil failures (Medium)
+**P1** - Backend Architecture Improvements (Story 1: InstanceStore abstraction leak) — P1 structural risk
+**P2** - BUG-010: tmux prompt detection (High, needs investigation) / BUG-012: testutil failures (Medium)
+**P3** - Terminal Jank Story 3: Terminal Instance Pool (depends on Stories 1 & 2, which are complete)
 
 **Recent Completions (2026-04-20)**:
 - Tmux Session Registry (T1-T6 all merged) — fork throttling eliminated
 - System Service Autostart (Stories 1-4 complete) — systemd + LaunchAgent + ssq-hooks
 - Session zombie/race-condition hardening (fix(session): 8fdb63d, a4fc2e6)
 - Full launch command tracking per session (feat: 3f20d89)
+- Terminal Jank Stories 1 & 2 — ED3 filter, clear-prefix removal, xterm 6.0, quiescence detector, snapshot cache
+- BUG-013 FIXED — xterm.js viewport jump on Claude repaints (EscapeSequenceParser.ts)
 
-**Bug Status**: Fixed: BUG-001..003, BUG-009 | Open-High: BUG-010, BUG-013 | Open-Medium: BUG-012 | Open-Low (review-queue gaps): GAP-001..004
+**Bug Status**: Fixed: BUG-001..003, BUG-009, BUG-013 | Open-High: BUG-010 | Open-Medium: BUG-012 | Open-Low (review-queue gaps): GAP-001..004
 
 ---
 
@@ -126,17 +128,12 @@
 **BUG-002** [MEDIUM]: LastMeaningfulOutput Timestamp Reset — FIXED
 **BUG-003** [LOW]: Large State File Size (34MB JSON) — FIXED (42x reduction)
 **BUG-009** [HIGH]: Session Package Test Failures — FIXED
+**BUG-013** [HIGH]: xterm.js Viewport Jump on Claude Repaints — FIXED (2026-04-20)
+- ED3 filter in `EscapeSequenceParser.ts`; clear-prefix removed from cold-start snapshot; xterm.js upgraded to 6.0
+- See: [docs/bugs/fixed/BUG-013-xterm-viewport-corruption-from-ed3-sequence.md](docs/bugs/fixed/BUG-013-xterm-viewport-corruption-from-ed3-sequence.md)
 **Review Queue BUG-001/002/003** [HIGH/MEDIUM/MEDIUM]: Duplicate notifications, session ID inconsistency, dedup — FIXED (2026-03-30)
 
 ### Open Bugs — High Severity
-
-**BUG-013** [HIGH]: xterm.js Viewport Jumps to Top During Claude Rendering — Open
-- **Discovered**: 2026-04-09
-- **Impact**: Terminal in web UI jumps to top on every Claude repaint (ED3 sequence resets viewportY)
-- **Root Cause**: Confirmed — Claude emits `\x1b[2J\x1b[3J`; xterm.js ED3 resets viewportY=0
-- **Fix**: Strip ED3 when paired with ED2 in `DeltaApplicator.ts` and `XtermTerminal.tsx` write paths
-- **Effort**: 2h | **Files**: 2 (`DeltaApplicator.ts`, `XtermTerminal.tsx`)
-- **See**: [docs/bugs/open/BUG-013-xterm-viewport-corruption-from-ed3-sequence.md](docs/bugs/open/BUG-013-xterm-viewport-corruption-from-ed3-sequence.md)
 
 **BUG-010** [HIGH]: tmux Banner and Prompt Detection Failures — Investigating
 - **Impact**: Session startup detection unreliable; tests timeout waiting for prompt
@@ -146,10 +143,10 @@
 
 ### Open Bugs — Medium Severity
 
-**BUG-012** [MEDIUM]: Testutil Package Failures — Investigating
-- **Impact**: Test infrastructure broken, blocks new test development
-- **Root Cause**: Outdated mocks or stale fixtures (TBD — requires go test ./testutil -v)
-- **Effort**: 4-6h investigation + fix
+**BUG-012** [MEDIUM]: Testutil Package Failures — Root Cause Identified
+- **Impact**: 29 tmux integration tests fail; blocks reliable test development
+- **Root Cause**: Stale tmux socket accumulation in `/run/user/<uid>/` — 200+ dead sockets from prior crashed test runs exhaust socket limits; individual tests pass, suite fails
+- **Immediate Fix**: `rm /run/user/$(id -u)/test_*` to unblock; permanent fix adds `os.Remove(socketPath)` to `TmuxTestServer.Cleanup()` (2h, 1-2 files)
 - **See**: [docs/bugs/open/BUG-012-testutil-package-failures.md](docs/bugs/open/BUG-012-testutil-package-failures.md)
 
 ### Open Gaps — Low Severity (Review Queue)
@@ -163,16 +160,16 @@
 ### Bug Summary Statistics
 
 **Total Tracked**: 13 (including review-queue gaps)
-**Fixed**: 6 (BUG-001, BUG-002, BUG-003, BUG-009, RQ-BUG-001, RQ-BUG-002, RQ-BUG-003)
-**Open - High**: 2 (BUG-010, BUG-013)
+**Fixed**: 7 (BUG-001, BUG-002, BUG-003, BUG-009, BUG-013, RQ-BUG-001, RQ-BUG-002, RQ-BUG-003)
+**Open - High**: 1 (BUG-010)
 **Open - Medium**: 1 (BUG-012)
 **Open - Low**: 4 (GAP-001..004)
 
 
 ### Bug Documentation Structure
 
-All bugs documented following standardized format in `/Users/tylerstapler/IdeaProjects/stapler-squad/docs/bugs/`:
-- **open/** - Active bugs requiring investigation or fix (BUG-008 through BUG-012)
+All bugs documented following standardized format in `docs/bugs/`:
+- **open/** - Active bugs requiring investigation or fix (BUG-010, BUG-012, review-queue-gaps)
 - **fixed/** - Resolved bugs with fix details (BUG-001 through BUG-007)
 - **in-progress/** - Bugs currently being worked on (empty)
 - **obsolete/** - Historical bugs no longer relevant (empty)

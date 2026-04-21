@@ -1,203 +1,129 @@
 # BUG-012: Testutil Package Failures [SEVERITY: Medium]
 
-**Status**: 🔍 Investigating
+**Status**: 🔍 Investigating (root cause identified 2026-04-20)
 **Discovered**: 2025-12-05 during test stabilization work
 **Impact**: Test infrastructure broken, blocks test development
 
 ## Problem Description
 
-The `testutil` package, which provides test utilities and helpers, has failing tests. This is **infrastructure failure** - the tools used to test other code are themselves broken.
+The `testutil` package has 29 failing tests across `tmux_integration_test.go`, `tmux_polling_test.go`, and `tmux_test.go`. All failures share the same error: `failed to start tmux session: error starting tmux session: exit status 1`.
+
+**Root cause identified (2026-04-20)**: Stale tmux socket accumulation. Previous test runs leave hundreds of dead socket files in `/run/user/<uid>/` (or `/tmp/tmux-*/`). When the OS socket/file descriptor limit is reached, new tmux servers fail to start immediately with `server exited unexpectedly`. The isolation mechanism (`tmux -L <socket-name>`) is correct; the socket files simply never get cleaned up after test failures or crashes.
+
+**Evidence**: `ls /run/user/$(id -u)/` shows 200+ stale test sockets: `test_TestRealTmuxSessionCreation_1`, `test_ensure_noop_*`, `test_keepalive_*`, `test_recovery_*`, etc.
 
 **Implications**:
-- Test helpers may not work correctly
-- New tests may use broken utilities
-- Test isolation may be compromised
-- Mock/stub behavior may be incorrect
-
-**Unknown details**:
-- Specific failing tests not captured
-- Root cause not investigated
-- Impact on other test packages unknown
+- Tests fail non-deterministically based on accumulated socket count
+- Each failed cleanup (t.Cleanup or server.Cleanup) leaves a socket behind
+- Tests pass individually (`-run TestTmuxTestServer_SessionExists` passes), fail in suite runs
+- Stale sockets also consume file descriptors, eventually exhausting system limits
 
 ## Reproduction
 
 ```bash
 # Run testutil package tests
-go test ./testutil -v
+go test ./testutil/... -v --timeout=60s
 
-# Expected: Infrastructure tests pass
-# Actual: Multiple failures (exact errors TBD)
+# Actual failures (29 failed):
+# failed to start tmux session: error starting tmux session: exit status 1
+# (across TestRealTmuxSessionCreation, TestRealTmuxSessionLifecycle,
+#  TestRealTmuxMultipleServers, TestTmuxPollingDoesNotHang, etc.)
+
+# Individual tests pass in isolation:
+go test ./testutil/... -run TestTmuxTestServer_SessionExists -v  # PASSES
+
+# Root cause: stale socket accumulation
+ls /run/user/$(id -u)/  # Shows 200+ stale test_* sockets
 ```
 
-**Expected**: All testutil tests pass (meta-test stability)
-**Actual**: Failures in test infrastructure
+**Expected**: All testutil tests pass
+**Actual**: 29 tests fail with `exit status 1` from tmux server startup
 
 ## Root Cause Analysis
 
-**Investigation required** - Potential causes:
+**Identified (2026-04-20)**: Stale tmux socket file accumulation.
 
-### 1. Outdated Test Mocks
+### Mechanism
 
-```go
-// Mocks may not match current interfaces
-// Interface changes broke mock implementations
-// Mock methods missing or have wrong signatures
+`CreateIsolatedTmuxServer` in `testutil/tmux.go` generates per-test socket names like `test_TestRealTmuxSessionCreation_1`. These socket files live in `/run/user/<uid>/` (or `/tmp/tmux-<uid>/` on some systems). When a test crashes or `t.Cleanup` fails before `Cleanup()` runs, the socket file persists.
+
+After enough accumulated runs, the socket directory fills up with 200+ stale entries:
+- `test_ensure_noop_*` (30+ entries)
+- `test_ensure_start_*` (25+ entries)
+- `test_exit_empty_*` (20+ entries)
+- `test_keepalive_*` (30+ entries)
+- `test_recovery_*` (30+ entries)
+- ... and more
+
+When a new test tries `tmux -L <socket-name> new-session`, tmux tries to create a new server. If the system's open file limit is approaching, the tmux daemon starts and immediately exits, returning `exit status 1` with the message `server exited unexpectedly`.
+
+### Why Individual Tests Pass
+
+Individual tests succeed because they acquire a socket before the limit is hit or use a lower counter that doesn't collide. The full suite runs all tests in parallel, simultaneously trying to create many tmux servers, guaranteeing failures.
+
+### Files Affected
+
+- `testutil/tmux.go` - `TmuxTestServer.Cleanup()` and `CreateIsolatedTmuxServer` (lines ~155-195)
+- `testutil/tmux.go` - `KillServer()` method (line ~285): server kill may leave socket file even after killing tmux process
+
+## Files Affected (3 files)
+
+- `testutil/tmux.go` - `TmuxTestServer.Cleanup()` and `KillServer()` must remove socket files
+- `testutil/tmux.go` - `sanitizeTestName()` — long socket names may exceed OS limits on some distros
+- `testutil/tmux_integration_test.go`, `testutil/tmux_polling_test.go`, `testutil/tmux_test.go` — 29 failing tests (consumers, not root cause)
+
+**Context boundary**: 1-2 files, well within scope.
+
+## Fix Approach
+
+### Immediate: Clean stale sockets (1 minute, manual)
+
+```bash
+# Clean all stale test sockets to unblock test runs immediately
+ls /run/user/$(id -u)/test_* | wc -l   # Count stale sockets
+rm /run/user/$(id -u)/test_*           # Remove all test sockets
+go test ./testutil/... --timeout=60s   # Should now pass
 ```
 
-**Example**:
-```go
-// Interface changed
-type SessionManager interface {
-    Create(opts CreateOptions) error  // Added opts parameter
-}
+### Permanent fix: Socket file cleanup in `TmuxTestServer.Cleanup()` (2h, Small task)
 
-// Mock not updated
-type MockSessionManager struct{}
-func (m *MockSessionManager) Create() error { // ❌ Wrong signature
+In `testutil/tmux.go`, `KillServer()` method currently runs `tmux -L <socket> kill-server` but does not remove the socket file afterwards. Add OS-level socket removal:
+
+```go
+func (s *TmuxTestServer) KillServer() error {
+    // ... existing kill-server command ...
+
+    // Remove the socket file to prevent stale accumulation
+    socketPath := tmuxSocketPath(s.socketName)
+    if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
+        s.t.Logf("Warning: could not remove socket file %s: %v", socketPath, err)
+    }
     return nil
 }
-```
 
-### 2. Fixture Data Staleness
-
-```go
-// Test fixtures (JSON, config files) outdated
-// Schema changes not reflected in fixtures
-// Expected field values no longer valid
-```
-
-**Example**:
-```json
-// Fixture: test_session.json
-{
-    "title": "Test",
-    "category": "All"  // ❌ Missing new required fields
+// tmuxSocketPath returns the filesystem path for a named tmux socket.
+// Tmux uses /run/user/<uid>/<name> on systemd systems, /tmp/tmux-<uid>/<name> on others.
+func tmuxSocketPath(socketName string) string {
+    if dir := os.Getenv("XDG_RUNTIME_DIR"); dir != "" {
+        return filepath.Join(dir, socketName)
+    }
+    return filepath.Join(fmt.Sprintf("/tmp/tmux-%d", os.Getuid()), socketName)
 }
 ```
 
-### 3. Helper Function Changes
+Additionally truncate socket names longer than 60 chars in `sanitizeTestName()` to stay well under OS path limits.
 
-```go
-// Helper functions modified without updating tests
-// Return types changed
-// Error handling changed
-// Side effects added
-```
-
-### 4. Dependency Injection Issues
-
-```go
-// Test utilities may use global state
-// Singleton patterns broken
-// Initialization order issues
-```
-
-### 5. Resource Cleanup Issues
-
-```go
-// Test utilities not cleaning up properly
-// Temp files/directories left behind
-// tmux sessions not killed
-// State leaking between tests
-```
-
-## Files Affected (Unknown)
-
-Investigation needed to determine affected files:
-- `testutil/*.go` - Test utility implementations
-- `testutil/*_test.go` - Failing tests
-- Possibly affects all packages using testutil
-
-**Context boundary**: ⚠️ Unknown (requires investigation)
-
-## Investigation Steps
-
-### Phase 1: Capture Test Output (15 minutes)
+## Verification
 
 ```bash
-# Run testutil tests verbosely
-go test ./testutil -v > testutil_output.txt 2>&1
+# Before fix: count stale sockets
+ls /run/user/$(id -u)/test_* 2>/dev/null | wc -l
 
-# Identify failures
-grep "FAIL:" testutil_output.txt
+# Apply fix and run tests
+go test ./testutil/... --timeout=60s
 
-# Capture full error context
-grep -B 10 -A 10 "FAIL:" testutil_output.txt > testutil_failures.txt
-```
-
-### Phase 2: Identify Broken Utilities (30 minutes)
-
-```bash
-# Find which utilities are tested
-ls testutil/*_test.go
-
-# Check which utilities are broken
-for test in testutil/*_test.go; do
-    echo "Testing $test"
-    go test "$test" -v
-done
-```
-
-### Phase 3: Check Usage Impact (30 minutes)
-
-```bash
-# Find which packages import testutil
-grep -r "testutil" . --include="*_test.go"
-
-# Check if other test failures are due to broken testutil
-# Compare test failure patterns with testutil issues
-```
-
-### Phase 4: Fix Broken Utilities (2-4 hours)
-
-Based on findings:
-
-**Update mocks**:
-```go
-// Regenerate mocks if using mockgen
-go generate ./testutil
-
-// Or manually update mock implementations
-```
-
-**Update fixtures**:
-```bash
-# Regenerate fixture data with current schema
-go run ./scripts/generate_fixtures.go
-
-# Or manually update JSON/config files
-```
-
-**Fix helper functions**:
-```go
-// Update helper signatures
-// Fix return types
-// Update error handling
-```
-
-**Add cleanup logic**:
-```go
-// Add proper teardown
-func (h *TestHelper) Cleanup() {
-    os.RemoveAll(h.tempDir)
-    h.killTmuxSessions()
-    h.resetState()
-}
-
-// Use in tests
-defer helper.Cleanup()
-```
-
-### Phase 5: Verify No Regressions (1 hour)
-
-```bash
-# Run all tests that use testutil
-go test ./ui -v
-go test ./session -v
-go test ./app -v
-
-# Verify no new failures introduced
-# Check that fixes don't break other tests
+# After multiple runs: verify sockets are cleaned up
+ls /run/user/$(id -u)/test_* 2>/dev/null | wc -l  # Should stay near 0
 ```
 
 ## Expected Fix Outcomes
