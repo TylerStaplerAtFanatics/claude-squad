@@ -20,10 +20,12 @@ import {
   removeSession,
   setLoading,
   setError,
+  setConnectionState,
   updateSessionStatus,
   selectAllSessions,
   selectSessionsLoading,
   selectSessionsError,
+  selectConnectionState,
 } from "@/lib/store/sessionsSlice";
 
 interface UseSessionServiceOptions {
@@ -39,6 +41,7 @@ interface UseSessionServiceReturn {
   sessions: Session[];
   loading: boolean;
   error: Error | null;
+  connectionState: import("@/lib/store/sessionsSlice").ConnectionState;
 
   // Methods
   listSessions: (options?: { category?: string; status?: SessionStatus }) => Promise<void>;
@@ -80,6 +83,13 @@ export function useSessionService(
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const clientRef = useRef<ReturnType<typeof createClient<typeof SessionService>> | null>(null);
+
+  // Reconnect control: true while watchSessions is active (user did not explicitly stop)
+  const shouldReconnectRef = useRef(false);
+  // Backoff delay in ms, doubles on each failure up to 30s
+  const reconnectDelayRef = useRef(1000);
+  // Timestamp of last received stream event, used to detect staleness
+  const lastEventTimeRef = useRef<number | null>(null);
 
   // Initialize ConnectRPC client
   useEffect(() => {
@@ -429,11 +439,16 @@ export function useSessionService(
         break;
       }
       case "statusChanged": {
-        const { sessionId, newStatus } = event.event.value;
+        const { sessionId, newStatus, detectedStatus, detectedContext } = event.event.value;
         // Dispatch into the reducer where state is always current.
         // This avoids capturing `sessions` in the closure, which would force
         // handleSessionEvent (and watchSessions) to reconnect on every change.
-        dispatch(updateSessionStatus({ sessionId, newStatus }));
+        dispatch(updateSessionStatus({
+          sessionId,
+          newStatus,
+          detectedStatus: detectedStatus ?? undefined,
+          detectedContext: detectedContext ?? undefined,
+        }));
         break;
       }
       case "notification": {
@@ -446,7 +461,8 @@ export function useSessionService(
     }
   }, [dispatch]);
 
-  // Watch sessions for real-time updates
+  // Watch sessions for real-time updates with automatic reconnect on failure.
+  // On reconnect, ListSessions is called first to flush any state missed while disconnected.
   const watchSessions = useCallback(
     (watchOptions?: { categoryFilter?: string; statusFilter?: SessionStatus }) => {
       if (!clientRef.current) return;
@@ -456,39 +472,94 @@ export function useSessionService(
         abortControllerRef.current.abort();
       }
 
-      abortControllerRef.current = new AbortController();
+      shouldReconnectRef.current = true;
+      reconnectDelayRef.current = 1000; // Reset backoff when explicitly (re)started
 
-      (async () => {
+      const startStream = async () => {
+        if (!shouldReconnectRef.current || !clientRef.current) return;
+
+        abortControllerRef.current = new AbortController();
+        lastEventTimeRef.current = Date.now(); // Treat stream start as an activity timestamp
+        dispatch(setConnectionState("connected"));
+
         try {
-          const stream = clientRef.current!.watchSessions(
+          const stream = clientRef.current.watchSessions(
             {
               categoryFilter: watchOptions?.categoryFilter,
               statusFilter: watchOptions?.statusFilter,
             },
-            { signal: abortControllerRef.current!.signal }
+            { signal: abortControllerRef.current.signal }
           );
 
           for await (const event of stream) {
+            lastEventTimeRef.current = Date.now();
             handleSessionEvent(event);
           }
+
+          // Stream ended normally (server-side close). Reconnect if still desired.
+          if (shouldReconnectRef.current) {
+            dispatch(setConnectionState("disconnected"));
+            // Refresh state before reconnecting — flushes changes missed while disconnected
+            if (clientRef.current) {
+              try {
+                const response = await clientRef.current.listSessions({});
+                dispatch(setSessions(response.sessions));
+              } catch { /* best-effort */ }
+            }
+            await new Promise(r => setTimeout(r, reconnectDelayRef.current));
+            reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30_000);
+            startStream();
+          }
         } catch (err) {
-          // Ignore abort errors
-          if (err instanceof Error && err.name !== "AbortError") {
-            dispatch(setError(err instanceof Error ? err.message : "Watch stream error"));
+          if (err instanceof Error && err.name === "AbortError") {
+            return; // Intentional stop via stopWatching()
+          }
+          // Unexpected network error — log, refresh state, then reconnect
+          dispatch(setError(err instanceof Error ? err.message : "Watch stream error"));
+          if (shouldReconnectRef.current) {
+            dispatch(setConnectionState("disconnected"));
+            if (clientRef.current) {
+              try {
+                const response = await clientRef.current.listSessions({});
+                dispatch(setSessions(response.sessions));
+              } catch { /* best-effort */ }
+            }
+            await new Promise(r => setTimeout(r, reconnectDelayRef.current));
+            reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30_000);
+            startStream();
           }
         }
-      })();
+      };
+
+      startStream();
     },
     [handleSessionEvent, dispatch]
   );
 
   // Stop watching sessions
   const stopWatching = useCallback(() => {
+    shouldReconnectRef.current = false;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-  }, []);
+    dispatch(setConnectionState("disconnected"));
+  }, [dispatch]);
+
+  // Staleness detector: if no events for >15s, mark state as stale
+  useEffect(() => {
+    if (!enabled) return;
+    const interval = setInterval(() => {
+      if (
+        lastEventTimeRef.current !== null &&
+        shouldReconnectRef.current &&
+        Date.now() - lastEventTimeRef.current > 15_000
+      ) {
+        dispatch(setConnectionState("stale"));
+      }
+    }, 5_000);
+    return () => clearInterval(interval);
+  }, [enabled, dispatch]);
 
   // Auto-watch on mount if enabled and authenticated
   useEffect(() => {
@@ -511,10 +582,13 @@ export function useSessionService(
   // Convert error string back to Error object for backward compatibility
   const error = useMemo(() => (errorStr ? new Error(errorStr) : null), [errorStr]);
 
+  const connectionState = useAppSelector(selectConnectionState);
+
   return {
     sessions,
     loading,
     error,
+    connectionState,
     listSessions,
     getSession,
     createSession,

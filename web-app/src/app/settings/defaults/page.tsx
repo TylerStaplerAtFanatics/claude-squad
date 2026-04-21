@@ -3,6 +3,7 @@
 import { GlobalDefaultsForm } from "@/components/settings/GlobalDefaultsForm";
 import { ProfilesManager } from "@/components/settings/ProfilesManager";
 import { DirectoryRulesManager } from "@/components/settings/DirectoryRulesManager";
+import { PushNotificationSettings } from "@/components/settings/PushNotificationSettings";
 import styles from "./defaults.module.css";
 
 export default function DefaultsPage() {
@@ -18,6 +19,9 @@ export default function DefaultsPage() {
         </section>
         <section className={styles.section}>
           <DirectoryRulesManager />
+        </section>
+        <section className={styles.section}>
+          <PushNotificationSettings />
         </section>
       </div>
     </main>

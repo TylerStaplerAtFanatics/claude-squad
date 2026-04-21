@@ -10,12 +10,15 @@ import { useNotifications } from "@/lib/contexts/NotificationContext";
 import { useOmnibar } from "@/lib/contexts/OmnibarContext";
 import { routes } from "@/lib/routes";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
+import { ConnectionIndicator } from "@/components/layout/ConnectionIndicator";
+import { ApprovalDrawer } from "@/components/sessions/ApprovalDrawer";
 import styles from "./Header.module.css";
 
 export function Header() {
   const pathname = usePathname();
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isApprovalDrawerOpen, setIsApprovalDrawerOpen] = useState(false);
   const { togglePanel, getUnreadCount } = useNotifications();
   const { open: openOmnibar } = useOmnibar();
   const unreadCount = getUnreadCount();
@@ -124,6 +127,7 @@ export function Header() {
         </nav>
 
         <div className={styles.actions}>
+          <ConnectionIndicator />
           <WorkspaceSwitcher />
           <button
             className={styles.newSessionButton}
@@ -134,7 +138,7 @@ export function Header() {
             <span className={styles.newSessionIcon} aria-hidden="true">+</span>
             <span className={styles.newSessionLabel}>New Session</span>
           </button>
-          <ApprovalNavBadge />
+          <ApprovalNavBadge onClick={() => setIsApprovalDrawerOpen(true)} />
           <button
             className={styles.notificationButton}
             onClick={togglePanel}
@@ -176,6 +180,10 @@ export function Header() {
       <DebugMenu
         isOpen={isDebugOpen}
         onClose={() => setIsDebugOpen(false)}
+      />
+      <ApprovalDrawer
+        isOpen={isApprovalDrawerOpen}
+        onClose={() => setIsApprovalDrawerOpen(false)}
       />
     </>
   );

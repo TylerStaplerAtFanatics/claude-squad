@@ -41,3 +41,4 @@ benchmark_results.txt
 
 # Build artifacts
 build/
+coverage.html

@@ -5619,6 +5619,7 @@ type SessionMutation struct {
 	typ                    string
 	id                     *int
 	title                  *string
+	uuid                   *string
 	_path                  *string
 	working_dir            *string
 	branch                 *string
@@ -5795,6 +5796,55 @@ func (m *SessionMutation) OldTitle(ctx context.Context) (v string, err error) {
 // ResetTitle resets all changes to the "title" field.
 func (m *SessionMutation) ResetTitle() {
 	m.title = nil
+}
+
+// SetUUID sets the "uuid" field.
+func (m *SessionMutation) SetUUID(s string) {
+	m.uuid = &s
+}
+
+// UUID returns the value of the "uuid" field in the mutation.
+func (m *SessionMutation) UUID() (r string, exists bool) {
+	v := m.uuid
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUUID returns the old "uuid" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldUUID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUUID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUUID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUUID: %w", err)
+	}
+	return oldValue.UUID, nil
+}
+
+// ClearUUID clears the value of the "uuid" field.
+func (m *SessionMutation) ClearUUID() {
+	m.uuid = nil
+	m.clearedFields[session.FieldUUID] = struct{}{}
+}
+
+// UUIDCleared returns if the "uuid" field was cleared in this mutation.
+func (m *SessionMutation) UUIDCleared() bool {
+	_, ok := m.clearedFields[session.FieldUUID]
+	return ok
+}
+
+// ResetUUID resets all changes to the "uuid" field.
+func (m *SessionMutation) ResetUUID() {
+	m.uuid = nil
+	delete(m.clearedFields, session.FieldUUID)
 }
 
 // SetPath sets the "path" field.
@@ -7179,6 +7229,9 @@ func (m *SessionMutation) Fields() []string {
 	if m.title != nil {
 		fields = append(fields, session.FieldTitle)
 	}
+	if m.uuid != nil {
+		fields = append(fields, session.FieldUUID)
+	}
 	if m._path != nil {
 		fields = append(fields, session.FieldPath)
 	}
@@ -7261,6 +7314,8 @@ func (m *SessionMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case session.FieldTitle:
 		return m.Title()
+	case session.FieldUUID:
+		return m.UUID()
 	case session.FieldPath:
 		return m.Path()
 	case session.FieldWorkingDir:
@@ -7320,6 +7375,8 @@ func (m *SessionMutation) OldField(ctx context.Context, name string) (ent.Value,
 	switch name {
 	case session.FieldTitle:
 		return m.OldTitle(ctx)
+	case session.FieldUUID:
+		return m.OldUUID(ctx)
 	case session.FieldPath:
 		return m.OldPath(ctx)
 	case session.FieldWorkingDir:
@@ -7383,6 +7440,13 @@ func (m *SessionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTitle(v)
+		return nil
+	case session.FieldUUID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUUID(v)
 		return nil
 	case session.FieldPath:
 		v, ok := value.(string)
@@ -7621,6 +7685,9 @@ func (m *SessionMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *SessionMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(session.FieldUUID) {
+		fields = append(fields, session.FieldUUID)
+	}
 	if m.FieldCleared(session.FieldWorkingDir) {
 		fields = append(fields, session.FieldWorkingDir)
 	}
@@ -7683,6 +7750,9 @@ func (m *SessionMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *SessionMutation) ClearField(name string) error {
 	switch name {
+	case session.FieldUUID:
+		m.ClearUUID()
+		return nil
 	case session.FieldWorkingDir:
 		m.ClearWorkingDir()
 		return nil
@@ -7741,6 +7811,9 @@ func (m *SessionMutation) ResetField(name string) error {
 	switch name {
 	case session.FieldTitle:
 		m.ResetTitle()
+		return nil
+	case session.FieldUUID:
+		m.ResetUUID()
 		return nil
 	case session.FieldPath:
 		m.ResetPath()

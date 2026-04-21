@@ -252,6 +252,10 @@ service SessionService {
   rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse) {}
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse) {}
   rpc AssignSessionsToProject(AssignSessionsToProjectRequest) returns (AssignSessionsToProjectResponse) {}
+
+  // GetTerminalSnapshot returns the last N lines of terminal output for a session
+  // without requiring an active stream. Suitable for session card previews.
+  rpc GetTerminalSnapshot(GetTerminalSnapshotRequest) returns (GetTerminalSnapshotResponse) {}
 }
 
 // ListSessionsRequest allows filtering sessions by various criteria.
@@ -1641,4 +1645,20 @@ message AssignSessionsToProjectRequest {
 
 message AssignSessionsToProjectResponse {
   int32 updated_count = 1;
+}
+
+// GetTerminalSnapshot
+
+message GetTerminalSnapshotRequest {
+  // ID of the session to snapshot.
+  string session_id = 1;
+  // Number of trailing lines to return (default 20).
+  int32 last_n_lines = 2;
+}
+
+message GetTerminalSnapshotResponse {
+  // Terminal content (may include ANSI escape sequences).
+  string content = 1;
+  // True when content is entirely whitespace (cleared terminal).
+  bool is_empty = 2;
 }

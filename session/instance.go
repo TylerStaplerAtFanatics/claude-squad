@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/atotto/clipboard"
+	"github.com/google/uuid"
 )
 
 type Status int
@@ -84,8 +85,15 @@ type LifecycleListener interface {
 
 // Instance is a running instance of claude code.
 type Instance struct {
+	// ID is the stable, immutable identifier for this instance.
+	// Set once at creation; never changes even if Title is renamed.
+	// Falls back to Title when empty for backward compatibility.
+	ID string
 	// Title is the title of the instance.
 	Title string
+	// UUID is a stable unique identifier for this instance, generated at creation time.
+	// Unlike Title, UUID does not change when the session is renamed.
+	UUID string
 	// Path is the path to the workspace repository root.
 	Path string
 	// WorkingDir is the directory within the repository to start in.
@@ -240,6 +248,7 @@ type Instance struct {
 func (i *Instance) ToInstanceData() InstanceData {
 	data := InstanceData{
 		Title:                i.Title,
+		UUID:                 i.UUID,
 		Path:                 i.Path,
 		WorkingDir:           i.WorkingDir,
 		Branch:               i.Branch,
@@ -368,6 +377,7 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 
 	instance := &Instance{
 		Title:       data.Title,
+		UUID:        data.UUID,
 		Path:        migratedPath, // Use migrated path
 		WorkingDir:  data.WorkingDir,
 		Branch:      data.Branch,
@@ -431,6 +441,11 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		OneShot: data.OneShot,
 		// Project association
 		ProjectID: data.ProjectID,
+	}
+
+	// MIGRATION: Assign UUID to existing sessions that pre-date UUID assignment
+	if instance.UUID == "" {
+		instance.UUID = uuid.New().String()
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice
@@ -619,6 +634,7 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 
 	instance := &Instance{
 		Title:            opts.Title,
+		UUID:             uuid.New().String(),
 		Status:           Ready,
 		Path:             absPath,
 		Branch:           opts.Branch,
@@ -772,6 +788,17 @@ func (i *Instance) GetTitle() string {
 	return i.Title
 }
 
+// GetStableID returns a stable identifier for this instance.
+// If UUID is set, returns it. Falls back to Title for backward compatibility
+// with sessions that pre-date UUID assignment.
+func (i *Instance) GetStableID() string {
+	if i.UUID != "" {
+		return i.UUID
+	}
+	return i.Title
+}
+
+
 // GetTmuxSessionName returns the sanitized tmux session name for reconciliation.
 // Returns empty string for external or uninitialized sessions.
 func (i *Instance) GetTmuxSessionName() string {
@@ -884,16 +911,42 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	}()
 
 	if !firstTimeSetup {
-		workDir := i.Path
-		if i.gitManager.HasWorktree() {
-			workDir = i.gitManager.GetWorktreePath()
+		if !i.tmuxManager.DoesSessionExist() {
+			// tmux session is dead (machine reboot, tmux kill-server, etc.)
+			startPath := i.resolveStartPath(i.Path)
+			if i.HasClaudeSession() {
+				// Cold restore: we have a conversation UUID — relaunch with --resume.
+				// initTmuxSession() (called above) already built the program command
+				// with --resume via ClaudeCommandBuilder, so Start() uses it directly.
+				log.InfoLog.Printf("Cold restoring '%s' with --resume %s in %s",
+					i.Title, i.claudeSession.SessionID, startPath)
+			} else {
+				// Dead tmux, no UUID — start a fresh session without --resume.
+				log.WarningLog.Printf("Cold start '%s': tmux dead, no conversation UUID, starting fresh in %s",
+					i.Title, startPath)
+			}
+			if err := i.tmuxManager.Start(startPath); err != nil {
+				setupErr = fmt.Errorf("cold restore Start failed for '%s': %w", i.Title, err)
+				return setupErr
+			}
+			// Attach PTY — same pattern as firstTimeSetup path (lines 867-870).
+			_ = i.tmuxManager.RestoreWithWorkDir(startPath)
+			if _, ptyErr := i.tmuxManager.GetPTY(); ptyErr != nil {
+				log.ErrorLog.Printf("Cold-restored session '%s': PTY attach failed (%v) — controller and SendKeys will be unavailable", i.Title, ptyErr)
+			}
+		} else {
+			// Hot restore: tmux session is alive — attach to it.
+			workDir := i.Path
+			if i.gitManager.HasWorktree() {
+				workDir = i.gitManager.GetWorktreePath()
+			}
+			log.InfoLog.Printf("Restoring existing tmux session for instance '%s' with workDir '%s'", i.Title, workDir)
+			if err := i.tmuxManager.RestoreWithWorkDir(workDir); err != nil {
+				setupErr = fmt.Errorf("failed to restore existing session: %w", err)
+				return setupErr
+			}
+			log.InfoLog.Printf("Successfully restored tmux session for instance '%s'", i.Title)
 		}
-		log.InfoLog.Printf("Restoring existing tmux session for instance '%s' with workDir '%s'", i.Title, workDir)
-		if err := i.tmuxManager.RestoreWithWorkDir(workDir); err != nil {
-			setupErr = fmt.Errorf("failed to restore existing session: %w", err)
-			return setupErr
-		}
-		log.InfoLog.Printf("Successfully restored tmux session for instance '%s'", i.Title)
 	} else {
 		basePath := i.Path
 		if i.gitManager.HasWorktree() {

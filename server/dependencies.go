@@ -458,6 +458,8 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 	scrollbackManager := scrollback.NewScrollbackManager(scrollbackConfig)
 	log.InfoLog.Printf("Initialized ScrollbackManager: path=%s, compression=%s, maxLines=%d",
 		scrollbackPath, scrollbackConfig.StoragePath, scrollbackConfig.MaxLines)
+	// Wire scrollback sequence provider so CreateCheckpoint records accurate seq numbers.
+	sessionService.SetScrollbackManager(scrollbackManager)
 
 	// Step 10: TmuxStreamerManager (independent)
 	tmuxStreamerManager := session.NewExternalTmuxStreamerManager()

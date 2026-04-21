@@ -23,6 +23,8 @@ type Session struct {
 	ID int `json:"id,omitempty"`
 	// Title holds the value of the "title" field.
 	Title string `json:"title,omitempty"`
+	// Stable unique identifier; empty for legacy sessions migrated before UUID support.
+	UUID string `json:"uuid,omitempty"`
 	// Path holds the value of the "path" field.
 	Path string `json:"path,omitempty"`
 	// WorkingDir holds the value of the "working_dir" field.
@@ -157,7 +159,7 @@ func (*Session) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case session.FieldID, session.FieldStatus, session.FieldHeight, session.FieldWidth:
 			values[i] = new(sql.NullInt64)
-		case session.FieldTitle, session.FieldPath, session.FieldWorkingDir, session.FieldBranch, session.FieldPrompt, session.FieldProgram, session.FieldExistingWorktree, session.FieldCategory, session.FieldSessionType, session.FieldTmuxPrefix, session.FieldLastOutputSignature, session.FieldInitialPrompt:
+		case session.FieldTitle, session.FieldUUID, session.FieldPath, session.FieldWorkingDir, session.FieldBranch, session.FieldPrompt, session.FieldProgram, session.FieldExistingWorktree, session.FieldCategory, session.FieldSessionType, session.FieldTmuxPrefix, session.FieldLastOutputSignature, session.FieldInitialPrompt:
 			values[i] = new(sql.NullString)
 		case session.FieldCreatedAt, session.FieldUpdatedAt, session.FieldLastTerminalUpdate, session.FieldLastMeaningfulOutput, session.FieldLastAddedToQueue, session.FieldLastViewed, session.FieldLastAcknowledged:
 			values[i] = new(sql.NullTime)
@@ -189,6 +191,12 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field title", values[i])
 			} else if value.Valid {
 				_m.Title = value.String
+			}
+		case session.FieldUUID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field uuid", values[i])
+			} else if value.Valid {
+				_m.UUID = value.String
 			}
 		case session.FieldPath:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -409,6 +417,9 @@ func (_m *Session) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("title=")
 	builder.WriteString(_m.Title)
+	builder.WriteString(", ")
+	builder.WriteString("uuid=")
+	builder.WriteString(_m.UUID)
 	builder.WriteString(", ")
 	builder.WriteString("path=")
 	builder.WriteString(_m.Path)

@@ -202,6 +202,7 @@ var (
 	SessionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "title", Type: field.TypeString, Unique: true},
+		{Name: "uuid", Type: field.TypeString, Nullable: true},
 		{Name: "path", Type: field.TypeString},
 		{Name: "working_dir", Type: field.TypeString, Nullable: true},
 		{Name: "branch", Type: field.TypeString, Nullable: true},
@@ -250,27 +251,27 @@ var (
 			{
 				Name:    "session_status",
 				Unique:  false,
-				Columns: []*schema.Column{SessionsColumns[5]},
+				Columns: []*schema.Column{SessionsColumns[6]},
 			},
 			{
 				Name:    "session_category",
 				Unique:  false,
-				Columns: []*schema.Column{SessionsColumns[14]},
+				Columns: []*schema.Column{SessionsColumns[15]},
 			},
 			{
 				Name:    "session_last_meaningful_output",
 				Unique:  false,
-				Columns: []*schema.Column{SessionsColumns[19]},
+				Columns: []*schema.Column{SessionsColumns[20]},
 			},
 			{
 				Name:    "session_last_acknowledged",
 				Unique:  false,
-				Columns: []*schema.Column{SessionsColumns[23]},
+				Columns: []*schema.Column{SessionsColumns[24]},
 			},
 			{
 				Name:    "session_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{SessionsColumns[8]},
+				Columns: []*schema.Column{SessionsColumns[9]},
 			},
 		},
 	}

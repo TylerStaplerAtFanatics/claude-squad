@@ -13,7 +13,7 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 	}
 
 	protoSession := &sessionv1.Session{
-		Id:          inst.Title, // Using Title as ID
+		Id:          inst.GetStableID(),
 		Title:       inst.Title,
 		Path:        inst.Workspace().EffectivePath,
 		WorkingDir:  inst.WorkingDir,
@@ -83,6 +83,9 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 			ProjectName:    cs.ProjectName,
 		}
 	}
+
+	// History file linkage — path to the Claude JSONL conversation file.
+	protoSession.HistoryFilePath = inst.HistoryFilePath
 
 	return protoSession
 }

@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState, CheckpointProto } from "@/gen/session/v1/types_pb";
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
+import { StatusBadge } from "./StatusBadge";
 import { GitHubBadge } from "./GitHubBadge";
 import { TagEditor } from "./TagEditor";
+import { useTerminalSnapshot } from "@/lib/hooks/useTerminalSnapshot";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
+import * as snapshotStyles from "./SessionCard.css";
+import { CheckpointButton } from "./CheckpointButton";
+import { CheckpointList } from "./CheckpointList";
 import styles from "./SessionCard.module.css";
 
 interface SessionCardProps {
@@ -26,6 +33,8 @@ interface SessionCardProps {
   isSelected?: boolean;
   onToggleSelect?: () => void;
   reviewItem?: ReviewItem; // Optional review queue item if session needs attention
+  detectedStatus?: string; // Terminal-detected status from pattern analysis
+  detectedContext?: string; // Context string for the detected status
 }
 
 export function SessionCard({
@@ -47,15 +56,14 @@ export function SessionCard({
   isSelected = false,
   onToggleSelect,
   reviewItem,
+  detectedStatus,
+  detectedContext,
 }: SessionCardProps) {
   const [isTagEditorOpen, setIsTagEditorOpen] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [newTitle, setNewTitle] = useState(session.title);
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
-  const [isCheckpointOpen, setIsCheckpointOpen] = useState(false);
-  const [checkpointLabel, setCheckpointLabel] = useState("");
-  const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
   const [isForkOpen, setIsForkOpen] = useState(false);
   const [forkCheckpoints, setForkCheckpoints] = useState<CheckpointProto[]>([]);
   const [forkTitle, setForkTitle] = useState("");
@@ -67,8 +75,39 @@ export function SessionCard({
   const [isRestarting, setIsRestarting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [renameError, setRenameError] = useState("");
-  const [checkpointError, setCheckpointError] = useState("");
   const [forkError, setForkError] = useState("");
+  const [isSnapshotOpen, setIsSnapshotOpen] = useState(false);
+
+  // Refs for focus trap: dialog containers and the buttons that trigger them
+  const renameDialogRef = useRef<HTMLDivElement>(null);
+  const restartDialogRef = useRef<HTMLDivElement>(null);
+  const forkDialogRef = useRef<HTMLDivElement>(null);
+  const renameTriggerRef = useRef<HTMLButtonElement>(null);
+  const restartTriggerRef = useRef<HTMLButtonElement>(null);
+  const forkTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useFocusTrap(renameDialogRef, isRenameOpen, renameTriggerRef);
+  useFocusTrap(restartDialogRef, isRestartConfirmOpen, restartTriggerRef);
+  useFocusTrap(forkDialogRef, isForkOpen, forkTriggerRef);
+
+  // Only fetch snapshot for running sessions (paused/loading sessions have stale output)
+  const isSnapshotEnabled = session.status === SessionStatus.RUNNING && isSnapshotOpen;
+  const { html: snapshotHtml, isEmpty: snapshotIsEmpty, loading: snapshotLoading, error: snapshotError } =
+    useTerminalSnapshot(session.id, isSnapshotEnabled);
+
+  const [loadedCheckpoints, setLoadedCheckpoints] = useState<CheckpointProto[]>([]);
+
+  // Load checkpoints on mount and refresh when a new checkpoint is created
+  const refreshCheckpoints = useCallback(async () => {
+    if (!onListCheckpoints) return;
+    const cps = await onListCheckpoints(session.id);
+    setLoadedCheckpoints(cps);
+  }, [onListCheckpoints, session.id]);
+
+  useEffect(() => {
+    refreshCheckpoints();
+  }, [refreshCheckpoints]);
+
   const getStatusColor = (status: SessionStatus): string => {
     switch (status) {
       case SessionStatus.RUNNING:
@@ -156,7 +195,25 @@ export function SessionCard({
   };
 
   const isPaused = session.status === SessionStatus.PAUSED;
+  const isRunning = session.status === SessionStatus.RUNNING;
+  const isReady = session.status === SessionStatus.READY;
   const isExternal = session.instanceType === InstanceType.EXTERNAL;
+
+  // Desktop overflow menu state
+  const [showOverflow, setShowOverflow] = useState(false);
+  const overflowContainerRef = useRef<HTMLDivElement>(null);
+
+  // Close overflow menu when clicking outside
+  useEffect(() => {
+    if (!showOverflow) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (overflowContainerRef.current && !overflowContainerRef.current.contains(e.target as Node)) {
+        setShowOverflow(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [showOverflow]);
   const sourceTerminal = session.externalMetadata?.sourceTerminal || "External";
   const muxEnabled = session.externalMetadata?.muxEnabled || false;
 
@@ -273,37 +330,6 @@ export function SessionCard({
     setIsRestartConfirmOpen(false);
   };
 
-  const handleCheckpointClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCheckpointLabel("");
-    setIsCheckpointOpen(true);
-  };
-
-  const handleCheckpointSubmit = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!checkpointLabel.trim()) return;
-    setIsCreatingCheckpoint(true);
-    setCheckpointError("");
-    try {
-      const success = await onCreateCheckpoint?.(session.id, checkpointLabel.trim());
-      if (success) {
-        setIsCheckpointOpen(false);
-      } else {
-        setCheckpointError("Failed to create checkpoint");
-      }
-    } catch (error) {
-      setCheckpointError(error instanceof Error ? error.message : "Failed to create checkpoint");
-    } finally {
-      setIsCreatingCheckpoint(false);
-    }
-  };
-
-  const handleCheckpointCancel = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsCheckpointOpen(false);
-    setCheckpointError("");
-  };
-
   const handleForkClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const cps = await onListCheckpoints?.(session.id) ?? [];
@@ -362,10 +388,17 @@ export function SessionCard({
           sessionTitle={session.title}
         />
       )}
-      {isRenameOpen && (
-        <div className={styles.renameDialog} onClick={(e) => e.stopPropagation()}>
-          <div className={styles.dialogContent}>
-            <h3>Rename Session</h3>
+      {isRenameOpen && createPortal(
+        <div className={styles.renameDialog} onClick={handleRenameCancel as unknown as React.MouseEventHandler}>
+          <div
+            ref={renameDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="renameDialogTitle"
+            className={styles.dialogContent}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="renameDialogTitle">Rename Session</h3>
             <input
               type="text"
               value={newTitle}
@@ -396,12 +429,21 @@ export function SessionCard({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-      {isRestartConfirmOpen && (
-        <div className={styles.confirmDialog} onClick={(e) => e.stopPropagation()}>
-          <div className={styles.dialogContent}>
-            <h3>Restart Session</h3>
+      {isRestartConfirmOpen && createPortal(
+        <div className={styles.confirmDialog} onClick={handleRestartCancel as unknown as React.MouseEventHandler}>
+          <div
+            ref={restartDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="restartDialogTitle"
+            className={styles.dialogContent}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => { if (e.key === "Escape") handleRestartCancel(e as unknown as React.MouseEvent); }}
+          >
+            <h3 id="restartDialogTitle">Restart Session</h3>
             <p>Are you sure you want to restart &quot;{session.title}&quot;?</p>
             <p className={styles.warningText}>This will terminate the current process and start a new one.</p>
             <div className={styles.dialogActions}>
@@ -421,60 +463,19 @@ export function SessionCard({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-      {isCheckpointOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="checkpointDialogTitle"
-          className={styles.renameDialog}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className={styles.dialogContent}>
-            <h3 id="checkpointDialogTitle">Create Checkpoint</h3>
-            <p>Enter a label for this checkpoint of &quot;{session.title}&quot;:</p>
-            <input
-              type="text"
-              value={checkpointLabel}
-              onChange={(e) => setCheckpointLabel(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCheckpointSubmit(e as unknown as React.MouseEvent);
-                if (e.key === "Escape") handleCheckpointCancel(e as unknown as React.MouseEvent);
-              }}
-              placeholder="e.g. before refactor, working state"
-              className={styles.renameInput}
-              autoFocus
-            />
-            {checkpointError && <span className={styles.errorMessage}>{checkpointError}</span>}
-            <div className={styles.dialogActions}>
-              <button
-                onClick={handleCheckpointSubmit}
-                disabled={isCreatingCheckpoint || !checkpointLabel.trim()}
-                className={styles.submitButton}
-              >
-                {isCreatingCheckpoint ? "Saving..." : "📍 Save Checkpoint"}
-              </button>
-              <button
-                onClick={handleCheckpointCancel}
-                disabled={isCreatingCheckpoint}
-                className={styles.cancelButton}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {isForkOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="forkDialogTitle"
-          className={styles.renameDialog}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className={styles.dialogContent}>
+      {isForkOpen && createPortal(
+        <div className={styles.renameDialog} onClick={handleForkCancel as unknown as React.MouseEventHandler}>
+          <div
+            ref={forkDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="forkDialogTitle"
+            className={styles.dialogContent}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 id="forkDialogTitle">Fork Session</h3>
             <p>Fork &quot;{session.title}&quot; from a checkpoint into a new independent session.</p>
             <label className={styles.renameLabel}>New session title:</label>
@@ -533,7 +534,8 @@ export function SessionCard({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     <div
       className={`${styles.card} ${selectMode ? styles.selectMode : ""} ${isSelected ? styles.selected : ""} ${isExternal ? styles.external : ""} ${isDeleting ? styles.deleting : ""}`}
@@ -605,13 +607,13 @@ export function SessionCard({
                 {getRateLimitStateText(session.rateLimitState)}
               </span>
             )}
+            {detectedStatus && (
+              <StatusBadge detectedStatus={detectedStatus} context={detectedContext} />
+            )}
           </div>
         </div>
-        {session.category && (
-          <span className={styles.category}>{session.category}</span>
-        )}
-        <div className={styles.tagsContainer}>
-          {session.tags && session.tags.length > 0 && (
+        {session.tags && session.tags.length > 0 && (
+          <div className={styles.tagsContainer}>
             <div className={styles.tags}>
               {session.tags.map((tag, index) => (
                 <span key={index} className={styles.tag}>
@@ -619,15 +621,8 @@ export function SessionCard({
                 </span>
               ))}
             </div>
-          )}
-          <button
-            className={styles.editTagsButton}
-            onClick={handleEditTags}
-            title="Edit tags"
-          >
-            {session.tags && session.tags.length > 0 ? "Edit Tags" : "Add Tags"}
-          </button>
-        </div>
+          </div>
+        )}
         {reviewItem && !selectMode && (
           <div className={styles.reviewInfo}>
             <ReviewQueueBadge
@@ -640,71 +635,38 @@ export function SessionCard({
             )}
           </div>
         )}
+        {/* Last Activity — Tier 1 always-visible in header */}
+        {(() => {
+          const moSecs = session.lastMeaningfulOutput?.seconds ?? BigInt(0);
+          const tuSecs = session.lastTerminalUpdate?.seconds ?? BigInt(0);
+          const lastActivity = moSecs === BigInt(0) && tuSecs === BigInt(0)
+            ? undefined
+            : moSecs >= tuSecs ? session.lastMeaningfulOutput : session.lastTerminalUpdate;
+          return lastActivity ? (
+            <div className={styles.lastActivityRow}>
+              <span className={styles.lastActivityLabel}>Active</span>
+              <time
+                dateTime={new Date(Number(lastActivity.seconds) * 1000).toISOString()}
+                title={new Date(Number(lastActivity.seconds) * 1000).toISOString()}
+                className={styles.lastActivityTime}
+              >
+                {formatTimeAgo(lastActivity)}
+              </time>
+            </div>
+          ) : null;
+        })()}
       </div>
 
       <div className={styles.body}>
-        <div className={styles.info}>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>Program:</span>
-            <span className={styles.value}>{session.program}</span>
+        {/* Tier 2: branch context — one line */}
+        {session.branch && (
+          <div className={styles.info}>
+            <div className={styles.infoRow}>
+              <span className={styles.label}>Branch:</span>
+              <span className={styles.value}>{session.branch}</span>
+            </div>
           </div>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>Branch:</span>
-            <span className={styles.value}>{session.branch}</span>
-          </div>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>Path:</span>
-            <span className={styles.value} title={session.path}>
-              {session.path}
-            </span>
-          </div>
-          {session.workingDir && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Working Dir:</span>
-              <span className={styles.value}>{session.workingDir}</span>
-            </div>
-          )}
-          {session.githubOwner && session.githubRepo && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Repository:</span>
-              <span className={styles.value}>
-                <a
-                  href={`https://github.com/${session.githubOwner}/${session.githubRepo}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className={styles.githubLink}
-                >
-                  {session.githubOwner}/{session.githubRepo}
-                </a>
-              </span>
-            </div>
-          )}
-          {session.githubPrNumber > 0 && session.githubPrUrl && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Pull Request:</span>
-              <span className={styles.value}>
-                <a
-                  href={session.githubPrUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className={styles.githubLink}
-                >
-                  #{session.githubPrNumber}
-                </a>
-              </span>
-            </div>
-          )}
-          {session.clonedRepoPath && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Cloned To:</span>
-              <span className={styles.value} title={session.clonedRepoPath}>
-                {session.clonedRepoPath}
-              </span>
-            </div>
-          )}
-        </div>
+        )}
 
         {session.diffStats && (
           <div className={styles.diffStats}>
@@ -712,33 +674,197 @@ export function SessionCard({
             <span className={styles.diffRemoved}>-{session.diffStats.removed}</span>
           </div>
         )}
+
+        {/* Terminal snapshot preview — only for running sessions */}
+        {session.status === SessionStatus.RUNNING && (
+          <div className={snapshotStyles.snapshotSection} onClick={(e) => e.stopPropagation()}>
+            <button
+              className={snapshotStyles.snapshotToggle}
+              onClick={() => setIsSnapshotOpen((prev) => !prev)}
+              aria-expanded={isSnapshotOpen}
+              aria-label="Toggle terminal preview"
+            >
+              <span>Terminal Preview</span>
+              <span className={snapshotStyles.snapshotToggleIcon} aria-hidden="true">
+                {isSnapshotOpen ? "▲" : "▼"}
+              </span>
+            </button>
+            {isSnapshotOpen && (
+              snapshotLoading ? (
+                <div className={snapshotStyles.snapshotLoading}>Loading…</div>
+              ) : snapshotError ? (
+                <div className={snapshotStyles.snapshotError.base}>
+                  Failed to load preview
+                </div>
+              ) : snapshotIsEmpty ? (
+                <div className={snapshotStyles.snapshotEmpty}>No recent output</div>
+              ) : (
+                <div
+                  className={snapshotStyles.snapshotPane}
+                  // Safe: content is rendered by ansi-to-html with escapeXML enabled,
+                  // or escaped manually in the plain-text fallback path.
+                  dangerouslySetInnerHTML={{ __html: snapshotHtml }}
+                  aria-label="Terminal output preview"
+                />
+              )
+            )}
+          </div>
+        )}
       </div>
 
-      <div className={styles.footer}>
-        <div className={styles.timestamps}>
-          <span className={styles.timestamp}>
-            Created: <time dateTime={session.createdAt ? new Date(Number(session.createdAt.seconds) * 1000).toISOString() : ""}>{formatDate(session.createdAt)}</time>
-          </span>
-          <span className={styles.timestamp}>
-            Updated: <time dateTime={session.updatedAt ? new Date(Number(session.updatedAt.seconds) * 1000).toISOString() : ""}>{formatDate(session.updatedAt)}</time>
-          </span>
-          {(() => {
-            // Use the most recent of lastMeaningfulOutput and lastTerminalUpdate.
-            // lastMeaningfulOutput is gated by a content-signature check, so it can lag
-            // behind lastTerminalUpdate when content repeats (e.g. idle prompt).
-            const moSecs = session.lastMeaningfulOutput?.seconds ?? BigInt(0);
-            const tuSecs = session.lastTerminalUpdate?.seconds ?? BigInt(0);
-            const lastActivity = moSecs === BigInt(0) && tuSecs === BigInt(0)
-              ? undefined
-              : moSecs >= tuSecs ? session.lastMeaningfulOutput : session.lastTerminalUpdate;
-            return lastActivity ? (
-              <span className={styles.timestamp} title="Last terminal activity">
-                Last Activity: <time dateTime={new Date(Number(lastActivity.seconds) * 1000).toISOString()}>{formatTimeAgo(lastActivity)}</time>
-              </span>
-            ) : null;
-          })()}
+      {onListCheckpoints && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <CheckpointList
+            sessionId={session.id}
+            checkpoints={loadedCheckpoints}
+          />
         </div>
+      )}
 
+      <div className={styles.footer}>
+          {/* Desktop: primary action + overflow menu */}
+          <div className={styles.desktopActions}>
+            {(isPaused || isReady) && (
+              <button
+                className={styles.actionButton}
+                onClick={(e) => { e.stopPropagation(); onResume?.(); }}
+                aria-label={`Resume session ${session.title}`}
+                title="Resume this session"
+              >
+                <span aria-hidden="true">▶️</span> Resume
+              </button>
+            )}
+            {isRunning && (
+              <button
+                className={styles.actionButton}
+                onClick={(e) => { e.stopPropagation(); onPause?.(); }}
+                aria-label={`Pause session ${session.title}`}
+                title="Pause this session"
+              >
+                <span aria-hidden="true">⏸️</span> Pause
+              </button>
+            )}
+            <div ref={overflowContainerRef} className={styles.overflowContainer}>
+              <button
+                className={styles.overflowButton}
+                onClick={(e) => { e.stopPropagation(); setShowOverflow((o) => !o); }}
+                aria-label="More session actions"
+                aria-expanded={showOverflow}
+                aria-haspopup="menu"
+              >
+                ···
+              </button>
+              {showOverflow && (
+                <div
+                  className={styles.overflowMenu}
+                  role="menu"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => { if (e.key === "Escape") setShowOverflow(false); }}
+                >
+                  {!(isPaused || isReady) && (
+                    <button
+                      ref={null}
+                      role="menuitem"
+                      className={styles.overflowMenuItem}
+                      onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onResume?.(); }}
+                      aria-label={`Resume session ${session.title}`}
+                    >
+                      <span aria-hidden="true">▶️</span> Resume
+                    </button>
+                  )}
+                  {!isRunning && (
+                    <button
+                      role="menuitem"
+                      className={styles.overflowMenuItem}
+                      onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onPause?.(); }}
+                      aria-label={`Pause session ${session.title}`}
+                    >
+                      <span aria-hidden="true">⏸️</span> Pause
+                    </button>
+                  )}
+                  <button
+                    ref={renameTriggerRef}
+                    role="menuitem"
+                    className={styles.overflowMenuItem}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleRenameClick(e); }}
+                    aria-label={`Rename session ${session.title}`}
+                  >
+                    <span aria-hidden="true">✏️</span> Rename
+                  </button>
+                  <button
+                    ref={restartTriggerRef}
+                    role="menuitem"
+                    className={`${styles.overflowMenuItem} ${styles.overflowMenuItemDanger}`}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleRestartClick(e); }}
+                    aria-label={`Restart session ${session.title}`}
+                  >
+                    <span aria-hidden="true">🔄</span> Restart
+                  </button>
+                  {onCreateCheckpoint && (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <CheckpointButton
+                        sessionId={session.id}
+                        isRunning={session.status === SessionStatus.RUNNING}
+                        onCreateCheckpoint={onCreateCheckpoint}
+                        onCheckpointCreated={() => { setShowOverflow(false); refreshCheckpoints(); }}
+                      />
+                    </div>
+                  )}
+                  {onForkFromCheckpoint && (
+                    <button
+                      ref={forkTriggerRef}
+                      role="menuitem"
+                      className={styles.overflowMenuItem}
+                      onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleForkClick(e); }}
+                      aria-label={`Fork session ${session.title} from checkpoint`}
+                    >
+                      <span aria-hidden="true">🍴</span> Fork
+                    </button>
+                  )}
+                  <button
+                    role="menuitem"
+                    className={styles.overflowMenuItem}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleEditTags(e); }}
+                    aria-label={`Edit tags for session ${session.title}`}
+                  >
+                    <span aria-hidden="true">🏷️</span> Edit Tags
+                  </button>
+                  <button
+                    role="menuitem"
+                    className={styles.overflowMenuItem}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onNewWorkspace?.(); }}
+                    aria-label={`New workspace from ${session.title}`}
+                  >
+                    <span aria-hidden="true">➕</span> New Workspace
+                  </button>
+                  <button
+                    role="menuitem"
+                    className={styles.overflowMenuItem}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onDuplicate?.(); }}
+                    aria-label={`Duplicate session ${session.title}`}
+                  >
+                    <span aria-hidden="true">📋</span> Duplicate
+                  </button>
+                  <button
+                    role="menuitem"
+                    className={`${styles.overflowMenuItem} ${styles.overflowMenuItemDanger}`}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setShowOverflow(false);
+                      setIsDeleting(true);
+                      try { await onDelete?.(); } catch { setIsDeleting(false); }
+                    }}
+                    disabled={isDeleting}
+                    aria-label={`Delete session ${session.title}`}
+                  >
+                    {isDeleting ? "Deleting..." : <><span aria-hidden="true">🗑️</span> Delete</>}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Mobile: accordion toggle + full action list */}
           <button
             className={styles.actionsToggle}
             onClick={(e) => { e.stopPropagation(); setShowActions(!showActions); }}
@@ -758,7 +884,7 @@ export function SessionCard({
               aria-label={`Resume session ${session.title}`}
               title="Resume this session"
             >
-              ▶️ Resume
+              <span aria-hidden="true">▶️</span> Resume
             </button>
           ) : (
             <button
@@ -770,7 +896,7 @@ export function SessionCard({
               aria-label={`Pause session ${session.title}`}
               title="Pause this session"
             >
-              ⏸️ Pause
+              <span aria-hidden="true">⏸️</span> Pause
             </button>
           )}
           <button
@@ -779,7 +905,7 @@ export function SessionCard({
             title="Rename this session"
             aria-label={`Rename session ${session.title}`}
           >
-            ✏️ Rename
+            <span aria-hidden="true">✏️</span> Rename
           </button>
           <button
             className={`${styles.actionButton} ${styles.restartButton}`}
@@ -787,17 +913,17 @@ export function SessionCard({
             title="Restart this session"
             aria-label={`Restart session ${session.title}`}
           >
-            🔄 Restart
+            <span aria-hidden="true">🔄</span> Restart
           </button>
           {onCreateCheckpoint && (
-            <button
-              className={styles.actionButton}
-              onClick={handleCheckpointClick}
-              title="Save a named checkpoint of the current session state"
-              aria-label={`Create checkpoint for session ${session.title}`}
-            >
-              📍 Checkpoint
-            </button>
+            <div onClick={(e) => e.stopPropagation()}>
+              <CheckpointButton
+                sessionId={session.id}
+                isRunning={session.status === SessionStatus.RUNNING}
+                onCreateCheckpoint={onCreateCheckpoint}
+                onCheckpointCreated={() => refreshCheckpoints()}
+              />
+            </div>
           )}
           {onForkFromCheckpoint && (
             <button
@@ -806,7 +932,7 @@ export function SessionCard({
               title="Fork this session from a checkpoint"
               aria-label={`Fork session ${session.title} from checkpoint`}
             >
-              🍴 Fork
+              <span aria-hidden="true">🍴</span> Fork
             </button>
           )}
           {onRunOneShot && (
@@ -822,6 +948,14 @@ export function SessionCard({
           )}
           <button
             className={styles.actionButton}
+            onClick={handleEditTags}
+            title="Edit session tags"
+            aria-label={`Edit tags for session ${session.title}`}
+          >
+            <span aria-hidden="true">🏷️</span> Edit Tags
+          </button>
+          <button
+            className={styles.actionButton}
             onClick={(e) => {
               e.stopPropagation();
               onNewWorkspace?.();
@@ -829,7 +963,7 @@ export function SessionCard({
             title="New workspace on the same project (same path, fresh title and branch)"
             aria-label={`New workspace from ${session.title}`}
           >
-            ➕ New Workspace
+            <span aria-hidden="true">➕</span> New Workspace
           </button>
           <button
             className={styles.actionButton}
@@ -840,7 +974,7 @@ export function SessionCard({
             title="Duplicate this session with editable configuration"
             aria-label={`Duplicate session ${session.title}`}
           >
-            📋 Duplicate
+            <span aria-hidden="true">📋</span> Duplicate
           </button>
           <button
             className={`${styles.actionButton} ${styles.deleteButton}`}
@@ -857,7 +991,7 @@ export function SessionCard({
             aria-label={`Delete session ${session.title}`}
             title="Delete this session"
           >
-            {isDeleting ? "Deleting..." : "🗑️ Delete"}
+            {isDeleting ? "Deleting..." : <><span aria-hidden="true">🗑️</span> Delete</>}
           </button>
         </div>
       </div>

@@ -33,15 +33,36 @@ export function usePushNotifications({ onNotification }: UsePushNotificationsOpt
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [permission, setPermission] = useState<NotificationPermission>("default");
 
   useEffect(() => {
-    const checkSupport = () => {
-      const supported = "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
-      setIsSupported(supported);
-      setIsLoading(false);
-    };
-    checkSupport();
+    const supported = "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+    setIsSupported(supported);
+    if (supported) {
+      setPermission(Notification.permission);
+    }
+    setIsLoading(false);
   }, []);
+
+  // Watch for permission changes (e.g., user revokes in browser settings while app is open).
+  useEffect(() => {
+    if (!isSupported || typeof window === "undefined") return;
+    if (!("permissions" in navigator)) return;
+
+    let status: PermissionStatus | null = null;
+    navigator.permissions.query({ name: "notifications" as PermissionName }).then((s) => {
+      status = s;
+      const handler = () => setPermission(Notification.permission);
+      s.addEventListener("change", handler);
+    });
+
+    return () => {
+      if (status) {
+        const handler = () => setPermission(Notification.permission);
+        status.removeEventListener("change", handler);
+      }
+    };
+  }, [isSupported]);
 
   const requestPermission = useCallback(async (): Promise<NotificationPermission> => {
     if (!isSupported) {
@@ -153,7 +174,7 @@ const newSubscription = await registration.pushManager.subscribe({
     subscription,
     isLoading,
     error,
-    permission: typeof window !== "undefined" ? Notification.permission : "default",
+    permission,
     requestPermission,
     subscribe,
     unsubscribe,

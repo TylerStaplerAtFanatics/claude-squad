@@ -126,6 +126,27 @@
 
   /* Animation stagger index — set via inline style; default 0 */
   --card-index: 0;
+
+  /* Status badge color tokens (used by StatusBadge.css.ts) */
+  --status-badge-approval-bg: #fecaca;
+  --status-badge-approval-fg: #991b1b;
+  --status-badge-approval-border: #fca5a5;
+  --status-badge-input-bg: #dbeafe;
+  --status-badge-input-fg: #1e40af;
+  --status-badge-input-border: #93c5fd;
+  --status-badge-complete-bg: #dcfce7;
+  --status-badge-complete-fg: #166534;
+  --status-badge-complete-border: #bbf7d0;
+  --status-badge-uncommitted-bg: #fef3c7;
+  --status-badge-uncommitted-fg: #92400e;
+  --status-badge-uncommitted-border: #fcd34d;
+  --status-badge-idle-bg: #f3f4f6;
+  --status-badge-idle-fg: #374151;
+  --status-badge-idle-border: #d1d5db;
+  --status-badge-stale-fg: #6b7280;
+  --status-badge-processing-bg: #e0e7ff;
+  --status-badge-processing-fg: #4338ca;
+  --status-badge-processing-border: #c7d2fe;
 }
 
 /* Header height override — aligns with compact breakpoint so height change and nav compression happen together */
@@ -207,6 +228,27 @@
     /* Placeholder text */
     --placeholder-color: #6b7280;
     --placeholder-color-dark: #4b5563;
+
+    /* Status badge color tokens — dark mode overrides */
+    --status-badge-approval-bg: #450a0a;
+    --status-badge-approval-fg: #fca5a5;
+    --status-badge-approval-border: #7f1d1d;
+    --status-badge-input-bg: #1e3a5f;
+    --status-badge-input-fg: #93c5fd;
+    --status-badge-input-border: #2563eb;
+    --status-badge-complete-bg: #14532d;
+    --status-badge-complete-fg: #86efac;
+    --status-badge-complete-border: #166534;
+    --status-badge-uncommitted-bg: #78350f;
+    --status-badge-uncommitted-fg: #fbbf24;
+    --status-badge-uncommitted-border: #b45309;
+    --status-badge-idle-bg: #1f2937;
+    --status-badge-idle-fg: #9ca3af;
+    --status-badge-idle-border: #374151;
+    --status-badge-stale-fg: #6b7280;
+    --status-badge-processing-bg: #312e81;
+    --status-badge-processing-fg: #a5b4fc;
+    --status-badge-processing-border: #4338ca;
   }
 }
 

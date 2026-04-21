@@ -50,8 +50,8 @@
   border-radius: 12px;
   max-width: 1200px; /* Increased from 800px for better terminal width */
   width: 100%;
-  height: 60vh; /* Further reduced for narrow windows with dev tools */
-  max-height: 60vh;
+  height: 80vh;
+  max-height: 80vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;

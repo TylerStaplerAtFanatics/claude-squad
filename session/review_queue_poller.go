@@ -1049,7 +1049,7 @@ func (rqp *ReviewQueuePoller) FindInstance(sessionID string) *Instance {
 	defer rqp.mu.RUnlock()
 
 	for _, inst := range rqp.instances {
-		if inst.Title == sessionID {
+		if inst.Title == sessionID || inst.GetStableID() == sessionID {
 			return inst
 		}
 	}

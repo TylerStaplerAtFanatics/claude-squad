@@ -63,6 +63,82 @@
   font-weight: 500;
 }
 
+/* New-items banner: appears when items arrive after the queue snapshot was taken */
+.newItemsBanner {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 8px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.newItemsBanner:hover {
+  opacity: 0.9;
+}
+
+.newItemsBanner:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.oldestCallout {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: var(--warning-bg, rgba(234, 179, 8, 0.15));
+  color: var(--warning, #b45309);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.filterToggleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+
+.filterToggle {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.filterToggle:hover {
+  background: var(--hover-background);
+  color: var(--text-primary);
+}
+
+.filterToggleActive {
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.filterClear {
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.filterClear:hover {
+  color: var(--error);
+}
+
 .filters {
   display: flex;
   flex-direction: column;

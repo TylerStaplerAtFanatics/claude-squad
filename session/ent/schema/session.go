@@ -20,6 +20,9 @@ func (Session) Fields() []ent.Field {
 		field.String("title").
 			Unique().
 			NotEmpty(),
+		field.String("uuid").
+			Optional().
+			Comment("Stable unique identifier; empty for legacy sessions migrated before UUID support."),
 		field.String("path").
 			NotEmpty(),
 		field.String("working_dir").

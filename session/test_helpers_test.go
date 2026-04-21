@@ -12,7 +12,7 @@ func createTestSession(title string) InstanceData {
 		Path:       "/home/user/project",
 		WorkingDir: "/home/user/project",
 		Branch:     "main",
-		Status:     Running,
+		Status:     Paused,
 		Height:     24,
 		Width:      80,
 		CreatedAt:  now,
