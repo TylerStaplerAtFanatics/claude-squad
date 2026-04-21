@@ -108,6 +108,7 @@ jobs:
           fi
 
       - name: Upload E2E videos as artifacts
+        id: upload-videos
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -123,7 +124,9 @@ jobs:
           script: |
             const marker = '<!-- e2e-videos -->';
             const videoCount = '${{ steps.validate-videos.outputs.video_count }}';
+            const artifactUrl = '${{ steps.upload-videos.outputs.artifact-url }}';
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const downloadLink = artifactUrl || runUrl;
 
             const lines = videoCount === '0'
               ? [
@@ -139,7 +142,7 @@ jobs:
                   '',
                   `**${videoCount} video(s)** captured for feature-marked changes in this PR.`,
                   '',
-                  `[Download artifacts](${runUrl}) (30-day retention)`,
+                  `[Download videos](${downloadLink}) (30-day retention)`,
                   '',
                   '> Videos capture test execution for UI paths touched by feature markers (`// +feature:`, `// +api:`).',
                 ];
