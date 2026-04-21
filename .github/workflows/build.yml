@@ -101,13 +101,30 @@ jobs:
           COVERAGE_SUMMARY: ${{ steps.coverage.outputs.summary }}
         with:
           script: |
+            const marker = '<!-- feature-coverage -->';
             const summary = process.env.COVERAGE_SUMMARY || 'Feature coverage report unavailable';
-            await github.rest.issues.createComment({
+            const body = `${marker}\n## 📊 Feature E2E Coverage\n\n${summary}\n\n> Run \`make e2e-report\` locally to view the full Allure report.`;
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `## 📊 Feature E2E Coverage\n\n${summary}\n\n> Run \`make e2e-report\` locally to view the full Allure report.`,
             });
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
         continue-on-error: true
 
   # ─────────────────────────────────────────────────────────────────────────────

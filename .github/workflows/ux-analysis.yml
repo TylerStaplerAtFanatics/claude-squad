@@ -83,8 +83,14 @@ jobs:
         run: |
           cd tests/e2e
           npx lhci autorun --config=lighthouse.config.js 2>&1 | tee /tmp/lighthouse-output.txt || true
-          # Extract score for PR comment
-          SCORE=$(grep -oP 'performance.*?\K[0-9]+' /tmp/lighthouse-output.txt | head -1 || echo "unknown")
+          # Extract performance score from lhci JSON manifest (stdout format is not stable)
+          SCORE=$(node -e "
+            try {
+              const m = require('./.lighthouseci/manifest.json');
+              const lhr = require(m[0].jsonPath);
+              console.log(Math.round(lhr.categories.performance.score * 100));
+            } catch(e) { console.log('unknown'); }
+          " 2>/dev/null || echo "unknown")
           echo "score=${SCORE}" >> $GITHUB_OUTPUT
         continue-on-error: true  # Lighthouse is non-blocking (warning only)
 
@@ -131,6 +137,7 @@ jobs:
           LIGHTHOUSE_SCORE: ${{ steps.lighthouse.outputs.score }}
         with:
           script: |
+            const marker = '<!-- ux-analysis -->';
             const lighthouseScore = process.env.LIGHTHOUSE_SCORE || 'unknown';
             const axeResult = '${{ steps.axe.outcome }}';
             const axeEmoji = axeResult === 'success' ? '✅' : '❌';
@@ -143,20 +150,36 @@ jobs:
               lighthouseEmoji = '⚠️';
             }
 
-            const body = `## UX Analysis
+            const body = `${marker}
+## UX Analysis
 
-            | Check | Status | Details |
-            |-------|--------|---------|
-            | ${axeEmoji} Axe Core (WCAG 2.1 AA) | ${axeResult} | Critical/serious violations block merge |
-            | ${lighthouseEmoji} Lighthouse Performance | Score: ${lighthouseScore} | Warning if < 70 (non-blocking) |
-            | 🤖 Claude UX Analysis | Advisory | See docs/qa/ for findings |
+| Check | Status | Details |
+|-------|--------|---------|
+| ${axeEmoji} Axe Core (WCAG 2.1 AA) | ${axeResult} | Critical/serious violations block merge |
+| ${lighthouseEmoji} Lighthouse Performance | Score: ${lighthouseScore} | Warning if < 70 (non-blocking) |
+| 🤖 Claude UX Analysis | Advisory | See docs/qa/ for findings |
 
-            > Axe Core excludes terminal rendering areas (intentional design).
-            > Lighthouse runs in desktop preset for this developer tool.`;
+> Axe Core excludes terminal rendering areas (intentional design).
+> Lighthouse runs in desktop preset for this developer tool.`;
 
-            await github.rest.issues.createComment({
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: body.replace(/^            /gm, ''),
             });
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

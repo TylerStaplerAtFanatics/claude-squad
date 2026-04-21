@@ -4,8 +4,8 @@ module.exports = {
   ci: {
     collect: {
       url: [
-        'http://localhost:8544',
-        'http://localhost:8544/review-queue',
+        'http://localhost:8543',
+        'http://localhost:8543/review-queue',
       ],
       numberOfRuns: 1,
       settings: {
