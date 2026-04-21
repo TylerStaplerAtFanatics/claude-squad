@@ -31,6 +31,7 @@ type PushNotification struct {
 	Tag                string                 `json:"tag,omitempty"`
 	Data               map[string]interface{} `json:"data,omitempty"`
 	RequireInteraction bool                   `json:"requireInteraction,omitempty"`
+	Renotify           bool                   `json:"renotify,omitempty"`
 }
 
 type PushService struct {
@@ -140,7 +141,7 @@ func (ps *PushService) GetVapidPublicKey() string {
 
 func (ps *PushService) Subscribe(sub PushSubscription) string {
 	ps.mu.Lock()
-	defer ps.mu.RUnlock()
+	defer ps.mu.Unlock()
 
 	hash := sha256.Sum256([]byte(sub.Endpoint))
 	subID := base64.RawURLEncoding.EncodeToString(hash[:])
@@ -195,7 +196,11 @@ func (ps *PushService) SendNotification(notif PushNotification) int {
 	successCount := 0
 	for _, sub := range subs {
 		if err := ps.sendToSubscription(sub, notif); err != nil {
-			log.ErrorLog.Printf("Failed to send push notification to %s: %v", sub.Endpoint[:50], err)
+			endpoint := sub.Endpoint
+			if len(endpoint) > 50 {
+				endpoint = endpoint[:50]
+			}
+			log.ErrorLog.Printf("Failed to send push notification to %s: %v", endpoint, err)
 			continue
 		}
 		successCount++
@@ -234,27 +239,28 @@ func (ps *PushService) sendToSubscription(sub PushSubscription, notif PushNotifi
 		return fmt.Errorf("failed to get private key PEM: %w", err)
 	}
 
-	_, err = webpush.SendNotification(body, subInfo, &webpush.Options{
+	resp, err := webpush.SendNotification(body, subInfo, &webpush.Options{
 		VAPIDPrivateKey: privateKeyPEM,
 		VAPIDPublicKey:  ps.vapidPublicKey,
 		TTL:             60 * 60 * 24, // 24 hours
 	})
-
+	if resp != nil {
+		defer resp.Body.Close()
+		if resp.StatusCode == 410 || resp.StatusCode == 404 {
+			ps.Unsubscribe(sub.Endpoint)
+			return nil
+		}
+	}
 	return err
 }
 
-// getPrivateKeyPEM returns the private key in PEM format for webpush-go library
+// getPrivateKeyPEM returns the VAPID private key as a base64url-encoded string
+// (raw 32-byte D value), which is the format expected by webpush-go.
 func (ps *PushService) getPrivateKeyPEM() (string, error) {
 	if ps.vapidPrivateKey == nil {
 		return "", fmt.Errorf("VAPID private key not initialized")
 	}
-
-	// Convert private key to PEM format
-	privateKeyBytes, err := ps.vapidPrivateKey.D.MarshalText()
-	if err != nil {
-		return "", err
-	}
-	return string(privateKeyBytes), nil
+	return base64.RawURLEncoding.EncodeToString(ps.vapidPrivateKey.D.Bytes()), nil
 }
 
 func (ps *PushService) loadSubscriptions() error {
