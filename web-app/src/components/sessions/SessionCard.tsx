@@ -1228,7 +1228,7 @@ export function SessionCard({
           )}
           {onRunOneShot && (
             <button
-              className={styles.actionButton}
+              className={actionButton}
               onClick={handleRunOneShot}
               disabled={isRunningOneShot}
               title="Run claude one-shot to create a PR for this session"
