@@ -1,7 +1,7 @@
 package services
 
 import (
-	"crypto/elliptic"
+	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
@@ -28,10 +28,10 @@ func newTestPushService(t *testing.T) *PushService {
 // secret so the webpush library can complete encryption and reach the test server.
 func newValidSubscription(t *testing.T, endpoint string) PushSubscription {
 	t.Helper()
-	curve := elliptic.P256()
-	_, x, y, err := elliptic.GenerateKey(curve, rand.Reader)
+	privKey, err := ecdh.P256().GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	p256dh := base64.RawURLEncoding.EncodeToString(elliptic.Marshal(curve, x, y))
+	// Uncompressed P-256 point: 0x04 || X || Y (65 bytes) — webpush expects this format.
+	p256dh := base64.RawURLEncoding.EncodeToString(privKey.PublicKey().Bytes())
 
 	authBytes := make([]byte, 16)
 	_, err = rand.Read(authBytes)
