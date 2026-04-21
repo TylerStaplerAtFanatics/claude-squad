@@ -151,11 +151,20 @@ jobs:
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          git pull --rebase --autostash origin ${{ github.head_ref }}
-          git add docs/demos/*.gif
+          # Save GIFs before switching branches — the PR workflow checks out a
+          # detached merge commit, not the PR branch tip. Rebasing that merge
+          # commit causes add/add conflicts with every file the PR touches.
+          cp -r docs/demos /tmp/e2e-demos
+          # Switch to the actual PR branch head for a clean push
+          git fetch origin ${{ github.head_ref }}
+          git checkout -B ${{ github.head_ref }} origin/${{ github.head_ref }}
+          # Restore GIFs onto the branch
+          mkdir -p docs/demos
+          cp /tmp/e2e-demos/*.gif docs/demos/
+          git add docs/demos/
           git diff --cached --quiet && echo "No GIF changes to commit" && exit 0
           git commit -m "chore(demos): update E2E feature GIFs [skip ci]"
-          git push origin HEAD:${{ github.head_ref }}
+          git push origin ${{ github.head_ref }}
 
       - name: Upload E2E videos as artifacts
         id: upload-videos
