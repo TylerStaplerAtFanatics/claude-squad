@@ -60,7 +60,13 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          // SwiftShader: software WebGL so terminal canvas renders in headless CI
+          args: ['--use-gl=swiftshader', '--disable-gpu-sandbox'],
+        },
+      },
     },
   ],
 });

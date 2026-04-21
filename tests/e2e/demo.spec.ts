@@ -32,7 +32,7 @@ import * as fs from 'fs';
  *   08 - Final hero            back to sessions dashboard
  */
 
-const BASE_URL = process.env.TEST_SERVER_URL || 'http://localhost:8544';
+const BASE_URL = process.env.TEST_SERVER_URL || 'http://localhost:8543';
 const SNAP_DIR = process.env.PLAYWRIGHT_VIDEO_OUTPUT_DIR || '/tmp/demo-video-output';
 
 function snap(page: import('@playwright/test').Page, name: string) {

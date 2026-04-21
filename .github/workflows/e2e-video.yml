@@ -75,6 +75,7 @@ jobs:
         env:
           RECORD_FEATURES: 'true'
           STAPLER_SQUAD_INSTANCE: test-${{ github.run_id }}
+          TEST_SERVER_URL: http://localhost:8543
         run: |
           # Start test server in background
           STAPLER_SQUAD_USE_CONTROL_MODE=false STAPLER_SQUAD_INSTANCE=test-${{ github.run_id }} \
@@ -116,7 +117,9 @@ jobs:
         run: |
           mkdir -p docs/demos
           NAMES=""
-          for webm in $(find tests/e2e/test-results -name "*.webm" 2>/dev/null | head -5); do
+          for webm in $(find tests/e2e/test-results -name "*.webm" 2>/dev/null \
+            | grep -iv "terminal-flickering\|stress-test\|terminal-stress" \
+            | head -5); do
             dir=$(basename "$(dirname "$webm")")
             name=$(echo "$dir" | sed 's/-chromium$//;s/-firefox$//;s/-webkit$//')
             gif="docs/demos/${name}.gif"
