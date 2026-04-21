@@ -113,7 +113,7 @@ jobs:
         run: |
           mkdir -p docs/demos
           NAMES=""
-          for webm in $(find tests/e2e/test-results -name "video.webm" 2>/dev/null | head -5); do
+          for webm in $(find tests/e2e/test-results -name "*.webm" 2>/dev/null | head -5); do
             dir=$(basename "$(dirname "$webm")")
             name=$(echo "$dir" | sed 's/-chromium$//;s/-firefox$//;s/-webkit$//')
             if ffmpeg -y -i "$webm" \
