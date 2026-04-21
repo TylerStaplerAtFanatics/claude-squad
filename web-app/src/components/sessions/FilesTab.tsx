@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { FileStatus, FileChange } from "@/gen/session/v1/types_pb";
 import { useVcsStatus } from "@/lib/hooks/useVcsStatus";
 import { FileTree } from "./FileTree";
 import { FileContentViewer } from "./FileContentViewer";
-import styles from "./FilesTab.module.css";
+import { useSessionVcsContext } from "@/lib/contexts/SessionVcsContext";
+import {
+  container, treePane, contentPane, toolbar, searchInput,
+  toolbarLabel, toolbarButton, searchCount, treeWrapper,
+} from "./FilesTab.css";
 
 // ---- Git status helpers ----
 
@@ -55,19 +59,18 @@ export function FilesTab({
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResultCount, setSearchResultCount] = useState<number | null>(null);
   const [searchResultTruncated, setSearchResultTruncated] = useState(false);
-  const [gitStatusMap, setGitStatusMap] = useState<Map<string, string>>(new Map());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fileTreeCollapseRef = useRef<(() => void) | null>(null);
 
-  // Shared VCS hook – same cache as VcsPanel, no duplicate requests.
-  const { data: vcsStatus, loading: vcsLoading, refetch: refreshVcs } = useVcsStatus(sessionId, baseUrl);
+  // VCS status comes from shared context — no independent fetch.
+  const { status, statusLoading: vcsLoading, refreshStatus } = useSessionVcsContext();
 
-  // Rebuild git status map whenever VCS data changes.
-  useEffect(() => {
-    if (!vcsStatus) return;
-    const { stagedFiles, unstagedFiles, untrackedFiles } = vcsStatus;
-    setGitStatusMap(buildGitStatusMap([...stagedFiles, ...unstagedFiles, ...untrackedFiles]));
-  }, [vcsStatus]);
+  // Derive git status map from shared VCS status.
+  const gitStatusMap = useMemo(() => {
+    if (!status) return new Map<string, string>();
+    const { stagedFiles, unstagedFiles, untrackedFiles } = status;
+    return buildGitStatusMap([...stagedFiles, ...unstagedFiles, ...untrackedFiles]);
+  }, [status]);
 
   // Notify parent when selection changes.
   const handleFileSelect = useCallback(
@@ -89,7 +92,6 @@ export function FilesTab({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "f") {
-        // Only intercept if this tab is active (we're rendered).
         e.preventDefault();
         searchInputRef.current?.focus();
       }
@@ -99,25 +101,25 @@ export function FilesTab({
   }, []);
 
   return (
-    <div className={styles.container}>
+    <div className={container}>
       {/* Left pane: file tree */}
-      <div className={styles.treePane}>
-        <div className={styles.toolbar}>
+      <div className={treePane}>
+        <div className={toolbar}>
           <input
             ref={searchInputRef}
             type="search"
-            className={styles.searchInput}
+            className={searchInput}
             placeholder="Search files… (⌘F)"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             aria-label="Search files"
           />
           {searchResultCount !== null && searchTerm.length >= 2 && (
-            <span className={styles.searchCount} title={searchResultTruncated ? "Results truncated at 500" : undefined}>
+            <span className={searchCount} title={searchResultTruncated ? "Results truncated at 500" : undefined}>
               {searchResultCount}{searchResultTruncated ? "+" : ""} match{searchResultCount !== 1 ? "es" : ""}
             </span>
           )}
-          <label className={styles.toolbarLabel} title="Show gitignored files">
+          <label className={toolbarLabel} title="Show gitignored files">
             <input
               type="checkbox"
               checked={includeIgnored}
@@ -126,22 +128,22 @@ export function FilesTab({
             Ignored
           </label>
           <button
-            className={styles.toolbarButton}
+            className={toolbarButton}
             onClick={() => fileTreeCollapseRef.current?.()}
             title="Collapse all directories"
           >
             ⊟
           </button>
           <button
-            className={styles.toolbarButton}
-            onClick={refreshVcs}
+            className={toolbarButton}
+            onClick={() => refreshStatus()}
             title="Refresh git status"
             disabled={vcsLoading}
           >
             {vcsLoading ? "⟳" : "↺"}
           </button>
         </div>
-        <div className={styles.treeWrapper}>
+        <div className={treeWrapper}>
           <FileTree
             sessionId={sessionId}
             baseUrl={baseUrl}
@@ -160,7 +162,7 @@ export function FilesTab({
       </div>
 
       {/* Right pane: file content */}
-      <div className={styles.contentPane}>
+      <div className={contentPane}>
         <FileContentViewer
           sessionId={sessionId}
           filePath={selectedPath}

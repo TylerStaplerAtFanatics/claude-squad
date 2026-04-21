@@ -1,6 +1,7 @@
 "use client";
 
-import styles from './FilterPill.module.css';
+import React from 'react';
+import { container as containerClass, pill as pillClass, label as labelClass, value as valueClass, removeButton as removeButtonClass, clearAllButton as clearAllButtonClass } from './FilterPill.css';
 
 interface FilterPillProps {
   label: string;
@@ -13,15 +14,15 @@ interface FilterPillProps {
 export function FilterPill({ label, value, onRemove, color, className }: FilterPillProps) {
   return (
     <div
-      className={`${styles.pill} ${className || ''}`}
+      className={`${pillClass} ${className || ''}`}
       style={color ? { borderColor: color } : undefined}
     >
-      <span className={styles.label}>{label}:</span>
-      <span className={styles.value} style={color ? { color } : undefined}>
+      <span className={labelClass}>{label}:</span>
+      <span className={valueClass} style={color ? { color } : undefined}>
         {value}
       </span>
       <button
-        className={styles.removeButton}
+        className={removeButtonClass}
         onClick={onRemove}
         aria-label={`Remove ${label}: ${value} filter`}
         type="button"
@@ -46,11 +47,11 @@ export function FilterPills({ children, onClearAll, className }: FilterPillsProp
   }
 
   return (
-    <div className={`${styles.container} ${className || ''}`}>
+    <div className={`${containerClass} ${className || ''}`}>
       {children}
       {onClearAll && (
         <button
-          className={styles.clearAllButton}
+          className={clearAllButtonClass}
           onClick={onClearAll}
           type="button"
           aria-label="Clear all filters"
@@ -62,6 +63,4 @@ export function FilterPills({ children, onClearAll, className }: FilterPillsProp
   );
 }
 
-// Re-export for convenience
-import React from 'react';
 export default FilterPill;

@@ -67,6 +67,11 @@
   --breakpoint-lg: 1024px;
   --breakpoint-xl: 1280px;
 
+  /* Pixel 9 Pro Fold breakpoints */
+  --breakpoint-outer: 390px;   /* outer screen */
+  --breakpoint-fold: 600px;    /* between outer and inner */
+  --breakpoint-inner: 900px;   /* inner screen */
+
   /* Touch target sizes (WCAG 2.1 AA) */
   --min-touch-target: 44px;
 
@@ -471,6 +476,15 @@ a {
 
 .skip-link:focus {
   top: 0;
+}
+
+/* Chrome 138+ Pixel 9 Pro Fold — progressive enhancement only */
+@media (horizontal-viewport-segments: 2) {
+  :root {
+    --fold-left-width: env(viewport-segment-width 0 0);
+    --fold-right-width: env(viewport-segment-width 1 0);
+    --fold-gap: env(viewport-segment-left 1 0);
+  }
 }
 
 /* Respect reduced-motion user preference (WCAG 2.3.3) */

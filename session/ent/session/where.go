@@ -60,11 +60,6 @@ func Title(v string) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldTitle, v))
 }
 
-// UUID applies equality check predicate on the "uuid" field. It's identical to UUIDEQ.
-func UUID(v string) predicate.Session {
-	return predicate.Session(sql.FieldEQ(FieldUUID, v))
-}
-
 // Path applies equality check predicate on the "path" field. It's identical to PathEQ.
 func Path(v string) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldPath, v))
@@ -248,81 +243,6 @@ func TitleEqualFold(v string) predicate.Session {
 // TitleContainsFold applies the ContainsFold predicate on the "title" field.
 func TitleContainsFold(v string) predicate.Session {
 	return predicate.Session(sql.FieldContainsFold(FieldTitle, v))
-}
-
-// UUIDEQ applies the EQ predicate on the "uuid" field.
-func UUIDEQ(v string) predicate.Session {
-	return predicate.Session(sql.FieldEQ(FieldUUID, v))
-}
-
-// UUIDNEQ applies the NEQ predicate on the "uuid" field.
-func UUIDNEQ(v string) predicate.Session {
-	return predicate.Session(sql.FieldNEQ(FieldUUID, v))
-}
-
-// UUIDIn applies the In predicate on the "uuid" field.
-func UUIDIn(vs ...string) predicate.Session {
-	return predicate.Session(sql.FieldIn(FieldUUID, vs...))
-}
-
-// UUIDNotIn applies the NotIn predicate on the "uuid" field.
-func UUIDNotIn(vs ...string) predicate.Session {
-	return predicate.Session(sql.FieldNotIn(FieldUUID, vs...))
-}
-
-// UUIDGT applies the GT predicate on the "uuid" field.
-func UUIDGT(v string) predicate.Session {
-	return predicate.Session(sql.FieldGT(FieldUUID, v))
-}
-
-// UUIDGTE applies the GTE predicate on the "uuid" field.
-func UUIDGTE(v string) predicate.Session {
-	return predicate.Session(sql.FieldGTE(FieldUUID, v))
-}
-
-// UUIDLT applies the LT predicate on the "uuid" field.
-func UUIDLT(v string) predicate.Session {
-	return predicate.Session(sql.FieldLT(FieldUUID, v))
-}
-
-// UUIDLTE applies the LTE predicate on the "uuid" field.
-func UUIDLTE(v string) predicate.Session {
-	return predicate.Session(sql.FieldLTE(FieldUUID, v))
-}
-
-// UUIDContains applies the Contains predicate on the "uuid" field.
-func UUIDContains(v string) predicate.Session {
-	return predicate.Session(sql.FieldContains(FieldUUID, v))
-}
-
-// UUIDHasPrefix applies the HasPrefix predicate on the "uuid" field.
-func UUIDHasPrefix(v string) predicate.Session {
-	return predicate.Session(sql.FieldHasPrefix(FieldUUID, v))
-}
-
-// UUIDHasSuffix applies the HasSuffix predicate on the "uuid" field.
-func UUIDHasSuffix(v string) predicate.Session {
-	return predicate.Session(sql.FieldHasSuffix(FieldUUID, v))
-}
-
-// UUIDIsNil applies the IsNil predicate on the "uuid" field.
-func UUIDIsNil() predicate.Session {
-	return predicate.Session(sql.FieldIsNull(FieldUUID))
-}
-
-// UUIDNotNil applies the NotNil predicate on the "uuid" field.
-func UUIDNotNil() predicate.Session {
-	return predicate.Session(sql.FieldNotNull(FieldUUID))
-}
-
-// UUIDEqualFold applies the EqualFold predicate on the "uuid" field.
-func UUIDEqualFold(v string) predicate.Session {
-	return predicate.Session(sql.FieldEqualFold(FieldUUID, v))
-}
-
-// UUIDContainsFold applies the ContainsFold predicate on the "uuid" field.
-func UUIDContainsFold(v string) predicate.Session {
-	return predicate.Session(sql.FieldContainsFold(FieldUUID, v))
 }
 
 // PathEQ applies the EQ predicate on the "path" field.

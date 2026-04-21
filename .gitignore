@@ -4,9 +4,14 @@
 stapler-squad
 claude-squad
 claude-mux
+ssq-hooks
 **.DS_Store
 cs
 stapler-squad-test
+
+# Override global gitignore: track source files in directories named "logs"
+!web-app/src/**/logs/
+!web-app/src/**/logs/**
 
 # Generated protocol buffer code
 gen/

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import styles from "./LiveRegion.module.css";
+import { srOnly } from "./LiveRegion.css";
 
 interface LiveRegionProps {
   message: string;
@@ -22,7 +22,7 @@ export function LiveRegion({ message, politeness = "polite" }: LiveRegionProps) 
       role="status"
       aria-live={politeness}
       aria-atomic="true"
-      className={styles.srOnly}
+      className={srOnly}
     >
       {currentMessage}
     </div>

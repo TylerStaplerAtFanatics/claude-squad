@@ -253,6 +253,10 @@ service SessionService {
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse) {}
   rpc AssignSessionsToProject(AssignSessionsToProjectRequest) returns (AssignSessionsToProjectResponse) {}
 
+  // ListBranches returns the git branches for a given repository path.
+  // Used by the SessionWizard branch autocomplete field.
+  rpc ListBranches(ListBranchesRequest) returns (ListBranchesResponse) {}
+
   // GetTerminalSnapshot returns the last N lines of terminal output for a session
   // without requiring an active stream. Suitable for session card previews.
   rpc GetTerminalSnapshot(GetTerminalSnapshotRequest) returns (GetTerminalSnapshotResponse) {}
@@ -634,6 +638,11 @@ message ClaudeHistoryEntry {
   string model = 6;
   // Number of messages in the conversation
   int32 message_count = 7;
+
+  // VCS state for the project directory — populated only by GetClaudeHistoryDetail
+  // (lazy enrichment, not included in list responses).  Null/absent means the
+  // directory is not a version-controlled repo or state was not requested.
+  VCSStatus vcs_status = 8;
 }
 
 message GetClaudeHistoryMessagesRequest {
@@ -1645,6 +1654,26 @@ message AssignSessionsToProjectRequest {
 
 message AssignSessionsToProjectResponse {
   int32 updated_count = 1;
+}
+
+// ListBranches
+
+message ListBranchesRequest {
+  // Absolute path to the git repository root.
+  string repo_path = 1;
+  // Optional substring filter applied in Go (case-insensitive).
+  string filter = 2;
+  // Maximum number of branches to return (default 200).
+  int32 max_results = 3;
+  // Whether to include remote-tracking branches (default false).
+  bool include_remote = 4;
+}
+
+message ListBranchesResponse {
+  repeated string branches = 1;
+  int32 total_count = 2;
+  // True if the command timed out before all branches were collected.
+  bool truncated = 3;
 }
 
 // GetTerminalSnapshot

@@ -1,6 +1,6 @@
 "use client";
 
-import styles from './DensityToggle.module.css';
+import { container, option, active } from './DensityToggle.css';
 
 export type LogDensity = 'compact' | 'comfortable' | 'spacious';
 
@@ -21,19 +21,19 @@ const DENSITY_OPTIONS: { value: LogDensity; label: string; icon: string }[] = [
 
 export function DensityToggle({ value, onChange, className }: DensityToggleProps) {
   return (
-    <div className={`${styles.container} ${className || ''}`} role="radiogroup" aria-label="Log density">
-      {DENSITY_OPTIONS.map((option) => (
+    <div className={`${container} ${className || ''}`} role="radiogroup" aria-label="Log density">
+      {DENSITY_OPTIONS.map((opt) => (
         <button
-          key={option.value}
-          className={`${styles.option} ${value === option.value ? styles.active : ''}`}
-          onClick={() => onChange(option.value)}
+          key={opt.value}
+          className={`${option} ${value === opt.value ? active : ''}`}
+          onClick={() => onChange(opt.value)}
           role="radio"
-          aria-checked={value === option.value}
-          aria-label={option.label}
-          title={option.label}
+          aria-checked={value === opt.value}
+          aria-label={opt.label}
+          title={opt.label}
           type="button"
         >
-          {option.icon}
+          {opt.icon}
         </button>
       ))}
     </div>

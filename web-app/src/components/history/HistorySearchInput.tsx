@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSearchHistory } from "@/lib/hooks/useSearchHistory";
-import styles from "./HistorySearchInput.module.css";
+import * as styles from "./HistorySearchInput.css";
 
 interface HistorySearchInputProps {
   /** Current search query */

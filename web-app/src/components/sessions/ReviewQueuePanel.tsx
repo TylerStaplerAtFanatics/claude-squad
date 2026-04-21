@@ -6,7 +6,60 @@ import { useApprovalsContext } from "@/lib/contexts/ApprovalsContext";
 import { useReviewQueueNavigation } from "@/lib/hooks/useReviewQueueNavigation";
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
 import { Priority, AttentionReason, ReviewItem } from "@/gen/session/v1/types_pb";
-import styles from "./ReviewQueuePanel.module.css";
+import {
+  panel,
+  header,
+  titleRow,
+  title,
+  count,
+  refreshButton,
+  stats,
+  stat,
+  filters,
+  filterGroup,
+  filterLabel,
+  filterButtons,
+  filterButton,
+  filterButtonActive,
+  items as itemsClass,
+  item,
+  itemClickable,
+  currentItem,
+  itemActions,
+  itemHeader,
+  itemTitle,
+  itemBody,
+  itemContext,
+  commandPreview,
+  expiredBadge,
+  itemPattern,
+  sessionDetails,
+  detailRow,
+  detailLabel,
+  detailValue,
+  tags,
+  tag,
+  itemFooter,
+  itemAge,
+  diffStats,
+  diffAdded,
+  diffRemoved,
+  loading as loadingClass,
+  empty as emptyClass,
+  error as errorClass,
+  emptySubtext,
+  completionState,
+  completionIcon,
+  retryButton,
+  visuallyHidden,
+  oldestCallout,
+  newItemsBanner,
+  filterToggleRow,
+  filterToggle,
+  filterToggleActive,
+  filterClear,
+} from "./ReviewQueuePanel.css";
+import { Button } from "@/components/ui";
 
 interface ReviewQueuePanelProps {
   onSessionClick?: (sessionId: string) => void;
@@ -262,34 +315,34 @@ export function ReviewQueuePanel({
 
   if (error) {
     return (
-      <div className={styles.error}>
+      <div className={errorClass}>
         <p>Failed to load review queue: {error.message}</p>
-        <button onClick={refresh} className={styles.retryButton}>
+        <Button onClick={refresh} intent="secondary" size="md">
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className={styles.panel} data-testid="review-queue">
+    <div className={panel} data-testid="review-queue">
       {/* Screen reader live region for queue count changes */}
-      <div aria-live="polite" aria-atomic="true" className={styles.visuallyHidden}>
+      <div aria-live="polite" aria-atomic="true" className={visuallyHidden}>
         {liveAnnouncement}
       </div>
-      <div className={styles.header}>
-        <div className={styles.titleRow}>
-          <h2 className={styles.title}>
+      <div className={header}>
+        <div className={titleRow}>
+          <h2 className={title}>
             Review Queue{" "}
             {totalItems > 0 && (
-              <span className={styles.count} data-testid="review-queue-badge">
+              <span className={count} data-testid="review-queue-badge">
                 ({totalItems})
               </span>
             )}
           </h2>
           <button
             onClick={refreshSnapshot}
-            className={styles.refreshButton}
+            className={refreshButton}
             disabled={loading}
             aria-label="Refresh review queue"
           >
@@ -298,8 +351,8 @@ export function ReviewQueuePanel({
         </div>
 
         {totalItems > 0 && (
-          <div className={styles.stats} data-testid="queue-statistics">
-            <span className={styles.stat} data-testid="total-items">
+          <div className={stats} data-testid="queue-statistics">
+            <span className={stat} data-testid="total-items">
               {summaryCount || `${totalItems} ${totalItems === 1 ? "item" : "items"}`}
             </span>
           </div>
@@ -307,7 +360,7 @@ export function ReviewQueuePanel({
 
         {/* Heads-up callout when oldest item is over 5 minutes old */}
         {oldestAgeSeconds > BigInt(300) && (
-          <div className={styles.oldestCallout} role="status">
+          <div className={oldestCallout} role="status">
             Oldest item: {formatDuration(oldestAgeSeconds)}
           </div>
         )}
@@ -315,7 +368,7 @@ export function ReviewQueuePanel({
         {/* New-items banner: shows when items arrive after snapshot was taken */}
         {newItemsCount > 0 && (
           <button
-            className={styles.newItemsBanner}
+            className={newItemsBanner}
             onClick={refreshSnapshot}
             aria-label={`${newItemsCount} new item${newItemsCount !== 1 ? "s" : ""} added. Click to refresh the list.`}
           >
@@ -325,9 +378,9 @@ export function ReviewQueuePanel({
       </div>
 
       {totalItems > 0 && (
-        <div className={styles.filterToggleRow}>
+        <div className={filterToggleRow}>
           <button
-            className={`${styles.filterToggle} ${hasActiveFilter ? styles.filterToggleActive : ""}`}
+            className={`${filterToggle} ${hasActiveFilter ? filterToggleActive : ""}`}
             onClick={() => setIsFiltersOpen((o) => !o)}
             aria-expanded={isFiltersOpen}
             aria-controls="review-queue-filters"
@@ -336,7 +389,7 @@ export function ReviewQueuePanel({
           </button>
           {hasActiveFilter && (
             <button
-              className={styles.filterClear}
+              className={filterClear}
               onClick={() => { setPriorityFilter(undefined); setReasonFilter(undefined); }}
               aria-label="Clear active filter"
             >
@@ -347,12 +400,12 @@ export function ReviewQueuePanel({
       )}
 
       {isFiltersOpen && (
-        <div id="review-queue-filters" className={styles.filters}>
-          <div className={styles.filterGroup}>
-            <label className={styles.filterLabel}>Priority:</label>
-            <div className={styles.filterButtons}>
+        <div id="review-queue-filters" className={filters}>
+          <div className={filterGroup}>
+            <label className={filterLabel}>Priority:</label>
+            <div className={filterButtons}>
               <button
-                className={`${styles.filterButton} ${priorityFilter === undefined ? styles.active : ""}`}
+                className={`${filterButton} ${priorityFilter === undefined ? filterButtonActive : ""}`}
                 onClick={() => handleFilterByPriority(undefined)}
                 aria-pressed={priorityFilter === undefined}
               >
@@ -360,16 +413,16 @@ export function ReviewQueuePanel({
               </button>
               {[Priority.URGENT, Priority.HIGH, Priority.MEDIUM, Priority.LOW].map(
                 (priority) => {
-                  const count = byPriority.get(priority) ?? 0;
+                  const priorityCount = byPriority.get(priority) ?? 0;
                   return (
                     <button
                       key={priority}
-                      className={`${styles.filterButton} ${priorityFilter === priority ? styles.active : ""}`}
+                      className={`${filterButton} ${priorityFilter === priority ? filterButtonActive : ""}`}
                       onClick={() => handleFilterByPriority(priority)}
-                      disabled={count === 0}
+                      disabled={priorityCount === 0}
                       aria-pressed={priorityFilter === priority}
                     >
-                      {getPriorityLabel(priority)} ({count})
+                      {getPriorityLabel(priority)} ({priorityCount})
                     </button>
                   );
                 }
@@ -377,11 +430,11 @@ export function ReviewQueuePanel({
             </div>
           </div>
 
-          <div className={styles.filterGroup}>
-            <label className={styles.filterLabel}>Reason:</label>
-            <div className={styles.filterButtons}>
+          <div className={filterGroup}>
+            <label className={filterLabel}>Reason:</label>
+            <div className={filterButtons}>
               <button
-                className={`${styles.filterButton} ${reasonFilter === undefined ? styles.active : ""}`}
+                className={`${filterButton} ${reasonFilter === undefined ? filterButtonActive : ""}`}
                 onClick={() => handleFilterByReason(undefined)}
                 aria-pressed={reasonFilter === undefined}
               >
@@ -396,16 +449,16 @@ export function ReviewQueuePanel({
                 AttentionReason.STALE,
                 AttentionReason.TASK_COMPLETE,
               ].map((reason) => {
-                const count = byReason.get(reason) ?? 0;
+                const reasonCount = byReason.get(reason) ?? 0;
                 return (
                   <button
                     key={reason}
-                    className={`${styles.filterButton} ${reasonFilter === reason ? styles.active : ""}`}
+                    className={`${filterButton} ${reasonFilter === reason ? filterButtonActive : ""}`}
                     onClick={() => handleFilterByReason(reason)}
-                    disabled={count === 0}
+                    disabled={reasonCount === 0}
                     aria-pressed={reasonFilter === reason}
                   >
-                    {getReasonLabel(reason)} ({count})
+                    {getReasonLabel(reason)} ({reasonCount})
                   </button>
                 );
               })}
@@ -414,183 +467,186 @@ export function ReviewQueuePanel({
         </div>
       )}
 
-      <div className={styles.items}>
+      <div className={itemsClass}>
         {loading && items.length === 0 ? (
-          <div className={styles.loading}>Loading review queue...</div>
+          <div className={loadingClass}>Loading review queue...</div>
         ) : items.length === 0 ? (
           hadItems ? (
-            <div className={`${styles.empty} ${styles.completionState}`}>
-              <p className={styles.completionIcon}>[✓]</p>
+            <div className={`${emptyClass} ${completionState}`}>
+              <p className={completionIcon}>[✓]</p>
               <p>All done! 0 items remaining.</p>
-              <p className={styles.emptySubtext}>
+              <p className={emptySubtext}>
                 Queue cleared.
               </p>
             </div>
           ) : (
-            <div className={styles.empty}>
+            <div className={emptyClass}>
               <p>No sessions need attention!</p>
-              <p className={styles.emptySubtext}>
+              <p className={emptySubtext}>
                 All sessions are running smoothly.
               </p>
             </div>
           )
         ) : (
           <>
-            {items.map((item, index) => (
+            {items.map((queueItem, index) => (
               <div
-                key={item.sessionId}
-                className={styles.item}
+                key={queueItem.sessionId}
+                className={item}
                 data-testid={index === currentIndex ? "current-item" : "review-item"}
-                data-session-id={item.sessionId}
+                data-session-id={queueItem.sessionId}
               >
                 <div
-                  className={`${styles.itemClickable} ${index === currentIndex ? styles.currentItem : ""}`}
-                  onClick={() => onSessionClick?.(item.sessionId)}
+                  className={`${itemClickable} ${index === currentIndex ? currentItem : ""}`}
+                  onClick={() => onSessionClick?.(queueItem.sessionId)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      onSessionClick?.(item.sessionId);
+                      onSessionClick?.(queueItem.sessionId);
                     }
                   }}
                   role="button"
                   tabIndex={0}
-                  data-testid={`review-item-${item.sessionId}`}
+                  data-testid={`review-item-${queueItem.sessionId}`}
                   data-current={index === currentIndex ? "true" : undefined}
                 >
-                  <div className={styles.itemHeader}>
-                    <h3 className={styles.itemTitle}>{item.sessionName}</h3>
+                  <div className={itemHeader}>
+                    <h3 className={itemTitle}>{queueItem.sessionName}</h3>
                     <ReviewQueueBadge
-                      priority={item.priority}
-                      reason={item.reason}
+                      priority={queueItem.priority}
+                      reason={queueItem.reason}
                       compact={true}
                     />
                   </div>
-                  <div className={styles.itemBody}>
+                  <div className={itemBody}>
                     <ReviewQueueBadge
-                      priority={item.priority}
-                      reason={item.reason}
+                      priority={queueItem.priority}
+                      reason={queueItem.reason}
                       compact={false}
                     />
-                    {item.context && !item.metadata?.["pending_approval_id"] && (
-                      <p className={styles.itemContext}>{item.context}</p>
+                    {queueItem.context && !queueItem.metadata?.["pending_approval_id"] && (
+                      <p className={itemContext}>{queueItem.context}</p>
                     )}
-                    {item.patternName && (
-                      <span className={styles.itemPattern}>
-                        Pattern: {item.patternName}
+                    {queueItem.patternName && (
+                      <span className={itemPattern}>
+                        Pattern: {queueItem.patternName}
                       </span>
                     )}
-                    {item.metadata?.["pending_approval_id"] && (
+                    {queueItem.metadata?.["pending_approval_id"] && (
                       <>
-                        {(item.metadata["tool_input_command"] || item.metadata["tool_input_file"]) && (
-                          <pre className={styles.commandPreview}>
-                            {item.metadata["tool_input_command"] || item.metadata["tool_input_file"]}
+                        {(queueItem.metadata["tool_input_command"] || queueItem.metadata["tool_input_file"]) && (
+                          <pre className={commandPreview}>
+                            {queueItem.metadata["tool_input_command"] || queueItem.metadata["tool_input_file"]}
                           </pre>
                         )}
-                        {item.metadata["cwd"] && (
-                          <div className={styles.detailRow}>
-                            <span className={styles.detailLabel}>Directory:</span>
-                            <span className={styles.detailValue}>{item.metadata["cwd"]}</span>
+                        {queueItem.metadata["cwd"] && (
+                          <div className={detailRow}>
+                            <span className={detailLabel}>Directory:</span>
+                            <span className={detailValue}>{queueItem.metadata["cwd"]}</span>
                           </div>
                         )}
-                        {item.metadata["orphaned"] === "true" && (
-                          <span className={styles.expiredBadge}>Expired</span>
+                        {queueItem.metadata["orphaned"] === "true" && (
+                          <span className={expiredBadge}>Expired</span>
                         )}
                       </>
                     )}
                     {/* Session details */}
-                    <div className={styles.sessionDetails}>
-                      <div className={styles.detailRow}>
-                        <span className={styles.detailLabel}>Program:</span>
-                        <span className={styles.detailValue}>{item.program}</span>
+                    <div className={sessionDetails}>
+                      <div className={detailRow}>
+                        <span className={detailLabel}>Program:</span>
+                        <span className={detailValue}>{queueItem.program}</span>
                       </div>
-                      <div className={styles.detailRow}>
-                        <span className={styles.detailLabel}>Branch:</span>
-                        <span className={styles.detailValue}>{item.branch}</span>
+                      <div className={detailRow}>
+                        <span className={detailLabel}>Branch:</span>
+                        <span className={detailValue}>{queueItem.branch}</span>
                       </div>
-                      <div className={styles.detailRow}>
-                        <span className={styles.detailLabel}>Path:</span>
-                        <span className={styles.detailValue} title={item.path}>{item.path}</span>
+                      <div className={detailRow}>
+                        <span className={detailLabel}>Path:</span>
+                        <span className={detailValue} title={queueItem.path}>{queueItem.path}</span>
                       </div>
-                      {item.tags && item.tags.length > 0 && (
-                        <div className={styles.detailRow}>
-                          <span className={styles.detailLabel}>Tags:</span>
-                          <div className={styles.tags}>
-                            {item.tags.map((tag, idx) => (
-                              <span key={idx} className={styles.tag}>{tag}</span>
+                      {queueItem.tags && queueItem.tags.length > 0 && (
+                        <div className={detailRow}>
+                          <span className={detailLabel}>Tags:</span>
+                          <div className={tags}>
+                            {queueItem.tags.map((t, idx) => (
+                              <span key={idx} className={tag}>{t}</span>
                             ))}
                           </div>
                         </div>
                       )}
                     </div>
                   </div>
-                  <div className={styles.itemFooter}>
-                    <span className={styles.itemAge}>
-                      Last Activity: {formatTimestamp(item.lastActivity?.seconds ?? BigInt(0))}{" "}
+                  <div className={itemFooter}>
+                    <span className={itemAge}>
+                      Last Activity: {formatTimestamp(queueItem.lastActivity?.seconds ?? BigInt(0))}{" "}
                       ago
                     </span>
-                    {item.diffStats && (item.diffStats.added > 0 || item.diffStats.removed > 0) && (
-                      <span className={styles.diffStats}>
-                        <span className={styles.diffAdded}>+{item.diffStats.added}</span>
-                        <span className={styles.diffRemoved}>-{item.diffStats.removed}</span>
+                    {queueItem.diffStats && (queueItem.diffStats.added > 0 || queueItem.diffStats.removed > 0) && (
+                      <span className={diffStats}>
+                        <span className={diffAdded}>+{queueItem.diffStats.added}</span>
+                        <span className={diffRemoved}>-{queueItem.diffStats.removed}</span>
                       </span>
                     )}
                   </div>
                 </div>
-                <div className={styles.itemActions}>
-                  {item.metadata?.["pending_approval_id"] && (
+                <div className={itemActions} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {queueItem.metadata?.["pending_approval_id"] && (
                     <>
-                      <button
-                        className={styles.approveButton}
+                      <Button
+                        intent="primary"
+                        size="lg"
                         onClick={(e) => {
                           e.stopPropagation();
-                          approveRequest(item.metadata!["pending_approval_id"]).finally(() => {
-                            acknowledgeSession(item.sessionId);
-                            onAcknowledged?.(item.sessionId);
+                          approveRequest(queueItem.metadata!["pending_approval_id"]).finally(() => {
+                            acknowledgeSession(queueItem.sessionId);
+                            onAcknowledged?.(queueItem.sessionId);
                           });
                         }}
                         title="Approve this tool-use request"
                         aria-label="Approve"
-                        data-testid={`approve-${item.sessionId}`}
+                        data-testid={`approve-${queueItem.sessionId}`}
                       >
-                        ✓
-                      </button>
-                      <button
-                        className={styles.denyButton}
+                        ✓ Approve
+                      </Button>
+                      <Button
+                        intent="danger"
+                        size="lg"
                         onClick={(e) => {
                           e.stopPropagation();
-                          denyRequest(item.metadata!["pending_approval_id"]).finally(() => {
-                            acknowledgeSession(item.sessionId);
-                            onAcknowledged?.(item.sessionId);
+                          denyRequest(queueItem.metadata!["pending_approval_id"]).finally(() => {
+                            acknowledgeSession(queueItem.sessionId);
+                            onAcknowledged?.(queueItem.sessionId);
                           });
                         }}
                         title="Deny this tool-use request"
                         aria-label="Deny"
-                        data-testid={`deny-${item.sessionId}`}
+                        data-testid={`deny-${queueItem.sessionId}`}
                       >
-                        ✗
-                      </button>
+                        ✗ Deny
+                      </Button>
                     </>
                   )}
                   {/* Skip button: only shown for non-approval items.
                       Approval items already have explicit ✓ Approve / ✗ Deny buttons above. */}
-                  {!item.metadata?.["pending_approval_id"] && (
-                    <button
-                      className={styles.skipButton}
+                  {!queueItem.metadata?.["pending_approval_id"] && (
+                    <Button
+                      intent="ghost"
+                      size="md"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (onSkipSession) {
-                          onSkipSession(item.sessionId);
+                          onSkipSession(queueItem.sessionId);
                         } else {
-                          acknowledgeSession(item.sessionId);
+                          acknowledgeSession(queueItem.sessionId);
                         }
-                        onAcknowledged?.(item.sessionId);
+                        onAcknowledged?.(queueItem.sessionId);
                       }}
                       title="Acknowledge session (remove from queue)"
                       aria-label="Acknowledge session"
-                      data-testid={`acknowledge-${item.sessionId}`}
+                      data-testid={`acknowledge-${queueItem.sessionId}`}
                     >
-                      ⏭
-                    </button>
+                      ⏭ Skip
+                    </Button>
                   )}
                 </div>
               </div>

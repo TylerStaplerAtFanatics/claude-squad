@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { SessionService } from "@/gen/session/v1/session_pb";
@@ -12,76 +12,67 @@ interface BranchSuggestionsOptions {
 }
 
 /**
- * Hook to provide git branch suggestions based on existing sessions.
- * Returns a list of unique branch names from all sessions, optionally filtered by repository.
+ * Hook to provide git branch suggestions from the real git refs of the selected repo.
+ * Calls ListBranches RPC when repositoryPath changes. Cancels in-flight requests on path change.
+ * Returns { suggestions, isLoading } — same interface as the previous implementation.
  */
 export function useBranchSuggestions(options: BranchSuggestionsOptions = {}) {
-  const { baseUrl = getApiBaseUrl() } = options;
+  const { repositoryPath, baseUrl = getApiBaseUrl() } = options;
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const fetchSuggestions = async () => {
+    // Cancel any in-flight request from a previous repositoryPath.
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    if (!repositoryPath) {
+      setSuggestions([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // Create transport and client once per effect invocation (not per retry).
+    const transport = createConnectTransport({ baseUrl });
+    const client = createClient(SessionService, transport);
+
+    const fetchBranches = async () => {
+      setIsLoading(true);
+      setSuggestions([]);
+
       try {
-        setIsLoading(true);
+        const response = await client.listBranches(
+          { repoPath: repositoryPath },
+          { signal: controller.signal }
+        );
 
-        // Create ConnectRPC client
-        const transport = createConnectTransport({ baseUrl });
-        const client = createClient(SessionService, transport);
-
-        // Fetch all sessions to extract branch names
-        const response = await client.listSessions({});
-        const sessions = response.sessions || [];
-
-        // Extract unique branch names, optionally filtered by repository
-        const branches = new Set<string>();
-        sessions.forEach((session) => {
-          if (session.branch) {
-            // If repository path is specified, only include branches from that repo
-            if (options.repositoryPath) {
-              if (session.path === options.repositoryPath) {
-                branches.add(session.branch);
-              }
-            } else {
-              branches.add(session.branch);
-            }
-          }
-        });
-
-        // Convert to sorted array
-        let sortedBranches = Array.from(branches).sort();
-
-        // Add common branch patterns if no suggestions exist
-        if (sortedBranches.length === 0) {
-          sortedBranches = [
-            "main",
-            "master",
-            "develop",
-            "feature/",
-            "bugfix/",
-            "hotfix/",
-            "release/",
-          ];
+        if (!controller.signal.aborted) {
+          setSuggestions(response.branches ?? []);
         }
-
-        setSuggestions(sortedBranches);
-      } catch (error) {
+      } catch (error: unknown) {
+        if (controller.signal.aborted) {
+          return; // Request was cancelled — ignore
+        }
         console.error("Failed to fetch branch suggestions:", error);
-        // Provide fallback suggestions on error
-        setSuggestions([
-          "main",
-          "master",
-          "develop",
-          "feature/",
-          "bugfix/",
-        ]);
+        setSuggestions([]);
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchSuggestions();
-  }, [options.repositoryPath, baseUrl]);
+    fetchBranches();
+
+    return () => {
+      controller.abort();
+    };
+  }, [repositoryPath, baseUrl]);
 
   return { suggestions, isLoading };
 }

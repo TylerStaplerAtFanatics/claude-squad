@@ -1,11 +1,14 @@
 package services
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -81,6 +84,13 @@ type SessionService struct {
 	// scrollbackMgr provides access to per-session scrollback sequence numbers
 	// for checkpoint creation. May be nil if not wired (seq defaults to 0).
 	scrollbackMgr scrollbackSequencer
+
+	// mcpServerURL is the URL of the stapler-squad HTTP MCP endpoint.
+	// When non-empty, passed to new sessions via InstanceOptions.MCPServerURL.
+	mcpServerURL string
+
+	// branchCache caches git branch lists per repo path. ADR-002.
+	branchCache sync.Map // map[string]branchCacheEntry
 }
 
 // scrollbackSequencer is the minimal interface SessionService needs from ScrollbackManager.
@@ -341,6 +351,12 @@ func (s *SessionService) SetReactiveQueueManager(mgr ReactiveQueueManager) {
 	s.reviewQueueSvc.SetReactiveQueueManager(mgr)
 }
 
+// SetMCPServerURL configures the HTTP MCP endpoint URL passed to new sessions.
+// Call this during server startup after the listen address is known.
+func (s *SessionService) SetMCPServerURL(url string) {
+	s.mcpServerURL = url
+}
+
 // SetReviewQueuePoller wires the ReviewQueuePoller so new/deleted sessions are
 // added/removed from the poller and AcknowledgeSession updates poller references.
 // Must be called during server startup before any session mutation RPCs are used.
@@ -597,6 +613,7 @@ func (s *SessionService) CreateSession(
 		ResumeId:         req.Msg.ResumeId,
 		OneShot:          req.Msg.OneShot,
 		ProjectID:        req.Msg.ProjectId,
+		MCPServerURL:     s.mcpServerURL,
 	}
 
 	// Add GitHub metadata if this was a GitHub URL
@@ -1875,6 +1892,129 @@ func (s *SessionService) ListWorktrees(
 	return s.pathCompletionSvc.ListWorktrees(ctx, req)
 }
 
+// branchCacheEntry holds a cached branch list for a repository path.
+type branchCacheEntry struct {
+	branches []string
+	cachedAt time.Time
+}
+
+const branchCacheTTL = 5 * time.Minute
+
+// ListBranches returns the git branches for a given repository path.
+// Results are cached per repo path with a 5-minute TTL. ADR-002.
+func (s *SessionService) ListBranches(
+	ctx context.Context,
+	req *connect.Request[sessionv1.ListBranchesRequest],
+) (*connect.Response[sessionv1.ListBranchesResponse], error) {
+	repoPath := req.Msg.GetRepoPath()
+	if repoPath == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("repo_path is required"))
+	}
+
+	// Normalize and validate the path: must resolve within the user's home directory.
+	absPath, err := filepath.Abs(repoPath)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid repo_path: %w", err))
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cannot determine home directory: %w", err))
+	}
+	if !strings.HasPrefix(absPath, homeDir+string(filepath.Separator)) && absPath != homeDir {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("repo_path must be within the user home directory"))
+	}
+	if _, err := os.Stat(absPath); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("repo_path does not exist: %w", err))
+	}
+
+	maxResults := int(req.Msg.GetMaxResults())
+	if maxResults <= 0 {
+		maxResults = 200
+	}
+	filter := req.Msg.GetFilter()
+
+	// Serve from cache if still fresh.
+	if entry, ok := s.branchCache.Load(absPath); ok {
+		cached := entry.(branchCacheEntry)
+		if time.Since(cached.cachedAt) < branchCacheTTL {
+			branches := filterBranches(cached.branches, filter, maxResults)
+			return connect.NewResponse(&sessionv1.ListBranchesResponse{
+				Branches:   branches,
+				TotalCount: int32(len(branches)),
+				Truncated:  false,
+			}), nil
+		}
+	}
+
+	// Run git for-each-ref with a 2-second timeout.
+	cmdCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	refSpec := "refs/heads"
+	if req.Msg.GetIncludeRemote() {
+		refSpec = "refs/"
+	}
+	cmd := exec.CommandContext(cmdCtx, "git", "-C", absPath, "for-each-ref", refSpec, "--format=%(refname:short)")
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	start := time.Now()
+	runErr := cmd.Run()
+	latencyMs := time.Since(start).Milliseconds()
+	log.InfoLog.Printf("[ListBranches] branch_list_latency_ms=%d repo=%s", latencyMs, absPath)
+
+	truncated := false
+	if runErr != nil {
+		if cmdCtx.Err() == context.DeadlineExceeded {
+			// Timeout: return whatever partial output was collected.
+			truncated = true
+		} else {
+			// git failed (not a git repo, etc.): return empty list, not an error.
+			log.InfoLog.Printf("[ListBranches] git for-each-ref failed for %s: %v", absPath, runErr)
+			return connect.NewResponse(&sessionv1.ListBranchesResponse{
+				Branches:   []string{},
+				TotalCount: 0,
+				Truncated:  false,
+			}), nil
+		}
+	}
+
+	var all []string
+	scanner := bufio.NewScanner(&out)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			all = append(all, line)
+		}
+	}
+
+	// Cache the full unfiltered list.
+	s.branchCache.Store(absPath, branchCacheEntry{branches: all, cachedAt: time.Now()})
+
+	branches := filterBranches(all, filter, maxResults)
+	return connect.NewResponse(&sessionv1.ListBranchesResponse{
+		Branches:   branches,
+		TotalCount: int32(len(branches)),
+		Truncated:  truncated,
+	}), nil
+}
+
+// filterBranches applies a case-insensitive substring filter and caps results at maxResults.
+func filterBranches(all []string, filter string, maxResults int) []string {
+	lowerFilter := strings.ToLower(filter)
+	var result []string
+	for _, b := range all {
+		if filter == "" || strings.Contains(strings.ToLower(b), lowerFilter) {
+			result = append(result, b)
+			if len(result) >= maxResults {
+				break
+			}
+		}
+	}
+	return result
+}
+
 // findInstance finds an instance by title using the live in-memory poller.
 func (s *SessionService) findInstance(id string) *session.Instance {
 	if s.reviewQueuePoller != nil {
@@ -2331,10 +2471,7 @@ func (s *SessionService) GetTerminalSnapshot(
 		content = ""
 	}
 
-	// Trim to last N lines and strip trailing whitespace per line.
-	// tmux capture-pane pads each line with spaces to the full pane width (e.g. 220 chars).
-	// Without trimming, pre-wrap CSS causes each padded line to wrap into many visual lines,
-	// showing only 1-2 actual content lines in a fixed-height preview box.
+	// Trim to last N lines
 	lastN := int(req.Msg.LastNLines)
 	if lastN <= 0 {
 		lastN = 20
@@ -2342,9 +2479,6 @@ func (s *SessionService) GetTerminalSnapshot(
 	lines := strings.Split(content, "\n")
 	if len(lines) > lastN {
 		lines = lines[len(lines)-lastN:]
-	}
-	for i, line := range lines {
-		lines[i] = strings.TrimRight(line, " \t")
 	}
 	content = strings.Join(lines, "\n")
 

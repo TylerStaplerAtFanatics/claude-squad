@@ -192,6 +192,11 @@ type Instance struct {
 	// Set by HistoryLinker when it correlates this session to an open JSONL file.
 	HistoryFilePath string
 
+	// MCPServerURL is the URL of the stapler-squad HTTP MCP endpoint.
+	// When set, passed as --mcp-server to claude on session start so no
+	// settings-file injection is needed.
+	MCPServerURL string `json:"mcp_server_url,omitempty"`
+
 	// historyDetector is used by tryExtractConversationUUID. When nil the
 	// production inspector is used. Set in tests to inject a fake home dir.
 	historyDetector *HistoryFileDetector
@@ -593,6 +598,11 @@ type InstanceOptions struct {
 
 	// ProjectID associates the session with a project.
 	ProjectID string
+
+	// MCPServerURL, when non-empty and the program is claude, passes
+	// --mcp-server '{"stapler-squad":{"url":"<MCPServerURL>"}}' so the
+	// session can call back into stapler-squad without any file injection.
+	MCPServerURL string
 }
 
 func NewInstance(opts InstanceOptions) (*Instance, error) {
@@ -668,8 +678,9 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 		GitHubSourceRef: opts.GitHubSourceRef,
 		ClonedRepoPath:  opts.ClonedRepoPath,
 		// One-shot mode and project
-		OneShot:   opts.OneShot,
-		ProjectID: opts.ProjectID,
+		OneShot:      opts.OneShot,
+		ProjectID:    opts.ProjectID,
+		MCPServerURL: opts.MCPServerURL,
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice
@@ -1562,6 +1573,13 @@ func (i *Instance) Restart(preserveOutput bool) error {
 	if claudeSessionID != "" && strings.Contains(program, "claude") {
 		// Add --resume flag for Claude sessions
 		program = fmt.Sprintf("%s --resume %s", program, claudeSessionID)
+	}
+
+	// Inject MCP server URL via CLI flag so no settings-file write is needed.
+	// Only for claude commands; other programs (aider, etc.) don't support this flag.
+	if i.MCPServerURL != "" && strings.Contains(program, "claude") {
+		mcpFlag := fmt.Sprintf(`--mcp-server '{"stapler-squad":{"type":"http","url":%q}}'`, i.MCPServerURL)
+		program = program + " " + mcpFlag
 	}
 
 	// Add AutoYes flag if needed

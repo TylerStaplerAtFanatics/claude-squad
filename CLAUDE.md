@@ -912,6 +912,27 @@ make pre-commit    # Full pre-commit validation
 make all          # Complete workflow: clean + build + test + analyze
 ```
 
+### Simulating CI Locally
+
+Run `make ci` to execute the same workflow CI runs — the definitive pre-push check.
+
+```bash
+make ci           # Full CI pipeline: proto check → web build → Go build → tests → lint
+```
+
+`make ci` covers:
+1. Verifies proto-generated files are up to date (no uncommitted regeneration needed)
+2. Builds the Next.js web UI (`npm run build` in `web-app/`)
+3. Builds the Go binary
+4. Runs all Go tests (`go test ./...`)
+5. Runs `golangci-lint`
+
+Frontend tests (Jest) are **not** part of `make ci` — run them separately:
+```bash
+cd web-app && npx jest --no-coverage                                    # All frontend tests
+cd web-app && npx jest --testPathPatterns="<pattern>" --no-coverage     # Subset by name
+```
+
 ### Analysis and Quality
 ```bash
 make analyze       # Run all static analysis tools

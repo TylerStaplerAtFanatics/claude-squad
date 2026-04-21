@@ -85,7 +85,7 @@ export const pill = style({
   color: vars.color.textSecondary,
   borderRadius: vars.radii.sm,
   fontSize: vars.fontSize.xs,
-  fontFamily: vars.fontMono,
+  fontFamily: vars.font.mono,
   letterSpacing: "0.02em",
 });
 

@@ -16,8 +16,6 @@ const (
 	FieldID = "id"
 	// FieldTitle holds the string denoting the title field in the database.
 	FieldTitle = "title"
-	// FieldUUID holds the string denoting the uuid field in the database.
-	FieldUUID = "uuid"
 	// FieldPath holds the string denoting the path field in the database.
 	FieldPath = "path"
 	// FieldWorkingDir holds the string denoting the working_dir field in the database.
@@ -117,7 +115,6 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldTitle,
-	FieldUUID,
 	FieldPath,
 	FieldWorkingDir,
 	FieldBranch,
@@ -203,11 +200,6 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByTitle orders the results by the title field.
 func ByTitle(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTitle, opts...).ToFunc()
-}
-
-// ByUUID orders the results by the uuid field.
-func ByUUID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldUUID, opts...).ToFunc()
 }
 
 // ByPath orders the results by the path field.

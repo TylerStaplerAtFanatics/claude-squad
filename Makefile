@@ -5,7 +5,7 @@
 PROFILE_FLAGS ?=
 PROFILE_PORT ?= 6060
 SERVER_FLAGS ?= --remote-access --tmux-keep-server
-export CGO_CFLAGS := -Wno-ignored-qualifiers
+export CGO_CFLAGS := -Wno-discarded-qualifiers -Wno-ignored-qualifiers
 export CGO_ENABLED := 1
 
 # File dependencies
@@ -41,7 +41,7 @@ endif
 		touch $(ASDF_STAMP); \
 	fi
 
-.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux
+.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service
 
 # Default target
 help: ## Show this help message
@@ -132,6 +132,12 @@ build-mux: ensure-tools ## Build the claude-mux PTY multiplexer binary
 
 install-mux: ensure-tools ## Build and install claude-mux to ~/.local/bin
 	@./scripts/install-mux.sh
+
+install-service: build ## Install stapler-squad as a system service (systemd on Linux, LaunchAgent on macOS)
+	@STAPLER_SQUAD_BIN="$(CURDIR)/stapler-squad" ./scripts/install-service.sh
+
+uninstall-service: ## Remove the system service and disable auto-start on login
+	@./scripts/install-service.sh --uninstall
 
 # Protocol Buffer code generation
 proto-gen: ensure-tools web-app/node_modules/.package-lock.json ## Generate Go and TypeScript code from proto files
