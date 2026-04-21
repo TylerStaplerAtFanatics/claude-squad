@@ -68,12 +68,18 @@ func TestDeleteSession_RemovesFromReviewQueue(t *testing.T) {
 	// Create session service
 	svc := NewSessionService(storage, eventBus)
 
-	// Create and add a test instance to storage
+	// Create and add a test instance to storage.
+	// Must use Status=Paused: LoadInstances calls FromInstanceData which calls
+	// Start(false) for non-Paused instances, attempting real tmux setup that
+	// times out after 10s in CI. Paused takes the fast path (started=true,
+	// no tmux interaction), matching the pattern in addPausedSession.
 	testInstance := &session.Instance{
-		Title:   "test-session",
-		Path:    "/tmp/test",
-		Status:  session.Running,
-		Program: "claude",
+		Title:     "test-session",
+		Path:      "/tmp/test",
+		Status:    session.Paused,
+		Program:   "claude",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	if err := storage.AddInstance(testInstance); err != nil {
