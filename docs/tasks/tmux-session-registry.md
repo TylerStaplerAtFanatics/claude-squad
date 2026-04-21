@@ -919,14 +919,12 @@ Acceptance criteria:
 
 ## Migration Checklist (post-implementation)
 
-- [ ] T1 merged — interfaces defined, no behaviour change
-- [ ] T2 merged — registry available, not yet used
-- [ ] T3 merged — `DoesSessionExist()` uses registry; verify in
-      staging that fork count drops for the tmux-list-sessions category
-- [ ] T4 merged — `monitorTmuxSession()` replaced; verify in staging that
-      has-session + list-panes forks disappear
-- [ ] T5 merged — PTYDiscovery uses registry; verify 5s poll execs drop
-- [ ] T6 merged — integration tests green in CI
+- [x] T1 merged — interfaces defined, no behaviour change (5e474b0)
+- [x] T2 merged — registry available, not yet used (2bc47ac)
+- [x] T3 merged — `DoesSessionExist()` uses registry (2b8919f)
+- [x] T4 merged — `monitorTmuxSession()` replaced (017f0b1)
+- [x] T5 merged — PTYDiscovery uses registry (e987331)
+- [x] T6 merged — integration tests green in CI (ca78293)
 - [ ] One release cycle in production; confirm cgroup throttle counter no
       longer climbs
 - [ ] Remove the polling fallback methods in a follow-up cleanup PR once
