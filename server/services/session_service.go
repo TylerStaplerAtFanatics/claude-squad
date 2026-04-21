@@ -595,7 +595,7 @@ func (s *SessionService) CreateSession(
 		SessionType:      sessionType,
 		TmuxPrefix:       "", // Use default from config
 		ResumeId:         req.Msg.ResumeId,
-		OneShot:   req.Msg.OneShot,
+		OneShot:          req.Msg.OneShot,
 		ProjectID:        req.Msg.ProjectId,
 	}
 
@@ -2079,15 +2079,15 @@ func (s *SessionService) BatchCreateSessions(
 			defer repoLock.Unlock()
 
 			createReq := connect.NewRequest(&sessionv1.CreateSessionRequest{
-				Title:         batchReq.Title,
-				Path:          batchReq.Path,
-				WorkingDir:    batchReq.WorkingDir,
-				Branch:        batchReq.Branch,
-				Program:       batchReq.Program,
-				Category:      batchReq.Category,
-				AutoYes: batchReq.AutoYes,
-				SessionType:   batchReq.SessionType,
-				ProjectId:     batchReq.ProjectId,
+				Title:       batchReq.Title,
+				Path:        batchReq.Path,
+				WorkingDir:  batchReq.WorkingDir,
+				Branch:      batchReq.Branch,
+				Program:     batchReq.Program,
+				Category:    batchReq.Category,
+				AutoYes:     batchReq.AutoYes,
+				SessionType: batchReq.SessionType,
+				ProjectId:   batchReq.ProjectId,
 			})
 
 			resp, createErr := s.CreateSession(ctx, createReq)

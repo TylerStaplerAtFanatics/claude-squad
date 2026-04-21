@@ -668,8 +668,8 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 		GitHubSourceRef: opts.GitHubSourceRef,
 		ClonedRepoPath:  opts.ClonedRepoPath,
 		// One-shot mode and project
-		OneShot: opts.OneShot,
-		ProjectID:     opts.ProjectID,
+		OneShot:   opts.OneShot,
+		ProjectID: opts.ProjectID,
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice
@@ -797,7 +797,6 @@ func (i *Instance) GetStableID() string {
 	}
 	return i.Title
 }
-
 
 // GetTmuxSessionName returns the sanitized tmux session name for reconciliation.
 // Returns empty string for external or uninitialized sessions.
