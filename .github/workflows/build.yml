@@ -15,6 +15,7 @@ on:
       - 'web-app/package-lock.json'
       - '.github/workflows/build.yml'
       - '.github/actions/prepare/**'
+  workflow_dispatch:
   pull_request:
     branches: [ main ]
     paths:
