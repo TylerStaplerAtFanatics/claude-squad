@@ -5,6 +5,7 @@ import { AuthProvider } from "@/lib/contexts/AuthContext";
 import { Providers } from "./Providers";
 import { NotificationPanel } from "@/components/ui/NotificationPanel";
 import { ViewportProvider } from "@/components/providers/ViewportProvider";
+import { defaultTheme } from "@/styles/theme.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -26,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className={defaultTheme}>
         <ViewportProvider />
         <ErrorBoundary>
           <AuthProvider>

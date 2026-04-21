@@ -52,16 +52,16 @@ type ExternalApprovalMonitor struct {
 
 // monitoredSession tracks approval monitoring state for one external session.
 type monitoredSession struct {
-	streamer     *ExternalStreamer     // Socket-based streamer (legacy)
-	tmuxStreamer *ExternalTmuxStreamer // Tmux-based streamer
-	title        string
-	source       ExternalApprovalSource
+	streamer        *ExternalStreamer     // Socket-based streamer (legacy)
+	tmuxStreamer    *ExternalTmuxStreamer // Tmux-based streamer
+	title           string
+	source          ExternalApprovalSource
 	consumer        OutputConsumer       // For socket-based
 	consumerKey     string               // Token for removing socket consumer
 	tmuxConsumer    func(content string) // For tmux-based
 	tmuxConsumerKey string               // Token for removing tmux consumer
-	lastDetect   time.Time
-	pending      []*detection.ApprovalRequest
+	lastDetect      time.Time
+	pending         []*detection.ApprovalRequest
 }
 
 // NewExternalApprovalMonitor creates a new external approval monitor.
