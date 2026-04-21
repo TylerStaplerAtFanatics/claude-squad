@@ -32,15 +32,16 @@ import (
 
 // Server manages the HTTP server with ConnectRPC handlers.
 type Server struct {
-	addr           string
-	httpServer     *http.Server
-	mux            *http.ServeMux
-	tlsConfig      *tls.Config                     // non-nil when TLS is enabled
-	authMiddleware func(http.Handler) http.Handler // nil when auth is disabled
-	httpsURL       string                          // set when remote access is enabled
-	hostnames      []string                        // detected LAN hostnames
-	origins        []string                        // allowed CORS origins
-	shutdownHooks  []func()                        // called before HTTP server stops
+	addr             string
+	httpServer       *http.Server
+	mux              *http.ServeMux
+	tlsConfig        *tls.Config                     // non-nil when TLS is enabled
+	authMiddleware   func(http.Handler) http.Handler // nil when auth is disabled
+	httpsURL         string                          // set when remote access is enabled
+	hostnames        []string                        // detected LAN hostnames
+	origins          []string                        // allowed CORS origins
+	shutdownHooks    []func()                        // called before HTTP server stops
+	connCtxCancel    context.CancelFunc              // cancels BaseContext → closes active streams on shutdown
 }
 
 // NewServer creates a new HTTP server instance with SessionService registered.
@@ -66,15 +67,22 @@ type Server struct {
 func NewServer(addr string) *Server {
 	mux := http.NewServeMux()
 
+	connCtx, connCtxCancel := context.WithCancel(context.Background())
+
 	srv := &Server{
-		addr: addr,
-		mux:  mux,
+		addr:          addr,
+		mux:           mux,
+		connCtxCancel: connCtxCancel,
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      nil, // Set in Start() after middleware chain is built
 			ReadTimeout:  15 * time.Second,
 			WriteTimeout: 0, // No write timeout — streaming connections are long-lived
 			IdleTimeout:  60 * time.Second,
+			// BaseContext is cancelled during Shutdown() so active streaming
+			// connections (ConnectRPC terminal streams, SSE) see a done context
+			// and self-close instead of blocking the graceful shutdown timeout.
+			BaseContext: func(_ net.Listener) context.Context { return connCtx },
 		},
 	}
 
@@ -344,6 +352,13 @@ func (s *Server) Start(ctx context.Context) error {
 
 // Shutdown gracefully shuts down the HTTP server.
 func (s *Server) Shutdown() error {
+	// Cancel the server's BaseContext first so active streaming connections
+	// (ConnectRPC terminal streams) see a done context and close themselves,
+	// preventing context deadline exceeded on the graceful shutdown below.
+	if s.connCtxCancel != nil {
+		s.connCtxCancel()
+	}
+
 	// Run registered hooks (e.g. capture pane paths, persist instance state) before
 	// stopping the HTTP server so in-flight requests complete first.
 	for _, hook := range s.shutdownHooks {

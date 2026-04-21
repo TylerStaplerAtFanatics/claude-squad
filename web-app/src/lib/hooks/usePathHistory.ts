@@ -76,16 +76,30 @@ export function usePathHistory() {
     [entries]
   );
 
+  /**
+   * Return all stored paths sorted by score desc, limited to `limit` entries.
+   * Used for "Recent Repos" empty-state display when no query is active.
+   */
+  const getAll = useCallback(
+    (limit: number = MAX_RESULTS): PathHistoryEntry[] => {
+      return [...entries]
+        .sort((a, b) => entryScore(b) - entryScore(a))
+        .slice(0, limit);
+    },
+    [entries]
+  );
+
   /** Record a path submission. Increments count if already stored. */
   const save = useCallback((path: string): void => {
     setEntries((prev) => {
       const copy = prev.map((e) => ({ ...e }));
       const existing = copy.find((e) => e.path === path);
+      const now = Date.now();
       if (existing) {
         existing.count += 1;
-        existing.lastUsed = Date.now();
+        existing.lastUsed = now;
       } else {
-        copy.push({ path, count: 1, lastUsed: Date.now() });
+        copy.push({ path, count: 1, lastUsed: now });
       }
       copy.sort((a, b) => entryScore(b) - entryScore(a));
       const trimmed = copy.slice(0, MAX_ENTRIES);
@@ -94,5 +108,5 @@ export function usePathHistory() {
     });
   }, []);
 
-  return { getMatching, save };
+  return { getMatching, getAll, save };
 }

@@ -34,12 +34,20 @@ type ClaudeController struct {
 	statusDetector   *detection.StatusDetector
 	idleDetector     *detection.IdleDetector // NEW: Idle state detection
 	rateLimitHandler *ratelimit.PTYConsumer  // Rate limit detection
-	queue            *CommandQueue
-	executor         *CommandExecutor
-	history          *CommandHistory
-	mu               sync.RWMutex
-	ctx              context.Context
-	cancel           context.CancelFunc
+	queue           *CommandQueue
+	executor        *CommandExecutor
+	history         *CommandHistory
+	onEOFCallback   func() // Fired when the ResponseStream PTY exits unexpectedly
+	mu              sync.RWMutex
+	ctx             context.Context
+	cancel          context.CancelFunc
+}
+
+// SetOnEOFCallback registers a function called when the PTY backing this controller
+// exits unexpectedly (program exit, not an explicit Stop() call).
+// Must be called before Start().
+func (cc *ClaudeController) SetOnEOFCallback(fn func()) {
+	cc.onEOFCallback = fn
 }
 
 // NewClaudeController creates a new controller for the given instance.
@@ -177,6 +185,12 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 	cc.responseStream.SetOnOutput(func() {
 		cc.idleDetector.RecordActivity()
 	})
+
+	// Wire PTY-EOF callback so the owning Instance can transition state when the
+	// program exits unexpectedly (not via an explicit Stop() call).
+	if cc.onEOFCallback != nil {
+		cc.responseStream.OnEOF = cc.onEOFCallback
+	}
 
 	// Start response stream
 	if err := cc.responseStream.Start(cc.ctx); err != nil {
@@ -699,6 +713,17 @@ func (cc *ClaudeController) GetRateLimitState() ratelimit.RateLimitState {
 		return cc.rateLimitHandler.GetRateLimitState()
 	}
 	return ratelimit.StateNone
+}
+
+// GetExitContent returns the last bytes captured before the PTY exited.
+// Returns nil if the controller has no response stream or no exit content was recorded.
+func (cc *ClaudeController) GetExitContent() []byte {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	if cc.responseStream == nil {
+		return nil
+	}
+	return cc.responseStream.GetExitTail()
 }
 
 // SetRateLimitEnabled enables or disables rate limit detection.

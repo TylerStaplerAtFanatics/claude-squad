@@ -44,6 +44,12 @@ type Event struct {
 	OldStatus session.Status
 	// NewStatus for status change events
 	NewStatus session.Status
+	// DetectedStatus is the terminal-pattern-detected state from InstanceStatusManager
+	// (e.g. "StatusNeedsApproval"). Empty when no controller is active.
+	DetectedStatus string
+	// DetectedContext is the human-readable context from the terminal detector
+	// (e.g. "Waiting for tool approval"). Empty when DetectedStatus is empty.
+	DetectedContext string
 	// InteractionType for user interaction events
 	InteractionType string
 	// Approved for approval response events (true = approved, false = denied)

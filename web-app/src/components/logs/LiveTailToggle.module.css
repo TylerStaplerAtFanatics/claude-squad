@@ -160,3 +160,19 @@
   color: #666;
   white-space: nowrap;
 }
+
+/* Promote pause/settings to 44px touch targets at tablet widths */
+@media (max-width: 1024px) {
+  .pauseButton,
+  .settingsButton {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dropdown {
+    max-width: calc(100vw - 2rem);
+    min-width: min(140px, calc(100vw - 2rem));
+  }
+}

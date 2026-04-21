@@ -465,6 +465,38 @@ type SessionLoggers struct {
 	LogFile    io.Closer
 }
 
+// SessionLogger is a session-scoped logger that automatically injects the session ID
+// into every log call, eliminating the need to pass the session ID manually.
+//
+// Usage:
+//
+//	logger := log.ForSession(i.Title)
+//	logger.Error("Failed to setup git worktree: %v", err)
+type SessionLogger struct {
+	sessionID string
+}
+
+// ForSession returns a SessionLogger bound to the given session ID.
+func ForSession(sessionID string) *SessionLogger {
+	return &SessionLogger{sessionID: sessionID}
+}
+
+func (sl *SessionLogger) Debug(format string, v ...interface{}) {
+	LogForSession(sl.sessionID, "debug", format, v...)
+}
+
+func (sl *SessionLogger) Info(format string, v ...interface{}) {
+	LogForSession(sl.sessionID, "info", format, v...)
+}
+
+func (sl *SessionLogger) Warning(format string, v ...interface{}) {
+	LogForSession(sl.sessionID, "warning", format, v...)
+}
+
+func (sl *SessionLogger) Error(format string, v ...interface{}) {
+	LogForSession(sl.sessionID, "error", format, v...)
+}
+
 // Global convenience functions for structured logging
 
 // DebugS logs a structured debug message

@@ -56,8 +56,10 @@ type monitoredSession struct {
 	tmuxStreamer *ExternalTmuxStreamer // Tmux-based streamer
 	title        string
 	source       ExternalApprovalSource
-	consumer     OutputConsumer       // For socket-based
-	tmuxConsumer func(content string) // For tmux-based
+	consumer        OutputConsumer       // For socket-based
+	consumerKey     string               // Token for removing socket consumer
+	tmuxConsumer    func(content string) // For tmux-based
+	tmuxConsumerKey string               // Token for removing tmux consumer
 	lastDetect   time.Time
 	pending      []*detection.ApprovalRequest
 }
@@ -85,8 +87,11 @@ func (m *ExternalApprovalMonitor) Stop() {
 	// Unregister all consumers
 	m.sessionsMu.Lock()
 	for socketPath, session := range m.sessions {
-		if session.streamer != nil && session.consumer != nil {
-			session.streamer.RemoveConsumer(session.consumer)
+		if session.streamer != nil && session.consumerKey != "" {
+			session.streamer.RemoveConsumer(session.consumerKey)
+		}
+		if session.tmuxStreamer != nil && session.tmuxConsumerKey != "" {
+			session.tmuxStreamer.RemoveConsumer(session.tmuxConsumerKey)
 		}
 		delete(m.sessions, socketPath)
 	}
@@ -129,8 +134,8 @@ func (m *ExternalApprovalMonitor) MonitorSession(
 	// Create consumer that processes output for approvals
 	monitored.consumer = m.createConsumer(socketPath, monitored)
 
-	// Register consumer with streamer
-	streamer.AddConsumer(monitored.consumer, false)
+	// Register consumer with streamer; store key for reliable removal
+	monitored.consumerKey = streamer.AddConsumer(monitored.consumer, false)
 
 	m.sessions[socketPath] = monitored
 
@@ -146,8 +151,11 @@ func (m *ExternalApprovalMonitor) StopMonitoringSession(socketPath string) {
 	defer m.sessionsMu.Unlock()
 
 	if session, exists := m.sessions[socketPath]; exists {
-		if session.streamer != nil && session.consumer != nil {
-			session.streamer.RemoveConsumer(session.consumer)
+		if session.streamer != nil && session.consumerKey != "" {
+			session.streamer.RemoveConsumer(session.consumerKey)
+		}
+		if session.tmuxStreamer != nil && session.tmuxConsumerKey != "" {
+			session.tmuxStreamer.RemoveConsumer(session.tmuxConsumerKey)
 		}
 		delete(m.sessions, socketPath)
 		log.InfoLog.Printf("Stopped approval monitoring for: %s", socketPath)
@@ -444,8 +452,8 @@ func (m *ExternalApprovalMonitor) MonitorSessionTmux(
 	// Create consumer that processes content for approvals
 	monitored.tmuxConsumer = m.createTmuxConsumer(tmuxSessionName, monitored)
 
-	// Register consumer with tmux streamer
-	streamer.AddConsumer(monitored.tmuxConsumer)
+	// Register consumer with tmux streamer; store key for reliable removal
+	monitored.tmuxConsumerKey = streamer.AddConsumer(monitored.tmuxConsumer)
 
 	m.sessions[tmuxSessionName] = monitored
 

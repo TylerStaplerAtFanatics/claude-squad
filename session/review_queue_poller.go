@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/detection"
+	"github.com/tstapler/stapler-squad/session/tmux"
 	"strings"
 	"sync"
 	"time"
@@ -16,15 +17,17 @@ type ReviewQueuePollerConfig struct {
 	IdleThreshold      time.Duration // Duration before considering session idle and adding to queue
 	InputWaitDuration  time.Duration // Time waiting for input before flagging
 	StalenessThreshold time.Duration // Duration since last meaningful output before considering stale
+	ReconcileInterval  time.Duration // How often to reconcile in-memory state against tmux reality (0 = disabled)
 }
 
 // DefaultReviewQueuePollerConfig returns sensible defaults for polling.
 func DefaultReviewQueuePollerConfig() ReviewQueuePollerConfig {
 	return ReviewQueuePollerConfig{
-		PollInterval:       2 * time.Second, // Poll every 2 seconds for immediate detection
-		IdleThreshold:      5 * time.Second, // Add to queue after 5s idle for immediate user notifications
-		InputWaitDuration:  3 * time.Second, // Flag if waiting for input > 3s (reduced from 5s)
-		StalenessThreshold: 2 * time.Minute, // Flag if no meaningful output for 2 minutes (reduced from 5min)
+		PollInterval:       2 * time.Second,  // Poll every 2 seconds for immediate detection
+		IdleThreshold:      5 * time.Second,  // Add to queue after 5s idle for immediate user notifications
+		InputWaitDuration:  3 * time.Second,  // Flag if waiting for input > 3s (reduced from 5s)
+		StalenessThreshold: 2 * time.Minute,  // Flag if no meaningful output for 2 minutes (reduced from 5min)
+		ReconcileInterval:  30 * time.Second, // Reconcile against tmux reality every 30 seconds
 	}
 }
 
@@ -68,6 +71,11 @@ type ReviewQueuePoller struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	mu     sync.RWMutex
+
+	// Backoff state: tracks consecutive poll errors to apply exponential delay.
+	consecutiveErrors int
+	// tickCount tracks poll loop iterations for reconciliation scheduling.
+	tickCount int
 }
 
 // NewReviewQueuePoller creates a new poller for automatically managing the review queue.
@@ -210,7 +218,115 @@ func (rqp *ReviewQueuePoller) pollLoop() {
 		case <-rqp.ctx.Done():
 			return
 		case <-ticker.C:
-			rqp.checkSessions()
+			rqp.tickCount++
+
+			if err := rqp.checkSessionsSafe(); err != nil {
+				rqp.consecutiveErrors++
+				backoff := rqp.backoffDuration(rqp.consecutiveErrors)
+				log.WarningLog.Printf("[ReviewQueuePoller] checkSessions error (consecutive: %d): %v — backing off %s",
+					rqp.consecutiveErrors, err, backoff)
+				select {
+				case <-rqp.ctx.Done():
+					return
+				case <-time.After(backoff):
+				}
+				continue
+			}
+			rqp.consecutiveErrors = 0
+
+			// Periodic reconciliation: verify in-memory state matches tmux reality.
+			// Runs every ReconcileInterval ticks; skipped when ReconcileInterval is 0.
+			if rqp.config.ReconcileInterval > 0 {
+				ticksPerReconcile := int(rqp.config.ReconcileInterval / rqp.config.PollInterval)
+				if ticksPerReconcile < 1 {
+					ticksPerReconcile = 1
+				}
+				if rqp.tickCount%ticksPerReconcile == 0 {
+					rqp.reconcileSessions()
+				}
+			}
+		}
+	}
+}
+
+// checkSessionsSafe wraps checkSessions with panic recovery, returning an error on panic.
+func (rqp *ReviewQueuePoller) checkSessionsSafe() (retErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("panic in checkSessions: %v", r)
+			log.ErrorLog.Printf("[ReviewQueuePoller] panic recovered: %v", r)
+		}
+	}()
+	rqp.checkSessions()
+	return nil
+}
+
+// backoffDuration returns the exponential backoff duration for the given error count.
+// Caps at 30 seconds: 2s, 4s, 8s, 16s, 30s, 30s, ...
+func (rqp *ReviewQueuePoller) backoffDuration(consecutiveErrors int) time.Duration {
+	const base = 2 * time.Second
+	const maxBackoff = 30 * time.Second
+	if consecutiveErrors <= 0 {
+		return base
+	}
+	shift := consecutiveErrors - 1
+	if shift > 10 {
+		shift = 10 // prevent overflow
+	}
+	backoff := base * (1 << uint(shift))
+	if backoff > maxBackoff {
+		backoff = maxBackoff
+	}
+	return backoff
+}
+
+// reconcileSessions compares in-memory Running/Ready instances against live tmux sessions.
+// Any managed instance not found in tmux is presumed dead and transitions to Paused via EventExited.
+func (rqp *ReviewQueuePoller) reconcileSessions() {
+	rqp.mu.RLock()
+	instances := make([]*Instance, len(rqp.instances))
+	copy(instances, rqp.instances)
+	rqp.mu.RUnlock()
+
+	if len(instances) == 0 {
+		return
+	}
+
+	// Determine the server socket from the first managed instance (all share the same socket).
+	serverSocket := ""
+	for _, inst := range instances {
+		if inst.IsManaged && inst.TmuxServerSocket != "" {
+			serverSocket = inst.TmuxServerSocket
+			break
+		}
+	}
+
+	liveSessions, err := tmux.ListAllSessions(serverSocket)
+	if err != nil {
+		if err == tmux.ErrServerDown {
+			log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: tmux server is down — skipping reconciliation")
+		} else {
+			log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: ListAllSessions error: %v", err)
+		}
+		return
+	}
+
+	for _, inst := range instances {
+		// Only reconcile managed Running or Ready instances that have a tmux session name.
+		if !inst.IsManaged {
+			continue
+		}
+		if inst.Status != Running && inst.Status != Ready {
+			continue
+		}
+		sessionName := inst.GetTmuxSessionName()
+		if sessionName == "" {
+			continue
+		}
+		if !liveSessions[sessionName] {
+			log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: managed session '%s' (tmux: %s) not found in live sessions — firing EventExited",
+				inst.Title, sessionName)
+			inst.fireLifecycleEvent(EventExited, "reconcile-session-missing")
 		}
 	}
 }
@@ -540,7 +656,8 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance) {
 				} else if worktree != nil {
 					isDirty, err := worktree.IsDirty()
 					if err != nil {
-						log.DebugLog.Printf("[ReviewQueue] Session '%s': Failed to check git status: %v", inst.Title, err)
+						log.WarningLog.Printf("[ReviewQueue] Session '%s': Failed to check git status: %v", inst.Title, err)
+						log.LogForSession(inst.Title, "warning", "Failed to check git status: %v", err)
 					} else if isDirty {
 						// Only override if we don't have a higher priority reason already
 						if !shouldAdd || priority == PriorityLow {
@@ -640,7 +757,8 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance) {
 			} else if worktree != nil {
 				isDirty, err := worktree.IsDirty()
 				if err != nil {
-					log.DebugLog.Printf("[ReviewQueue] Session '%s': Failed to check git status: %v", inst.Title, err)
+					log.WarningLog.Printf("[ReviewQueue] Session '%s': Failed to check git status: %v", inst.Title, err)
+					log.ForSession(inst.Title).Warning("Failed to check git status: %v", err)
 				} else if isDirty {
 					// Only override if we don't have a higher priority reason already
 					if !shouldAdd || priority == PriorityLow {
@@ -931,7 +1049,7 @@ func (rqp *ReviewQueuePoller) FindInstance(sessionID string) *Instance {
 	defer rqp.mu.RUnlock()
 
 	for _, inst := range rqp.instances {
-		if inst.Title == sessionID {
+		if inst.Title == sessionID || inst.GetStableID() == sessionID {
 			return inst
 		}
 	}

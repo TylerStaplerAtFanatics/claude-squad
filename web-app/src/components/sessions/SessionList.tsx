@@ -6,6 +6,10 @@ import { Session, SessionStatus, CheckpointProto } from "@/gen/session/v1/types_
 import { SessionCard } from "./SessionCard";
 import { BulkActions } from "./BulkActions";
 import { GroupingStrategy, GroupingStrategyLabels, groupSessions, cycleGroupingStrategy } from "@/lib/grouping/strategies";
+import { useReviewQueueContext } from "@/lib/contexts/ReviewQueueContext";
+import { useAppSelector } from "@/lib/store";
+import { selectDetectedStatusMap } from "@/lib/store/sessionsSlice";
+import { ActionBar } from "@/components/ui/ActionBar";
 import styles from "./SessionList.module.css";
 
 interface SessionListProps {
@@ -85,6 +89,16 @@ export function SessionList({
   onListCheckpoints,
   onForkFromCheckpoint,
 }: SessionListProps) {
+  // Review queue items indexed by session ID for badge display on session cards
+  const { items: reviewItems } = useReviewQueueContext();
+  const reviewItemBySessionId = useMemo(() => {
+    const map = new Map(reviewItems.map(item => [item.sessionId, item]));
+    return map;
+  }, [reviewItems]);
+
+  // Terminal-detected status data from Redux store
+  const detectedStatusMap = useAppSelector(selectDetectedStatusMap);
+
   // Initialize state from local storage
   const [searchQuery, setSearchQuery] = useState(() => loadFromStorage(STORAGE_KEYS.SEARCH_QUERY, ""));
   const [selectedStatus, setSelectedStatus] = useState<SessionStatus | "all">(() =>
@@ -182,7 +196,8 @@ export function SessionList({
           session.path.toLowerCase().includes(query) ||
           session.branch.toLowerCase().includes(query) ||
           (session.category && session.category.toLowerCase().includes(query)) ||
-          (session.tags && session.tags.some(tag => tag.toLowerCase().includes(query)));
+          (session.tags && session.tags.some(tag => tag.toLowerCase().includes(query))) ||
+          (session.program && session.program.toLowerCase().includes(query));
 
         if (!matchesSearch) return false;
       }
@@ -361,7 +376,10 @@ export function SessionList({
           </div>
 
           {/* Collapsible filter controls */}
-          <div
+          <ActionBar
+            scroll
+            compact
+            gap="sm"
             id="session-filter-controls"
             className={`${styles.filterControls} ${filtersOpen ? styles.filterControlsOpen : ""}`}
           >
@@ -437,7 +455,7 @@ export function SessionList({
             >
               {Object.entries(GroupingStrategyLabels).map(([value, label]) => (
                 <option key={value} value={value}>
-                  Group by: {label}
+                  {label}
                 </option>
               ))}
             </select>
@@ -464,7 +482,7 @@ export function SessionList({
             >
               {sortDir === 'asc' ? '↑' : '↓'}
             </button>
-          </div>
+          </ActionBar>
         </div>
       </div>
 
@@ -543,6 +561,9 @@ export function SessionList({
                       selectMode={selectMode}
                       isSelected={selectedSessions.has(session.id)}
                       onToggleSelect={() => handleToggleSession(session.id)}
+                      reviewItem={reviewItemBySessionId.get(session.id)}
+                      detectedStatus={detectedStatusMap[session.id]?.detectedStatus}
+                      detectedContext={detectedStatusMap[session.id]?.detectedContext}
                     />
                   </div>
                 ))}

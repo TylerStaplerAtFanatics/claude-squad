@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -91,6 +92,14 @@ type TmuxSession struct {
 	controlModeSubscribers map[string]chan []byte // WebSocket clients subscribed to control mode updates
 	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers map and controlModeExited
 	controlModeExited      bool                   // True after readControlModeOutput exits; new subscribers get pre-closed channel
+
+	// Exit detection: fired when the session exits unexpectedly (not via StopControlMode).
+	// onExit is called at most once per TmuxSession lifetime (guarded by onExitOnce).
+	// intentionalStop distinguishes operator-initiated StopControlMode() from crashes.
+	// Must not be called while stateMutex (on the owning Instance) is held.
+	onExit         func(reason string)
+	onExitOnce     sync.Once
+	intentionalStop atomic.Bool
 }
 
 // windowSize represents terminal dimensions from external sources (like BubbleTea)
@@ -138,6 +147,68 @@ func toStaplerSquadTmuxNameWithPrefix(str string, prefix string) string {
 func serverNotRunning(output []byte) bool {
 	s := strings.ToLower(string(output))
 	return strings.Contains(s, "no server running") || strings.Contains(s, "error connecting to")
+}
+
+// SetOnExitCallback registers a function called when the session exits unexpectedly.
+// The callback fires at most once per TmuxSession lifetime (guarded by sync.Once).
+// It is NOT called when StopControlMode() is the cause of the exit.
+// The callback must not be called while the owning Instance's stateMutex is held.
+func (t *TmuxSession) SetOnExitCallback(fn func(reason string)) {
+	t.onExit = fn
+}
+
+// GetSanitizedName returns the tmux session name as it appears in `tmux list-sessions`.
+// Used for bulk reconciliation against ListAllSessions output.
+func (t *TmuxSession) GetSanitizedName() string {
+	return t.sanitizedName
+}
+
+// ResetExitOnce resets the exit callback so it can fire again after a session restart.
+// Also clears intentionalStop so the next StopControlMode() correctly guards the callback.
+// Call this before reusing a TmuxSession object for a restarted session.
+func (t *TmuxSession) ResetExitOnce() {
+	t.onExitOnce = sync.Once{}
+	t.intentionalStop.Store(false)
+}
+
+// IsServerDown returns true if the tmux server is not running for the given socket.
+// Returns false if the server state cannot be determined (treats unknown as up to
+// avoid false-positive zombie recovery suppression).
+func IsServerDown(serverSocket string) bool {
+	return checkServerNotRunning(serverSocket)
+}
+
+// ErrServerDown is returned by ListAllSessions when the tmux server is not running.
+// Callers should treat this as "no sessions are alive" without attempting recovery.
+var ErrServerDown = errors.New("tmux server not running")
+
+// ListAllSessions returns the set of all currently live tmux session names.
+// Uses serverSocket for isolation if non-empty (same -L flag semantics as TmuxSession).
+// Does NOT go through the per-session existence cache - intended for bulk reconciliation.
+// Returns ErrServerDown when the tmux server is not running.
+func ListAllSessions(serverSocket string) (map[string]bool, error) {
+	args := prependSocket(serverSocket, []string{"list-sessions", "-F", "#{session_name}"})
+	cmd := exec.Command("tmux", args...)
+	out, err := cmd.Output()
+	if err != nil {
+		// Collect stderr for server-down detection
+		combinedOutput := []byte(err.Error())
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			combinedOutput = append(combinedOutput, exitErr.Stderr...)
+		}
+		if serverNotRunning(combinedOutput) {
+			return nil, ErrServerDown
+		}
+		return nil, fmt.Errorf("ListAllSessions: %w", err)
+	}
+
+	sessions := make(map[string]bool)
+	for _, name := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if name != "" {
+			sessions[name] = true
+		}
+	}
+	return sessions, nil
 }
 
 // checkServerNotRunning runs tmux list-sessions directly (bypassing any circuit breaker)
@@ -234,23 +305,26 @@ func CreateKeepaliveSession(serverSocket string) error {
 type CleanupFunc func() error
 
 // tmuxCircuitBreakerConfig returns a circuit breaker config tuned for tmux commands.
-// Unlike the default config, "no sessions" (exit 1 on an empty server) does not count
-// as a failure for the list-sessions command class, because an empty server is a normal
-// transient state during session creation — not a dependency failure.
+// The circuit breaker's sole purpose is detecting tmux server unavailability so the
+// application stops hammering a dead server. It must NOT trip on per-target errors
+// (e.g. "can't find pane", "session not found") because those are session-level
+// failures — the server is healthy and the caller handles them directly.
+// Applying serverNotRunning to all command classes prevents premature trips from
+// capture-pane or display-message failures when a watched session has simply exited.
 func tmuxCircuitBreakerConfig() executor.CircuitBreakerConfig {
+	defaults := executor.DefaultCircuitBreakerConfig()
 	return executor.CircuitBreakerConfig{
-		FailureThreshold: executor.DefaultCircuitBreakerConfig().FailureThreshold,
-		RecoveryTimeout:  executor.DefaultCircuitBreakerConfig().RecoveryTimeout,
+		FailureThreshold:   defaults.FailureThreshold,
+		RecoveryTimeout:    defaults.RecoveryTimeout,
+		MaxRecoveryTimeout: defaults.MaxRecoveryTimeout,
 		IsFailure: func(commandClass string, output []byte, err error) bool {
 			if err == nil {
 				return false
 			}
-			if commandClass == "tmux-list-sessions" {
-				// Only trip the breaker when the server itself is down.
-				// "No sessions" (empty server, exit 1, no output) is a normal state.
-				return serverNotRunning(output)
-			}
-			return true
+			// Only trip the breaker when the tmux server itself is down.
+			// Per-target errors (pane/session not found, invalid flag, etc.)
+			// are not server failures and must not open the circuit.
+			return serverNotRunning(output)
 		},
 	}
 }
@@ -528,7 +602,7 @@ func (t *TmuxSession) start(workDir string, setupCleanup bool, cleanup *CleanupF
 	}
 
 	// Session is created and ready - let the user handle any program-specific interactions
-	log.InfoLog.Printf("Tmux session '%s' created successfully, program '%s' starting", t.sanitizedName, t.program)
+	log.InfoLog.Printf("Tmux session '%s' created successfully, launching: %s", t.sanitizedName, programWithHistory)
 	return nil
 }
 
@@ -598,7 +672,7 @@ func (t *TmuxSession) RestoreWithWorkDir(workDir string) error {
 					return fmt.Errorf("failed to create tmux session '%s': %w", t.sanitizedName, err)
 				}
 			} else {
-				log.InfoLog.Printf("Created new tmux session '%s' in directory '%s'", t.sanitizedName, workDir)
+				log.InfoLog.Printf("Created new tmux session '%s' in directory '%s', launching: %s", t.sanitizedName, workDir, t.program)
 				t.invalidateExistsCache() // Session was created, invalidate cache
 				// new-session started the tmux server; reset this session's circuit breakers
 				// so subsequent DoesSessionExist() calls can verify the session is running.

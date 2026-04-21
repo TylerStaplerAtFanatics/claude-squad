@@ -196,3 +196,12 @@
   color: #666;
   cursor: not-allowed;
 }
+
+@media (max-width: 768px) {
+  .dropdown {
+    left: auto;
+    right: 0;
+    max-width: calc(100vw - 2rem);
+    min-width: min(200px, calc(100vw - 2rem));
+  }
+}
