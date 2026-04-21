@@ -151,7 +151,7 @@ jobs:
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          git pull --rebase origin ${{ github.head_ref }}
+          git pull --rebase --autostash origin ${{ github.head_ref }}
           git add docs/demos/*.gif
           git diff --cached --quiet && echo "No GIF changes to commit" && exit 0
           git commit -m "chore(demos): update E2E feature GIFs [skip ci]"
