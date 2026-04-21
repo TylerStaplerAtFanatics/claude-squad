@@ -63,9 +63,12 @@ func TestDirCache_MissOnMtimeChange(t *testing.T) {
 	cache := NewDirCache(16, 60*time.Second)
 	cache.Put(dir, entries, info.ModTime())
 
-	// Modify the directory by creating a new file.
-	// On most filesystems this advances the directory's mtime.
+	// Modify the directory and explicitly advance its mtime by 1 s so the
+	// test is not sensitive to filesystem mtime resolution (e.g. tmpfs on fast
+	// machines can return the same timestamp if everything runs within one tick).
 	makeFile(t, filepath.Join(dir, "newfile.txt"))
+	future := info.ModTime().Add(time.Second)
+	require.NoError(t, os.Chtimes(dir, future, future))
 
 	got, ok := cache.Get(dir)
 	assert.False(t, ok, "expected cache miss after directory was modified")
@@ -279,8 +282,11 @@ func TestListPathCompletions_CacheMissAfterMtimeChange(t *testing.T) {
 	assert.Contains(t, names1, "alpha")
 	assert.NotContains(t, names1, "beta")
 
-	// Modify the directory after the first call.
+	// Modify the directory after the first call, then advance its mtime by 1 s
+	// so the cache invalidation check is not sensitive to filesystem mtime resolution.
 	makeDir(t, filepath.Join(dir, "beta"))
+	future := time.Now().Add(time.Second)
+	require.NoError(t, os.Chtimes(dir, future, future))
 
 	resp2, err := svc.ListPathCompletions(newReqCtx(t), newReq(&sessionv1.ListPathCompletionsRequest{
 		PathPrefix: dir + "/",

@@ -10,6 +10,8 @@ interface HistoryGroupViewProps {
   groupedEntries: HistoryGroup[];
   flatEntries: ClaudeHistoryEntry[];
   selectedEntry: ClaudeHistoryEntry | null;
+  /** Enriched entry from GetClaudeHistoryDetail — has VCS state for the selected card */
+  enrichedEntry?: ClaudeHistoryEntry | null;
   loading: boolean;
   entriesCount: number;
   filteredCount: number;
@@ -23,6 +25,7 @@ export function HistoryGroupView({
   groupedEntries,
   flatEntries,
   selectedEntry,
+  enrichedEntry,
   loading,
   entriesCount,
   filteredCount,
@@ -98,6 +101,7 @@ export function HistoryGroupView({
                   key={entry.id}
                   entry={entry}
                   isSelected={isSelected}
+                  enrichedEntry={isSelected ? enrichedEntry : undefined}
                   onSelect={() => onSelectEntry(entry, entryIndex)}
                 />
               );

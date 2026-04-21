@@ -1,11 +1,13 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { useDispatch, useSelector } from "react-redux";
+import bulkSelectionReducer from "./bulkSelectionSlice";
 import reviewQueueReducer from "./reviewQueueSlice";
 import sessionsReducer from "./sessionsSlice";
 import { connectApi } from "@/lib/api/connectApi";
 
 export const store = configureStore({
   reducer: {
+    bulkSelection: bulkSelectionReducer,
     reviewQueue: reviewQueueReducer,
     sessions: sessionsReducer,
     [connectApi.reducerPath]: connectApi.reducer,

@@ -200,8 +200,7 @@ func (s *Storage) SaveInstancesSync(instances []*Instance) error {
 
 // LoadInstances loads the list of instances from the repository.
 func (s *Storage) LoadInstances() ([]*Instance, error) {
-	ctx := context.Background()
-	dataSlice, err := s.repo.List(ctx)
+	dataSlice, err := s.repo.List(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to list instances from repository: %w", err)
 	}
@@ -211,15 +210,6 @@ func (s *Storage) LoadInstances() ([]*Instance, error) {
 		if err != nil {
 			log.WarningLog.Printf("Skipping instance '%s' from repository: %v", data.Title, err)
 			continue
-		}
-		// Persist newly assigned UUIDs for legacy sessions that lacked one.
-		// Without this, every load generates a different UUID → duplicate session
-		// entries in the UI and sessions disappearing on page reload.
-		if data.UUID == "" && inst.UUID != "" {
-			log.InfoLog.Printf("[LoadInstances] Persisting migrated UUID for session '%s'", inst.Title)
-			if updateErr := s.repo.Update(ctx, inst.ToInstanceData()); updateErr != nil {
-				log.WarningLog.Printf("[LoadInstances] Failed to persist UUID for '%s': %v", inst.Title, updateErr)
-			}
 		}
 		instances = append(instances, inst)
 	}

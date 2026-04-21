@@ -5,7 +5,7 @@
 PROFILE_FLAGS ?=
 PROFILE_PORT ?= 6060
 SERVER_FLAGS ?= --remote-access --tmux-keep-server
-export CGO_CFLAGS := -Wno-ignored-qualifiers
+export CGO_CFLAGS := -Wno-discarded-qualifiers -Wno-ignored-qualifiers
 export CGO_ENABLED := 1
 
 # File dependencies

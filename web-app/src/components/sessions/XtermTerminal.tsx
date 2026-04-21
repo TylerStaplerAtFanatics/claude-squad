@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
 import { useMobileTerminalGestures } from "@/lib/hooks/useMobileTerminalGestures";
 import { Terminal } from "@xterm/xterm";
+import { useTouchScroll } from "@/lib/hooks/useTouchScroll";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
@@ -109,6 +110,9 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, XtermTerminalProps>
   const onResizeRef = useRef(onResize);
   // Ref so touch handlers always read the latest mouseTracking value without recreating terminal
   const mouseTrackingRef = useRef(mouseTracking);
+
+  // Enable touch-based scrolling on mobile devices
+  useTouchScroll(containerRef, () => terminalRef.current);
 
   useEffect(() => {
     onDataRef.current = onData;

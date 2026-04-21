@@ -138,6 +138,30 @@ export const prBadgeComplete = style({
   },
 });
 
+export const prBadgeError = style({
+  background: vars.color.error,
+  color: "#ffffff",
+  borderColor: vars.color.error,
+  selectors: {
+    "&:hover": {
+      opacity: 0.9,
+      boxShadow: "0 2px 6px rgba(0, 0, 0, 0.2)",
+    },
+  },
+});
+
+export const prBadgeUnknown = style({
+  background: vars.color.surfaceSubtle,
+  color: vars.color.textSecondary,
+  borderColor: vars.color.borderColor,
+  selectors: {
+    "&:hover": {
+      opacity: 0.9,
+      boxShadow: "0 2px 6px rgba(0, 0, 0, 0.1)",
+    },
+  },
+});
+
 export const priorityLabel = style({
   fontSize: 10,
   fontWeight: 700,

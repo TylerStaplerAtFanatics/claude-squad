@@ -31,6 +31,7 @@ import { useTerminalStream } from "@/lib/hooks/useTerminalStream";
 import { XtermTerminal, type XtermTerminalHandle } from "./XtermTerminal";
 import { TerminalStreamManager } from "@/lib/terminal/TerminalStreamManager";
 import { getCachedDimensions, saveDimensions } from "@/lib/terminal/TerminalDimensionCache";
+import { track } from "@/lib/telemetry";
 import * as styles from "./TerminalOutput.css";
 
 interface TerminalOutputProps {
@@ -226,6 +227,12 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       if (metricsRef.current.firstOutputTime === null) {
         metricsRef.current.firstOutputTime = performance.now();
         logTerminalMetrics();
+        const totalLoadTime = metricsRef.current.firstOutputTime - metricsRef.current.mountTime;
+        track('session_attach', totalLoadTime, { phase: 'attach' }, sessionId);
+        const connectionDuration = metricsRef.current.connectedTime && metricsRef.current.connectionInitTime
+          ? metricsRef.current.connectedTime - metricsRef.current.connectionInitTime
+          : totalLoadTime;
+        track('stream_terminal_first_byte', connectionDuration, undefined, sessionId);
         setIsLoadingInitialContent(false);
       }
     });
@@ -529,6 +536,20 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       }, 50);
     }
   }, [isVisible]);
+
+  // visualViewport resize listener — re-fits terminal when the on-screen keyboard
+  // appears/disappears on mobile (visualViewport changes don't fire window resize)
+  useEffect(() => {
+    const vp = window.visualViewport;
+    if (!vp) return;
+
+    const onVpResize = () => {
+      setTimeout(() => xtermRef.current?.fit(), 300);
+    };
+
+    vp.addEventListener('resize', onVpResize);
+    return () => vp.removeEventListener('resize', onVpResize);
+  }, []);
 
   // Reset loading state when switching sessions and trigger reconnect
   useEffect(() => {

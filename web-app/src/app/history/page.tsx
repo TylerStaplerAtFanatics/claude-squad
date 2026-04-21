@@ -267,6 +267,7 @@ export default function HistoryBrowserPage() {
               </h2>
               <HistoryGroupView
                 groupedEntries={groupedEntries} flatEntries={flatEntries} selectedEntry={selectedEntry}
+                enrichedEntry={selectedEntry}
                 loading={loading} entriesCount={entries.length} filteredCount={filteredEntries.length}
                 hasActiveFilters={hasActiveFilters} groupingStrategy={groupingStrategy}
                 onSelectEntry={selectEntry} onClearFilters={clearFilters}
