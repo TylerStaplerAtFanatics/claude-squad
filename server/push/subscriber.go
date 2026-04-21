@@ -3,6 +3,7 @@ package push
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
@@ -12,119 +13,259 @@ import (
 	"github.com/tstapler/stapler-squad/session"
 )
 
-// StartPushSubscriber subscribes to the EventBus for specific session events and sends push notifications.
-func StartPushSubscriber(ctx context.Context, bus *events.EventBus, pushService *services.PushService) {
-	if bus == nil || pushService == nil {
-		log.WarningLog.Printf("[PushSubscriber] EventBus or push service is nil, not starting subscriber")
+// StartDeliverySubscriber subscribes to the EventBus and fans push notifications
+// out to all provided Notifiers. It exits when ctx is cancelled.
+// A single failing Notifier does not prevent delivery to the others.
+func StartDeliverySubscriber(ctx context.Context, bus *events.EventBus, notifiers []Notifier) {
+	if bus == nil {
+		log.WarningLog.Printf("[DeliverySubscriber] EventBus is nil, not starting")
 		return
 	}
 
 	ch, _ := bus.Subscribe(ctx)
 
 	go func() {
-		log.InfoLog.Printf("[PushSubscriber] Started listening for session events")
+		log.InfoLog.Printf("[DeliverySubscriber] started (%d notifier(s))", len(notifiers))
 
 		var mu sync.Mutex
-		lastProcessed := make(map[string]time.Time) // Track last processed events to prevent duplicates
-		const deduplicationWindow = 2 * time.Second // Ignore duplicate events within this window
+		lastSent := make(map[string]time.Time)
+		const dedupWindow = 2 * time.Second
 
 		for {
 			select {
 			case event, ok := <-ch:
 				if !ok {
-					log.InfoLog.Printf("[PushSubscriber] Event channel closed, stopping")
+					log.InfoLog.Printf("[DeliverySubscriber] event channel closed, stopping")
 					return
 				}
 				if event == nil {
 					continue
 				}
 
-				// Process only the events we care about
-				var shouldNotify bool
-				var notificationTitle, notificationBody string
-				var notificationTag string
-				var notificationData map[string]interface{}
-
-				switch event.Type {
-				case events.EventSessionStatusChanged:
-					if event.NewStatus == session.Stopped {
-						shouldNotify = true
-						notificationTitle = "Session Completed"
-						if event.Session != nil {
-							notificationBody = fmt.Sprintf("Session '%s' has completed", event.Session.Title)
-							notificationData = map[string]interface{}{
-								"sessionId":    event.Session.Title,
-								"sessionTitle": event.Session.Title,
-								"url":          "/",
-							}
-							notificationTag = "session-completed-" + event.Session.Title
-						}
-					} else if event.NewStatus == session.NeedsApproval ||
-						(event.OldStatus != session.NeedsApproval && event.NewStatus == session.NeedsApproval) {
-						// Only notify when transitioning TO needs approval (approval needed)
-						shouldNotify = true
-						notificationTitle = "Approval Required"
-						if event.Session != nil {
-							notificationBody = fmt.Sprintf("Session '%s' requires approval", event.Session.Title)
-							notificationData = map[string]interface{}{
-								"sessionId":    event.Session.Title,
-								"sessionTitle": event.Session.Title,
-								"url":          "/?session=" + event.Session.Title + "&tab=terminal",
-							}
-							notificationTag = "approval-required-" + event.Session.Title
-						}
-					}
-				case events.EventNotification:
-					// Forward high-priority notifications from the session itself
-					if event.NotificationPriority == int32(3) { // HIGH priority
-						shouldNotify = true
-						notificationTitle = event.NotificationTitle
-						notificationBody = event.NotificationMessage
-						if event.SessionID != "" {
-							notificationData = map[string]interface{}{
-								"sessionId": event.SessionID,
-								"url":       "/?session=" + event.SessionID + "&tab=terminal",
-							}
-							notificationTag = "notification-" + event.NotificationID
-						}
-					}
+				dn, ok := buildDeliveryNotification(event)
+				if !ok {
+					continue
 				}
 
-				if shouldNotify && notificationTitle != "" && notificationBody != "" {
-					// Simple deduplication: ignore if we processed a similar notification recently
-					mu.Lock()
-					key := notificationTag
-					if lastTime, exists := lastProcessed[key]; exists {
-						if time.Since(lastTime) < deduplicationWindow {
-							mu.Unlock()
-							continue // Skip duplicate
-						}
-					}
-					lastProcessed[key] = time.Now()
+				// Dedup: skip if the same tag was sent within the dedup window.
+				mu.Lock()
+				if last, seen := lastSent[dn.Tag]; seen && time.Since(last) < dedupWindow {
 					mu.Unlock()
-
-					// Send push notification
-					pushNotification := services.PushNotification{
-						Title:              notificationTitle,
-						Body:               notificationBody,
-						Icon:               "/icons/icon-192.png",
-						Tag:                notificationTag,
-						Data:               notificationData,
-						RequireInteraction: true,
-					}
-
-					sentCount := pushService.SendNotification(pushNotification)
-					if sentCount > 0 {
-						log.InfoLog.Printf("[PushSubscriber] Sent push notification: %s - %s", notificationTitle, notificationBody)
-					} else {
-						log.WarningLog.Printf("[PushSubscriber] No push subscriptions available for notification: %s", notificationTitle)
-					}
+					continue
 				}
+				lastSent[dn.Tag] = time.Now()
+				mu.Unlock()
+
+				fanout(ctx, notifiers, dn)
 
 			case <-ctx.Done():
-				log.InfoLog.Printf("[PushSubscriber] Context canceled, stopping")
+				log.InfoLog.Printf("[DeliverySubscriber] context cancelled, stopping")
 				return
 			}
 		}
 	}()
+}
+
+// StartPushSubscriber is the legacy entry-point. New code should use
+// StartDeliverySubscriber with an explicit []Notifier slice.
+func StartPushSubscriber(ctx context.Context, bus *events.EventBus, pushService *services.PushService) {
+	if pushService == nil {
+		log.WarningLog.Printf("[PushSubscriber] push service is nil, not starting")
+		return
+	}
+	StartDeliverySubscriber(ctx, bus, []Notifier{NewWebPushNotifier(pushService)})
+}
+
+// shouldNotify returns true when the event/priority/type combination warrants a
+// push notification. Extracted as a pure function for easy table-driven testing.
+func shouldNotify(
+	eventType events.EventType,
+	priority int32,
+	notificationType int32,
+	newStatus session.Status,
+) bool {
+	switch eventType {
+	case events.EventSessionStatusChanged:
+		return newStatus == session.Stopped || newStatus == session.NeedsApproval
+	case events.EventNotification:
+		if priority >= priorityHigh {
+			return true
+		}
+		if notificationType == typeApproval {
+			return true
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+// buildDeliveryNotification converts a raw Event into a DeliveryNotification.
+// Returns (dn, true) when the event should be delivered; (zero, false) otherwise.
+func buildDeliveryNotification(event *events.Event) (DeliveryNotification, bool) {
+	switch event.Type {
+	case events.EventSessionStatusChanged:
+		return buildStatusChangeNotification(event)
+	case events.EventNotification:
+		return buildInlineNotification(event)
+	default:
+		return DeliveryNotification{}, false
+	}
+}
+
+func buildStatusChangeNotification(event *events.Event) (DeliveryNotification, bool) {
+	if !shouldNotify(event.Type, 0, 0, event.NewStatus) {
+		return DeliveryNotification{}, false
+	}
+
+	sess := event.Session
+	var title, body, tag string
+	var data map[string]interface{}
+	requireInteraction := false
+	renotify := false
+
+	switch event.NewStatus {
+	case session.Stopped:
+		title = "Session Completed"
+		if sess != nil {
+			body = fmt.Sprintf("Session '%s' has completed", sess.Title)
+			tag = "session-completed-" + stableID(sess)
+			data = buildDataMap(sess, "SESSION_COMPLETE", false)
+		}
+	case session.NeedsApproval:
+		title = "Approval Required"
+		requireInteraction = true
+		renotify = true
+		if sess != nil {
+			body = fmt.Sprintf("Session '%s' requires approval", sess.Title)
+			tag = "approval-required-" + stableID(sess)
+			data = buildDataMap(sess, "APPROVAL_NEEDED", true)
+		}
+	}
+
+	if title == "" || body == "" {
+		return DeliveryNotification{}, false
+	}
+
+	return DeliveryNotification{
+		Title:              title,
+		Body:               body,
+		Icon:               "/icons/icon-192.png",
+		Tag:                tag,
+		Data:               data,
+		RequireInteraction: requireInteraction,
+		Renotify:           renotify,
+	}, true
+}
+
+func buildInlineNotification(event *events.Event) (DeliveryNotification, bool) {
+	if !shouldNotify(event.Type, event.NotificationPriority, event.NotificationType, 0) {
+		return DeliveryNotification{}, false
+	}
+	if event.NotificationTitle == "" || event.NotificationMessage == "" {
+		return DeliveryNotification{}, false
+	}
+
+	requireInteraction := event.NotificationType == typeApproval
+	renotify := event.NotificationType == typeApproval
+	tag := "notification-" + event.NotificationID
+
+	var data map[string]interface{}
+	if event.SessionID != "" {
+		data = map[string]interface{}{
+			"sessionId":        event.SessionID,
+			"notificationType": notificationTypeName(event.NotificationType),
+			"timestamp":        time.Now().Unix(),
+			"url":              buildSessionURL(event.SessionID),
+		}
+	}
+
+	return DeliveryNotification{
+		Title:              event.NotificationTitle,
+		Body:               event.NotificationMessage,
+		Icon:               "/icons/icon-192.png",
+		Tag:                tag,
+		Data:               data,
+		RequireInteraction: requireInteraction,
+		Renotify:           renotify,
+	}, true
+}
+
+// buildNotificationForSession constructs a DeliveryNotification for a specific
+// session event type. Used by tests and helper callers.
+func buildNotificationForSession(sess *session.Instance, eventType events.EventType) DeliveryNotification {
+	switch eventType {
+	case events.EventSessionStatusChanged:
+		return buildApprovalNotification(sess)
+	default:
+		return buildCompletedNotification(sess)
+	}
+}
+
+// buildApprovalNotification constructs an approval-required notification for sess.
+func buildApprovalNotification(sess *session.Instance) DeliveryNotification {
+	return DeliveryNotification{
+		Title:              "Approval Required",
+		Body:               fmt.Sprintf("Session '%s' requires approval", sess.Title),
+		Icon:               "/icons/icon-192.png",
+		Tag:                "approval-required-" + stableID(sess),
+		Data:               buildDataMap(sess, "APPROVAL_NEEDED", true),
+		RequireInteraction: true,
+		Renotify:           true,
+	}
+}
+
+// buildCompletedNotification constructs a session-completed notification for sess.
+func buildCompletedNotification(sess *session.Instance) DeliveryNotification {
+	return DeliveryNotification{
+		Title:              "Session Completed",
+		Body:               fmt.Sprintf("Session '%s' has completed", sess.Title),
+		Icon:               "/icons/icon-192.png",
+		Tag:                "session-completed-" + stableID(sess),
+		Data:               buildDataMap(sess, "SESSION_COMPLETE", false),
+		RequireInteraction: false,
+		Renotify:           false,
+	}
+}
+
+// stableID returns the stable identifier for a session: ID when non-empty, Title otherwise.
+func stableID(sess *session.Instance) string {
+	if sess.ID != "" {
+		return sess.ID
+	}
+	return sess.Title
+}
+
+// buildDataMap builds the FCM-compatible data map for a notification.
+func buildDataMap(sess *session.Instance, notifType string, isApproval bool) map[string]interface{} {
+	id := stableID(sess)
+	data := map[string]interface{}{
+		"sessionId":        id,
+		"sessionTitle":     sess.Title,
+		"notificationType": notifType,
+		"timestamp":        time.Now().Unix(),
+		"url":              buildSessionURL(id),
+	}
+	if isApproval {
+		data["actions"] = []map[string]string{
+			{"action": "review", "title": "Review"},
+			{"action": "later", "title": "Later"},
+		}
+	}
+	return data
+}
+
+// buildSessionURL returns the deep-link URL for a session, using the stable ID.
+func buildSessionURL(sessionID string) string {
+	return "/?session=" + url.QueryEscape(sessionID) + "&tab=terminal"
+}
+
+// notificationTypeName maps a proto NotificationType int32 to a string.
+func notificationTypeName(t int32) string {
+	switch t {
+	case typeApproval:
+		return "APPROVAL_NEEDED"
+	default:
+		return "GENERIC"
+	}
 }

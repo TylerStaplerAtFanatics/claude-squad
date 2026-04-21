@@ -64,6 +64,10 @@ func (s Status) String() string {
 
 // Instance is a running instance of claude code.
 type Instance struct {
+	// ID is the stable, immutable identifier for this instance.
+	// Set once at creation; never changes even if Title is renamed.
+	// Falls back to Title when empty for backward compatibility.
+	ID string
 	// Title is the title of the instance.
 	Title string
 	// Path is the path to the workspace repository root.

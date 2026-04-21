@@ -170,6 +170,13 @@ func GetConfigDir() (string, error) {
 	return baseDir, nil
 }
 
+// NotificationPrefs holds the user's notification delivery preferences.
+type NotificationPrefs struct {
+	// PushEnabled controls whether web push notifications are sent.
+	// Default is false (opt-in).
+	PushEnabled bool `json:"push_enabled"`
+}
+
 // Config represents the application configuration
 type Config struct {
 	// ListenAddress is the address the HTTP server listens on.
@@ -228,6 +235,8 @@ type Config struct {
 	ConfigVersion int `json:"config_version,omitempty"`
 	// SessionDefaults holds named profiles, directory rules, and global defaults for new sessions.
 	SessionDefaults SessionDefaults `json:"session_defaults,omitempty"`
+	// Notifications holds the user's notification delivery preferences.
+	Notifications NotificationPrefs `json:"notifications,omitempty"`
 }
 
 // SessionDefaults is the top-level container for all session default configuration.
@@ -436,75 +445,95 @@ func LoadConfig() *Config {
 	}
 
 	configPath := filepath.Join(configDir, ConfigFileName)
-	data, err := os.ReadFile(configPath)
+	cfg, err := LoadConfigFromPath(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Create and save default config if file doesn't exist
 			defaultCfg := DefaultConfig()
 			if saveErr := saveConfig(defaultCfg); saveErr != nil {
 				log.WarningLog.Printf("failed to save default config: %v", saveErr)
 			}
 			return defaultCfg
 		}
-
-		log.WarningLog.Printf("failed to get config file: %v", err)
+		log.WarningLog.Printf("failed to load config file: %v", err)
 		return DefaultConfig()
 	}
 
-	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
-		log.ErrorLog.Printf("failed to parse config file: %v", err)
-		return DefaultConfig()
-	}
-
-	// Apply defaults for fields that might not be in saved config (e.g., newly added fields)
-	if config.KeyCategories == nil {
-		config.KeyCategories = getDefaultKeyCategories()
-	}
-
-	// Initialize SessionDefaults collections to avoid nil-panic at call sites.
-	if config.SessionDefaults.Profiles == nil {
-		config.SessionDefaults.Profiles = make(map[string]ProfileDefaults)
-	}
-	if config.SessionDefaults.EnvVars == nil {
-		config.SessionDefaults.EnvVars = make(map[string]string)
-	}
-	if config.SessionDefaults.Tags == nil {
-		config.SessionDefaults.Tags = []string{}
-	}
-	if config.SessionDefaults.DirectoryRules == nil {
-		config.SessionDefaults.DirectoryRules = []DirectoryRule{}
-	}
-	if config.ConfigVersion == 0 {
-		config.ConfigVersion = 1
-	}
-
-	return &config
+	return cfg
 }
 
-// saveConfig saves the configuration to disk
-func saveConfig(config *Config) error {
-	configDir, err := GetConfigDir()
-	if err != nil {
-		return fmt.Errorf("failed to get config directory: %w", err)
+// saveConfig saves the configuration to disk atomically via a temp-file rename.
+// Accepts an optional explicit path; when omitted the path is derived from GetConfigDir().
+func saveConfig(config *Config, paths ...string) error {
+	var configPath string
+	if len(paths) > 0 && paths[0] != "" {
+		configPath = paths[0]
+	} else {
+		configDir, err := GetConfigDir()
+		if err != nil {
+			return fmt.Errorf("failed to get config directory: %w", err)
+		}
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
+		configPath = filepath.Join(configDir, ConfigFileName)
 	}
 
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	configPath := filepath.Join(configDir, ConfigFileName)
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	return os.WriteFile(configPath, data, 0644)
+	// Write to a temp file in the same directory, then rename for atomicity.
+	tmpPath := configPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write temp config: %w", err)
+	}
+	if err := os.Rename(tmpPath, configPath); err != nil {
+		_ = os.Remove(tmpPath) // best-effort cleanup
+		return fmt.Errorf("failed to rename config: %w", err)
+	}
+	return nil
 }
 
-// SaveConfig exports the saveConfig function for use by other packages
+// SaveConfig exports the saveConfig function for use by other packages.
 func SaveConfig(config *Config) error {
 	return saveConfig(config)
+}
+
+// LoadConfigFromPath loads and parses a config file from an explicit path.
+// Returns the config and any error encountered.
+func LoadConfigFromPath(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	// Apply zero-value defaults for newly-added fields.
+	if cfg.KeyCategories == nil {
+		cfg.KeyCategories = getDefaultKeyCategories()
+	}
+	if cfg.SessionDefaults.Profiles == nil {
+		cfg.SessionDefaults.Profiles = make(map[string]ProfileDefaults)
+	}
+	if cfg.SessionDefaults.EnvVars == nil {
+		cfg.SessionDefaults.EnvVars = make(map[string]string)
+	}
+	if cfg.SessionDefaults.Tags == nil {
+		cfg.SessionDefaults.Tags = []string{}
+	}
+	if cfg.SessionDefaults.DirectoryRules == nil {
+		cfg.SessionDefaults.DirectoryRules = []DirectoryRule{}
+	}
+	if cfg.ConfigVersion == 0 {
+		cfg.ConfigVersion = 1
+	}
+
+	return &cfg, nil
 }
 
 // getDefaultKeyCategories returns the default key category mappings
