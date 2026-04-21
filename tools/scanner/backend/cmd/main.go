@@ -12,9 +12,9 @@ import (
 
 // Registry is the top-level JSON structure written to the output file.
 type Registry struct {
-	Version     string           `json:"version"`
-	GeneratedAt time.Time        `json:"generatedAt"`
-	Features    []RegistryEntry  `json:"features"`
+	Version     string          `json:"version"`
+	GeneratedAt time.Time       `json:"generatedAt"`
+	Features    []RegistryEntry `json:"features"`
 }
 
 // BackendDetails holds backend-specific fields nested under "backend" in the JSON.

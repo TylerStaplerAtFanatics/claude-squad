@@ -70,6 +70,8 @@ jobs:
 
       - name: Run Axe accessibility tests
         id: axe
+        env:
+          TEST_SERVER_URL: http://localhost:8543
         run: |
           cd tests/e2e
           npx playwright test accessibility.spec.ts --reporter=list
