@@ -107,6 +107,9 @@ jobs:
             echo "Found ${VIDEO_COUNT} video file(s)"
           fi
 
+      - name: Install ffmpeg
+        run: sudo apt-get install -y ffmpeg
+
       - name: Convert videos to GIFs for docs/demos
         id: convert-gifs
         if: steps.validate-videos.outputs.video_count != '0'
