@@ -116,12 +116,20 @@ jobs:
           for webm in $(find tests/e2e/test-results -name "*.webm" 2>/dev/null | head -5); do
             dir=$(basename "$(dirname "$webm")")
             name=$(echo "$dir" | sed 's/-chromium$//;s/-firefox$//;s/-webkit$//')
-            if ffmpeg -y -i "$webm" \
-              -vf "fps=8,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer:bayer_scale=3" \
-              -loop 0 -t 30 "docs/demos/${name}.gif" 2>/dev/null; then
+            gif="docs/demos/${name}.gif"
+            palette=$(mktemp --suffix=.png)
+            echo "Converting $webm -> $gif"
+            # Two-pass palette GIF: better quality, more reliable than single-pass complex filter
+            if ffmpeg -y -i "$webm" -vf "fps=8,scale=960:-2,palettegen=max_colors=128" -t 30 "$palette" 2>&1 \
+               && ffmpeg -y -i "$webm" -i "$palette" \
+                 -lavfi "fps=8,scale=960:-2[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3" \
+                 -loop 0 -t 30 "$gif" 2>&1; then
               NAMES="${NAMES}${name},"
-              echo "Created docs/demos/${name}.gif"
+              echo "Created $gif ($(du -h "$gif" | cut -f1))"
+            else
+              echo "Warning: ffmpeg conversion failed for $webm"
             fi
+            rm -f "$palette"
           done
           echo "names=${NAMES%,}" >> $GITHUB_OUTPUT
 
