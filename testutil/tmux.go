@@ -2,12 +2,15 @@ package testutil
 
 import (
 	"fmt"
-	"github.com/tstapler/stapler-squad/executor"
-	"github.com/tstapler/stapler-squad/session/tmux"
-	"os/exec"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/tstapler/stapler-squad/executor"
+	"github.com/tstapler/stapler-squad/session/tmux"
+	"os/exec"
 )
 
 // TmuxWaiter provides utilities for waiting on tmux operations
@@ -178,6 +181,14 @@ func CreateIsolatedTmuxServer(t *testing.T) *TmuxTestServer {
 	counter := atomic.AddUint64(&serverCounter, 1)
 	socketName := fmt.Sprintf("test_%s_%d", sanitizeTestName(t.Name()), counter)
 
+	// Remove any stale socket from a previous crashed run before starting.
+	// A stale socket file causes tmux to report "server exited unexpectedly"
+	// instead of creating a new server, which would silently fail the test.
+	staleSocket := tmuxSocketPath(socketName)
+	if err := os.Remove(staleSocket); err != nil && !os.IsNotExist(err) {
+		t.Logf("Warning: could not remove stale socket %s: %v", staleSocket, err)
+	}
+
 	server := &TmuxTestServer{
 		socketName: socketName,
 		executor:   executor.MakeExecutor(),
@@ -310,11 +321,28 @@ func (s *TmuxTestServer) KillServer() error {
 	if err != nil {
 		// Server already gone is not an error
 		if strings.Contains(err.Error(), "no server running") {
+			// Still attempt socket file removal even if server was already gone
+			_ = os.Remove(tmuxSocketPath(s.socketName))
 			return nil
 		}
 		return fmt.Errorf("failed to kill server: %w", err)
 	}
+
+	// Remove the socket file to prevent stale accumulation across test runs
+	socketPath := tmuxSocketPath(s.socketName)
+	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
+		s.t.Logf("Warning: could not remove socket file %s: %v", socketPath, err)
+	}
 	return nil
+}
+
+// tmuxSocketPath returns the filesystem path for a named tmux socket.
+// Tmux uses XDG_RUNTIME_DIR/<name> on systemd systems, /tmp/tmux-<uid>/<name> otherwise.
+func tmuxSocketPath(socketName string) string {
+	if dir := os.Getenv("XDG_RUNTIME_DIR"); dir != "" {
+		return filepath.Join(dir, socketName)
+	}
+	return filepath.Join(fmt.Sprintf("/tmp/tmux-%d", os.Getuid()), socketName)
 }
 
 // Cleanup performs cleanup of the isolated tmux server.
@@ -333,9 +361,9 @@ func (s *TmuxTestServer) Cleanup() {
 	}
 }
 
-// sanitizeTestName converts test name to filesystem-safe socket name
+// sanitizeTestName converts test name to filesystem-safe socket name.
+// Truncates to 60 chars to stay well under OS Unix socket path limits.
 func sanitizeTestName(testName string) string {
-	// Replace problematic characters with underscores
 	replacer := strings.NewReplacer(
 		"/", "_",
 		" ", "_",
@@ -344,7 +372,11 @@ func sanitizeTestName(testName string) string {
 		"(", "_",
 		")", "_",
 	)
-	return replacer.Replace(testName)
+	name := replacer.Replace(testName)
+	if len(name) > 60 {
+		name = name[:60]
+	}
+	return name
 }
 
 // TempSessionName generates a temporary session name with an ID

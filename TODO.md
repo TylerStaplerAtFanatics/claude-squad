@@ -3,7 +3,7 @@
 ## Priority Summary
 
 **P1** - Backend Architecture Improvements (Story 1: InstanceStore abstraction leak) — P1 structural risk
-**P2** - BUG-010: tmux prompt detection (High, needs investigation) / BUG-012: testutil failures (Medium)
+**P2** - BUG-010: tmux prompt detection (High, needs investigation)
 **P3** - Terminal Jank Story 3: Terminal Instance Pool (depends on Stories 1 & 2, which are complete)
 
 **Recent Completions (2026-04-20)**:
@@ -14,7 +14,7 @@
 - Terminal Jank Stories 1 & 2 — ED3 filter, clear-prefix removal, xterm 6.0, quiescence detector, snapshot cache
 - BUG-013 FIXED — xterm.js viewport jump on Claude repaints (EscapeSequenceParser.ts)
 
-**Bug Status**: Fixed: BUG-001..003, BUG-009, BUG-013 | Open-High: BUG-010 | Open-Medium: BUG-012 | Open-Low (review-queue gaps): GAP-001..004
+**Bug Status**: Fixed: BUG-001..003, BUG-009, BUG-012, BUG-013 | Open-High: BUG-010 | Open-Low (review-queue gaps): GAP-001..004
 
 ---
 
@@ -141,14 +141,6 @@
 - **Effort**: 4-5h investigation + fix
 - **See**: [docs/bugs/open/BUG-010-tmux-banner-prompt-detection.md](docs/bugs/open/BUG-010-tmux-banner-prompt-detection.md)
 
-### Open Bugs — Medium Severity
-
-**BUG-012** [MEDIUM]: Testutil Package Failures — Root Cause Identified
-- **Impact**: 29 tmux integration tests fail; blocks reliable test development
-- **Root Cause**: Stale tmux socket accumulation in `/run/user/<uid>/` — 200+ dead sockets from prior crashed test runs exhaust socket limits; individual tests pass, suite fails
-- **Immediate Fix**: `rm /run/user/$(id -u)/test_*` to unblock; permanent fix adds `os.Remove(socketPath)` to `TmuxTestServer.Cleanup()` (2h, 1-2 files)
-- **See**: [docs/bugs/open/BUG-012-testutil-package-failures.md](docs/bugs/open/BUG-012-testutil-package-failures.md)
-
 ### Open Gaps — Low Severity (Review Queue)
 
 - **GAP-001**: Approval timeout UX degrades silently — no proactive notification on timeout
@@ -160,16 +152,15 @@
 ### Bug Summary Statistics
 
 **Total Tracked**: 13 (including review-queue gaps)
-**Fixed**: 7 (BUG-001, BUG-002, BUG-003, BUG-009, BUG-013, RQ-BUG-001, RQ-BUG-002, RQ-BUG-003)
+**Fixed**: 8 (BUG-001, BUG-002, BUG-003, BUG-009, BUG-012, BUG-013, RQ-BUG-001, RQ-BUG-002, RQ-BUG-003)
 **Open - High**: 1 (BUG-010)
-**Open - Medium**: 1 (BUG-012)
 **Open - Low**: 4 (GAP-001..004)
 
 
 ### Bug Documentation Structure
 
 All bugs documented following standardized format in `docs/bugs/`:
-- **open/** - Active bugs requiring investigation or fix (BUG-010, BUG-012, review-queue-gaps)
+- **open/** - Active bugs requiring investigation or fix (BUG-010, review-queue-gaps)
 - **fixed/** - Resolved bugs with fix details (BUG-001 through BUG-007)
 - **in-progress/** - Bugs currently being worked on (empty)
 - **obsolete/** - Historical bugs no longer relevant (empty)

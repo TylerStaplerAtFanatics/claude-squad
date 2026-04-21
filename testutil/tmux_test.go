@@ -203,10 +203,16 @@ func TestTmuxTestServer_AutomaticCleanup(t *testing.T) {
 	cmd := exec.Command("tmux", "-L", socketName, "list-sessions")
 	output, err := cmd.CombinedOutput()
 
-	// Should get "no server running" error
+	// Should get an error indicating the server is gone.
+	// tmux reports "no server running" when no socket exists,
+	// or "server exited unexpectedly" when it can't connect to the socket.
 	if err != nil {
-		assert.Contains(t, string(output), "no server running",
-			"Server should be gone after cleanup")
+		out := string(output)
+		serverGone := strings.Contains(out, "no server running") ||
+			strings.Contains(out, "server exited unexpectedly") ||
+			strings.Contains(out, "error connecting to")
+		assert.True(t, serverGone,
+			"Server should be gone after cleanup, got: %s", out)
 	} else {
 		// If no error, sessions list should be empty
 		sessions := strings.TrimSpace(string(output))
