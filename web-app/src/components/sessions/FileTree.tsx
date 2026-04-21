@@ -86,7 +86,8 @@ function buildTreeData(
     if (!node.isDir) return node;
     const loaded = dirContents.get(node.id);
     if (loaded === undefined) {
-      // Directory not yet loaded — provide empty array so it's expandable.
+      // [] signals react-arborist: expandable branch (fires onToggle when opened).
+      // Children will be loaded lazily in handleToggle.
       return { ...node, children: [] };
     }
     return {
@@ -530,11 +531,12 @@ export function FileTree({
 
       const allNodes = buildTreeData(rootNodes, dirContents);
       const node = findNode(allNodes);
-      if (node?.isDir && !dirContents.has(id)) {
+      // Load if not yet fetched, or retry if a previous load errored.
+      if (node?.isDir && (!dirContents.has(id) || errorPaths.has(id))) {
         loadDirectory(id);
       }
     },
-    [rootNodes, dirContents, loadDirectory, searchResults]
+    [rootNodes, dirContents, loadDirectory, searchResults, errorPaths]
   );
 
   if (rootLoading) {
@@ -618,6 +620,7 @@ export function FileTree({
         idAccessor={(node) => node.id}
         childrenAccessor={(node) => {
           if (!node.isDir) return null;
+          // [] = expandable (unloaded or empty); actual children once loaded.
           return node.children ?? [];
         }}
         disableDrag={true}

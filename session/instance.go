@@ -785,6 +785,13 @@ func (i *Instance) GetStableID() string {
 	return i.Title
 }
 
+// MatchesID reports whether id refers to this instance.
+// Accepts both the stable UUID and the legacy Title identifier so that all
+// service lookups work correctly regardless of which form the caller has.
+func (i *Instance) MatchesID(id string) bool {
+	return i.Title == id || i.GetStableID() == id
+}
+
 // GetTmuxSessionName returns the sanitized tmux session name for reconciliation.
 // Returns empty string for external or uninitialized sessions.
 func (i *Instance) GetTmuxSessionName() string {

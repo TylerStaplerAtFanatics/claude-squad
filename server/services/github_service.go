@@ -26,6 +26,7 @@ func NewGitHubService(storage *session.Storage) *GitHubService {
 }
 
 // findInstance loads all instances from storage and returns the one matching id.
+// id may be either the session UUID or the legacy Title; both are accepted.
 // Returns CodeNotFound if not found.
 func (gs *GitHubService) findInstance(id string) (*session.Instance, error) {
 	instances, err := gs.storage.LoadInstances()
@@ -33,7 +34,7 @@ func (gs *GitHubService) findInstance(id string) (*session.Instance, error) {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
 	}
 	for _, inst := range instances {
-		if inst.Title == id {
+		if inst.MatchesID(id) {
 			return inst, nil
 		}
 	}
