@@ -29,74 +29,74 @@ FAIL	github.com/tstapler/stapler-squad/testutil [setup failed]
    Console: stderr (level: ERROR)
 ═══════════════════════════════════════════════════════════════
 
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:26 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:26 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:26 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:26 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:26 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:26 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:26 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:26 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:27 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:27 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:27 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:27 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:28 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:28 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:28 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:28 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:28 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:28 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:28 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:28 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:29 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:29 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:29 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:29 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:30 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:30 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:30 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:30 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:30 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:30 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:30 config.go:278: failed to get claude command: claude command not found in aliases or PATH
-[pid-4226-1776732866] ERROR:2026/04/21 00:54:30 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:50 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:50 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:50 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:50 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:51 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:51 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:51 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:51 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:51 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:51 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:51 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:51 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:52 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:52 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:52 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:52 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:53 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:53 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:53 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:53 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:53 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:53 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:53 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:53 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:54 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:54 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:54 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:54 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:54 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:54 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:54 config.go:278: failed to get claude command: claude command not found in aliases or PATH
+[pid-4044-1776807710] ERROR:2026/04/21 21:41:54 config.go:278: failed to get claude command: claude command not found in aliases or PATH
 PASS
-ok  	github.com/tstapler/stapler-squad/config	4.978s
+ok  	github.com/tstapler/stapler-squad/config	5.045s
 goos: linux
 goarch: amd64
 pkg: github.com/tstapler/stapler-squad/executor
 cpu: AMD EPYC 7763 64-Core Processor                
-BenchmarkTimeoutExecutor_FastCommand-4     	    1417	    839447 ns/op	   20232 B/op	     101 allocs/op
-BenchmarkTimeoutExecutor_FastCommand-4     	    1406	    836493 ns/op	   20232 B/op	     101 allocs/op
-BenchmarkTimeoutExecutor_FastCommand-4     	    1419	    834166 ns/op	   20232 B/op	     101 allocs/op
-BenchmarkTimeoutExecutor_FastCommand-4     	    1420	    837907 ns/op	   20232 B/op	     101 allocs/op
-BenchmarkTimeoutExecutor_FastCommand-4     	    1423	    835911 ns/op	   20232 B/op	     101 allocs/op
-BenchmarkTimeoutExecutor_FastCommand-4     	    1429	    859129 ns/op	   20232 B/op	     101 allocs/op
-BenchmarkTimeoutExecutor_FastCommand-4     	    1423	    845679 ns/op	   20232 B/op	     101 allocs/op
-BenchmarkTimeoutExecutor_FastCommand-4     	    1417	    832339 ns/op	   20232 B/op	     101 allocs/op
-BenchmarkTimeoutExecutor_OutputCapture-4   	    1351	    893589 ns/op	   25664 B/op	     107 allocs/op
-BenchmarkTimeoutExecutor_OutputCapture-4   	    1324	    901263 ns/op	   25664 B/op	     107 allocs/op
-BenchmarkTimeoutExecutor_OutputCapture-4   	    1340	    901607 ns/op	   25664 B/op	     107 allocs/op
-BenchmarkTimeoutExecutor_OutputCapture-4   	    1321	    899246 ns/op	   25664 B/op	     107 allocs/op
-BenchmarkTimeoutExecutor_OutputCapture-4   	    1316	    905577 ns/op	   25664 B/op	     107 allocs/op
-BenchmarkTimeoutExecutor_OutputCapture-4   	    1298	    909581 ns/op	   25664 B/op	     107 allocs/op
-BenchmarkTimeoutExecutor_OutputCapture-4   	    1297	    904912 ns/op	   25664 B/op	     107 allocs/op
-BenchmarkTimeoutExecutor_OutputCapture-4   	    1316	    901595 ns/op	   25664 B/op	     107 allocs/op
+BenchmarkTimeoutExecutor_FastCommand-4     	    1431	    816724 ns/op	   20232 B/op	     101 allocs/op
+BenchmarkTimeoutExecutor_FastCommand-4     	    1444	    822461 ns/op	   20232 B/op	     101 allocs/op
+BenchmarkTimeoutExecutor_FastCommand-4     	    1448	    822900 ns/op	   20232 B/op	     101 allocs/op
+BenchmarkTimeoutExecutor_FastCommand-4     	    1436	    818014 ns/op	   20232 B/op	     101 allocs/op
+BenchmarkTimeoutExecutor_FastCommand-4     	    1448	    820243 ns/op	   20232 B/op	     101 allocs/op
+BenchmarkTimeoutExecutor_FastCommand-4     	    1425	    820257 ns/op	   20232 B/op	     101 allocs/op
+BenchmarkTimeoutExecutor_FastCommand-4     	    1455	    822686 ns/op	   20232 B/op	     101 allocs/op
+BenchmarkTimeoutExecutor_FastCommand-4     	    1438	    821979 ns/op	   20232 B/op	     101 allocs/op
+BenchmarkTimeoutExecutor_OutputCapture-4   	    1326	    885170 ns/op	   25664 B/op	     107 allocs/op
+BenchmarkTimeoutExecutor_OutputCapture-4   	    1345	    888877 ns/op	   25664 B/op	     107 allocs/op
+BenchmarkTimeoutExecutor_OutputCapture-4   	    1336	    882986 ns/op	   25664 B/op	     107 allocs/op
+BenchmarkTimeoutExecutor_OutputCapture-4   	    1345	    888045 ns/op	   25664 B/op	     107 allocs/op
+BenchmarkTimeoutExecutor_OutputCapture-4   	    1351	    889866 ns/op	   25664 B/op	     107 allocs/op
+BenchmarkTimeoutExecutor_OutputCapture-4   	    1336	    888084 ns/op	   25664 B/op	     107 allocs/op
+BenchmarkTimeoutExecutor_OutputCapture-4   	    1344	    887286 ns/op	   25664 B/op	     107 allocs/op
+BenchmarkTimeoutExecutor_OutputCapture-4   	    1354	    884408 ns/op	   25664 B/op	     107 allocs/op
 PASS
-ok  	github.com/tstapler/stapler-squad/executor	51.587s
+ok  	github.com/tstapler/stapler-squad/executor	51.452s
 PASS
 ok  	github.com/tstapler/stapler-squad/github	0.013s
 PASS
 ok  	github.com/tstapler/stapler-squad/log	0.006s
 PASS
-ok  	github.com/tstapler/stapler-squad/pkg/classifier	0.406s
+ok  	github.com/tstapler/stapler-squad/pkg/classifier	0.447s
 ?   	github.com/tstapler/stapler-squad/profiling	[no test files]
 PASS
-ok  	github.com/tstapler/stapler-squad/server/analytics	0.006s
+ok  	github.com/tstapler/stapler-squad/server/analytics	0.005s
 ?   	github.com/tstapler/stapler-squad/server/auth	[no test files]
 PASS
-ok  	github.com/tstapler/stapler-squad/server/compression	0.088s
+ok  	github.com/tstapler/stapler-squad/server/compression	0.087s
 PASS
 ok  	github.com/tstapler/stapler-squad/server/handlers	0.011s
 ?   	github.com/tstapler/stapler-squad/server/middleware	[no test files]
@@ -106,42 +106,42 @@ goos: linux
 goarch: amd64
 pkg: github.com/tstapler/stapler-squad/session/detection
 cpu: AMD EPYC 7763 64-Core Processor                
-Benchmark_ApprovalDetector_Detect-4            	   12349	     97992 ns/op	    2475 B/op	      31 allocs/op
-Benchmark_ApprovalDetector_Detect-4            	   12165	     97227 ns/op	    2487 B/op	      31 allocs/op
-Benchmark_ApprovalDetector_Detect-4            	   12290	     98653 ns/op	    2487 B/op	      31 allocs/op
-Benchmark_ApprovalDetector_Detect-4            	   12060	     97625 ns/op	    2478 B/op	      31 allocs/op
-Benchmark_ApprovalDetector_Detect-4            	   12355	     97043 ns/op	    2484 B/op	      31 allocs/op
-Benchmark_ApprovalDetector_Detect-4            	   12127	     98054 ns/op	    2475 B/op	      31 allocs/op
-Benchmark_ApprovalDetector_Detect-4            	   12186	     98080 ns/op	    2478 B/op	      31 allocs/op
-Benchmark_ApprovalDetector_Detect-4            	   12147	     97024 ns/op	    2478 B/op	      31 allocs/op
-Benchmark_ApprovalDetector_AddPattern-4        	  500350	      3821 ns/op	    2613 B/op	      27 allocs/op
-Benchmark_ApprovalDetector_AddPattern-4        	  518212	      3870 ns/op	    2611 B/op	      27 allocs/op
-Benchmark_ApprovalDetector_AddPattern-4        	  509456	      3910 ns/op	    2612 B/op	      27 allocs/op
-Benchmark_ApprovalDetector_AddPattern-4        	  487161	      3919 ns/op	    2614 B/op	      27 allocs/op
-Benchmark_ApprovalDetector_AddPattern-4        	  476794	      3920 ns/op	    2615 B/op	      27 allocs/op
-Benchmark_ApprovalDetector_AddPattern-4        	  515480	      3930 ns/op	    2612 B/op	      27 allocs/op
-Benchmark_ApprovalDetector_AddPattern-4        	  508545	      3909 ns/op	    2612 B/op	      27 allocs/op
-Benchmark_ApprovalDetector_AddPattern-4        	  511590	      3889 ns/op	    2612 B/op	      27 allocs/op
-Benchmark_StatusDetector_Detect-4              	   33058	     36481 ns/op	     209 B/op	       4 allocs/op
-Benchmark_StatusDetector_Detect-4              	   32880	     36414 ns/op	     208 B/op	       4 allocs/op
-Benchmark_StatusDetector_Detect-4              	   31682	     36545 ns/op	     210 B/op	       4 allocs/op
-Benchmark_StatusDetector_Detect-4              	   33232	     36747 ns/op	     209 B/op	       4 allocs/op
-Benchmark_StatusDetector_Detect-4              	   32563	     36253 ns/op	     209 B/op	       4 allocs/op
-Benchmark_StatusDetector_Detect-4              	   33112	     36566 ns/op	     208 B/op	       4 allocs/op
-Benchmark_StatusDetector_Detect-4              	   32786	     36272 ns/op	     210 B/op	       4 allocs/op
-Benchmark_StatusDetector_Detect-4              	   32797	     37075 ns/op	     209 B/op	       4 allocs/op
-Benchmark_StatusDetector_DetectWithContext-4   	 3890197	       306.0 ns/op	     112 B/op	       4 allocs/op
-Benchmark_StatusDetector_DetectWithContext-4   	 3729879	       305.2 ns/op	     112 B/op	       4 allocs/op
-Benchmark_StatusDetector_DetectWithContext-4   	 3838477	       309.6 ns/op	     112 B/op	       4 allocs/op
-Benchmark_StatusDetector_DetectWithContext-4   	 3927492	       304.9 ns/op	     112 B/op	       4 allocs/op
-Benchmark_StatusDetector_DetectWithContext-4   	 3834321	       306.3 ns/op	     112 B/op	       4 allocs/op
-Benchmark_StatusDetector_DetectWithContext-4   	 3868875	       305.4 ns/op	     112 B/op	       4 allocs/op
-Benchmark_StatusDetector_DetectWithContext-4   	 3873288	       307.1 ns/op	     112 B/op	       4 allocs/op
-Benchmark_StatusDetector_DetectWithContext-4   	 3900294	       309.3 ns/op	     112 B/op	       4 allocs/op
+Benchmark_ApprovalDetector_Detect-4            	   12384	     96479 ns/op	    2484 B/op	      31 allocs/op
+Benchmark_ApprovalDetector_Detect-4            	   12252	     96711 ns/op	    2475 B/op	      31 allocs/op
+Benchmark_ApprovalDetector_Detect-4            	   12488	     96577 ns/op	    2480 B/op	      31 allocs/op
+Benchmark_ApprovalDetector_Detect-4            	   12402	     97289 ns/op	    2478 B/op	      31 allocs/op
+Benchmark_ApprovalDetector_Detect-4            	   12285	     97712 ns/op	    2475 B/op	      31 allocs/op
+Benchmark_ApprovalDetector_Detect-4            	   12466	     96964 ns/op	    2481 B/op	      31 allocs/op
+Benchmark_ApprovalDetector_Detect-4            	   12396	     98101 ns/op	    2481 B/op	      31 allocs/op
+Benchmark_ApprovalDetector_Detect-4            	   12441	     97329 ns/op	    2478 B/op	      31 allocs/op
+Benchmark_ApprovalDetector_AddPattern-4        	  509545	      3751 ns/op	    2612 B/op	      27 allocs/op
+Benchmark_ApprovalDetector_AddPattern-4        	  488306	      3864 ns/op	    2614 B/op	      27 allocs/op
+Benchmark_ApprovalDetector_AddPattern-4        	  531214	      3817 ns/op	    2610 B/op	      27 allocs/op
+Benchmark_ApprovalDetector_AddPattern-4        	  509466	      3823 ns/op	    2612 B/op	      27 allocs/op
+Benchmark_ApprovalDetector_AddPattern-4        	  537044	      3828 ns/op	    2610 B/op	      27 allocs/op
+Benchmark_ApprovalDetector_AddPattern-4        	  535909	      3925 ns/op	    2610 B/op	      27 allocs/op
+Benchmark_ApprovalDetector_AddPattern-4        	  543798	      3760 ns/op	    2609 B/op	      27 allocs/op
+Benchmark_ApprovalDetector_AddPattern-4        	  542652	      3834 ns/op	    2609 B/op	      27 allocs/op
+Benchmark_StatusDetector_Detect-4              	   32122	     36839 ns/op	     209 B/op	       4 allocs/op
+Benchmark_StatusDetector_Detect-4              	   33116	     36509 ns/op	     209 B/op	       4 allocs/op
+Benchmark_StatusDetector_Detect-4              	   33193	     37344 ns/op	     208 B/op	       4 allocs/op
+Benchmark_StatusDetector_Detect-4              	   33193	     37049 ns/op	     209 B/op	       4 allocs/op
+Benchmark_StatusDetector_Detect-4              	   32862	     36304 ns/op	     209 B/op	       4 allocs/op
+Benchmark_StatusDetector_Detect-4              	   33145	     37360 ns/op	     209 B/op	       4 allocs/op
+Benchmark_StatusDetector_Detect-4              	   33309	     36669 ns/op	     208 B/op	       4 allocs/op
+Benchmark_StatusDetector_Detect-4              	   32368	     36529 ns/op	     208 B/op	       4 allocs/op
+Benchmark_StatusDetector_DetectWithContext-4   	 3968337	       302.0 ns/op	     112 B/op	       4 allocs/op
+Benchmark_StatusDetector_DetectWithContext-4   	 3935404	       301.6 ns/op	     112 B/op	       4 allocs/op
+Benchmark_StatusDetector_DetectWithContext-4   	 3882340	       303.3 ns/op	     112 B/op	       4 allocs/op
+Benchmark_StatusDetector_DetectWithContext-4   	 3881071	       303.2 ns/op	     112 B/op	       4 allocs/op
+Benchmark_StatusDetector_DetectWithContext-4   	 3944986	       303.1 ns/op	     112 B/op	       4 allocs/op
+Benchmark_StatusDetector_DetectWithContext-4   	 3941991	       302.3 ns/op	     112 B/op	       4 allocs/op
+Benchmark_StatusDetector_DetectWithContext-4   	 3959151	       303.1 ns/op	     112 B/op	       4 allocs/op
+Benchmark_StatusDetector_DetectWithContext-4   	 3918732	       303.6 ns/op	     112 B/op	       4 allocs/op
 PASS
-ok  	github.com/tstapler/stapler-squad/session/detection	69.720s
+ok  	github.com/tstapler/stapler-squad/session/detection	70.131s
 PASS
-ok  	github.com/tstapler/stapler-squad/session/detection/ratelimit	9.240s
+ok  	github.com/tstapler/stapler-squad/session/detection/ratelimit	9.237s
 ?   	github.com/tstapler/stapler-squad/session/ent	[no test files]
 ?   	github.com/tstapler/stapler-squad/session/ent/approvalrule	[no test files]
 ?   	github.com/tstapler/stapler-squad/session/ent/classificationanalytics	[no test files]
@@ -158,446 +158,77 @@ ok  	github.com/tstapler/stapler-squad/session/detection/ratelimit	9.240s
 ?   	github.com/tstapler/stapler-squad/session/ent/tag	[no test files]
 ?   	github.com/tstapler/stapler-squad/session/ent/worktree	[no test files]
 PASS
-ok  	github.com/tstapler/stapler-squad/session/git	4.043s
+ok  	github.com/tstapler/stapler-squad/session/git	3.700s
 PASS
-ok  	github.com/tstapler/stapler-squad/session/mux	4.013s
+ok  	github.com/tstapler/stapler-squad/session/mux	3.945s
 ?   	github.com/tstapler/stapler-squad/session/procinfo	[no test files]
 ?   	github.com/tstapler/stapler-squad/session/queue	[no test files]
 goos: linux
 goarch: amd64
 pkg: github.com/tstapler/stapler-squad/session/scrollback
 cpu: AMD EPYC 7763 64-Core Processor                
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  338698	      3473 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  344239	      3493 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  349050	      3596 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  354879	      3506 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  354895	      3502 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  335238	      3549 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  349707	      3532 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  345976	      3557 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   11629	    101642 ns/op	 629.66 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    102233 ns/op	 626.02 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    101556 ns/op	 630.19 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    102646 ns/op	 623.50 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    102680 ns/op	 623.30 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    101446 ns/op	 630.88 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    101277 ns/op	 631.93 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    101529 ns/op	 630.36 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   58144	     18043 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   66280	     17394 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   71013	     17406 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   74445	     16423 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   74322	     16977 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   69820	     17750 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   67716	     17000 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   69846	     16917 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  126812	      9298 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  130020	      9357 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  125380	      9315 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  128512	      9433 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  126951	      9491 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  121926	      9398 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  124501	      9469 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  125256	      9500 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12213456	        96.99 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12131203	        97.01 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12154746	        96.85 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12305212	        97.44 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12191898	        97.39 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12174456	        97.53 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12117140	        97.66 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12231508	        96.87 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  676568	      1763 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  670744	      1748 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  657750	      1748 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  669216	      1744 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  700316	      1788 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  679612	      1758 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  655628	      1733 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  681177	      1746 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 8921799	       129.7 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 9037081	       137.1 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 9036732	       130.5 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 9014476	       129.9 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 8934915	       131.0 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 8960510	       130.6 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 8947564	       131.1 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 8953728	       130.2 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  362908	      3462 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  351588	      3438 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  358161	      3441 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  344685	      3536 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  357301	      3433 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  351680	      3420 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  358363	      3411 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  353288	      3428 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	   10000	    100655 ns/op	 635.84 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	   10000	    100898 ns/op	 634.30 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	   10000	    100739 ns/op	 635.31 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	   10000	    101160 ns/op	 632.66 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	   10000	    100736 ns/op	 635.33 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	   10000	    100588 ns/op	 636.26 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	   10000	    101060 ns/op	 633.28 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	   11884	    100886 ns/op	 634.38 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   69376	     17274 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   72652	     17591 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   72163	     16880 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   70168	     17456 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   69552	     17590 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   73515	     17465 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   63498	     17489 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   75500	     17138 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  125888	      9252 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  123000	      9741 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  123460	      9518 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  125244	      9543 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  124521	      9547 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  124690	      9514 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  119720	      9587 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  120547	      9851 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	12209451	        96.67 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	12074961	        96.74 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	12193874	        96.75 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	12072829	        96.99 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	12326400	        97.98 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	12167554	        96.43 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	12219868	        96.91 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	12280706	        96.86 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  616714	      1779 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  657526	      1808 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  604995	      1801 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  570145	      1798 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  644295	      1806 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  649569	      1822 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  625542	      1790 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  647452	      1784 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8995442	       129.4 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8977238	       130.4 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 9050968	       129.8 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8957964	       130.2 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 9030676	       129.5 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8969010	       130.0 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 9070784	       130.3 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 9067015	       130.4 ns/op	      32 B/op	       1 allocs/op
 PASS
-ok  	github.com/tstapler/stapler-squad/session/scrollback	72.209s
---- FAIL: TestSessionResumption (30.09s)
-    --- FAIL: TestSessionResumption/ExistingSession_ShouldReuse_NotFail (10.03s)
-        session_resumption_test.go:58: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:58
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:16
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-session: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_ShouldReuse_NotFail
-            	Messages:   	Starting existing session should succeed (reuse)
-    --- FAIL: TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly (10.03s)
-        session_resumption_test.go:104: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:104
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:20
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-with-cleanup: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly
-            	Messages:   	StartWithCleanup on existing session should succeed
-    --- FAIL: TestSessionResumption/NewSession_ShouldCreateNormally (10.03s)
-        session_resumption_test.go:151: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:151
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:24
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_new-session: <nil>
-            	Test:       	TestSessionResumption/NewSession_ShouldCreateNormally
-            	Messages:   	Starting new session should succeed
---- FAIL: TestSessionResumptionBehaviorComparison (10.03s)
-    --- FAIL: TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds (10.03s)
-        session_resumption_test.go:200: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:200
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_resumption-test: <nil>
-            	Test:       	TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds
-            	Messages:   	NEW behavior: existing session should be reused successfully
---- FAIL: TestSessionResumptionIntegration (10.03s)
-    session_resumption_test.go:242: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:242
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_postgres-connection-pooling: <nil>
-        	Test:       	TestSessionResumptionIntegration
-        	Messages:   	Session creation should succeed for existing session
---- FAIL: TestStartTmuxSession (10.03s)
-    tmux_test.go:95: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/tmux_test.go:95
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_test-session: <nil>
-        	Test:       	TestStartTmuxSession
---- FAIL: TestSessionResumption (30.09s)
-    --- FAIL: TestSessionResumption/ExistingSession_ShouldReuse_NotFail (10.03s)
-        session_resumption_test.go:58: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:58
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:16
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-session: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_ShouldReuse_NotFail
-            	Messages:   	Starting existing session should succeed (reuse)
-    --- FAIL: TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly (10.03s)
-        session_resumption_test.go:104: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:104
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:20
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-with-cleanup: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly
-            	Messages:   	StartWithCleanup on existing session should succeed
-    --- FAIL: TestSessionResumption/NewSession_ShouldCreateNormally (10.03s)
-        session_resumption_test.go:151: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:151
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:24
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_new-session: <nil>
-            	Test:       	TestSessionResumption/NewSession_ShouldCreateNormally
-            	Messages:   	Starting new session should succeed
---- FAIL: TestSessionResumptionBehaviorComparison (10.03s)
-    --- FAIL: TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds (10.03s)
-        session_resumption_test.go:200: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:200
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_resumption-test: <nil>
-            	Test:       	TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds
-            	Messages:   	NEW behavior: existing session should be reused successfully
---- FAIL: TestSessionResumptionIntegration (10.03s)
-    session_resumption_test.go:242: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:242
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_postgres-connection-pooling: <nil>
-        	Test:       	TestSessionResumptionIntegration
-        	Messages:   	Session creation should succeed for existing session
---- FAIL: TestStartTmuxSession (10.03s)
-    tmux_test.go:95: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/tmux_test.go:95
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_test-session: <nil>
-        	Test:       	TestStartTmuxSession
---- FAIL: TestSessionResumption (30.08s)
-    --- FAIL: TestSessionResumption/ExistingSession_ShouldReuse_NotFail (10.03s)
-        session_resumption_test.go:58: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:58
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:16
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-session: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_ShouldReuse_NotFail
-            	Messages:   	Starting existing session should succeed (reuse)
-    --- FAIL: TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly (10.03s)
-        session_resumption_test.go:104: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:104
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:20
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-with-cleanup: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly
-            	Messages:   	StartWithCleanup on existing session should succeed
-    --- FAIL: TestSessionResumption/NewSession_ShouldCreateNormally (10.03s)
-        session_resumption_test.go:151: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:151
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:24
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_new-session: <nil>
-            	Test:       	TestSessionResumption/NewSession_ShouldCreateNormally
-            	Messages:   	Starting new session should succeed
---- FAIL: TestSessionResumptionBehaviorComparison (10.03s)
-    --- FAIL: TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds (10.03s)
-        session_resumption_test.go:200: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:200
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_resumption-test: <nil>
-            	Test:       	TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds
-            	Messages:   	NEW behavior: existing session should be reused successfully
---- FAIL: TestSessionResumptionIntegration (10.03s)
-    session_resumption_test.go:242: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:242
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_postgres-connection-pooling: <nil>
-        	Test:       	TestSessionResumptionIntegration
-        	Messages:   	Session creation should succeed for existing session
---- FAIL: TestStartTmuxSession (10.03s)
-    tmux_test.go:95: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/tmux_test.go:95
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_test-session: <nil>
-        	Test:       	TestStartTmuxSession
---- FAIL: TestSessionResumption (30.09s)
-    --- FAIL: TestSessionResumption/ExistingSession_ShouldReuse_NotFail (10.03s)
-        session_resumption_test.go:58: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:58
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:16
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-session: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_ShouldReuse_NotFail
-            	Messages:   	Starting existing session should succeed (reuse)
-    --- FAIL: TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly (10.03s)
-        session_resumption_test.go:104: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:104
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:20
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-with-cleanup: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly
-            	Messages:   	StartWithCleanup on existing session should succeed
-    --- FAIL: TestSessionResumption/NewSession_ShouldCreateNormally (10.03s)
-        session_resumption_test.go:151: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:151
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:24
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_new-session: <nil>
-            	Test:       	TestSessionResumption/NewSession_ShouldCreateNormally
-            	Messages:   	Starting new session should succeed
---- FAIL: TestSessionResumptionBehaviorComparison (10.03s)
-    --- FAIL: TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds (10.03s)
-        session_resumption_test.go:200: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:200
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_resumption-test: <nil>
-            	Test:       	TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds
-            	Messages:   	NEW behavior: existing session should be reused successfully
---- FAIL: TestSessionResumptionIntegration (10.03s)
-    session_resumption_test.go:242: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:242
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_postgres-connection-pooling: <nil>
-        	Test:       	TestSessionResumptionIntegration
-        	Messages:   	Session creation should succeed for existing session
---- FAIL: TestStartTmuxSession (10.03s)
-    tmux_test.go:95: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/tmux_test.go:95
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_test-session: <nil>
-        	Test:       	TestStartTmuxSession
---- FAIL: TestSessionResumption (30.09s)
-    --- FAIL: TestSessionResumption/ExistingSession_ShouldReuse_NotFail (10.03s)
-        session_resumption_test.go:58: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:58
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:16
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-session: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_ShouldReuse_NotFail
-            	Messages:   	Starting existing session should succeed (reuse)
-    --- FAIL: TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly (10.03s)
-        session_resumption_test.go:104: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:104
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:20
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-with-cleanup: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly
-            	Messages:   	StartWithCleanup on existing session should succeed
-    --- FAIL: TestSessionResumption/NewSession_ShouldCreateNormally (10.03s)
-        session_resumption_test.go:151: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:151
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:24
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_new-session: <nil>
-            	Test:       	TestSessionResumption/NewSession_ShouldCreateNormally
-            	Messages:   	Starting new session should succeed
---- FAIL: TestSessionResumptionBehaviorComparison (10.03s)
-    --- FAIL: TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds (10.03s)
-        session_resumption_test.go:200: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:200
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_resumption-test: <nil>
-            	Test:       	TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds
-            	Messages:   	NEW behavior: existing session should be reused successfully
---- FAIL: TestSessionResumptionIntegration (10.03s)
-    session_resumption_test.go:242: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:242
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_postgres-connection-pooling: <nil>
-        	Test:       	TestSessionResumptionIntegration
-        	Messages:   	Session creation should succeed for existing session
---- FAIL: TestStartTmuxSession (10.03s)
-    tmux_test.go:95: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/tmux_test.go:95
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_test-session: <nil>
-        	Test:       	TestStartTmuxSession
---- FAIL: TestSessionResumption (30.09s)
-    --- FAIL: TestSessionResumption/ExistingSession_ShouldReuse_NotFail (10.03s)
-        session_resumption_test.go:58: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:58
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:16
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-session: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_ShouldReuse_NotFail
-            	Messages:   	Starting existing session should succeed (reuse)
-    --- FAIL: TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly (10.03s)
-        session_resumption_test.go:104: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:104
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:20
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-with-cleanup: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly
-            	Messages:   	StartWithCleanup on existing session should succeed
-    --- FAIL: TestSessionResumption/NewSession_ShouldCreateNormally (10.03s)
-        session_resumption_test.go:151: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:151
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:24
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_new-session: <nil>
-            	Test:       	TestSessionResumption/NewSession_ShouldCreateNormally
-            	Messages:   	Starting new session should succeed
---- FAIL: TestSessionResumptionBehaviorComparison (10.03s)
-    --- FAIL: TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds (10.03s)
-        session_resumption_test.go:200: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:200
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_resumption-test: <nil>
-            	Test:       	TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds
-            	Messages:   	NEW behavior: existing session should be reused successfully
---- FAIL: TestSessionResumptionIntegration (10.03s)
-    session_resumption_test.go:242: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:242
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_postgres-connection-pooling: <nil>
-        	Test:       	TestSessionResumptionIntegration
-        	Messages:   	Session creation should succeed for existing session
---- FAIL: TestStartTmuxSession (10.03s)
-    tmux_test.go:95: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/tmux_test.go:95
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_test-session: <nil>
-        	Test:       	TestStartTmuxSession
---- FAIL: TestSessionResumption (30.09s)
-    --- FAIL: TestSessionResumption/ExistingSession_ShouldReuse_NotFail (10.03s)
-        session_resumption_test.go:58: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:58
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:16
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-session: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_ShouldReuse_NotFail
-            	Messages:   	Starting existing session should succeed (reuse)
-    --- FAIL: TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly (10.03s)
-        session_resumption_test.go:104: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:104
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:20
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-with-cleanup: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly
-            	Messages:   	StartWithCleanup on existing session should succeed
-    --- FAIL: TestSessionResumption/NewSession_ShouldCreateNormally (10.03s)
-        session_resumption_test.go:151: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:151
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:24
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_new-session: <nil>
-            	Test:       	TestSessionResumption/NewSession_ShouldCreateNormally
-            	Messages:   	Starting new session should succeed
---- FAIL: TestSessionResumptionBehaviorComparison (10.03s)
-    --- FAIL: TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds (10.03s)
-        session_resumption_test.go:200: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:200
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_resumption-test: <nil>
-            	Test:       	TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds
-            	Messages:   	NEW behavior: existing session should be reused successfully
---- FAIL: TestSessionResumptionIntegration (10.03s)
-    session_resumption_test.go:242: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:242
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_postgres-connection-pooling: <nil>
-        	Test:       	TestSessionResumptionIntegration
-        	Messages:   	Session creation should succeed for existing session
---- FAIL: TestStartTmuxSession (10.03s)
-    tmux_test.go:95: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/tmux_test.go:95
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_test-session: <nil>
-        	Test:       	TestStartTmuxSession
---- FAIL: TestSessionResumption (30.09s)
-    --- FAIL: TestSessionResumption/ExistingSession_ShouldReuse_NotFail (10.03s)
-        session_resumption_test.go:58: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:58
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:16
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-session: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_ShouldReuse_NotFail
-            	Messages:   	Starting existing session should succeed (reuse)
-    --- FAIL: TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly (10.03s)
-        session_resumption_test.go:104: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:104
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:20
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_existing-with-cleanup: <nil>
-            	Test:       	TestSessionResumption/ExistingSession_WithCleanup_ShouldSetupProperly
-            	Messages:   	StartWithCleanup on existing session should succeed
-    --- FAIL: TestSessionResumption/NewSession_ShouldCreateNormally (10.03s)
-        session_resumption_test.go:151: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:151
-            	            				/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:24
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_new-session: <nil>
-            	Test:       	TestSessionResumption/NewSession_ShouldCreateNormally
-            	Messages:   	Starting new session should succeed
---- FAIL: TestSessionResumptionBehaviorComparison (10.03s)
-    --- FAIL: TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds (10.03s)
-        session_resumption_test.go:200: 
-            	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:200
-            	Error:      	Received unexpected error:
-            	            	timed out waiting for tmux session staplersquad_resumption-test: <nil>
-            	Test:       	TestSessionResumptionBehaviorComparison/NEW_Behavior_Succeeds
-            	Messages:   	NEW behavior: existing session should be reused successfully
---- FAIL: TestSessionResumptionIntegration (10.03s)
-    session_resumption_test.go:242: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/session_resumption_test.go:242
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_postgres-connection-pooling: <nil>
-        	Test:       	TestSessionResumptionIntegration
-        	Messages:   	Session creation should succeed for existing session
---- FAIL: TestStartTmuxSession (10.03s)
-    tmux_test.go:95: 
-        	Error Trace:	/home/runner/work/stapler-squad/stapler-squad/session/tmux/tmux_test.go:95
-        	Error:      	Received unexpected error:
-        	            	timed out waiting for tmux session staplersquad_test-session: <nil>
-        	Test:       	TestStartTmuxSession
-FAIL
-exit status 1
-FAIL	github.com/tstapler/stapler-squad/session/tmux	811.762s
+ok  	github.com/tstapler/stapler-squad/session/scrollback	72.978s
 PASS
-ok  	github.com/tstapler/stapler-squad/session/vc	2.588s
+ok  	github.com/tstapler/stapler-squad/session/tmux	330.265s
+PASS
+ok  	github.com/tstapler/stapler-squad/session/vc	2.412s
 ?   	github.com/tstapler/stapler-squad/session/vcs	[no test files]
 ?   	github.com/tstapler/stapler-squad/telemetry	[no test files]
 ?   	github.com/tstapler/stapler-squad/terminal	[no test files]
