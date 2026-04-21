@@ -806,61 +806,64 @@ func (s *SessionService) DeleteSession(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session id is required"))
 	}
 
-	instances, err := s.storage.LoadInstances()
+	// Verify existence using raw data — no PTY side effects.
+	dataSlice, err := s.storage.ListInstanceData()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list instances: %w", err))
 	}
-
-	// Find the instance to delete
-	var instance *session.Instance
-	for _, inst := range instances {
-		if inst.Title == req.Msg.Id {
-			instance = inst
+	found := false
+	for _, d := range dataSlice {
+		if d.Title == req.Msg.Id {
+			found = true
 			break
 		}
 	}
-
-	if instance == nil {
+	if !found {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.Id))
 	}
 
-	// Destroy the session (cleanup tmux + git worktree)
-	if err := instance.Destroy(); err != nil {
-		// Log error but continue with deletion from storage
-		log.WarningLog.Printf("Failed to cleanup session resources: %v", err)
+	// Remove from all pollers BEFORE deleting from storage. This is atomic from the
+	// poller's perspective and closes the race window where external discovery could
+	// re-add the session between storage deletion and the old LoadInstances() reload.
+	s.removeFromAllPollers(req.Msg.Id)
+
+	// Destroy tmux/git resources using the live in-memory instance if available.
+	if inst := s.FindLiveInstance(req.Msg.Id); inst != nil {
+		if err := inst.Destroy(); err != nil {
+			log.WarningLog.Printf("Failed to cleanup session resources for '%s': %v", req.Msg.Id, err)
+		}
 	}
 
-	// Delete from storage
+	// Delete from storage.
 	if err := s.storage.DeleteInstance(req.Msg.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete instance from storage: %w", err))
 	}
 
-	// Remove from review queue immediately
-	if s.reviewQueueSvc != nil {
-		s.reviewQueueSvc.GetQueue().Remove(req.Msg.Id)
-		log.InfoLog.Printf("[ReviewQueue] Removed deleted session '%s' from review queue", req.Msg.Id)
-	}
-
-	// CRITICAL: Update the ReviewQueuePoller's instance references after deletion
-	// The poller still has references to the old instances list which includes the deleted session.
-	// Reload the instances and update the poller to prevent stale references.
-	if s.reviewQueuePoller != nil {
-		updatedInstances, err := s.storage.LoadInstances()
-		if err != nil {
-			log.ErrorLog.Printf("[ReviewQueue] Failed to reload instances after DeleteSession: %v", err)
-		} else {
-			s.reviewQueuePoller.SetInstances(updatedInstances)
-			log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after DeleteSession for '%s'", req.Msg.Id)
-		}
-	}
-
-	// Publish SessionDeleted event to all watchers
+	// Publish SessionDeleted event to all watchers.
 	s.eventBus.Publish(events.NewSessionDeletedEvent(req.Msg.Id))
 
 	return connect.NewResponse(&sessionv1.DeleteSessionResponse{
 		Success: true,
 		Message: fmt.Sprintf("Session '%s' deleted successfully", req.Msg.Id),
 	}), nil
+}
+
+// removeFromAllPollers removes the session from the review queue and all pollers.
+// Call this before deleting from storage to close the race window where LoadInstances()
+// could re-add the session via external discovery.
+func (s *SessionService) removeFromAllPollers(id string) {
+	if s.reviewQueueSvc != nil {
+		s.reviewQueueSvc.GetQueue().Remove(id)
+	}
+	if s.reviewQueuePoller != nil {
+		s.reviewQueuePoller.RemoveInstance(id)
+	}
+}
+
+// RemoveFromAllPollers is the exported version for use by MCP tools and other
+// callers outside the services package that need to clean up after deletion.
+func (s *SessionService) RemoveFromAllPollers(id string) {
+	s.removeFromAllPollers(id)
 }
 
 // WatchSessions streams real-time session events (created/updated/deleted).
@@ -2015,16 +2018,16 @@ func (s *SessionService) findInstance(id string) *session.Instance {
 	return nil
 }
 
-// allInstances returns all live instances from both the poller and external discovery.
+// allInstances returns all managed (poller-tracked) live instances.
+// External discovery sessions are intentionally excluded: they are persisted via
+// the OnSessionAdded/OnSessionRemoved callbacks in dependencies.go, and including
+// them here would re-persist deleted external sessions during unrelated operations
+// such as CreateCheckpoint or ForkSession.
 func (s *SessionService) allInstances() []*session.Instance {
-	var result []*session.Instance
 	if s.reviewQueuePoller != nil {
-		result = append(result, s.reviewQueuePoller.GetInstances()...)
+		return s.reviewQueuePoller.GetInstances()
 	}
-	if s.externalDiscovery != nil {
-		result = append(result, s.externalDiscovery.GetSessions()...)
-	}
-	return result
+	return nil
 }
 
 // ListFiles returns the immediate children of a directory in a session's worktree.

@@ -345,6 +345,10 @@ func (lh *lifecycleHandlers) stopSession(ctx context.Context, req mcpgo.CallTool
 		}
 	}
 
+	// Remove from all pollers BEFORE storage deletion to close the race window
+	// where external discovery could re-add the session between delete and poller update.
+	lh.svc.RemoveFromAllPollers(sessionID)
+
 	if err := lh.store.DeleteInstance(sessionID); err != nil {
 		return errResult(ErrInternalError, fmt.Sprintf("delete from storage: %v", err), ""), nil
 	}
