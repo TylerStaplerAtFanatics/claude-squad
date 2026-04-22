@@ -102,6 +102,7 @@ func (r *EntRepository) Create(ctx context.Context, data InstanceData) error {
 	// Create main session
 	sessionCreate := tx.Session.Create().
 		SetTitle(data.Title).
+		SetUUID(data.UUID).
 		SetPath(data.Path).
 		SetStatus(int(data.Status)).
 		SetCreatedAt(data.CreatedAt).
@@ -215,17 +216,17 @@ func (r *EntRepository) Create(ctx context.Context, data InstanceData) error {
 	}
 
 	// Create Claude session if present
-	if data.ClaudeSession.SessionID != "" {
+	if data.ClaudeSession.ConversationUUID != "" {
 		claudeCreate := tx.ClaudeSession.Create().
 			SetSessionID(sess.ID).
-			SetClaudeSessionID(data.ClaudeSession.SessionID).
+			SetClaudeSessionID(data.ClaudeSession.ConversationUUID).
 			SetAutoReattach(data.ClaudeSession.Settings.AutoReattach).
 			SetCreateNewOnMissing(data.ClaudeSession.Settings.CreateNewOnMissing).
 			SetShowSessionSelector(data.ClaudeSession.Settings.ShowSessionSelector).
 			SetSessionTimeoutMinutes(data.ClaudeSession.Settings.SessionTimeoutMinutes)
 
-		if data.ClaudeSession.ConversationID != "" {
-			claudeCreate.SetConversationID(data.ClaudeSession.ConversationID)
+		if data.ClaudeSession.SquadSessionID != "" {
+			claudeCreate.SetConversationID(data.ClaudeSession.SquadSessionID)
 		}
 		if data.ClaudeSession.ProjectName != "" {
 			claudeCreate.SetProjectName(data.ClaudeSession.ProjectName)
@@ -279,6 +280,7 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 
 	// Update main session fields
 	sessionUpdate := tx.Session.UpdateOne(sess).
+		SetUUID(data.UUID).
 		SetPath(data.Path).
 		SetStatus(int(data.Status)).
 		SetUpdatedAt(data.UpdatedAt).
@@ -434,21 +436,21 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 	}
 
 	// Update Claude session if present
-	if data.ClaudeSession.SessionID != "" {
+	if data.ClaudeSession.ConversationUUID != "" {
 		existingClaude, err := tx.ClaudeSession.Query().Where(claudesession.HasSessionWith(session.ID(sess.ID))).Only(ctx)
 		if err != nil {
 			if ent.IsNotFound(err) {
 				// Create new Claude session
 				claudeCreate := tx.ClaudeSession.Create().
 					SetSessionID(sess.ID).
-					SetClaudeSessionID(data.ClaudeSession.SessionID).
+					SetClaudeSessionID(data.ClaudeSession.ConversationUUID).
 					SetAutoReattach(data.ClaudeSession.Settings.AutoReattach).
 					SetCreateNewOnMissing(data.ClaudeSession.Settings.CreateNewOnMissing).
 					SetShowSessionSelector(data.ClaudeSession.Settings.ShowSessionSelector).
 					SetSessionTimeoutMinutes(data.ClaudeSession.Settings.SessionTimeoutMinutes)
 
-				if data.ClaudeSession.ConversationID != "" {
-					claudeCreate.SetConversationID(data.ClaudeSession.ConversationID)
+				if data.ClaudeSession.SquadSessionID != "" {
+					claudeCreate.SetConversationID(data.ClaudeSession.SquadSessionID)
 				}
 				if data.ClaudeSession.ProjectName != "" {
 					claudeCreate.SetProjectName(data.ClaudeSession.ProjectName)
@@ -470,14 +472,14 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 		} else {
 			// Update existing Claude session
 			claudeUpdate := tx.ClaudeSession.UpdateOne(existingClaude).
-				SetClaudeSessionID(data.ClaudeSession.SessionID).
+				SetClaudeSessionID(data.ClaudeSession.ConversationUUID).
 				SetAutoReattach(data.ClaudeSession.Settings.AutoReattach).
 				SetCreateNewOnMissing(data.ClaudeSession.Settings.CreateNewOnMissing).
 				SetShowSessionSelector(data.ClaudeSession.Settings.ShowSessionSelector).
 				SetSessionTimeoutMinutes(data.ClaudeSession.Settings.SessionTimeoutMinutes)
 
-			if data.ClaudeSession.ConversationID != "" {
-				claudeUpdate.SetConversationID(data.ClaudeSession.ConversationID)
+			if data.ClaudeSession.SquadSessionID != "" {
+				claudeUpdate.SetConversationID(data.ClaudeSession.SquadSessionID)
 			}
 			if data.ClaudeSession.ProjectName != "" {
 				claudeUpdate.SetProjectName(data.ClaudeSession.ProjectName)
@@ -713,6 +715,7 @@ func (r *EntRepository) Close() error {
 func (r *EntRepository) sessionToInstanceData(sess *ent.Session) *InstanceData {
 	data := &InstanceData{
 		Title:               sess.Title,
+		UUID:                sess.UUID,
 		Path:                sess.Path,
 		WorkingDir:          sess.WorkingDir,
 		Branch:              sess.Branch,
@@ -785,8 +788,8 @@ func (r *EntRepository) sessionToInstanceData(sess *ent.Session) *InstanceData {
 	if sess.Edges.ClaudeSession != nil {
 		cs := sess.Edges.ClaudeSession
 		data.ClaudeSession = ClaudeSessionData{
-			SessionID:      cs.ClaudeSessionID,
-			ConversationID: cs.ConversationID,
+			ConversationUUID: cs.ClaudeSessionID,
+			SquadSessionID:   cs.ConversationID,
 			ProjectName:    cs.ProjectName,
 			Settings: ClaudeSettings{
 				AutoReattach:          cs.AutoReattach,
