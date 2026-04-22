@@ -96,7 +96,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$bin_path
+ExecStart=$bin_path --remote-access
 WorkingDirectory=$HOME
 Restart=on-failure
 RestartSec=5s
@@ -150,6 +150,7 @@ install_macos() {
     <key>ProgramArguments</key>
     <array>
         <string>$bin_path</string>
+        <string>--remote-access</string>
     </array>
 
     <key>RunAtLoad</key>
