@@ -283,12 +283,6 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, XtermTerminalProps>
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
 
-    // Now trigger initial resize callback (ref is ready for parent's getTerminal())
-    lastSizeRef.current = { cols: terminal.cols, rows: terminal.rows };
-    if (onResizeRef.current) {
-      onResizeRef.current(terminal.cols, terminal.rows);
-    }
-
     // Setup ResizeObserver for automatic fitting
     // Track container size to avoid unnecessary fit() calls
     let lastContainerSize = { width: 0, height: 0 };
@@ -307,7 +301,7 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, XtermTerminalProps>
       const widthChanged = Math.abs(width - lastContainerSize.width) > 1;
       const heightChanged = Math.abs(height - lastContainerSize.height) > 1;
 
-      if (widthChanged || heightChanged) {
+      if ((widthChanged || heightChanged) && width > 0 && height > 0) {
         lastContainerSize = { width, height };
         resizeCount++;
 
