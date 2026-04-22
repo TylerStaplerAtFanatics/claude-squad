@@ -74,12 +74,17 @@ jobs:
       - name: Run E2E tests with video recording
         env:
           RECORD_FEATURES: 'true'
-          STAPLER_SQUAD_INSTANCE: test-${{ github.run_id }}
           TEST_SERVER_URL: http://localhost:8543
         run: |
-          # Start test server in background
-          STAPLER_SQUAD_USE_CONTROL_MODE=false STAPLER_SQUAD_INSTANCE=test-${{ github.run_id }} \
-            ./stapler-squad --tmux-keep-server &
+          # Seed 6 mock demo sessions into a temp directory so the server
+          # starts with pre-populated data (payment, auth, k8s, etc.)
+          DEMO_DIR=$(mktemp -d)
+          go run ./tests/demo/seed "$DEMO_DIR" 6
+          echo "Seeded demo data into $DEMO_DIR"
+
+          # Start server pointing at the seeded data directory
+          STAPLER_SQUAD_USE_CONTROL_MODE=false \
+            ./stapler-squad --tmux-keep-server --test-mode --test-dir "$DEMO_DIR" &
           SERVER_PID=$!
 
           # Wait for server to be ready
@@ -96,6 +101,7 @@ jobs:
           npx playwright test --reporter=list || true
 
           kill $SERVER_PID 2>/dev/null || true
+          rm -rf "$DEMO_DIR"
 
       - name: Validate video files were created
         id: validate-videos
