@@ -407,7 +407,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       // the cached size (lastResize) is itself reasonable — a stale tiny cache
       // entry would otherwise bypass the stability wait and connect at the wrong size.
       if (hasCachedDimensionsRef.current && !hasInitiatedConnectionRef.current && !isConnected && !error && isMountedRef.current) {
-        const initDims = lastResize ?? { cols, rows };
+        const initDims = { cols, rows };
         if (initDims.cols >= MIN_COLS && initDims.rows >= MIN_ROWS) {
           console.log(`[TerminalOutput] Using cached dimensions, skipping stability wait (${initDims.cols}x${initDims.rows})`);
           metricsRef.current.sizeStableTime = performance.now();
