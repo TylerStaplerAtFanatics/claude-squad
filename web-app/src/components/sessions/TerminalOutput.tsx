@@ -49,6 +49,12 @@ interface TerminalOutputProps {
 const MIN_COLS = 30;
 const MIN_ROWS = 10;
 
+// xterm.js initializes with these default dimensions before FitAddon.fit() runs.
+// Cache entries equal to these values are treated as potentially corrupt (see Bug 1)
+// and are not used for fast-connect. The actual container size arrives via onResize.
+const XTERM_DEFAULT_COLS = 80;
+const XTERM_DEFAULT_ROWS = 24;
+
 export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSessionName, isVisible }: TerminalOutputProps) {
   const xtermRef = useRef<XtermTerminalHandle | null>(null);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
@@ -544,6 +550,9 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     const cached = getCachedDimensions(sessionId);
     if (cached && cached.cols >= MIN_COLS && cached.rows >= MIN_ROWS) {
       hasCachedDimensionsRef.current = true;
+      // Set lastResizeRef so the initial onResize from xterm mount (if any) matches
+      // the cached value and sizeChanged=false, preventing a spurious fast-connect.
+      lastResizeRef.current = cached;
       console.log(`[TerminalOutput] Initialized with cached dimensions: ${cached.cols}x${cached.rows}`);
     } else if (cached) {
       console.log(`[TerminalOutput] Ignoring stale cached dimensions ${cached.cols}x${cached.rows} (below ${MIN_COLS}x${MIN_ROWS})`);
@@ -600,12 +609,17 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     // Otherwise set the pending flag so we connect once the in-progress disconnect resolves
     if (!isConnected) {
       const dims = lastResizeRef.current;
-      if (dims && isMountedRef.current) {
+      // Guard: don't fast-connect with xterm default dims (80×24). Those are the
+      // terminal's initial values before fitAddon.fit() measures the container —
+      // if Bug 1 corrupted the cache to 80×24, using them here would cause a thin
+      // PTY. The resize handler will fire with the actual dims and connect normally.
+      const isXtermDefault = dims?.cols === XTERM_DEFAULT_COLS && dims?.rows === XTERM_DEFAULT_ROWS;
+      if (dims && isMountedRef.current && !isXtermDefault) {
         hasInitiatedConnectionRef.current = true;
         setIsWaitingForStableSize(false);
         connect(dims.cols, dims.rows);
       }
-      // If no dims yet, resize handler will fire and trigger connect normally
+      // If no dims yet (or dims are xterm defaults), resize handler will fire and trigger connect normally
     } else {
       // Was connected to previous session — disconnect() is in-flight (async).
       // Mark pending so the isConnected→false transition triggers connect below.

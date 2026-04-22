@@ -48,6 +48,10 @@ jest.mock('@xterm/xterm', () => {
     cols = 80;
     rows = 24;
     options: Record<string, unknown> = {};
+
+    constructor(opts?: Record<string, unknown>) {
+      if (opts) Object.assign(this.options, opts);
+    }
     buffer = {
       active: { length: 0, cursorY: 0, viewportY: 0 },
       normal: { length: 0 },
