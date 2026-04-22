@@ -239,8 +239,8 @@ func (csm *ClaudeSessionManager) AttachToSession(sessionID string) error {
 // CreateSessionData creates ClaudeSessionData from a detected session
 func (csm *ClaudeSessionManager) CreateSessionData(session ClaudeSession, settings ClaudeSettings) ClaudeSessionData {
 	return ClaudeSessionData{
-		SessionID:      session.ID,
-		ConversationID: session.ConversationID,
+		ConversationUUID: session.ID,
+		SquadSessionID:   session.ConversationID,
 		ProjectName:    session.ProjectName,
 		LastAttached:   time.Now(),
 		Settings:       settings,

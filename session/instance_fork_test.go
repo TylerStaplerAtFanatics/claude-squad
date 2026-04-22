@@ -16,7 +16,7 @@ func forkResumeID(inst *Instance) string {
 	if inst.claudeSession == nil {
 		return ""
 	}
-	return inst.claudeSession.SessionID
+	return inst.claudeSession.ConversationUUID
 }
 
 // writeConvLines writes count JSON lines to path (simulates Claude history file).
@@ -46,7 +46,7 @@ func TestForkFromCheckpoint_ConvUUID_SetAsResumeId(t *testing.T) {
 	historyFile := filepath.Join(historyDir, "conv-aaa.jsonl")
 	writeConvLines(t, historyFile, 10)
 	srcInst.HistoryFilePath = historyFile
-	srcInst.claudeSession = &ClaudeSessionData{SessionID: "conv-aaa"}
+	srcInst.claudeSession = &ClaudeSessionData{ConversationUUID: "conv-aaa"}
 
 	// Create checkpoint with conv data.
 	cp, err := srcInst.CreateCheckpoint("snap", 5)

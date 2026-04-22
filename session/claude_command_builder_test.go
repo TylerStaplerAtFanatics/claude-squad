@@ -20,7 +20,7 @@ func TestClaudeCommandBuilder_Build(t *testing.T) {
 			name:        "claude command with valid session",
 			baseProgram: "claude",
 			claudeSession: &ClaudeSessionData{
-				SessionID: validSessionID,
+				ConversationUUID: validSessionID,
 			},
 			expected:    "claude --resume 550e8400-e29b-41d4-a716-446655440000",
 			description: "Should append --resume flag with valid session ID",
@@ -29,7 +29,7 @@ func TestClaudeCommandBuilder_Build(t *testing.T) {
 			name:        "claude command with flags and valid session",
 			baseProgram: "claude --model sonnet",
 			claudeSession: &ClaudeSessionData{
-				SessionID: validSessionID,
+				ConversationUUID: validSessionID,
 			},
 			expected:    "claude --model sonnet --resume 550e8400-e29b-41d4-a716-446655440000",
 			description: "Should append --resume to command with existing flags",
@@ -38,7 +38,7 @@ func TestClaudeCommandBuilder_Build(t *testing.T) {
 			name:        "claude full path with valid session",
 			baseProgram: "/usr/local/bin/claude",
 			claudeSession: &ClaudeSessionData{
-				SessionID: validSessionID,
+				ConversationUUID: validSessionID,
 			},
 			expected:    "/usr/local/bin/claude --resume 550e8400-e29b-41d4-a716-446655440000",
 			description: "Should handle full path commands",
@@ -54,7 +54,7 @@ func TestClaudeCommandBuilder_Build(t *testing.T) {
 			name:        "claude command with empty session ID",
 			baseProgram: "claude",
 			claudeSession: &ClaudeSessionData{
-				SessionID: "",
+				ConversationUUID: "",
 			},
 			expected:    "claude",
 			description: "Should return unchanged when session ID is empty",
@@ -63,7 +63,7 @@ func TestClaudeCommandBuilder_Build(t *testing.T) {
 			name:        "claude command with invalid UUID",
 			baseProgram: "claude",
 			claudeSession: &ClaudeSessionData{
-				SessionID: invalidSessionID,
+				ConversationUUID: invalidSessionID,
 			},
 			expected:    "claude",
 			description: "Should return unchanged when session ID is not valid UUID",
@@ -72,7 +72,7 @@ func TestClaudeCommandBuilder_Build(t *testing.T) {
 			name:        "non-claude command with session data",
 			baseProgram: "aider --model ollama_chat/gemma3:1b",
 			claudeSession: &ClaudeSessionData{
-				SessionID: validSessionID,
+				ConversationUUID: validSessionID,
 			},
 			expected:    "aider --model ollama_chat/gemma3:1b",
 			description: "Should not modify non-Claude commands",
@@ -88,7 +88,7 @@ func TestClaudeCommandBuilder_Build(t *testing.T) {
 			name:        "mixed case claude command",
 			baseProgram: "Claude",
 			claudeSession: &ClaudeSessionData{
-				SessionID: validSessionID,
+				ConversationUUID: validSessionID,
 			},
 			expected:    "Claude --resume 550e8400-e29b-41d4-a716-446655440000",
 			description: "Should handle case-insensitive Claude detection",
@@ -97,7 +97,7 @@ func TestClaudeCommandBuilder_Build(t *testing.T) {
 			name:        "claude in path with args",
 			baseProgram: "/home/user/.local/bin/claude --verbose",
 			claudeSession: &ClaudeSessionData{
-				SessionID: validSessionID,
+				ConversationUUID: validSessionID,
 			},
 			expected:    "/home/user/.local/bin/claude --verbose --resume 550e8400-e29b-41d4-a716-446655440000",
 			description: "Should handle full path with arguments",
@@ -258,7 +258,7 @@ func TestIsValidUUID(t *testing.T) {
 // BenchmarkClaudeCommandBuilder_Build benchmarks the Build() method
 func BenchmarkClaudeCommandBuilder_Build(b *testing.B) {
 	validSession := &ClaudeSessionData{
-		SessionID: "550e8400-e29b-41d4-a716-446655440000",
+		ConversationUUID: "550e8400-e29b-41d4-a716-446655440000",
 	}
 
 	benchmarks := []struct {
