@@ -330,6 +330,8 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, XtermTerminalProps>
           });
           resizeTimeout = null;
         }, debounceDelay);
+      } else if ((widthChanged || heightChanged) && (width === 0 || height === 0)) {
+        console.log(`[XtermTerminal] Skipping fit: container collapsed to zero-size (${width}px × ${height}px)`);
       }
     });
 
