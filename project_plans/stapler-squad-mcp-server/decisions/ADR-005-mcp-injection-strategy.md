@@ -54,6 +54,7 @@ The binary path is resolved via `os.Executable()` at injection time, giving the 
 
 ## Alternatives Considered
 
+- **CLAUDE.md injection**: Considered writing MCP server instructions and configuration context into the session's `CLAUDE.md` file. Rejected — `CLAUDE.md` is a user-authored, repo-committed file that encodes project conventions and instructions; Stapler Squad should not modify it. Appending to it would pollute git history (unlike `settings.local.json`, which is `.gitignore`'d), risk overwriting or conflating user-written instructions, and create confusing diffs. MCP configuration is structured JSON, not natural language — it belongs in a config file, not an instruction file.
 - **Auto-inject into all new sessions regardless of source**: Rejected — modifies sessions the user did not explicitly opt in to. Violates the "don't affect existing ones unless the user explicitly wants it" requirement.
 - **Environment variable injection at tmux session start**: Considered (`CLAUDE_MCP_SERVERS=...`). Rejected — Claude Code does not support MCP configuration via environment variables as of 2026; only settings files are respected.
 - **Single global install automatically at stapler-squad startup**: Rejected — too broad; affects sessions outside Stapler Squad's scope and cannot be scoped to specific sessions.

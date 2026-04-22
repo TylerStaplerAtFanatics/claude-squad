@@ -1232,20 +1232,7 @@ func (s *SessionService) GetSessionDiff(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session id is required"))
 	}
 
-	instances, err := s.loadInstancesWithWiring()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
-	}
-
-	// Find instance by ID (UUID or legacy Title).
-	var instance *session.Instance
-	for _, inst := range instances {
-		if inst.MatchesID(req.Msg.Id) {
-			instance = inst
-			break
-		}
-	}
-
+	instance := s.findInstance(req.Msg.Id)
 	if instance == nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.Id))
 	}

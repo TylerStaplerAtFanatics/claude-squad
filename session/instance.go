@@ -874,6 +874,7 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	i.tmuxManager.ResetExitOnce()
 	i.tmuxManager.SetOnExitCallback(func(reason string) {
 		log.InfoLog.Printf("Instance '%s': unexpected exit detected via control mode (%s)", i.Title, reason)
+		log.ForSession(i.Title).Info("Session exited unexpectedly (reason: %s)", reason)
 		i.stateMutex.Lock()
 		if i.Status == Running || i.Status == Ready {
 			if err := i.transitionTo(Stopped); err != nil {
@@ -985,6 +986,7 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	i.stateMutex.Unlock()
 	i.started = true
 	i.fireLifecycleEvent(EventStarted, "")
+	log.ForSession(i.Title).Info("Session started (firstTimeSetup: %v)", firstTimeSetup)
 
 	// Start controller for new sessions only; loaded sessions are wired later by server.go.
 	if firstTimeSetup {
@@ -1378,6 +1380,7 @@ func (i *Instance) Pause() error {
 		return fmt.Errorf("failed to transition to Paused: %w", err)
 	}
 	i.stateMutex.Unlock()
+	log.ForSession(i.Title).Info("Session paused")
 	_ = clipboard.WriteAll(i.gitManager.GetBranchName())
 	return nil
 }
@@ -1460,6 +1463,7 @@ func (i *Instance) Resume() error {
 		return fmt.Errorf("failed to transition to Running on resume: %w", err)
 	}
 	i.stateMutex.Unlock()
+	log.ForSession(i.Title).Info("Session resumed")
 
 	// Start ClaudeController for idle detection and automation
 	// This is non-critical - we log errors but don't fail the resume
