@@ -231,11 +231,16 @@ func (r *TmuxServerRegistry) syncSessions() error {
 func (r *TmuxServerRegistry) startControlMode() (*exec.Cmd, *bufio.Scanner, io.WriteCloser, error) {
 	keepaliveName := TmuxPrefix + "keepalive"
 
-	// Ensure the sentinel session exists so attach-session doesn't exit immediately.
-	// "new-session -d -s <name>" is idempotent: if the session already exists tmux
-	// exits with a non-zero code which we intentionally ignore.
-	createArgs := prependSocket(r.serverSocket, []string{"new-session", "-d", "-s", keepaliveName})
-	_ = exec.Command("tmux", createArgs...).Run()
+	// Only create the keepalive sentinel on the default server (empty socket).
+	// Isolated servers (e.g., test harnesses using -L <socket>) manage their own
+	// session lifecycle and must not have a keepalive injected into them.
+	if r.serverSocket == "" {
+		// Ensure the sentinel session exists so attach-session doesn't exit immediately.
+		// "new-session -d -s <name>" is idempotent: if the session already exists tmux
+		// exits with a non-zero code which we intentionally ignore.
+		createArgs := []string{"new-session", "-d", "-s", keepaliveName}
+		_ = exec.Command("tmux", createArgs...).Run()
+	}
 
 	// No -r flag: read-only is irrelevant for event monitoring, and it caused
 	// immediate %exit on some tmux versions.
