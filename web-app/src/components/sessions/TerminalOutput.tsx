@@ -544,7 +544,6 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     const cached = getCachedDimensions(sessionId);
     if (cached && cached.cols >= MIN_COLS && cached.rows >= MIN_ROWS) {
       hasCachedDimensionsRef.current = true;
-      lastResizeRef.current = cached;
       console.log(`[TerminalOutput] Initialized with cached dimensions: ${cached.cols}x${cached.rows}`);
     } else if (cached) {
       console.log(`[TerminalOutput] Ignoring stale cached dimensions ${cached.cols}x${cached.rows} (below ${MIN_COLS}x${MIN_ROWS})`);

@@ -242,16 +242,24 @@ describe('Bug 2b: handleTerminalResize uses stale lastResize for connect dims', 
 // Correct behaviour reference — what should happen with a VALID cache
 // ---------------------------------------------------------------------------
 describe('Baseline: valid cache should fast-connect with correct dims', () => {
-  it('connect is called with valid cached dims (220×55) on mount', () => {
+  it('connect is called with valid cached dims (220×55) on first resize', async () => {
     // This test should PASS today and after the fix — it verifies that the
     // fast-connect optimisation still works when the cache is valid.
+    // Fast-connect happens on first resize (not synchronously on mount) so that
+    // the actual terminal dimensions are used rather than stale cached defaults.
     (getCachedDimensions as jest.Mock).mockReturnValue({ cols: 220, rows: 55 });
     const stream = makeStreamMock();
     (useTerminalStream as jest.Mock).mockReturnValue(stream);
 
     renderTerminalOutput();
 
-    // Valid cache dims should be used for fast connect
+    // No connect before any resize fires (cache no longer triggers immediate connect)
+    expect(stream.connect).not.toHaveBeenCalled();
+
+    // First resize fires with the actual container dims (matching cache)
+    await act(async () => { capturedOnResize?.(220, 55); });
+
+    // Fast-connect uses the actual resize dims (which happen to match the cache)
     expect(stream.connect).toHaveBeenCalledWith(220, 55);
   });
 
