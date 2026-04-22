@@ -111,9 +111,19 @@ EOF
 
     log_success "Service file written to: $service_file"
     echo ""
-    log_info "Enable and start now:"
-    echo "    systemctl --user daemon-reload"
-    echo "    systemctl --user enable --now stapler-squad"
+
+    # Reload systemd and restart (or start) the service automatically.
+    log_info "Reloading systemd and restarting service..."
+    systemctl --user daemon-reload
+    systemctl --user enable stapler-squad
+    if systemctl --user is-active --quiet stapler-squad; then
+        systemctl --user restart stapler-squad
+        log_success "Service restarted."
+    else
+        systemctl --user start stapler-squad
+        log_success "Service started."
+    fi
+
     echo ""
     log_info "Check status:"
     echo "    systemctl --user status stapler-squad"
@@ -123,8 +133,6 @@ EOF
     echo ""
     log_info "Optional — keep service running after logout (one-time setup):"
     echo "    loginctl enable-linger \$USER"
-    echo ""
-    log_warning "If you rebuild or move the binary, re-run this script to update the service file."
 }
 
 # ── macOS / LaunchAgent ───────────────────────────────────────────────────────
@@ -187,19 +195,24 @@ EOF
 
     log_success "LaunchAgent plist written to: $plist_file"
     echo ""
-    log_info "Load and start now (macOS 12 and earlier):"
-    echo "    launchctl load -w $plist_file"
-    echo ""
-    log_info "Load and start now (macOS 13 Ventura and later):"
-    echo "    launchctl bootstrap gui/\$(id -u) $plist_file"
+
+    # Unload any existing instance, then load the updated plist.
+    log_info "Reloading LaunchAgent..."
+    launchctl unload "$plist_file" 2>/dev/null || true
+    if launchctl bootstrap "gui/$(id -u)" "$plist_file" 2>/dev/null; then
+        log_success "Service started via launchctl bootstrap."
+    else
+        # Fallback for macOS 12 and earlier
+        launchctl load -w "$plist_file"
+        log_success "Service loaded via launchctl load."
+    fi
+
     echo ""
     log_info "Check status:"
     echo "    launchctl list | grep stapler-squad"
     echo ""
     log_info "View logs:"
     echo "    tail -f $log_dir/service.log"
-    echo ""
-    log_warning "If you rebuild or move the binary, re-run this script to update the plist."
 }
 
 # ── Uninstall ─────────────────────────────────────────────────────────────────

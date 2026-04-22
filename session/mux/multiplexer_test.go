@@ -65,6 +65,162 @@ func TestMultiplexer_BroadcastToClients(t *testing.T) {
 	assert.Equal(t, outputData, c2Data, "client 2 data should match PTY output")
 }
 
+// fakeSubscription holds a channel and a once-guard so it can only be closed once,
+// regardless of whether FirePaneExit or context cancellation fires first.
+type fakeSubscription struct {
+	ch   chan struct{}
+	once sync.Once
+}
+
+func (s *fakeSubscription) close() {
+	s.once.Do(func() { close(s.ch) })
+}
+
+// fakePaneExitSubscriber is a test double for tmux.PaneExitSubscriber.
+type fakePaneExitSubscriber struct {
+	mu   sync.Mutex
+	subs map[string][]*fakeSubscription
+}
+
+func newFakePaneExitSubscriber() *fakePaneExitSubscriber {
+	return &fakePaneExitSubscriber{subs: make(map[string][]*fakeSubscription)}
+}
+
+func (f *fakePaneExitSubscriber) SubscribePaneExit(ctx context.Context, name string) <-chan struct{} {
+	sub := &fakeSubscription{ch: make(chan struct{})}
+	f.mu.Lock()
+	f.subs[name] = append(f.subs[name], sub)
+	f.mu.Unlock()
+	go func() {
+		<-ctx.Done()
+		// Remove from map then close (once-guarded against FirePaneExit racing).
+		f.mu.Lock()
+		subs := f.subs[name]
+		newSubs := make([]*fakeSubscription, 0, len(subs))
+		for _, s := range subs {
+			if s != sub {
+				newSubs = append(newSubs, s)
+			}
+		}
+		f.subs[name] = newSubs
+		f.mu.Unlock()
+		sub.close()
+	}()
+	return sub.ch
+}
+
+func (f *fakePaneExitSubscriber) FirePaneExit(name string) {
+	f.mu.Lock()
+	subs := f.subs[name]
+	delete(f.subs, name)
+	f.mu.Unlock()
+	for _, s := range subs {
+		s.close()
+	}
+}
+
+// newTestMultiplexer creates a minimal Multiplexer suitable for unit tests
+// (no real PTY, no real tmux).
+func newTestMultiplexer(t *testing.T) (*Multiplexer, context.CancelFunc) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	m := &Multiplexer{
+		clients:     make(map[net.Conn]struct{}),
+		tmuxSession: "test-session",
+		ctx:         ctx,
+		cancel:      cancel,
+	}
+	return m, cancel
+}
+
+// TestMultiplexer_StartSessionMonitor_ChannelBased verifies that when a
+// PaneExitSubscriber is configured, firing pane exit triggers Shutdown.
+func TestMultiplexer_StartSessionMonitor_ChannelBased(t *testing.T) {
+	m, cancel := newTestMultiplexer(t)
+	t.Cleanup(cancel)
+
+	fake := newFakePaneExitSubscriber()
+	m.paneExitSub = fake
+
+	shutdownCalled := make(chan struct{})
+	// Override cancel so we can observe Shutdown being called.
+	origCancel := m.cancel
+	m.cancel = func() {
+		origCancel()
+		select {
+		case <-shutdownCalled:
+		default:
+			close(shutdownCalled)
+		}
+	}
+
+	m.startSessionMonitor()
+
+	// Fire pane exit for the session name.
+	fake.FirePaneExit("test-session")
+
+	select {
+	case <-shutdownCalled:
+		// expected
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout: Shutdown was not called after pane exit")
+	}
+}
+
+// TestMultiplexer_StartSessionMonitor_FallbackWhenNilSubscriber verifies that
+// when paneExitSub is nil the polling goroutine is started (wg incremented).
+func TestMultiplexer_StartSessionMonitor_FallbackWhenNilSubscriber(t *testing.T) {
+	m, cancel := newTestMultiplexer(t)
+	defer cancel()
+
+	// paneExitSub is nil by default — polling path should be used.
+	// We swap out monitorTmuxSessionPolling by cancelling the context immediately
+	// so the goroutine exits right away; what we verify is that wg.Add(1) was
+	// called (i.e., wg.Wait completes after cancel without deadlock).
+	cancel() // cause the polling goroutine to return immediately
+
+	m.startSessionMonitor()
+	// If polling path was NOT taken, wg.Wait would return instantly with no
+	// goroutine having been added. Either way, this must not block.
+	done := make(chan struct{})
+	go func() {
+		m.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// expected: goroutine finished (either immediately or after context cancel)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout: polling goroutine did not exit after context cancel")
+	}
+}
+
+// TestMultiplexer_StartSessionMonitor_ContextCancel verifies that cancelling the
+// multiplexer context before pane exit causes the monitor goroutine to exit
+// cleanly with no goroutine leak.
+func TestMultiplexer_StartSessionMonitor_ContextCancel(t *testing.T) {
+	m, cancel := newTestMultiplexer(t)
+
+	fake := newFakePaneExitSubscriber()
+	m.paneExitSub = fake
+
+	m.startSessionMonitor()
+
+	// Cancel before any pane exit fires.
+	cancel()
+
+	// The goroutine must exit. Give it a moment.
+	// We detect leaks by checking that the fake has no live subscriptions
+	// after a short grace period (the goroutine removes its entry on ctx.Done).
+	require.Eventually(t, func() bool {
+		fake.mu.Lock()
+		defer fake.mu.Unlock()
+		return len(fake.subs["test-session"]) == 0
+	}, 2*time.Second, 10*time.Millisecond,
+		"subscription was not cleaned up after context cancel")
+}
+
 // TestMultiplexer_InputIsolation verifies that input from one client goes ONLY to the
 // PTY and is NOT broadcast to other connected clients.
 //

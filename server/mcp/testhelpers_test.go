@@ -45,6 +45,17 @@ func (s *stubStore) UpdateInstanceLastUserResponse(title string, t time.Time) er
 	return nil
 }
 
+func (s *stubStore) ListInstanceData() ([]session.InstanceData, error) {
+	if s.loadErr != nil {
+		return nil, s.loadErr
+	}
+	data := make([]session.InstanceData, 0, len(s.instances))
+	for _, inst := range s.instances {
+		data = append(data, inst.ToInstanceData())
+	}
+	return data, nil
+}
+
 // makeScrollbackMgr creates a scrollback manager backed by a temp directory.
 func makeScrollbackMgr(t *testing.T) *scrollback.ScrollbackManager {
 	t.Helper()
