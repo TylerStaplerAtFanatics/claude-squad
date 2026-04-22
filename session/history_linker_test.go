@@ -38,7 +38,7 @@ func TestHistoryLinker_SetHistoryInfo_UpdatesInstance(t *testing.T) {
 	inst := makeTestInstance("test-session")
 	inst.SetHistoryInfo(info.ConversationUUID, info.HistoryFilePath)
 
-	assert.Equal(t, uuid, inst.claudeSession.SessionID)
+	assert.Equal(t, uuid, inst.claudeSession.ConversationUUID)
 	assert.Equal(t, histPath, inst.HistoryFilePath)
 }
 
@@ -51,7 +51,7 @@ func TestHistoryLinker_AlreadyLinked_NoUpdate(t *testing.T) {
 	realUUID := "550e8400-e29b-41d4-a716-446655440001"
 	inst.SetHistoryInfo(realUUID, "/some/path.jsonl")
 	assert.True(t, inst.HasClaudeSession())
-	assert.Equal(t, realUUID, inst.claudeSession.SessionID)
+	assert.Equal(t, realUUID, inst.claudeSession.ConversationUUID)
 }
 
 func TestHistoryLinker_NoJSONLOpen_NoUpdate(t *testing.T) {

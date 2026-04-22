@@ -116,7 +116,7 @@ func TestCreateCheckpoint_StartedInstance_AllFieldsPopulated(t *testing.T) {
 		started: true,
 	}
 	// Set conversation UUID so it gets captured.
-	inst.claudeSession = &ClaudeSessionData{SessionID: "conv-uuid-123"}
+	inst.claudeSession = &ClaudeSessionData{ConversationUUID: "conv-uuid-123"}
 
 	before := time.Now()
 	cp, err := inst.CreateCheckpoint("before-refactor", 42)

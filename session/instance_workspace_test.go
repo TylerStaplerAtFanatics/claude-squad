@@ -8,12 +8,12 @@ import (
 )
 
 // TestTryExtractConversationUUID_SkipsWhenAlreadyHasID verifies the early-return
-// guard: when claudeSession.SessionID is already populated, tryExtractConversationUUID
+// guard: when claudeSession.ConversationUUID is already populated, tryExtractConversationUUID
 // returns immediately and does not overwrite the existing ID.
 //
 // The guard lives at the top of tryExtractConversationUUID:
 //
-//	if i.claudeSession != nil && i.claudeSession.SessionID != "" { return }
+//	if i.claudeSession != nil && i.claudeSession.ConversationUUID != "" { return }
 //
 // Because this returns before any tmux interaction, the test requires no live
 // tmux session and will not reach NewHistoryFileDetectorWithRealInspector.
@@ -23,7 +23,7 @@ func TestTryExtractConversationUUID_SkipsWhenAlreadyHasID(t *testing.T) {
 	inst := &Instance{
 		Title: "test-skip-existing-id",
 		claudeSession: &ClaudeSessionData{
-			SessionID: existingID,
+			ConversationUUID: existingID,
 		},
 		// tmuxManager.session is nil — DoesSessionExist() would return false,
 		// but the guard fires before we ever reach the tmux check.
@@ -32,7 +32,7 @@ func TestTryExtractConversationUUID_SkipsWhenAlreadyHasID(t *testing.T) {
 	inst.tryExtractConversationUUID()
 
 	require.NotNil(t, inst.claudeSession)
-	assert.Equal(t, existingID, inst.claudeSession.SessionID,
+	assert.Equal(t, existingID, inst.claudeSession.ConversationUUID,
 		"SessionID must not be overwritten when it is already populated")
 }
 
@@ -68,7 +68,7 @@ func TestTryExtractConversationUUID_EmptySessionIDTriesTmux(t *testing.T) {
 	inst := &Instance{
 		Title: "test-empty-session-id",
 		claudeSession: &ClaudeSessionData{
-			SessionID: "", // Explicitly empty — guard should NOT fire.
+			ConversationUUID: "", // Explicitly empty — guard should NOT fire.
 		},
 		// tmuxManager.session is nil — DoesSessionExist() returns false.
 	}
@@ -77,7 +77,7 @@ func TestTryExtractConversationUUID_EmptySessionIDTriesTmux(t *testing.T) {
 
 	// SessionID must still be empty because tmux was not running.
 	require.NotNil(t, inst.claudeSession)
-	assert.Equal(t, "", inst.claudeSession.SessionID,
+	assert.Equal(t, "", inst.claudeSession.ConversationUUID,
 		"SessionID must remain empty when tmux is not running")
 }
 
@@ -85,7 +85,7 @@ func TestTryExtractConversationUUID_EmptySessionIDTriesTmux(t *testing.T) {
 // guard condition at the SwitchWorkspace call site (line 133 and line 172 of
 // instance_workspace.go).  Both call sites share the same shape:
 //
-//	if i.claudeSession == nil || i.claudeSession.SessionID == "" {
+//	if i.claudeSession == nil || i.claudeSession.ConversationUUID == "" {
 //	    i.tryExtractConversationUUID()
 //	}
 //
@@ -97,18 +97,18 @@ func TestSwitchWorkspace_GuardPreventsExtractionWhenIDPopulated(t *testing.T) {
 	inst := &Instance{
 		Title: "test-guard-at-call-site",
 		claudeSession: &ClaudeSessionData{
-			SessionID: preexistingID,
+			ConversationUUID: preexistingID,
 		},
 	}
 
 	// Simulate the guard condition used at both call sites in SwitchWorkspace.
-	if inst.claudeSession == nil || inst.claudeSession.SessionID == "" {
+	if inst.claudeSession == nil || inst.claudeSession.ConversationUUID == "" {
 		inst.tryExtractConversationUUID()
 	}
 
 	// The guard prevented the call — ID is unchanged.
 	require.NotNil(t, inst.claudeSession)
-	assert.Equal(t, preexistingID, inst.claudeSession.SessionID,
+	assert.Equal(t, preexistingID, inst.claudeSession.ConversationUUID,
 		"SessionID must be unchanged when SwitchWorkspace guard fires")
 }
 
@@ -126,7 +126,7 @@ func TestSwitchWorkspace_GuardAllowsExtractionWhenIDMissing(t *testing.T) {
 	// tryExtractConversationUUID is reachable when guard condition fires.
 	// No tmux means it returns early without panic.
 	var extractionAttempted bool
-	if inst.claudeSession == nil || inst.claudeSession.SessionID == "" {
+	if inst.claudeSession == nil || inst.claudeSession.ConversationUUID == "" {
 		extractionAttempted = true
 		inst.tryExtractConversationUUID()
 	}
