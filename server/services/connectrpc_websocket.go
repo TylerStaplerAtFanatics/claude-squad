@@ -446,22 +446,22 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 	// *tmux.TmuxSession type. *Instance satisfies this interface via delegation methods.
 	var streamer SessionStreamer = instance
 
-	if err := streamer.StartControlMode(); err != nil {
-		// If the tmux session no longer exists (e.g. process exited, server recovered),
-		// restore it before giving up so the user gets a live terminal on reconnect.
-		tmuxSession := instance.GetTmuxSession()
-		if tmuxSession != nil && !tmuxSession.DoesSessionExist() {
-			log.InfoLog.Printf("[streamViaControlMode] Session '%s' not in tmux, restoring before control mode", sessionID)
-			workDir := instance.GetWorkingDirectory()
-			if restoreErr := tmuxSession.RestoreWithWorkDir(workDir); restoreErr != nil {
-				return fmt.Errorf("tmux session missing and restore failed: %w", restoreErr)
-			}
-			if err := streamer.StartControlMode(); err != nil {
-				return fmt.Errorf("failed to start control mode after restore: %w", err)
-			}
-		} else {
-			return fmt.Errorf("failed to start control mode: %w", err)
+	// Check if the tmux session exists BEFORE starting control mode.
+	// StartControlMode() only returns an error if the process fails to launch — it does
+	// NOT return an error when tmux can't find the session, because that error arrives
+	// asynchronously via the output reader goroutine. We must check existence first so
+	// the restore path actually runs.
+	tmuxSession := instance.GetTmuxSession()
+	if tmuxSession != nil && !tmuxSession.DoesSessionExist() {
+		log.InfoLog.Printf("[streamViaControlMode] Session '%s' not in tmux, restoring before control mode", sessionID)
+		workDir := instance.GetWorkingDirectory()
+		if restoreErr := tmuxSession.RestoreWithWorkDir(workDir); restoreErr != nil {
+			return fmt.Errorf("tmux session missing and restore failed: %w", restoreErr)
 		}
+	}
+
+	if err := streamer.StartControlMode(); err != nil {
+		return fmt.Errorf("failed to start control mode: %w", err)
 	}
 	defer func() {
 		if err := streamer.StopControlMode(); err != nil {
