@@ -161,6 +161,10 @@ enum SessionStatus {
   SESSION_STATUS_PAUSED = 4;
   // Session needs user approval on a prompt.
   SESSION_STATUS_NEEDS_APPROVAL = 5;
+  // Session is being initialized (transient state before first start).
+  SESSION_STATUS_CREATING = 6;
+  // Session has been stopped (terminal state, cannot transition further).
+  SESSION_STATUS_STOPPED = 7;
 }
 
 // SessionType determines the session workflow.
