@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sync"
@@ -119,6 +120,7 @@ func (ps *PushService) loadVapidKeys() error {
 		PublicKey: ecdsa.PublicKey{
 			Curve: elliptic.P256(),
 		},
+		D: new(big.Int),
 	}
 
 	privateKey.D.SetBytes(privateKeyBytes)

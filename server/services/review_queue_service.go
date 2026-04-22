@@ -145,48 +145,55 @@ func (rqs *ReviewQueueService) AcknowledgeSession(
 	// (e.g., external sessions, or sessions with corrupt IDs from the TTY detection bug).
 	rqs.reviewQueue.Remove(req.Msg.Id)
 
-	instances, err := rqs.storage.LoadInstances()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
-	}
-
+	// Look up the live in-memory instance from the poller first. This avoids calling
+	// LoadInstances(), which constructs fresh Instance objects from the database and
+	// discards the live PTY/controller state held by instances already in the poller.
 	var instance *session.Instance
-	var instanceIndex int
-	for i, inst := range instances {
-		if inst.MatchesID(req.Msg.Id) {
-			instance = inst
-			instanceIndex = i
-			break
-		}
+	if rqs.reviewQueuePoller != nil {
+		instance = rqs.reviewQueuePoller.FindInstance(req.Msg.Id)
 	}
 
 	if instance == nil {
-		// Session not in storage (external session or unknown ID). Queue item already removed above.
-		log.InfoLog.Printf("[ReviewQueue] AcknowledgeSession: session '%s' not found in storage, removed from queue", req.Msg.Id)
+		// Session is not in the poller (external session, unknown ID, or poller not wired).
+		// Fall back to a direct storage lookup so we can still persist the ack timestamp.
+		dataSlice, err := rqs.storage.ListInstanceData()
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list instances: %w", err))
+		}
+		var found bool
+		for _, data := range dataSlice {
+			if data.Title == req.Msg.Id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			log.InfoLog.Printf("[ReviewQueue] AcknowledgeSession: session '%s' not found in storage, removed from queue", req.Msg.Id)
+			return connect.NewResponse(&sessionv1.AcknowledgeSessionResponse{
+				Success: true,
+				Message: fmt.Sprintf("Session '%s' removed from review queue", req.Msg.Id),
+			}), nil
+		}
+		// Persist the acknowledged timestamp directly without building a full Instance.
+		if err := rqs.storage.UpdateInstanceAcknowledged(req.Msg.Id); err != nil {
+			log.WarningLog.Printf("[ReviewQueue] AcknowledgeSession: failed to persist ack for '%s': %v", req.Msg.Id, err)
+		}
+		rqs.eventBus.Publish(events.NewSessionAcknowledgedEvent(req.Msg.Id, "user_acknowledged"))
 		return connect.NewResponse(&sessionv1.AcknowledgeSessionResponse{
 			Success: true,
-			Message: fmt.Sprintf("Session '%s' removed from review queue", req.Msg.Id),
+			Message: fmt.Sprintf("Session '%s' acknowledged and removed from review queue", req.Msg.Id),
 		}), nil
 	}
 
+	// Update the live instance in-place — no LoadInstances() required.
 	instance.MarkAcknowledged()
-	instances[instanceIndex] = instance
 
-	if err := rqs.storage.SaveInstances(instances); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save instance: %w", err))
+	// Persist only this instance. UpdateInstance does a targeted UPDATE by title.
+	if err := rqs.storage.UpdateInstance(instance); err != nil {
+		log.WarningLog.Printf("[ReviewQueue] AcknowledgeSession: failed to persist ack for '%s': %v", instance.Title, err)
 	}
 
-	// CRITICAL: Update the ReviewQueuePoller's instance references.
-	// When we LoadInstances() above, we create brand new instance objects.
-	// The poller still has references to the OLD objects from initialization.
-	// If we don't update the poller's references, it will continue checking
-	// stale objects with outdated LastAddedToQueue timestamps, causing
-	// notification spam even after the user acknowledges sessions.
-	if rqs.reviewQueuePoller != nil {
-		rqs.reviewQueuePoller.SetInstances(instances)
-		log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after AcknowledgeSession for '%s'", instance.Title)
-	}
-
+	log.InfoLog.Printf("[ReviewQueue] AcknowledgeSession: acknowledged live instance '%s'", instance.Title)
 	rqs.eventBus.Publish(events.NewSessionAcknowledgedEvent(instance.Title, "user_acknowledged"))
 
 	return connect.NewResponse(&sessionv1.AcknowledgeSessionResponse{

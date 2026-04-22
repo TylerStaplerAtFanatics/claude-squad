@@ -5,6 +5,61 @@ import (
 	"testing"
 )
 
+// allStatuses lists every Status constant known to the transition table.
+var allStatuses = []Status{Creating, Ready, Running, Loading, Paused, NeedsApproval, Stopped}
+
+// validTransitionSet is the ground truth for TestCanTransition_ExhaustiveMatrix.
+// Any pair not listed here must return false from CanTransition.
+var validTransitionSet = map[[2]Status]bool{
+	// Creating
+	{Creating, Running}: true,
+	{Creating, Stopped}: true,
+	// Ready
+	{Ready, Running}: true,
+	{Ready, Paused}:  true,
+	{Ready, Stopped}: true,
+	// Running
+	{Running, Ready}:         true,
+	{Running, Paused}:        true,
+	{Running, NeedsApproval}: true,
+	{Running, Stopped}:       true,
+	// Paused
+	{Paused, Running}: true,
+	{Paused, Stopped}: true,
+	// NeedsApproval
+	{NeedsApproval, Running}: true,
+	{NeedsApproval, Paused}:  true,
+	{NeedsApproval, Stopped}: true,
+	// Loading
+	{Loading, Running}: true,
+	{Loading, Paused}:  true,
+	{Loading, Stopped}: true,
+	// Stopped — terminal, no outgoing transitions
+}
+
+// TestCanTransition_ExhaustiveMatrix verifies every pair of known statuses against
+// the ground-truth validTransitionSet. This is the single source of truth: adding
+// a new transition to allowedTransitions without also updating validTransitionSet
+// (or vice-versa) will cause this test to fail.
+func TestCanTransition_ExhaustiveMatrix(t *testing.T) {
+	for _, from := range allStatuses {
+		for _, to := range allStatuses {
+			pair := [2]Status{from, to}
+			wantValid := validTransitionSet[pair]
+			got := CanTransition(from, to)
+			if got != wantValid {
+				if wantValid {
+					t.Errorf("CanTransition(%s, %s) = false, want true (missing from allowedTransitions)", from, to)
+				} else {
+					t.Errorf("CanTransition(%s, %s) = true, want false (should be invalid)", from, to)
+				}
+			}
+		}
+	}
+}
+
+// TestCanTransition_ValidTransitions is a human-readable complement to the matrix
+// test — it names each valid transition explicitly for documentation value.
 func TestCanTransition_ValidTransitions(t *testing.T) {
 	tests := []struct {
 		name string
@@ -16,8 +71,10 @@ func TestCanTransition_ValidTransitions(t *testing.T) {
 		{"Creating -> Stopped", Creating, Stopped},
 		// Ready transitions
 		{"Ready -> Running", Ready, Running},
+		{"Ready -> Paused", Ready, Paused},
 		{"Ready -> Stopped", Ready, Stopped},
 		// Running transitions
+		{"Running -> Ready", Running, Ready},
 		{"Running -> Paused", Running, Paused},
 		{"Running -> NeedsApproval", Running, NeedsApproval},
 		{"Running -> Stopped", Running, Stopped},
@@ -30,6 +87,7 @@ func TestCanTransition_ValidTransitions(t *testing.T) {
 		{"NeedsApproval -> Stopped", NeedsApproval, Stopped},
 		// Loading transitions
 		{"Loading -> Running", Loading, Running},
+		{"Loading -> Paused", Loading, Paused},
 		{"Loading -> Stopped", Loading, Stopped},
 	}
 
@@ -42,33 +100,37 @@ func TestCanTransition_ValidTransitions(t *testing.T) {
 	}
 }
 
+// TestCanTransition_InvalidTransitions spot-checks transitions that must never be
+// allowed. The exhaustive matrix test above already catches all of them, but having
+// named cases here makes failures easier to diagnose.
 func TestCanTransition_InvalidTransitions(t *testing.T) {
 	tests := []struct {
 		name string
 		from Status
 		to   Status
 	}{
-		// Stopped is terminal - cannot transition out
+		// Stopped is terminal — no outgoing transitions
 		{"Stopped -> Running", Stopped, Running},
 		{"Stopped -> Paused", Stopped, Paused},
-		// Paused cannot go directly to NeedsApproval
-		{"Paused -> NeedsApproval", Paused, NeedsApproval},
-		// Running cannot go back to Ready or Creating
-		{"Running -> Ready", Running, Ready},
-		{"Running -> Creating", Running, Creating},
+		{"Stopped -> Ready", Stopped, Ready},
+		{"Stopped -> NeedsApproval", Stopped, NeedsApproval},
+		{"Stopped -> Loading", Stopped, Loading},
+		{"Stopped -> Creating", Stopped, Creating},
 		// Self-transitions are not allowed
 		{"Running -> Running", Running, Running},
 		{"Paused -> Paused", Paused, Paused},
-		// Loading cannot go to Paused directly
-		{"Loading -> Paused", Loading, Paused},
-		// Ready cannot go to Paused directly
-		{"Ready -> Paused", Ready, Paused},
-		// Creating cannot go to Paused directly
-		{"Creating -> Paused", Creating, Paused},
-		// Paused cannot go to Creating
-		{"Paused -> Creating", Paused, Creating},
-		// Running cannot go to Loading
+		{"Ready -> Ready", Ready, Ready},
+		{"Stopped -> Stopped", Stopped, Stopped},
+		// Paused cannot go directly to NeedsApproval
+		{"Paused -> NeedsApproval", Paused, NeedsApproval},
+		// No state can transition to Creating or Loading (startup-only states)
+		{"Running -> Creating", Running, Creating},
 		{"Running -> Loading", Running, Loading},
+		{"Paused -> Creating", Paused, Creating},
+		{"Ready -> Creating", Ready, Creating},
+		// Creating cannot go to Paused (no session exists yet)
+		{"Creating -> Paused", Creating, Paused},
+		{"Creating -> NeedsApproval", Creating, NeedsApproval},
 	}
 
 	for _, tt := range tests {
@@ -110,7 +172,6 @@ func TestErrInvalidTransition(t *testing.T) {
 }
 
 func TestAllowedTransitions_StoppedIsTerminal(t *testing.T) {
-	// Verify that Stopped has no outgoing transitions
 	allowed, ok := allowedTransitions[Stopped]
 	if !ok {
 		t.Fatal("Stopped should be present in allowedTransitions map")
@@ -121,11 +182,118 @@ func TestAllowedTransitions_StoppedIsTerminal(t *testing.T) {
 }
 
 func TestAllowedTransitions_AllStatusesCovered(t *testing.T) {
-	// Every defined status should have an entry in the transition table
-	statuses := []Status{Creating, Ready, Running, Loading, Paused, NeedsApproval, Stopped}
-	for _, s := range statuses {
+	for _, s := range allStatuses {
 		if _, ok := allowedTransitions[s]; !ok {
 			t.Errorf("Status %s is not covered in allowedTransitions", s)
 		}
+	}
+}
+
+// TestAllowedTransitions_StoppedReachableFromEveryState verifies that every
+// non-terminal state can reach Stopped in at most one hop. This is a safety
+// property: sessions must always be stoppable.
+func TestAllowedTransitions_StoppedReachableFromEveryState(t *testing.T) {
+	for _, s := range allStatuses {
+		if s == Stopped {
+			continue
+		}
+		if !CanTransition(s, Stopped) {
+			t.Errorf("State %s cannot transition directly to Stopped — all states must be stoppable", s)
+		}
+	}
+}
+
+// TestTransitionTo_ValidTransitions verifies that Instance.transitionTo updates
+// Status and returns nil for every allowed transition.
+func TestTransitionTo_ValidTransitions(t *testing.T) {
+	for pair := range validTransitionSet {
+		from, to := pair[0], pair[1]
+		t.Run(from.String()+"->"+to.String(), func(t *testing.T) {
+			inst := &Instance{Title: "test", Status: from}
+			err := inst.transitionTo(to)
+			if err != nil {
+				t.Errorf("transitionTo(%s) from %s: unexpected error %v", to, from, err)
+			}
+			if inst.Status != to {
+				t.Errorf("after transitionTo(%s): Status = %s, want %s", to, inst.Status, to)
+			}
+		})
+	}
+}
+
+// TestTransitionTo_InvalidTransitions verifies that Instance.transitionTo returns
+// ErrInvalidTransition and leaves Status unchanged for every disallowed transition.
+func TestTransitionTo_InvalidTransitions(t *testing.T) {
+	for _, from := range allStatuses {
+		for _, to := range allStatuses {
+			if validTransitionSet[[2]Status{from, to}] {
+				continue // skip valid pairs
+			}
+			from, to := from, to // capture
+			t.Run(from.String()+"->"+to.String(), func(t *testing.T) {
+				inst := &Instance{Title: "test", Status: from}
+				err := inst.transitionTo(to)
+				if err == nil {
+					t.Errorf("transitionTo(%s) from %s: expected error, got nil", to, from)
+					return
+				}
+				var te ErrInvalidTransition
+				if !errors.As(err, &te) {
+					t.Errorf("transitionTo(%s) from %s: error is %T, want ErrInvalidTransition", to, from, err)
+				}
+				if inst.Status != from {
+					t.Errorf("transitionTo(%s) from %s: Status changed to %s (must be unchanged on error)", to, from, inst.Status)
+				}
+			})
+		}
+	}
+}
+
+// TestTransitionTo_ChainedTransitions verifies common multi-hop paths through
+// the state machine work as a sequence of transitionTo calls.
+func TestTransitionTo_ChainedTransitions(t *testing.T) {
+	type step struct{ to Status }
+
+	chains := []struct {
+		name  string
+		start Status
+		steps []step
+	}{
+		{
+			name:  "new session lifecycle",
+			start: Ready,
+			steps: []step{{Running}, {Paused}, {Running}, {Stopped}},
+		},
+		{
+			name:  "needs approval flow",
+			start: Running,
+			steps: []step{{NeedsApproval}, {Running}, {Stopped}},
+		},
+		{
+			name:  "idle detection cycle",
+			start: Running,
+			steps: []step{{Ready}, {Running}, {Ready}, {Stopped}},
+		},
+		{
+			name:  "loading to paused (worktree deleted)",
+			start: Loading,
+			steps: []step{{Paused}, {Running}, {Stopped}},
+		},
+		{
+			name:  "ready to paused (worktree deleted before first start)",
+			start: Ready,
+			steps: []step{{Paused}, {Running}, {Stopped}},
+		},
+	}
+
+	for _, chain := range chains {
+		t.Run(chain.name, func(t *testing.T) {
+			inst := &Instance{Title: "test-chain", Status: chain.start}
+			for i, step := range chain.steps {
+				if err := inst.transitionTo(step.to); err != nil {
+					t.Fatalf("step %d: transitionTo(%s) from %s: %v", i, step.to, inst.Status, err)
+				}
+			}
+		})
 	}
 }
