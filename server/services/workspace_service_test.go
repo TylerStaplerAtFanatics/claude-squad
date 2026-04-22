@@ -223,3 +223,69 @@ func TestWorkspaceService_SwitchGuardIsPerSession(t *testing.T) {
 	// err == nil also means the guard did not trigger, which is the desired
 	// outcome: session B proceeded past the guard independently.
 }
+
+// --------------------------------------------------------------------------
+// UUID ID lookup tests (regression: frontend now passes UUIDs, not Titles)
+// --------------------------------------------------------------------------
+
+// TestWorkspaceService_GetVCSStatus_FindsByUUID verifies that GetVCSStatus
+// accepts a session UUID as the ID parameter. Before the UUID migration, only
+// the Title was accepted; now MatchesID checks both UUID and Title.
+func TestWorkspaceService_GetVCSStatus_FindsByUUID(t *testing.T) {
+	fix := setupWorkspaceTestFixture(t)
+	t.Cleanup(fix.cleanup)
+
+	const testUUID = "11111111-1111-1111-1111-111111111111"
+	require.NoError(t, fix.storage.AddInstance(&session.Instance{
+		UUID:    testUUID,
+		Title:   "my-uuid-session",
+		Path:    "/tmp/test-workspace",
+		Status:  session.Running,
+		Program: "claude",
+	}))
+
+	_, err := fix.svc.GetVCSStatus(context.Background(), connect.NewRequest(&sessionv1.GetVCSStatusRequest{
+		Id: testUUID,
+	}))
+
+	// Must NOT return CodeNotFound — UUID lookup must succeed.
+	// /tmp/test-workspace is not a VCS dir, so the response body may carry
+	// an error string, but the RPC itself returns nil.
+	require.NoError(t, err, "GetVCSStatus should find the session by UUID")
+}
+
+// TestWorkspaceService_GetVCSStatus_FindsByTitle verifies that the legacy
+// Title-based lookup still works after the UUID migration.
+func TestWorkspaceService_GetVCSStatus_FindsByTitle(t *testing.T) {
+	fix := setupWorkspaceTestFixture(t)
+	t.Cleanup(fix.cleanup)
+
+	require.NoError(t, fix.storage.AddInstance(&session.Instance{
+		Title:   "title-only-session",
+		Path:    "/tmp/test-workspace",
+		Status:  session.Running,
+		Program: "claude",
+	}))
+
+	_, err := fix.svc.GetVCSStatus(context.Background(), connect.NewRequest(&sessionv1.GetVCSStatusRequest{
+		Id: "title-only-session",
+	}))
+
+	require.NoError(t, err, "GetVCSStatus should still find the session by Title")
+}
+
+// TestWorkspaceService_GetVCSStatus_UnknownIDReturnsNotFound verifies that an
+// ID that matches neither UUID nor Title of any session returns CodeNotFound.
+func TestWorkspaceService_GetVCSStatus_UnknownIDReturnsNotFound(t *testing.T) {
+	fix := setupWorkspaceTestFixture(t)
+	t.Cleanup(fix.cleanup)
+
+	_, err := fix.svc.GetVCSStatus(context.Background(), connect.NewRequest(&sessionv1.GetVCSStatusRequest{
+		Id: "no-such-session",
+	}))
+
+	require.Error(t, err)
+	var connectErr *connect.Error
+	require.ErrorAs(t, err, &connectErr)
+	assert.Equal(t, connect.CodeNotFound, connectErr.Code())
+}
