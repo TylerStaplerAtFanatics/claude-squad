@@ -156,9 +156,11 @@ beforeEach(() => {
   getHarness().reset();
   jest.spyOn(console, 'log').mockImplementation(() => {});
   jest.spyOn(console, 'warn').mockImplementation(() => {});
-  jest.spyOn(navigator, 'clipboard', 'get').mockReturnValue({
-    writeText: jest.fn().mockResolvedValue(undefined),
-  } as any);
+  Object.defineProperty(navigator, 'clipboard', {
+    value: { writeText: jest.fn().mockResolvedValue(undefined) },
+    configurable: true,
+    writable: true,
+  });
 });
 
 afterEach(() => {
