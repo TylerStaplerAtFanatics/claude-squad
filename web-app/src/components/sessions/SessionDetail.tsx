@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { Session, InstanceType } from "@/gen/session/v1/types_pb";
+import { Session, InstanceType, SessionStatus, SessionType } from "@/gen/session/v1/types_pb";
 import { DiffViewer } from "./DiffViewer";
 import { VcsPanel } from "./VcsPanel";
 import { prefetchVcsStatus } from "@/lib/hooks/useVcsStatus";
@@ -46,6 +46,28 @@ interface SessionDetailProps {
   queueTotal?: number; // Total items in the review queue
 }
 
+function getStatusLabel(status: SessionStatus): string {
+  switch (status) {
+    case SessionStatus.RUNNING: return "Running";
+    case SessionStatus.READY: return "Ready";
+    case SessionStatus.LOADING: return "Loading";
+    case SessionStatus.PAUSED: return "Paused";
+    case SessionStatus.NEEDS_APPROVAL: return "Needs Approval";
+    case SessionStatus.CREATING: return "Creating";
+    case SessionStatus.STOPPED: return "Stopped";
+    default: return "Unknown";
+  }
+}
+
+function getSessionTypeLabel(type: SessionType): string {
+  switch (type) {
+    case SessionType.DIRECTORY: return "Directory";
+    case SessionType.NEW_WORKTREE: return "New Worktree";
+    case SessionType.EXISTING_WORKTREE: return "Existing Worktree";
+    default: return "Unknown";
+  }
+}
+
 export function SessionDetail({
   session,
   onClose,
@@ -66,6 +88,8 @@ export function SessionDetail({
   const [showWorkspaceSwitchModal, setShowWorkspaceSwitchModal] = useState(false);
   const [isEditingProgram, setIsEditingProgram] = useState(false);
   const [programValue, setProgramValue] = useState(session.program || "");
+  const [isEditingWorkingDir, setIsEditingWorkingDir] = useState(false);
+  const [workingDirValue, setWorkingDirValue] = useState(session.workingDir || "");
   const { updateSession } = useSessionService();
 
   // Terminal instance pool: keeps up to 8 session terminals alive (LRU, oldest first)
@@ -158,6 +182,20 @@ export function SessionDetail({
   const handleCancelProgramEdit = () => {
     setProgramValue(session.program || "");
     setIsEditingProgram(false);
+  };
+
+  // Handler for saving working directory change
+  const handleSaveWorkingDir = async () => {
+    if (workingDirValue !== (session.workingDir || "")) {
+      await updateSession(session.id, { workingDir: workingDirValue });
+    }
+    setIsEditingWorkingDir(false);
+  };
+
+  // Handler for canceling working directory edit
+  const handleCancelWorkingDirEdit = () => {
+    setWorkingDirValue(session.workingDir || "");
+    setIsEditingWorkingDir(false);
   };
 
   return (
@@ -341,22 +379,26 @@ export function SessionDetail({
         {activeTab === "info" && (
           <div className={styles.tabContent}>
             <div className={styles.infoGrid}>
+              {/* Identity */}
               <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Session ID:</span>
-                <span className={styles.infoValue}>{session.id}</span>
+                <span className={styles.infoLabel}>Instance ID:</span>
+                <span className={styles.infoValue} style={{ fontFamily: 'monospace', fontSize: '0.9em' }}>{session.id}</span>
               </div>
               <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Status:</span>
-                <span className={styles.infoValue}>{session.status}</span>
+                <span className={styles.infoValue}>{getStatusLabel(session.status)}</span>
               </div>
               <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Branch:</span>
-                <span className={styles.infoValue}>{session.branch}</span>
+                <span className={styles.infoLabel}>Session Type:</span>
+                <span className={styles.infoValue}>{getSessionTypeLabel(session.sessionType)}</span>
               </div>
-              <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Category:</span>
-                <span className={styles.infoValue}>{session.category}</span>
-              </div>
+              {session.instanceType === InstanceType.EXTERNAL && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Instance Type:</span>
+                  <span className={styles.infoValue}>External</span>
+                </div>
+              )}
+              {/* Timestamps */}
               <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Created:</span>
                 <span className={styles.infoValue}>
@@ -369,18 +411,69 @@ export function SessionDetail({
                   {session.updatedAt ? new Date(Number(session.updatedAt.seconds) * 1000).toLocaleString() : "N/A"}
                 </span>
               </div>
+              {/* Location */}
+              {session.branch && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Branch:</span>
+                  <span className={styles.infoValue} style={{ fontFamily: 'monospace' }}>{session.branch}</span>
+                </div>
+              )}
               {session.path && (
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Workspace Path:</span>
-                  <span className={styles.infoValue}>{session.path}</span>
+                  <span className={styles.infoValue} style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{session.path}</span>
                 </div>
               )}
-              {session.workingDir && (
+              <div className={styles.infoItem}>
+                <span className={styles.infoLabel}>Working Directory:</span>
+                {isEditingWorkingDir ? (
+                  <div className={styles.editContainer}>
+                    <input
+                      type="text"
+                      value={workingDirValue}
+                      onChange={(e) => setWorkingDirValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleSaveWorkingDir(); else if (e.key === "Escape") handleCancelWorkingDirEdit(); }}
+                      autoFocus
+                      className={styles.editInput}
+                      placeholder={session.path || ""}
+                      style={{ fontFamily: 'monospace', minWidth: '20ch' }}
+                    />
+                    <button onClick={handleSaveWorkingDir} className={styles.saveButton}>✓</button>
+                    <button onClick={handleCancelWorkingDirEdit} className={styles.cancelButton}>✕</button>
+                  </div>
+                ) : (
+                  <span className={styles.infoValue} style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                    {session.workingDir || <em style={{ opacity: 0.5 }}>{session.path}</em>}
+                    <button
+                      onClick={() => { setWorkingDirValue(session.workingDir || ""); setIsEditingWorkingDir(true); }}
+                      className={styles.editButton}
+                      title="Edit working directory"
+                    >
+                      ✏️
+                    </button>
+                  </span>
+                )}
+              </div>
+              {/* Organization */}
+              {session.category && (
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Working Directory:</span>
-                  <span className={styles.infoValue}>{session.workingDir}</span>
+                  <span className={styles.infoLabel}>Category:</span>
+                  <span className={styles.infoValue}>{session.category}</span>
                 </div>
               )}
+              {session.tags && session.tags.length > 0 && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Tags:</span>
+                  <span className={styles.infoValue}>{session.tags.join(", ")}</span>
+                </div>
+              )}
+              {session.autoYes && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Auto Yes:</span>
+                  <span className={styles.infoValue}>Enabled</span>
+                </div>
+              )}
+              {/* Program */}
               {session.program && (
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Program:</span>
@@ -428,32 +521,141 @@ export function SessionDetail({
                   </span>
                 </div>
               )}
-              {session.instanceType === InstanceType.EXTERNAL && (
+              {session.tmuxPrefix && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Tmux Prefix:</span>
+                  <span className={styles.infoValue} style={{ fontFamily: 'monospace' }}>{session.tmuxPrefix}</span>
+                </div>
+              )}
+              {/* Claude session */}
+              {session.claudeSession?.sessionId && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Claude Conversation UUID:</span>
+                  <span className={styles.infoValue} style={{ fontFamily: 'monospace', fontSize: '0.9em' }}>{session.claudeSession.sessionId}</span>
+                </div>
+              )}
+              {session.claudeSession?.projectName && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Claude Project:</span>
+                  <span className={styles.infoValue}>{session.claudeSession.projectName}</span>
+                </div>
+              )}
+              {session.historyFilePath && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>History File:</span>
+                  <span className={styles.infoValue} style={{ fontFamily: 'monospace', wordBreak: 'break-all', fontSize: '0.85em' }}>{session.historyFilePath}</span>
+                </div>
+              )}
+              {/* Git worktree */}
+              {session.gitWorktree && (
                 <>
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Session Type:</span>
-                    <span className={styles.infoValue}>External</span>
-                  </div>
-                  {session.externalMetadata?.sourceTerminal && (
+                  {session.gitWorktree.repoPath && (
                     <div className={styles.infoItem}>
-                      <span className={styles.infoLabel}>Source:</span>
-                      <span className={styles.infoValue}>{session.externalMetadata.sourceTerminal}</span>
+                      <span className={styles.infoLabel}>Repo Path:</span>
+                      <span className={styles.infoValue} style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{session.gitWorktree.repoPath}</span>
                     </div>
                   )}
-                  {session.externalMetadata?.muxEnabled && (
+                  {session.gitWorktree.worktreePath && (
                     <div className={styles.infoItem}>
-                      <span className={styles.infoLabel}>Mux Enabled:</span>
-                      <span className={styles.infoValue}>✓ Yes</span>
+                      <span className={styles.infoLabel}>Worktree Path:</span>
+                      <span className={styles.infoValue} style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{session.gitWorktree.worktreePath}</span>
                     </div>
                   )}
-                  {session.externalMetadata?.tmuxSessionName && (
+                  {session.gitWorktree.branchName && (
                     <div className={styles.infoItem}>
-                      <span className={styles.infoLabel}>Tmux Session:</span>
-                      <span className={styles.infoValue}>{session.externalMetadata.tmuxSessionName}</span>
+                      <span className={styles.infoLabel}>Worktree Branch:</span>
+                      <span className={styles.infoValue} style={{ fontFamily: 'monospace' }}>{session.gitWorktree.branchName}</span>
+                    </div>
+                  )}
+                  {session.gitWorktree.baseCommitSha && (
+                    <div className={styles.infoItem}>
+                      <span className={styles.infoLabel}>Base Commit:</span>
+                      <span className={styles.infoValue} style={{ fontFamily: 'monospace', fontSize: '0.85em' }}>{session.gitWorktree.baseCommitSha}</span>
                     </div>
                   )}
                 </>
               )}
+              {/* Diff stats */}
+              {session.diffStats && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Diff Stats:</span>
+                  <span className={styles.infoValue}>
+                    <span style={{ color: 'var(--color-success, #22c55e)' }}>+{session.diffStats.added}</span>
+                    {" / "}
+                    <span style={{ color: 'var(--color-error, #ef4444)' }}>-{session.diffStats.removed}</span>
+                  </span>
+                </div>
+              )}
+              {/* GitHub PR */}
+              {session.githubPrUrl && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>GitHub PR:</span>
+                  <span className={styles.infoValue}>
+                    <a href={session.githubPrUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-link, #3b82f6)' }}>
+                      #{session.githubPrNumber} {session.githubPrState && `(${session.githubPrState})`}
+                      {session.githubPrIsDraft && " [Draft]"}
+                    </a>
+                  </span>
+                </div>
+              )}
+              {session.githubOwner && session.githubRepo && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>GitHub Repo:</span>
+                  <span className={styles.infoValue} style={{ fontFamily: 'monospace' }}>{session.githubOwner}/{session.githubRepo}</span>
+                </div>
+              )}
+              {session.githubSourceRef && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Source Ref:</span>
+                  <span className={styles.infoValue} style={{ fontFamily: 'monospace' }}>{session.githubSourceRef}</span>
+                </div>
+              )}
+              {(session.githubApprovedCount > 0 || session.githubChangesReqCount > 0) && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Reviews:</span>
+                  <span className={styles.infoValue}>
+                    {session.githubApprovedCount > 0 && <span style={{ color: 'var(--color-success, #22c55e)' }}>{session.githubApprovedCount} approved</span>}
+                    {session.githubApprovedCount > 0 && session.githubChangesReqCount > 0 && " · "}
+                    {session.githubChangesReqCount > 0 && <span style={{ color: 'var(--color-error, #ef4444)' }}>{session.githubChangesReqCount} changes requested</span>}
+                  </span>
+                </div>
+              )}
+              {session.githubCheckConclusion && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>CI Status:</span>
+                  <span className={styles.infoValue}>{session.githubCheckConclusion}</span>
+                </div>
+              )}
+              {session.clonedRepoPath && (
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>Cloned Repo:</span>
+                  <span className={styles.infoValue} style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{session.clonedRepoPath}</span>
+                </div>
+              )}
+              {/* External session metadata */}
+              {session.instanceType === InstanceType.EXTERNAL && session.externalMetadata && (
+                <>
+                  {session.externalMetadata.sourceTerminal && (
+                    <div className={styles.infoItem}>
+                      <span className={styles.infoLabel}>Source Terminal:</span>
+                      <span className={styles.infoValue}>{session.externalMetadata.sourceTerminal}</span>
+                    </div>
+                  )}
+                  {session.externalMetadata.muxEnabled && (
+                    <div className={styles.infoItem}>
+                      <span className={styles.infoLabel}>Mux Enabled:</span>
+                      <span className={styles.infoValue}>Yes</span>
+                    </div>
+                  )}
+                  {session.externalMetadata.tmuxSessionName && (
+                    <div className={styles.infoItem}>
+                      <span className={styles.infoLabel}>Tmux Session:</span>
+                      <span className={styles.infoValue} style={{ fontFamily: 'monospace' }}>{session.externalMetadata.tmuxSessionName}</span>
+                    </div>
+                  )}
+                </>
+              )}
+              {/* Initial prompt */}
               {session.prompt && (
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Initial Prompt:</span>

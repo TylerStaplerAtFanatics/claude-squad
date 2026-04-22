@@ -510,13 +510,15 @@ func (s *SessionService) CreateSession(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
 	}
 
-	// Check if session with this title already exists
-	instances, err := s.storage.LoadInstances()
+	// Check if session with this title already exists.
+	// Use ListInstanceData (raw DB rows) rather than LoadInstances to avoid
+	// the side-effect of FromInstanceData calling Start() on every session.
+	existing, err := s.storage.ListInstanceData()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list instances: %w", err))
 	}
-	for _, inst := range instances {
-		if inst.Title == req.Msg.Title {
+	for _, data := range existing {
+		if data.Title == req.Msg.Title {
 			return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("session with title '%s' already exists", req.Msg.Title))
 		}
 	}
@@ -635,11 +637,11 @@ func (s *SessionService) CreateSession(
 		log.WarningLog.Printf("[CreateSession] Failed to inject hook config for session '%s': %v", instance.Title, err)
 	}
 
-	// Save instance to storage
-	// Note: Storage uses SaveInstances (plural) which saves all instances
-	// We need to load, append, and save all instances
-	updatedInstances := append(instances, instance)
-	if err := s.storage.SaveInstances(updatedInstances); err != nil {
+	// Save only the new instance to storage.
+	// Using AddInstance avoids loading and re-writing all instances (which would call
+	// FromInstanceData/Start on every session and replace live poller instances with
+	// cold storage copies).
+	if err := s.storage.AddInstance(instance); err != nil {
 		// Cleanup on save failure
 		if destroyErr := instance.Destroy(); destroyErr != nil {
 			// Log cleanup error but return original save error
@@ -648,10 +650,11 @@ func (s *SessionService) CreateSession(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save instance: %w", err))
 	}
 
-	// CRITICAL: Update the ReviewQueuePoller's instance references after creating new session
+	// Add only the new session to the poller, preserving all existing live instances.
+	// Using AddInstance (not SetInstances) avoids replacing live instances with cold copies.
 	if s.reviewQueuePoller != nil {
-		s.reviewQueuePoller.SetInstances(updatedInstances)
-		log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after CreateSession for '%s'", instance.Title)
+		s.reviewQueuePoller.AddInstance(instance)
+		log.InfoLog.Printf("[ReviewQueue] Added new session '%s' to poller", instance.Title)
 	}
 
 	// Publish SessionCreated event to all watchers
@@ -738,6 +741,12 @@ func (s *SessionService) UpdateSession(
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart session after program change: %w", err))
 			}
 		}
+	}
+
+	// Handle working directory update
+	if req.Msg.WorkingDir != nil {
+		instance.WorkingDir = *req.Msg.WorkingDir
+		updatedFields = append(updatedFields, "working_dir")
 	}
 
 	// Handle status change (pause/resume) LAST - after all metadata updates.
