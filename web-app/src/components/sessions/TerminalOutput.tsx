@@ -42,6 +42,13 @@ interface TerminalOutputProps {
   isVisible?: boolean; // When provided, triggers fit+focus on visibility change
 }
 
+// Minimum dimensions considered "real" — anything smaller is a transient value
+// from xterm.js before the CSS container has finished laying out. The first
+// resize event often fires at e.g. 10x6 before layout is complete; caching or
+// connecting at those dimensions produces a garbled terminal on the next view.
+const MIN_COLS = 30;
+const MIN_ROWS = 10;
+
 export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSessionName, isVisible }: TerminalOutputProps) {
   const xtermRef = useRef<XtermTerminalHandle | null>(null);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
@@ -382,23 +389,38 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       lastResizeRef.current = { cols, rows };
       console.log(`[TerminalOutput] Saved resize dimensions: ${cols}x${rows}`);
 
-      saveDimensions(sessionId, cols, rows);
+      // Only persist dimensions that are plausibly real — transient tiny values
+      // (e.g. 10x6) fired before the CSS container finishes layout would otherwise
+      // corrupt the cache and cause the next session view to connect at the wrong size.
+      if (cols >= MIN_COLS && rows >= MIN_ROWS) {
+        saveDimensions(sessionId, cols, rows);
+      } else {
+        console.log(`[TerminalOutput] Skipping cache write for tiny dimensions ${cols}x${rows} (below ${MIN_COLS}x${MIN_ROWS})`);
+      }
 
       if (metricsRef.current.firstResizeTime === null) {
         metricsRef.current.firstResizeTime = performance.now();
       }
       metricsRef.current.resizeCount++;
 
-      // Skip size stability wait if we have cached dimensions
+      // Skip size stability wait if we have cached dimensions, but only when
+      // the cached size (lastResize) is itself reasonable — a stale tiny cache
+      // entry would otherwise bypass the stability wait and connect at the wrong size.
       if (hasCachedDimensionsRef.current && !hasInitiatedConnectionRef.current && !isConnected && !error && isMountedRef.current) {
         const initDims = lastResize ?? { cols, rows };
-        console.log(`[TerminalOutput] Using cached dimensions, skipping stability wait (${initDims.cols}x${initDims.rows})`);
-        metricsRef.current.sizeStableTime = performance.now();
-        metricsRef.current.connectionInitTime = performance.now();
-        hasInitiatedConnectionRef.current = true;
-        setIsWaitingForStableSize(false);
-        connect(initDims.cols, initDims.rows);
-        return;
+        if (initDims.cols >= MIN_COLS && initDims.rows >= MIN_ROWS) {
+          console.log(`[TerminalOutput] Using cached dimensions, skipping stability wait (${initDims.cols}x${initDims.rows})`);
+          metricsRef.current.sizeStableTime = performance.now();
+          metricsRef.current.connectionInitTime = performance.now();
+          hasInitiatedConnectionRef.current = true;
+          setIsWaitingForStableSize(false);
+          connect(initDims.cols, initDims.rows);
+          return;
+        } else {
+          // Cached value is too small — treat as no cache and wait for stable size.
+          console.log(`[TerminalOutput] Cached dimensions ${initDims.cols}x${initDims.rows} too small, falling through to stability wait`);
+          hasCachedDimensionsRef.current = false;
+        }
       }
 
       // Event-driven size stability detection for initial connection
@@ -520,10 +542,12 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
   // Initialize with cached dimensions on mount
   useEffect(() => {
     const cached = getCachedDimensions(sessionId);
-    if (cached) {
+    if (cached && cached.cols >= MIN_COLS && cached.rows >= MIN_ROWS) {
       hasCachedDimensionsRef.current = true;
       lastResizeRef.current = cached;
       console.log(`[TerminalOutput] Initialized with cached dimensions: ${cached.cols}x${cached.rows}`);
+    } else if (cached) {
+      console.log(`[TerminalOutput] Ignoring stale cached dimensions ${cached.cols}x${cached.rows} (below ${MIN_COLS}x${MIN_ROWS})`);
     }
   }, [sessionId]);
 
