@@ -32,6 +32,20 @@ func (_c *SessionCreate) SetTitle(v string) *SessionCreate {
 	return _c
 }
 
+// SetUUID sets the "uuid" field.
+func (_c *SessionCreate) SetUUID(v string) *SessionCreate {
+	_c.mutation.SetUUID(v)
+	return _c
+}
+
+// SetNillableUUID sets the "uuid" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableUUID(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetUUID(*v)
+	}
+	return _c
+}
+
 // SetPath sets the "path" field.
 func (_c *SessionCreate) SetPath(v string) *SessionCreate {
 	_c.mutation.SetPath(v)
@@ -423,6 +437,10 @@ func (_c *SessionCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *SessionCreate) defaults() {
+	if _, ok := _c.mutation.UUID(); !ok {
+		v := session.DefaultUUID
+		_c.mutation.SetUUID(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := session.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -512,6 +530,10 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Title(); ok {
 		_spec.SetField(session.FieldTitle, field.TypeString, value)
 		_node.Title = value
+	}
+	if value, ok := _c.mutation.UUID(); ok {
+		_spec.SetField(session.FieldUUID, field.TypeString, value)
+		_node.UUID = value
 	}
 	if value, ok := _c.mutation.Path(); ok {
 		_spec.SetField(session.FieldPath, field.TypeString, value)
@@ -726,6 +748,24 @@ func (u *SessionUpsert) SetTitle(v string) *SessionUpsert {
 // UpdateTitle sets the "title" field to the value that was provided on create.
 func (u *SessionUpsert) UpdateTitle() *SessionUpsert {
 	u.SetExcluded(session.FieldTitle)
+	return u
+}
+
+// SetUUID sets the "uuid" field.
+func (u *SessionUpsert) SetUUID(v string) *SessionUpsert {
+	u.Set(session.FieldUUID, v)
+	return u
+}
+
+// UpdateUUID sets the "uuid" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateUUID() *SessionUpsert {
+	u.SetExcluded(session.FieldUUID)
+	return u
+}
+
+// ClearUUID clears the value of the "uuid" field.
+func (u *SessionUpsert) ClearUUID() *SessionUpsert {
+	u.SetNull(session.FieldUUID)
 	return u
 }
 
@@ -1145,6 +1185,27 @@ func (u *SessionUpsertOne) SetTitle(v string) *SessionUpsertOne {
 func (u *SessionUpsertOne) UpdateTitle() *SessionUpsertOne {
 	return u.Update(func(s *SessionUpsert) {
 		s.UpdateTitle()
+	})
+}
+
+// SetUUID sets the "uuid" field.
+func (u *SessionUpsertOne) SetUUID(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetUUID(v)
+	})
+}
+
+// UpdateUUID sets the "uuid" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateUUID() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateUUID()
+	})
+}
+
+// ClearUUID clears the value of the "uuid" field.
+func (u *SessionUpsertOne) ClearUUID() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearUUID()
 	})
 }
 
@@ -1790,6 +1851,27 @@ func (u *SessionUpsertBulk) SetTitle(v string) *SessionUpsertBulk {
 func (u *SessionUpsertBulk) UpdateTitle() *SessionUpsertBulk {
 	return u.Update(func(s *SessionUpsert) {
 		s.UpdateTitle()
+	})
+}
+
+// SetUUID sets the "uuid" field.
+func (u *SessionUpsertBulk) SetUUID(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetUUID(v)
+	})
+}
+
+// UpdateUUID sets the "uuid" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateUUID() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateUUID()
+	})
+}
+
+// ClearUUID clears the value of the "uuid" field.
+func (u *SessionUpsertBulk) ClearUUID() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearUUID()
 	})
 }
 
