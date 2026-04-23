@@ -57,7 +57,16 @@ func (us *UtilityService) GetLogs(
 	var logFilePath string
 	var err error
 	if sid := req.Msg.GetSessionId(); sid != "" {
-		logFilePath, err = log.GetSessionLogFilePath(cfg, sid)
+		// Log files are written using inst.Title as the key (not UUID).
+		// Resolve the incoming ID (which may be a UUID) to the session Title
+		// before constructing the log file path.
+		resolvedID := sid
+		if us.reviewQueuePoller != nil {
+			if inst := us.reviewQueuePoller.FindInstance(sid); inst != nil {
+				resolvedID = inst.Title
+			}
+		}
+		logFilePath, err = log.GetSessionLogFilePath(cfg, resolvedID)
 	} else {
 		logFilePath, err = log.GetLogFilePath(cfg)
 	}

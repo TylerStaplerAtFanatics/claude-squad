@@ -6,8 +6,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/tstapler/stapler-squad/cmd/commands"
 	"github.com/tstapler/stapler-squad/cmd/interfaces"
 	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/log"
@@ -57,36 +55,6 @@ func NewBridge() *Bridge {
 	return bridge
 }
 
-// Initialize sets up the bridge with handler callbacks
-func (b *Bridge) Initialize(
-	sessionHandlers *commands.SessionHandlers,
-	gitHandlers *commands.GitHandlers,
-	navigationHandlers *commands.NavigationHandlers,
-	organizationHandlers *commands.OrganizationHandlers,
-	systemHandlers *commands.SystemHandlers,
-) {
-	if b.initialized.Load() {
-		log.InfoLog.Printf("Bridge.Initialize: already initialized, skipping")
-		return
-	}
-
-	log.InfoLog.Printf("Bridge.Initialize: setting up handlers")
-	log.InfoLog.Printf("Bridge.Initialize: sessionHandlers.OnNewSession != nil: %v", sessionHandlers != nil && sessionHandlers.OnNewSession != nil)
-
-	// Configure command handlers
-	commands.SetSessionHandlers(sessionHandlers)
-	commands.SetGitHandlers(gitHandlers)
-	commands.SetNavigationHandlers(navigationHandlers)
-	commands.SetOrganizationHandlers(organizationHandlers)
-	commands.SetSystemHandlers(systemHandlers)
-
-	b.initialized.Store(true)
-	log.InfoLog.Printf("Bridge.Initialize: completed successfully")
-
-	// Now that we're initialized, pre-warm cache in background
-	go b.prewarmKeyCategories()
-}
-
 // GetCurrentContext returns the current context
 func (b *Bridge) GetCurrentContext() ContextID {
 	if len(b.contextStack) == 0 {
@@ -101,13 +69,13 @@ func (b *Bridge) GetRegistry() *CommandRegistry {
 }
 
 // HandleLegacyKey is disabled since legacy keys package has been removed
-func (b *Bridge) HandleLegacyKey(keyName interface{}) (tea.Model, tea.Cmd, error) {
+func (b *Bridge) HandleLegacyKey(keyName interface{}) error {
 	// Legacy key handling disabled - use HandleKeyString directly
-	return nil, nil, nil
+	return nil
 }
 
 // HandleKeyString processes a key string through the new command system
-func (b *Bridge) HandleKeyString(key string) (tea.Model, tea.Cmd, error) {
+func (b *Bridge) HandleKeyString(key string) error {
 	currentContext := b.GetCurrentContext()
 	log.DebugLog.Printf("HandleKeyString: key=%s, context=%s", key, currentContext)
 	command := b.registry.ResolveCommand(currentContext, key)
@@ -120,36 +88,10 @@ func (b *Bridge) HandleKeyString(key string) (tea.Model, tea.Cmd, error) {
 		}
 
 		// Execute the command
-		err := command.Handler(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// Extract results from context
-		var model tea.Model
-		var teaCmd tea.Cmd
-
-		if m, ok := ctx.Args["model"]; ok {
-			if teaModel, ok := m.(tea.Model); ok {
-				model = teaModel
-			}
-		}
-
-		if c, ok := ctx.Args["cmd"]; ok {
-			if tCmd, ok := c.(tea.Cmd); ok {
-				teaCmd = tCmd
-			}
-		}
-
-		// Check if handler executed but didn't set model/cmd
-		if model == nil && teaCmd == nil {
-			log.InfoLog.Printf("Command handler for '%s' executed but returned no model/cmd - handlers may not be initialized", key)
-		}
-
-		return model, teaCmd, nil
+		return command.Handler(ctx)
 	}
 
-	return nil, nil, nil
+	return nil
 }
 
 // GetLegacyStatusLine generates status line compatible with old menu system

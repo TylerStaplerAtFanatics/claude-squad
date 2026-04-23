@@ -196,7 +196,6 @@ type Instance struct {
 	// first start and updated on restart. Empty for external (mux-discovered) sessions.
 	LaunchCommand string `json:"launch_command,omitempty"`
 
-
 	// historyDetector is used by tryExtractConversationUUID. When nil the
 	// production inspector is used. Set in tests to inject a fake home dir.
 	historyDetector *HistoryFileDetector
@@ -800,6 +799,13 @@ func (i *Instance) GetStableID() string {
 	return i.Title
 }
 
+// MatchesID reports whether id refers to this instance.
+// Accepts both the stable UUID and the legacy Title identifier so that all
+// service lookups work correctly regardless of which form the caller has.
+func (i *Instance) MatchesID(id string) bool {
+	return i.Title == id || i.GetStableID() == id
+}
+
 // GetTmuxSessionName returns the sanitized tmux session name for reconciliation.
 // Returns empty string for external or uninitialized sessions.
 func (i *Instance) GetTmuxSessionName() string {
@@ -882,6 +888,7 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	i.tmuxManager.ResetExitOnce()
 	i.tmuxManager.SetOnExitCallback(func(reason string) {
 		log.InfoLog.Printf("Instance '%s': unexpected exit detected via control mode (%s)", i.Title, reason)
+		log.ForSession(i.Title).Info("Session exited unexpectedly (reason: %s)", reason)
 		i.stateMutex.Lock()
 		if i.Status == Running || i.Status == Ready {
 			if err := i.transitionTo(Stopped); err != nil {
@@ -1003,6 +1010,7 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	i.stateMutex.Unlock()
 	i.started = true
 	i.fireLifecycleEvent(EventStarted, "")
+	log.ForSession(i.Title).Info("Session started (firstTimeSetup: %v)", firstTimeSetup)
 
 	// Start controller for new sessions only; loaded sessions are wired later by server.go.
 	if firstTimeSetup {
@@ -1408,6 +1416,7 @@ func (i *Instance) Pause() error {
 		return fmt.Errorf("failed to transition to Paused: %w", err)
 	}
 	i.stateMutex.Unlock()
+	log.ForSession(i.Title).Info("Session paused")
 	_ = clipboard.WriteAll(i.gitManager.GetBranchName())
 	return nil
 }
@@ -1490,6 +1499,7 @@ func (i *Instance) Resume() error {
 		return fmt.Errorf("failed to transition to Running on resume: %w", err)
 	}
 	i.stateMutex.Unlock()
+	log.ForSession(i.Title).Info("Session resumed")
 
 	// Start ClaudeController for idle detection and automation
 	// This is non-critical - we log errors but don't fail the resume

@@ -219,7 +219,7 @@ func (h *ConnectRPCWebSocketHandler) resolveSession(sessionID string) (*session.
 		// Try to find by session title/ID first
 		sessions := h.externalDiscovery.GetSessions()
 		for _, inst := range sessions {
-			if inst.Title == sessionID || inst.GetStableID() == sessionID {
+			if inst.MatchesID(sessionID) {
 				log.InfoLog.Printf("[resolveSession] Found external session '%s' via ExternalDiscovery", sessionID)
 				return inst, true // External session
 			}

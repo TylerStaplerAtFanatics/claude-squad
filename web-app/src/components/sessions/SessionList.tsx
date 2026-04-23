@@ -50,7 +50,7 @@ interface SessionListProps {
   onResumeSession?: (session: Session) => void;
   /** Called for bulk resume to skip the confirmation modal and resume immediately. */
   onDirectResumeSession?: (session: Session) => void;
-  onDuplicateSession?: (sessionId: string) => void;
+  onCloneSession?: (sessionId: string) => void;
   onNewWorkspaceSession?: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, newTitle: string) => Promise<boolean>;
   onRestartSession?: (sessionId: string) => Promise<boolean>;
@@ -58,7 +58,6 @@ interface SessionListProps {
   onNewSession?: () => void;
   onCreateCheckpoint?: (sessionId: string, label: string) => Promise<boolean>;
   onListCheckpoints?: (sessionId: string) => Promise<CheckpointProto[]>;
-  onForkFromCheckpoint?: (sessionId: string, checkpointId: string, newTitle: string) => Promise<Session | null>;
 }
 
 type SortField = 'lastActivity' | 'name' | 'createdAt' | 'updatedAt';
@@ -109,7 +108,7 @@ export function SessionList({
   onPauseSession,
   onResumeSession,
   onDirectResumeSession,
-  onDuplicateSession,
+  onCloneSession,
   onNewWorkspaceSession,
   onRenameSession,
   onRestartSession,
@@ -117,7 +116,6 @@ export function SessionList({
   onNewSession,
   onCreateCheckpoint,
   onListCheckpoints,
-  onForkFromCheckpoint,
 }: SessionListProps) {
   // Review queue items indexed by session ID for badge display on session cards
   const { items: reviewItems } = useReviewQueueContext();
@@ -643,14 +641,13 @@ export function SessionList({
                       onDelete={() => onDeleteSession?.(session.id)}
                       onPause={() => onPauseSession?.(session.id)}
                       onResume={() => onResumeSession?.(session)}
-                      onDuplicate={() => onDuplicateSession?.(session.id)}
+                      onClone={() => onCloneSession?.(session.id)}
                       onNewWorkspace={() => onNewWorkspaceSession?.(session.id)}
                       onRename={onRenameSession}
                       onRestart={onRestartSession}
                       onUpdateTags={onUpdateTags}
                       onCreateCheckpoint={onCreateCheckpoint}
                       onListCheckpoints={onListCheckpoints}
-                      onForkFromCheckpoint={onForkFromCheckpoint}
                       selectMode={selectMode}
                       isSelected={selectedSessions.has(session.id)}
                       onToggleSelect={() => handleToggleSession(session.id)}

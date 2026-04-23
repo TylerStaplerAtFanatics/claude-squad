@@ -69,7 +69,7 @@ const dir = (name: string, base = "/home/user"): PathEntry => ({
   name,
   path: `${base}/${name}`,
   isDirectory: true,
-});
+} as unknown as PathEntry);
 
 function renderOmnibar(
   props: { onClose?: jest.Mock; onCreateSession?: jest.Mock; onNavigateToSession?: jest.Mock } = {}

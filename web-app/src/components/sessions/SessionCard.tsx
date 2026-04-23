@@ -75,11 +75,6 @@ import {
   submitButton,
   cancelButton,
   dangerButton,
-  forkEmptyMessage,
-  forkCheckpointList,
-  forkCheckpointItem,
-  forkCheckpointLabel,
-  forkGitSha,
   snapshotSection,
   snapshotToggle,
   snapshotToggleIcon,
@@ -95,14 +90,13 @@ interface SessionCardProps {
   onDelete?: () => Promise<void> | void;
   onPause?: () => void;
   onResume?: () => void;
-  onDuplicate?: () => void;
+  onClone?: () => void;
   onNewWorkspace?: () => void;
   onRename?: (sessionId: string, newTitle: string) => Promise<boolean>;
   onRestart?: (sessionId: string) => Promise<boolean>;
   onUpdateTags?: (sessionId: string, tags: string[]) => void;
   onCreateCheckpoint?: (sessionId: string, label: string) => Promise<boolean>;
   onListCheckpoints?: (sessionId: string) => Promise<CheckpointProto[]>;
-  onForkFromCheckpoint?: (sessionId: string, checkpointId: string, newTitle: string) => Promise<Session | null>;
   selectMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: () => void;
@@ -117,14 +111,13 @@ export function SessionCard({
   onDelete,
   onPause,
   onResume,
-  onDuplicate,
+  onClone,
   onNewWorkspace,
   onRename,
   onRestart,
   onUpdateTags,
   onCreateCheckpoint,
   onListCheckpoints,
-  onForkFromCheckpoint,
   selectMode = false,
   isSelected = false,
   onToggleSelect,
@@ -140,11 +133,6 @@ export function SessionCard({
   const [isCheckpointOpen, setIsCheckpointOpen] = useState(false);
   const [checkpointLabel, setCheckpointLabel] = useState("");
   const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
-  const [isForkOpen, setIsForkOpen] = useState(false);
-  const [forkCheckpoints, setForkCheckpoints] = useState<CheckpointProto[]>([]);
-  const [forkTitle, setForkTitle] = useState("");
-  const [activeForkCheckpointId, setActiveForkCheckpointId] = useState("");
-  const [isForking, setIsForking] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -153,23 +141,19 @@ export function SessionCard({
   const [inlineEditValue, setInlineEditValue] = useState("");
   const inlineSavingRef = useRef(false);
   const [checkpointError, setCheckpointError] = useState("");
-  const [forkError, setForkError] = useState("");
   const [isSnapshotOpen, setIsSnapshotOpen] = useState(false);
 
   // Refs for focus trap: dialog containers and the buttons that trigger them
   const renameDialogRef = useRef<HTMLDivElement>(null);
   const restartDialogRef = useRef<HTMLDivElement>(null);
   const checkpointDialogRef = useRef<HTMLDivElement>(null);
-  const forkDialogRef = useRef<HTMLDivElement>(null);
   const renameTriggerRef = useRef<HTMLButtonElement>(null);
   const restartTriggerRef = useRef<HTMLButtonElement>(null);
   const checkpointTriggerRef = useRef<HTMLButtonElement>(null);
-  const forkTriggerRef = useRef<HTMLButtonElement>(null);
 
   useFocusTrap(renameDialogRef, isRenameOpen, renameTriggerRef);
   useFocusTrap(restartDialogRef, isRestartConfirmOpen, restartTriggerRef);
   useFocusTrap(checkpointDialogRef, isCheckpointOpen, checkpointTriggerRef);
-  useFocusTrap(forkDialogRef, isForkOpen, forkTriggerRef);
 
   // Only fetch snapshot for running sessions (paused/loading sessions have stale output)
   const isSnapshotEnabled = session.status === SessionStatus.RUNNING && isSnapshotOpen;
@@ -469,39 +453,6 @@ export function SessionCard({
     setCheckpointError("");
   };
 
-  const handleForkClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const cps = await onListCheckpoints?.(session.id) ?? [];
-    setForkCheckpoints(cps);
-    setForkTitle(`${session.title}-fork`);
-    setActiveForkCheckpointId(cps.length > 0 ? cps[cps.length - 1].id : "");
-    setIsForkOpen(true);
-  };
-
-  const handleForkSubmit = async (checkpointId: string) => {
-    if (!forkTitle.trim() || !checkpointId) return;
-    setIsForking(true);
-    setForkError("");
-    try {
-      const result = await onForkFromCheckpoint?.(session.id, checkpointId, forkTitle.trim());
-      if (result) {
-        setIsForkOpen(false);
-      } else {
-        setForkError("Failed to fork session");
-      }
-    } catch (error) {
-      setForkError(error instanceof Error ? error.message : "Failed to fork session");
-    } finally {
-      setIsForking(false);
-    }
-  };
-
-  const handleForkCancel = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsForkOpen(false);
-    setForkError("");
-  };
-
   return (
     <>
       {isTagEditorOpen && (
@@ -627,77 +578,6 @@ export function SessionCard({
                 onClick={handleCheckpointCancel}
                 disabled={isCreatingCheckpoint}
                 className={cancelButton}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-      {isForkOpen && createPortal(
-        <div className={renameDialog} onClick={handleForkCancel as unknown as React.MouseEventHandler}>
-          <div
-            ref={forkDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="forkDialogTitle"
-            className={dialogContent}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 id="forkDialogTitle">Fork Session</h3>
-            <p>Fork &quot;{session.title}&quot; from a checkpoint into a new independent session.</p>
-            <label className={renameLabel}>New session title:</label>
-            <input
-              type="text"
-              value={forkTitle}
-              onChange={(e) => setForkTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") handleForkCancel(e as unknown as React.MouseEvent);
-              }}
-              placeholder="e.g. my-session-fork"
-              className={renameInput}
-              autoFocus
-            />
-            {forkCheckpoints.length === 0 ? (
-              <p className={forkEmptyMessage}>
-                No checkpoints found. Create a checkpoint first.
-              </p>
-            ) : (
-              <ul className={forkCheckpointList}>
-                {forkCheckpoints.map((cp) => (
-                  <li key={cp.id} className={forkCheckpointItem}>
-                    <input
-                      type="radio"
-                      name="forkCheckpoint"
-                      value={cp.id}
-                      checked={activeForkCheckpointId === cp.id}
-                      onChange={() => setActiveForkCheckpointId(cp.id)}
-                      id={`cp-${cp.id}`}
-                    />
-                    <label htmlFor={`cp-${cp.id}`} className={forkCheckpointLabel}>
-                      <strong>{cp.label}</strong>
-                      {cp.gitCommitSha && <span className={forkGitSha}>{cp.gitCommitSha.slice(0, 7)}</span>}
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {forkError && <span className={errorMessage}>{forkError}</span>}
-            <div className={dialogActions}>
-              {forkCheckpoints.length > 0 && (
-                <button
-                  className={submitButton}
-                  onClick={() => handleForkSubmit(activeForkCheckpointId)}
-                  disabled={isForking || !forkTitle.trim() || !activeForkCheckpointId}
-                >
-                  {isForking ? "Forking..." : "Fork from checkpoint"}
-                </button>
-              )}
-              <button
-                onClick={handleForkCancel}
-                className={cancelButton}
-                disabled={isForking}
               >
                 Cancel
               </button>
@@ -1082,15 +962,14 @@ export function SessionCard({
                     <span aria-hidden="true">📍</span> Checkpoint
                   </button>
                 )}
-                {onForkFromCheckpoint && (
+                {onClone && (
                   <button
-                    ref={forkTriggerRef}
                     role="menuitem"
                     className={overflowMenuItem}
-                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleForkClick(e); }}
-                    aria-label={`Fork session ${session.title} from checkpoint`}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onClone(); }}
+                    aria-label={`Clone session ${session.title}`}
                   >
-                    <span aria-hidden="true">🍴</span> Fork
+                    <span aria-hidden="true">⊕</span> Clone
                   </button>
                 )}
                 <button
@@ -1108,14 +987,6 @@ export function SessionCard({
                   aria-label={`New workspace from ${session.title}`}
                 >
                   <span aria-hidden="true">➕</span> New Workspace
-                </button>
-                <button
-                  role="menuitem"
-                  className={overflowMenuItem}
-                  onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onDuplicate?.(); }}
-                  aria-label={`Duplicate session ${session.title}`}
-                >
-                  <span aria-hidden="true">📋</span> Duplicate
                 </button>
                 <button
                   role="menuitem"
@@ -1197,14 +1068,14 @@ export function SessionCard({
               <span aria-hidden="true">📍</span> Checkpoint
             </button>
           )}
-          {onForkFromCheckpoint && (
+          {onClone && (
             <button
               className={actionButton}
-              onClick={handleForkClick}
-              title="Fork this session from a checkpoint"
-              aria-label={`Fork session ${session.title} from checkpoint`}
+              onClick={(e) => { e.stopPropagation(); onClone(); }}
+              title="Clone this session (open omnibar pre-filled with this repo)"
+              aria-label={`Clone session ${session.title}`}
             >
-              <span aria-hidden="true">🍴</span> Fork
+              <span aria-hidden="true">⊕</span> Clone
             </button>
           )}
           <button
@@ -1225,17 +1096,6 @@ export function SessionCard({
             aria-label={`New workspace from ${session.title}`}
           >
             <span aria-hidden="true">➕</span> New Workspace
-          </button>
-          <button
-            className={actionButton}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDuplicate?.();
-            }}
-            title="Duplicate this session with editable configuration"
-            aria-label={`Duplicate session ${session.title}`}
-          >
-            <span aria-hidden="true">📋</span> Duplicate
           </button>
           <button
             className={`${actionButton} ${deleteButton}`}
