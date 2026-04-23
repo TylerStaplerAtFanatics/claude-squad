@@ -1,6 +1,7 @@
 import { configureStore } from "@reduxjs/toolkit";
 import bulkSelectionReducer from "../bulkSelectionSlice";
 import sessionsReducer from "../sessionsSlice";
+import { connectApi } from "@/lib/api/connectApi";
 import reviewQueueReducer, {
   setReviewQueue,
   setReviewQueueStats,
@@ -18,8 +19,8 @@ import { create } from "@bufbuild/protobuf";
 
 function makeStore() {
   return configureStore({
-    reducer: { bulkSelection: bulkSelectionReducer, reviewQueue: reviewQueueReducer, sessions: sessionsReducer },
-    middleware: (getDefault) => getDefault({ serializableCheck: false }),
+    reducer: { bulkSelection: bulkSelectionReducer, reviewQueue: reviewQueueReducer, sessions: sessionsReducer, [connectApi.reducerPath]: connectApi.reducer },
+    middleware: (getDefault) => getDefault({ serializableCheck: false }).concat(connectApi.middleware),
   });
 }
 
