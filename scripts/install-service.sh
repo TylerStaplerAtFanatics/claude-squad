@@ -213,6 +213,24 @@ EOF
     echo ""
     log_info "View logs:"
     echo "    tail -f $log_dir/service.log"
+
+    # ── Full Disk Access reminder ─────────────────────────────────────────────
+    # stapler-squad creates sessions in arbitrary directories (~/Documents,
+    # ~/Developer, etc.).  Without Full Disk Access, macOS pops a TCC consent
+    # dialog on every startup for each protected directory it touches.
+    # Granting Full Disk Access suppresses those dialogs permanently.
+    echo ""
+    log_info "macOS Privacy — Full Disk Access"
+    echo "    stapler-squad needs Full Disk Access to create sessions in any"
+    echo "    directory without macOS prompting for consent each time."
+    echo ""
+    echo "    To grant it:"
+    echo "      1. Open: System Settings → Privacy & Security → Full Disk Access"
+    echo "      2. Click '+' and add: $bin_path"
+    echo "      3. Restart the service: launchctl kickstart -k gui/\$(id -u)/com.stapler-squad"
+    echo ""
+    echo "    Opening Privacy & Security now..."
+    open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles" 2>/dev/null || true
 }
 
 # ── Uninstall ─────────────────────────────────────────────────────────────────
