@@ -816,18 +816,19 @@ func (s *SessionService) DeleteSession(
 	}
 
 	// Verify existence using raw data — no PTY side effects.
+	// Match by Title OR UUID so that sessions created after UUID assignment are found correctly.
 	dataSlice, err := s.storage.ListInstanceData()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list instances: %w", err))
 	}
-	found := false
+	sessionTitle := ""
 	for _, d := range dataSlice {
-		if d.Title == req.Msg.Id {
-			found = true
+		if d.Title == req.Msg.Id || d.UUID == req.Msg.Id {
+			sessionTitle = d.Title
 			break
 		}
 	}
-	if !found {
+	if sessionTitle == "" {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.Id))
 	}
 
@@ -843,8 +844,8 @@ func (s *SessionService) DeleteSession(
 		}
 	}
 
-	// Delete from storage.
-	if err := s.storage.DeleteInstance(req.Msg.Id); err != nil {
+	// Delete from storage using Title (the storage key), not the client-supplied ID which may be a UUID.
+	if err := s.storage.DeleteInstance(sessionTitle); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete instance from storage: %w", err))
 	}
 

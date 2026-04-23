@@ -184,6 +184,43 @@ func TestDeleteSession_EmptyId(t *testing.T) {
 	}
 }
 
+// TestDeleteSession_ByUUID verifies that a session can be deleted using its UUID
+// (the stable ID returned by GetStableID) rather than its title.
+// Regression test: the frontend sends session.id = GetStableID() = UUID for newer
+// sessions, but the old server code only matched by Title, causing "session not found".
+func TestDeleteSession_ByUUID(t *testing.T) {
+	storage := createTestStorage(t)
+	eventBus := events.NewEventBus(100)
+	svc := NewSessionService(storage, eventBus)
+
+	const sessionUUID = "550e8400-e29b-41d4-a716-446655440000"
+	testInstance := &session.Instance{
+		Title:     "my-session",
+		UUID:      sessionUUID,
+		Path:      "/tmp/test",
+		Status:    session.Paused,
+		Program:   "claude",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, storage.AddInstance(testInstance))
+
+	// Delete using the UUID (as the frontend would send via GetStableID())
+	req := connect.NewRequest(&sessionv1.DeleteSessionRequest{Id: sessionUUID})
+	resp, err := svc.DeleteSession(context.Background(), req)
+	require.NoError(t, err, "DeleteSession by UUID should succeed")
+	assert.True(t, resp.Msg.Success)
+
+	// Confirm session is gone from storage
+	instances, err := storage.LoadInstances()
+	require.NoError(t, err)
+	for _, inst := range instances {
+		if inst.Title == "my-session" {
+			t.Error("session should be removed from storage after UUID-based deletion")
+		}
+	}
+}
+
 // --------------------------------------------------------------------------
 // UpdateSession – tags
 // --------------------------------------------------------------------------
