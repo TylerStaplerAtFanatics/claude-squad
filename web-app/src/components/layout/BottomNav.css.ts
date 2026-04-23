@@ -64,3 +64,43 @@ export const navItemLabel = style({
   fontSize: vars.fontSize.xs,
   fontWeight: "500",
 });
+
+export const newSessionButton = style({
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: "64px",
+  fontSize: vars.fontSize.xs,
+  color: vars.color.primary,
+  background: "transparent",
+  border: "none",
+  cursor: "pointer",
+  padding: `${vars.space["2"]} ${vars.space["1"]}`,
+  gap: vars.space["1"],
+
+  selectors: {
+    "&:hover": {
+      color: vars.color.primaryHover,
+      background: vars.color.hoverBackground,
+    },
+    "&:active": {
+      color: vars.color.primaryActive,
+    },
+  },
+});
+
+export const newSessionButtonInner = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "32px",
+  height: "32px",
+  borderRadius: "50%",
+  background: vars.color.primary,
+  color: "#fff",
+  fontSize: "22px",
+  lineHeight: "1",
+  fontWeight: "300",
+});
