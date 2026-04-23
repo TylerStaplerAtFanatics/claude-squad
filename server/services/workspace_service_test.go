@@ -240,7 +240,7 @@ func TestWorkspaceService_GetVCSStatus_FindsByUUID(t *testing.T) {
 		UUID:    testUUID,
 		Title:   "my-uuid-session",
 		Path:    "/tmp/test-workspace",
-		Status:  session.Running,
+		Status:  session.Paused, // Paused avoids tmux setup in LoadInstances (no CI tmux)
 		Program: "claude",
 	}))
 
@@ -263,7 +263,7 @@ func TestWorkspaceService_GetVCSStatus_FindsByTitle(t *testing.T) {
 	require.NoError(t, fix.storage.AddInstance(&session.Instance{
 		Title:   "title-only-session",
 		Path:    "/tmp/test-workspace",
-		Status:  session.Running,
+		Status:  session.Paused, // Paused avoids tmux setup in LoadInstances (no CI tmux)
 		Program: "claude",
 	}))
 
