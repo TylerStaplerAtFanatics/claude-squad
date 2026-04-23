@@ -49,6 +49,36 @@ describe("Detector", () => {
     expect(result.type).toBe(InputType.GitHubShorthand);
   });
 
+  describe("NewSessionDetector", () => {
+    it("NewSessionDetector_should_detectNewPrefix_When_inputStartsWithNew", () => {
+      const result = registry.detect("new/");
+      expect(result.type).toBe(InputType.NewSession);
+    });
+
+    it("NewSessionDetector_should_returnNull_When_inputDoesNotStartWithNew", () => {
+      const result = registry.detect("stapler");
+      expect(result.type).not.toBe(InputType.NewSession);
+    });
+
+    it("NewSessionDetector_should_parseQueryAfterPrefix_When_inputIsNewSlashFoo", () => {
+      const result = registry.detect("new/stapler");
+      expect(result.type).toBe(InputType.NewSession);
+      expect(result.parsedValue).toBe("stapler");
+    });
+
+    it("NewSessionDetector_should_returnEmptyParsedValue_When_inputIsJustNewSlash", () => {
+      const result = registry.detect("new/");
+      expect(result.type).toBe(InputType.NewSession);
+      expect(result.parsedValue).toBe("");
+    });
+
+    it("NewSessionDetector_should_detectPrefix_When_inputIsUppercaseNEW", () => {
+      const result = registry.detect("NEW/thing");
+      expect(result.type).toBe(InputType.NewSession);
+      expect(result.parsedValue).toBe("thing");
+    });
+  });
+
   // T-PITFALL-001
   describe("pitfall guards", () => {
     it("bare text does not resolve to Unknown (T-PITFALL-001)", () => {
