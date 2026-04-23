@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // TmuxWaiter provides utilities for waiting on tmux operations
@@ -329,6 +330,15 @@ func (s *TmuxTestServer) KillServer() error {
 // This is automatically called via t.Cleanup() but can also be called manually.
 func (s *TmuxTestServer) Cleanup() {
 	s.t.Helper()
+
+	// Stop the server registry for this socket BEFORE killing the server.
+	// The registry runs a reconnectLoop goroutine that will restart the tmux
+	// server immediately after kill-server unless we cancel its context first.
+	tmux.StopServerRegistry(s.socketName)
+
+	// Give the reconnectLoop goroutine time to observe the cancellation
+	// before we issue kill commands.
+	time.Sleep(50 * time.Millisecond)
 
 	// Try to kill all sessions first (cleaner)
 	if err := s.KillAllSessions(); err != nil {
