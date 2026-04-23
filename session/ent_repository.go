@@ -605,7 +605,6 @@ func (r *EntRepository) List(ctx context.Context) ([]InstanceData, error) {
 	// Query all sessions with relationships
 	sessions, err := r.client.Session.Query().
 		WithWorktree().
-		WithDiffStats().
 		WithTags().
 		WithClaudeSession(func(q *ent.ClaudeSessionQuery) {
 			q.WithMetadata()
@@ -630,7 +629,6 @@ func (r *EntRepository) ListByStatus(ctx context.Context, status Status) ([]Inst
 	sessions, err := r.client.Session.Query().
 		Where(session.Status(int(status))).
 		WithWorktree().
-		WithDiffStats().
 		WithTags().
 		WithClaudeSession(func(q *ent.ClaudeSessionQuery) {
 			q.WithMetadata()
@@ -655,7 +653,6 @@ func (r *EntRepository) ListByTag(ctx context.Context, tagName string) ([]Instan
 	sessions, err := r.client.Session.Query().
 		Where(session.HasTagsWith(tag.Name(tagName))).
 		WithWorktree().
-		WithDiffStats().
 		WithTags().
 		WithClaudeSession(func(q *ent.ClaudeSessionQuery) {
 			q.WithMetadata()
