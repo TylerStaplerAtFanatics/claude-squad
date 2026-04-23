@@ -12,6 +12,7 @@ export enum InputType {
   GitHubRepo = "github_repo",
   GitHubShorthand = "github_shorthand",
   SessionSearch = "session_search",
+  NewSession = "new_session",
 }
 
 export interface InputTypeInfo {
@@ -60,6 +61,11 @@ export const INPUT_TYPE_INFO: Record<InputType, InputTypeInfo> = {
     label: "Search Sessions",
     icon: "🔍",
     description: "Search existing sessions",
+  },
+  [InputType.NewSession]: {
+    label: "New Session",
+    icon: "✨",
+    description: "Create a new session",
   },
 };
 
