@@ -69,7 +69,7 @@ jobs:
           version: v2.11.4
           args: --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
           skip-cache: false
-          only-new-issues: true
+          only-new-issues: false
 
       - name: CSS lint (stylelint + undefined variable check)
         working-directory: web-app

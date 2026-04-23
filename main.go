@@ -649,7 +649,7 @@ func init() {
 	rootCmd.Flags().StringVar(&rpIDFlag, "rp-id", "",
 		"WebAuthn Relying Party ID override (your LAN IP or hostname, e.g. '192.168.1.42'). "+
 			"Defaults to the detected LAN IP.")
-	rootCmd.Flags().BoolVar(&tmuxKeepServerFlag, "tmux-keep-server", false,
+	rootCmd.Flags().BoolVar(&tmuxKeepServerFlag, "tmux-keep-server", true,
 		"Keep tmux server running even when all user sessions close (sets exit-empty off). "+
 			"Use this if the tmux server frequently stops between sessions.")
 

@@ -42,6 +42,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@reduxjs/toolkit": "^2.11.2",
     "@simplewebauthn/browser": "^13.3.0",
+    "@swc/helpers": "^0.5.21",
     "@vanilla-extract/recipes": "^0.5.7",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.16.0",

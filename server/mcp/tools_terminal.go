@@ -163,14 +163,14 @@ func (th *terminalHandlers) readSessionOutput(_ context.Context, req mcpgo.CallT
 		stripANSI = v
 	}
 
-	// Verify session exists using a raw data list to avoid PTY side effects.
-	dataSlice, err := th.store.ListInstanceData()
+	// Verify session exists.
+	instances, err := th.store.LoadInstances()
 	if err != nil {
 		return errResult(ErrInternalError, "failed to load sessions", ""), nil
 	}
 	found := false
-	for _, data := range dataSlice {
-		if data.Title == sessionID {
+	for _, inst := range instances {
+		if inst.Title == sessionID {
 			found = true
 			break
 		}
@@ -371,14 +371,14 @@ func (th *terminalHandlers) waitForOutput(_ context.Context, req mcpgo.CallToolR
 		}
 	}
 
-	// Verify session exists using a raw data list to avoid PTY side effects.
-	dataSlice, err := th.store.ListInstanceData()
+	// Verify session exists.
+	instances, err := th.store.LoadInstances()
 	if err != nil {
 		return errResult(ErrInternalError, "failed to load sessions", ""), nil
 	}
 	found := false
-	for _, data := range dataSlice {
-		if data.Title == sessionID {
+	for _, inst := range instances {
+		if inst.Title == sessionID {
 			found = true
 			break
 		}

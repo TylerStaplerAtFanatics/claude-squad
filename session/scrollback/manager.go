@@ -303,6 +303,20 @@ func (m *ScrollbackManager) GetStats(sessionID string) (ScrollbackStats, error) 
 	return stats, nil
 }
 
+// CurrentSequence returns the highest scrollback sequence number written so far
+// for the given session. Returns 0 if the session has no scrollback yet.
+// Implements the scrollbackSequencer interface used by SessionService.CreateCheckpoint.
+func (m *ScrollbackManager) CurrentSequence(sessionID string) uint64 {
+	m.mutex.RLock()
+	buffer, exists := m.buffers[sessionID]
+	m.mutex.RUnlock()
+
+	if !exists {
+		return 0
+	}
+	return buffer.CurrentSequence()
+}
+
 // ScrollbackStats provides information about scrollback usage.
 type ScrollbackStats struct {
 	SessionID      string

@@ -15,6 +15,7 @@ import (
 	servermcp "github.com/tstapler/stapler-squad/server/mcp"
 	"github.com/tstapler/stapler-squad/server/middleware"
 	"github.com/tstapler/stapler-squad/server/notifications"
+	"github.com/tstapler/stapler-squad/server/push"
 	"github.com/tstapler/stapler-squad/server/services"
 	"github.com/tstapler/stapler-squad/server/web"
 	"github.com/tstapler/stapler-squad/session/tmux"
@@ -156,6 +157,15 @@ func NewServer(addr string) *Server {
 				// Wire the notification store into the session service for RPC access
 				deps.SessionService.SetNotificationStore(notifStore)
 			}
+		}
+
+		// Initialize push notification service.
+		if configErr == nil {
+			pushService := services.NewPushService(configDir)
+			pushHandler := services.NewPushHandler(pushService)
+			pushHandler.RegisterRoutes(srv.mux)
+			push.StartPushSubscriber(serverCtx, deps.EventBus, pushService)
+			log.InfoLog.Printf("Push notification service initialized")
 		}
 
 		// Wire tmux server recovery → web UI toast notification.
