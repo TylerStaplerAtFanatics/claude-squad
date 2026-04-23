@@ -16,12 +16,6 @@ export enum GroupingStrategy {
   None = "none",
 }
 
-/**
- * Display labels for grouping strategies shown in the UI dropdown.
- * GroupingStrategy.Project is intentionally omitted until ProjectPanel UI
- * is implemented — without it every session lands in "No Project" which
- * is identical to the flat list but confusing.
- */
 export const GroupingStrategyLabels: Partial<Record<GroupingStrategy, string>> = {
   [GroupingStrategy.Category]: "Category",
   [GroupingStrategy.Tag]: "Tags",
@@ -30,6 +24,7 @@ export const GroupingStrategyLabels: Partial<Record<GroupingStrategy, string>> =
   [GroupingStrategy.Program]: "Program",
   [GroupingStrategy.Status]: "Status",
   [GroupingStrategy.SessionType]: "Session Type",
+  [GroupingStrategy.Project]: "Project",
   [GroupingStrategy.None]: "None (Flat List)",
 };
 

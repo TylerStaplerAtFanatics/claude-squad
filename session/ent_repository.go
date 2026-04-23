@@ -1083,13 +1083,36 @@ func (r *EntRepository) UpdateProject(ctx context.Context, data ProjectData) (*P
 	return &result, nil
 }
 
-// DeleteProject removes a project; sessions are unassigned (FK cleared).
+// DeleteProject removes a project; sessions are unassigned (FK cleared) atomically.
 func (r *EntRepository) DeleteProject(ctx context.Context, name string) error {
-	p, err := r.client.Project.Query().Where(project.Name(name)).Only(ctx)
+	tx, err := r.client.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	p, err := tx.Project.Query().Where(project.Name(name)).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to find project '%s': %w", name, err)
 	}
-	return r.client.Project.DeleteOne(p).Exec(ctx)
+
+	// Clear the project FK on all sessions that belong to this project before deleting.
+	if err = tx.Session.Update().
+		Where(session.HasProjectWith(project.Name(name))).
+		ClearProject().
+		Exec(ctx); err != nil {
+		return fmt.Errorf("failed to unassign sessions from project '%s': %w", name, err)
+	}
+
+	if err = tx.Project.DeleteOne(p).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete project '%s': %w", name, err)
+	}
+
+	return tx.Commit()
 }
 
 // AssignSessionsToProject links sessions (by title) to a project (by name).

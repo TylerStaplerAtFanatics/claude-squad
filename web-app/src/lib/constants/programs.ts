@@ -11,6 +11,7 @@ export const PROGRAMS: ProgramOption[] = [
   { value: "aider --model ollama_chat/gemma3:1b", label: "Aider (Ollama Gemma 1B)", description: "Local model" },
   { value: "opencode", label: "OpenCode", description: "OpenCode CLI assistant" },
   { value: "gemini", label: "Gemini CLI", description: "Google Gemini CLI" },
+  { value: "bash", label: "Terminal", description: "Interactive shell session" },
 ];
 
 export const DEFAULT_PROGRAM = "claude";

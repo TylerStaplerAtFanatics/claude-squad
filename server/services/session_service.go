@@ -2334,6 +2334,8 @@ func (s *SessionService) RunOneShot(
 		inst.GitHubPRURL = prURL
 		if err := s.storage.SaveInstances(s.allInstances()); err != nil {
 			log.WarningLog.Printf("RunOneShot: failed to persist PR URL for session '%s': %v", inst.Title, err)
+		} else {
+			s.eventBus.Publish(events.NewSessionUpdatedEvent(inst, []string{"github_pr_url"}))
 		}
 	}
 

@@ -363,6 +363,7 @@ function HomeContent() {
       program: data.program,
       category: data.category || "",
       prompt: data.prompt || "",
+      initialPrompt: data.initialPrompt || "",
       autoYes: data.autoYes,
       existingWorktree: data.existingWorktree || "",
     });
@@ -535,6 +536,7 @@ function HomeContent() {
                 onComplete={handleWizardComplete}
                 onCancel={handleWizardCancel}
                 initialData={wizardInitialData}
+                existingTitles={sessions.map((s) => s.title)}
               />
             </div>
           </div>
