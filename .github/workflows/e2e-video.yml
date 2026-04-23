@@ -2,7 +2,8 @@ name: E2E Feature Video Capture
 
 # Story 6: Feature Flow Video Capture
 # Runs on PRs that touch feature-marked files and records Playwright videos.
-# Videos are uploaded as GitHub Actions artifacts (30-day retention).
+# Videos/GIFs are uploaded as unzipped artifacts (upload-artifact@v7, archive:false)
+# so reviewers can view them directly in the browser without downloading a ZIP.
 
 on:
   pull_request:
