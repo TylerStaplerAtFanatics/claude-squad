@@ -425,7 +425,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
         } else {
           // Cached value is too small — treat as no cache and wait for stable size.
           console.log(`[TerminalOutput] Cached dimensions ${initDims.cols}x${initDims.rows} too small, falling through to stability wait`);
-          hasCachedDimensionsRef.current = false;
+          hasCachedDimensionsRef.current = false; // prevents future onResize events from fast-connecting on stale cache
         }
       }
 
@@ -626,7 +626,26 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       pendingConnectAfterDisconnectRef.current = true;
     }
 
+    // Safety net: if the container is hidden at mount (display:none, 0×0), the
+    // ResizeObserver zero-size guard prevents fitAddon.fit(), so no resize event
+    // fires and the stability timer never starts. After 5s, attempt to connect
+    // with whatever valid cached dims are available, or skip silently.
+    const safetyTimeout = setTimeout(() => {
+      if (!hasInitiatedConnectionRef.current && isMountedRef.current) {
+        const dims = lastResizeRef.current;
+        if (dims && dims.cols >= MIN_COLS && dims.rows >= MIN_ROWS) {
+          console.log(`[TerminalOutput] Safety timeout: connecting with cached dims ${dims.cols}x${dims.rows} (container may have been hidden at mount)`);
+          hasInitiatedConnectionRef.current = true;
+          setIsWaitingForStableSize(false);
+          connect(dims.cols, dims.rows);
+        } else {
+          console.log(`[TerminalOutput] Safety timeout: no valid dims available, container still not visible`);
+        }
+      }
+    }, 5000);
+
     return () => {
+      clearTimeout(safetyTimeout);
       setIsLoadingInitialContent(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

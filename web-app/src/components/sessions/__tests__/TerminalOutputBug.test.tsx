@@ -278,3 +278,65 @@ describe('Baseline: valid cache should fast-connect with correct dims', () => {
     jest.useRealTimers();
   });
 });
+
+// ---------------------------------------------------------------------------
+// MIN_COLS / MIN_ROWS guard — tiny dimensions are rejected
+// ---------------------------------------------------------------------------
+describe('MIN dimension guard: tiny dims are rejected at every entry point', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('saveDimensions is NOT called when onResize fires with tiny dims (10×6)', async () => {
+    const { saveDimensions } = require('@/lib/terminal/TerminalDimensionCache');
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+    (getCachedDimensions as jest.Mock).mockReturnValue(null);
+
+    renderTerminalOutput();
+
+    // Resize fires with tiny pre-layout dims (below MIN_COLS=30, MIN_ROWS=10)
+    await act(async () => { capturedOnResize?.(10, 6); });
+
+    expect(saveDimensions).not.toHaveBeenCalledWith('session-1', 10, 6);
+  });
+
+  it('tiny cache entry (10×6) falls through to the stability timer, not fast-connect', async () => {
+    (getCachedDimensions as jest.Mock).mockReturnValue({ cols: 10, rows: 6 });
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+
+    renderTerminalOutput();
+
+    // Tiny cached dims should NOT trigger immediate connect
+    expect(stream.connect).not.toHaveBeenCalled();
+
+    // When a valid resize arrives, the stability timer should fire normally
+    await act(async () => { capturedOnResize?.(200, 50); });
+    expect(stream.connect).not.toHaveBeenCalled(); // still in stability window
+
+    await act(async () => { jest.advanceTimersByTime(100); });
+    expect(stream.connect).toHaveBeenCalledWith(200, 50);
+  });
+
+  it('tiny onResize dims (10×6) do not connect even with a valid cache present', async () => {
+    // Cache has valid dims but the first resize arrives tiny
+    (getCachedDimensions as jest.Mock).mockReturnValue({ cols: 220, rows: 55 });
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+
+    renderTerminalOutput();
+
+    // Fast-connect fires synchronously on mount from session-switch effect (220×55)
+    expect(stream.connect).toHaveBeenCalledWith(220, 55);
+    const callsBefore = (stream.connect as jest.Mock).mock.calls.length;
+
+    // A subsequent tiny resize (e.g., layout thrash) should NOT cause a second connect
+    await act(async () => { capturedOnResize?.(10, 6); });
+    expect((stream.connect as jest.Mock).mock.calls.length).toBe(callsBefore);
+  });
+});
