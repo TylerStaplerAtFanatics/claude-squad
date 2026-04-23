@@ -17,6 +17,26 @@ export interface StressTestMetrics {
 }
 
 /**
+ * Navigate to stress test page and wait for terminal to initialize.
+ * Alias: navigateToStressTest
+ */
+export async function navigateToStressTest(page: Page): Promise<void> {
+  return setupStressTestPage(page);
+}
+
+/**
+ * Launch a named session on the stress test page and return the session name.
+ */
+export async function launchSession(page: Page, name: string): Promise<string> {
+  await page.evaluate(async (sessionName: string) => {
+    const stressTest = (window as any).stressTest;
+    if (!stressTest) throw new Error('Stress test not initialized');
+    await stressTest.createSession(sessionName);
+  }, name);
+  return name;
+}
+
+/**
  * Navigate to stress test page and wait for terminal to initialize
  */
 export async function setupStressTestPage(page: Page): Promise<void> {

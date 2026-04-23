@@ -16,22 +16,25 @@
 import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { ApprovalCard } from "../ApprovalCard";
-import type { PendingApprovalProto } from "@/gen/session/v1/types_pb";
+import type { PlainApproval } from "@/lib/api/approvalsApi";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeApproval(overrides: Partial<Record<string, unknown>> = {}): PendingApprovalProto {
+function makeApproval(overrides: Partial<Record<string, unknown>> = {}): PlainApproval {
   return {
     id: "approval-1",
     sessionId: "session-abc",
     toolName: "Bash",
     toolInput: {},
     cwd: "/home/user",
+    permissionMode: "",
+    createdAt: undefined,
+    expiresAt: undefined,
     secondsRemaining: 60,
     ...overrides,
-  } as unknown as PendingApprovalProto;
+  } as unknown as PlainApproval;
 }
 
 // ---------------------------------------------------------------------------
