@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Fuse from "fuse.js";
 import { detect, InputType, INPUT_TYPE_INFO, DetectionResult } from "@/lib/omnibar";
+import { useModeReducer, OmnibarModeState } from "@/lib/omnibar/modes/useModeReducer";
 import { PROGRAMS } from "@/lib/constants/programs";
 import { usePathCompletions } from "@/lib/hooks/usePathCompletions";
 import { usePathHistory } from "@/lib/hooks/usePathHistory";
@@ -13,13 +14,12 @@ import { selectAllSessions } from "@/lib/store/sessionsSlice";
 import { Session, SessionStatus } from "@/gen/session/v1/types_pb";
 import { PathCompletionDropdown, type CompletionEntry } from "./PathCompletionDropdown";
 import { OmnibarResultList, getResultListItemCount, getHighlightedItemId } from "./OmnibarResultList";
+import { OmnibarModeBadge } from "./OmnibarModeBadge";
+import { OmnibarCreationPanel } from "./OmnibarCreationPanel";
 import {
   overlay, modal, inputContainer, typeIndicator, input as inputClass,
   detectionInfo, detectionBadge, unknown,
-  body, field, label as labelClass, fieldInput, hint, select as selectClass,
-  checkbox as checkboxClass, collapsible, collapsibleHeader, collapsibleTitle, collapsibleIcon, expanded,
-  collapsibleContent, footer, button as buttonClass, buttonSecondary, buttonPrimary,
-  error as errorClass, shortcuts, shortcut, shortcutKey, completionError as completionErrorClass,
+  shortcuts, shortcut, shortcutKey, completionError as completionErrorClass,
   pathIndicator, pathIndicatorValid, pathIndicatorInvalid, pathIndicatorLoading,
 } from "./Omnibar.css";
 
@@ -28,6 +28,40 @@ interface OmnibarProps {
   onClose: () => void;
   onCreateSession: (data: OmnibarSessionData) => Promise<void>;
   onNavigateToSession: (sessionId: string) => void;
+  initialMode?: "discovery" | "creation";
+}
+
+// Consolidated form state
+export interface OmnibarFormState {
+  sessionName: string;
+  branch: string;
+  program: string;
+  category: string;
+  autoYes: boolean;
+  useTitleAsBranch: boolean;
+  sessionType: "directory" | "new_worktree" | "existing_worktree";
+  existingWorktree: string;
+  workingDir: string;
+}
+
+const INITIAL_FORM_STATE: OmnibarFormState = {
+  sessionName: "",
+  branch: "",
+  program: "claude",
+  category: "",
+  autoYes: false,
+  useTitleAsBranch: true,
+  sessionType: "new_worktree",
+  existingWorktree: "",
+  workingDir: "",
+};
+
+// Consolidated UI state
+interface OmnibarUIState {
+  showAdvanced: boolean;
+  dropdownIndex: number;
+  dropdownDismissed: boolean;
+  resultHighlightIndex: number;
 }
 
 export interface OmnibarSessionData {
@@ -48,40 +82,62 @@ export interface OmnibarSessionData {
   workingDir?: string;
 }
 
-type OmnibarMode = "discovery" | "creation";
-
 const RESULT_LISTBOX_ID = "omnibar-result-listbox";
 
-export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession }: OmnibarProps) {
+export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession, initialMode }: OmnibarProps) {
   // Input state
   const [input, setInput] = useState("");
   const [detection, setDetection] = useState<DetectionResult | null>(null);
 
-  // Form state
-  const [sessionName, setSessionName] = useState("");
-  const [program, setProgram] = useState("claude");
-  const [category, setCategory] = useState("");
-  const [autoYes, setAutoYes] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Consolidated form state
+  const [formState, setFormState] = useState<OmnibarFormState>(INITIAL_FORM_STATE);
+  const setFormField = useCallback(
+    <K extends keyof OmnibarFormState>(key: K, value: OmnibarFormState[K]) =>
+      setFormState((prev) => ({ ...prev, [key]: value })),
+    []
+  );
 
-  // Session type and worktree state
-  const [sessionType, setSessionType] = useState<"directory" | "new_worktree" | "existing_worktree">("new_worktree");
-  const [branch, setBranch] = useState("");
-  const [useTitleAsBranch, setUseTitleAsBranch] = useState(true);
-  const [existingWorktree, setExistingWorktree] = useState("");
-  const [workingDir, setWorkingDir] = useState("");
+  // Consolidated UI state
+  const [uiState, setUIState] = useState<OmnibarUIState>({
+    showAdvanced: false,
+    dropdownIndex: -1,
+    dropdownDismissed: false,
+    resultHighlightIndex: -1,
+  });
+  const setUIField = useCallback(
+    <K extends keyof OmnibarUIState>(key: K, value: OmnibarUIState[K]) =>
+      setUIState((prev) => ({ ...prev, [key]: value })),
+    []
+  );
 
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Path completion dropdown state
-  const [dropdownIndex, setDropdownIndex] = useState(-1);
-  const [dropdownDismissed, setDropdownDismissed] = useState(false);
+  // Mode state machine
+  const [modeState, dispatchMode] = useModeReducer();
 
-  // Two-phase mode state
-  const [mode, setMode] = useState<OmnibarMode>("discovery");
-  const [resultHighlightIndex, setResultHighlightIndex] = useState(-1);
+  // Convenience aliases for existing code
+  // Destructure only fields needed for validation/submission logic in Omnibar.tsx
+  const { sessionName, program, category, autoYes, sessionType, branch, useTitleAsBranch, existingWorktree, workingDir } = formState;
+  const { showAdvanced } = uiState;
+  const { dropdownIndex, dropdownDismissed, resultHighlightIndex } = uiState;
+  // Used in detection auto-fill effects
+  const setSessionName = useCallback((v: string) => setFormField("sessionName", v), [setFormField]);
+  const setBranch = useCallback((v: string) => setFormField("branch", v), [setFormField]);
+  const setDropdownIndex = useCallback((updater: number | ((prev: number) => number)) => {
+    setUIState((prev) => ({
+      ...prev,
+      dropdownIndex: typeof updater === "function" ? updater(prev.dropdownIndex) : updater,
+    }));
+  }, []);
+  const setDropdownDismissed = useCallback((v: boolean) => setUIField("dropdownDismissed", v), [setUIField]);
+  const setResultHighlightIndex = useCallback((updater: number | ((prev: number) => number)) => {
+    setUIState((prev) => ({
+      ...prev,
+      resultHighlightIndex: typeof updater === "function" ? updater(prev.resultHighlightIndex) : updater,
+    }));
+  }, []);
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
@@ -157,8 +213,8 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession 
   const isDropdownVisible =
     isPathInput && mergedEntries.length > 0 && !dropdownDismissed;
 
-  // Discovery mode hooks
-  const isDiscoveryMode = mode === "discovery";
+  // Discovery mode derived from modeState
+  const isDiscoveryMode = modeState.type === "discovery";
 
   // Compute session search query without waiting for the 150ms detection debounce.
   // Bare text (no path/URL/github prefix) passes to Fuse immediately for zero-lag search.
@@ -246,18 +302,14 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession 
         prevDetectionTypeRef.current = result.type;
 
         // Update mode based on detection type
-        if (
-          result.type === InputType.LocalPath ||
-          result.type === InputType.PathWithBranch ||
-          result.type === InputType.GitHubPR ||
-          result.type === InputType.GitHubBranch ||
-          result.type === InputType.GitHubRepo ||
-          result.type === InputType.GitHubShorthand
-        ) {
-          setMode("creation");
-        } else if (result.type === InputType.SessionSearch) {
-          setMode("discovery");
-          setResultHighlightIndex(-1);
+        if (result.type === InputType.NewSession) {
+          // "new/" prefix typed → creation_with_repo mode with query from parsedValue
+          dispatchMode({ kind: "new_prefix_typed", query: result.parsedValue });
+        } else {
+          dispatchMode({ kind: "detect", detection: result });
+          if (result.type === InputType.SessionSearch) {
+            setResultHighlightIndex(-1);
+          }
         }
 
         // Auto-fill session name if:
@@ -277,7 +329,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession 
         }
       } else {
         setDetection(null);
-        setMode("discovery");
+        dispatchMode({ kind: "reset_to_discovery" });
         setResultHighlightIndex(-1);
       }
     }, 150); // 150ms debounce
@@ -301,25 +353,21 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession 
     if (!isOpen) {
       setInput("");
       setDetection(null);
-      setSessionName("");
-      setProgram("claude");
-      setCategory("");
-      setAutoYes(false);
-      setShowAdvanced(false);
+      setFormState(INITIAL_FORM_STATE);
+      setUIState({ showAdvanced: false, dropdownIndex: -1, dropdownDismissed: false, resultHighlightIndex: -1 });
       setError(null);
-      setSessionType("new_worktree");
-      setBranch("");
-      setUseTitleAsBranch(false);
-      setExistingWorktree("");
-      setWorkingDir("");
       lastSuggestedNameRef.current = "";
       prevDetectionTypeRef.current = null;
-      setDropdownIndex(-1);
-      setDropdownDismissed(false);
-      setMode("discovery");
-      setResultHighlightIndex(-1);
+      dispatchMode({ kind: "reset_to_discovery" });
     }
   }, [isOpen]);
+
+  // On open: apply initialMode if provided
+  useEffect(() => {
+    if (isOpen && initialMode === "creation") {
+      dispatchMode({ kind: "open_creation_direct" });
+    }
+  }, [isOpen, initialMode]);
 
   // Session result selection handlers
   const handleSessionSelect = useCallback(
@@ -330,15 +378,29 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession 
     [onNavigateToSession, onClose]
   );
 
+  const handleCloneSession = useCallback(
+    (session: Session) => {
+      // Pre-fill the input with the source session's path and switch to creation mode
+      if (session.path) {
+        setInput(session.path);
+        dispatchMode({ kind: "select_repo", path: session.path });
+        setResultHighlightIndex(-1);
+        setDropdownDismissed(false);
+        inputRef.current?.focus();
+      }
+    },
+    [dispatchMode]
+  );
+
   const handleRepoSelect = useCallback(
     (path: string) => {
       setInput(path + "/");
-      setMode("creation");
+      dispatchMode({ kind: "select_repo", path });
       setResultHighlightIndex(-1);
       setDropdownDismissed(false);
       inputRef.current?.focus();
     },
-    []
+    [dispatchMode]
   );
 
   const dispatchHighlightedResultAction = useCallback(
@@ -350,7 +412,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession 
         if (repoIndex < displayedRepoEntries.length) {
           handleRepoSelect(displayedRepoEntries[repoIndex].path);
         } else {
-          setMode("creation");
+          dispatchMode({ kind: "open_creation_direct" });
           setResultHighlightIndex(-1);
         }
       }
@@ -439,7 +501,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession 
         if (!isDiscoveryMode) {
           // Escape in creation mode: return to discovery rather than closing.
           // Second Escape (in discovery mode) will close.
-          setMode("discovery");
+          dispatchMode({ kind: "reset_to_discovery" });
           setInput("");
           setResultHighlightIndex(-1);
         } else {
@@ -462,6 +524,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession 
       dropdownIndex,
       handleCompletionSelect,
       onClose,
+      dispatchMode,
     ]
   );
 
@@ -671,8 +734,9 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession 
             highlightedIndex={resultHighlightIndex}
             onSessionSelect={handleSessionSelect}
             onRepoSelect={handleRepoSelect}
+            onCloneSession={handleCloneSession}
             onCreateNew={() => {
-              setMode("creation");
+              dispatchMode({ kind: "open_creation_direct" });
               setResultHighlightIndex(-1);
             }}
           />
@@ -710,224 +774,33 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession 
           </div>
         )}
 
-        {/* Form Fields - creation mode only */}
+        {/* Creation form + footer — delegated to OmnibarCreationPanel */}
         {!isDiscoveryMode && (
-          <div className={body}>
-            {/* Session Name */}
-            <div className={field}>
-              <label className={labelClass} htmlFor="omnibar-name">
-                Session Name *
-              </label>
-              <input
-                id="omnibar-name"
-                type="text"
-                className={fieldInput}
-                placeholder="my-feature-session"
-                value={sessionName}
-                onChange={(e) => setSessionName(e.target.value)}
-              />
-            </div>
-
-            {/* Session Type */}
-            <div className={field}>
-              <label className={labelClass} htmlFor="omnibar-session-type">
-                Session Type
-              </label>
-              <select
-                id="omnibar-session-type"
-                className={selectClass}
-                value={sessionType}
-                onChange={(e) => setSessionType(e.target.value as "directory" | "new_worktree" | "existing_worktree")}
-              >
-                <option value="new_worktree">Create New Worktree</option>
-                <option value="existing_worktree">Use Existing Worktree</option>
-                <option value="directory">Directory Only (No Worktree)</option>
-              </select>
-              <span className={hint}>
-                {sessionType === "new_worktree" && "Creates an isolated git worktree for this session"}
-                {sessionType === "existing_worktree" && "Uses an existing worktree at a specific path"}
-                {sessionType === "directory" && "Works directly in the repository without worktree isolation"}
-              </span>
-            </div>
-
-            {/* Branch controls (for new worktree) */}
-            {sessionType === "new_worktree" && (
-              <>
-                <label className={checkboxClass}>
-                  <input
-                    type="checkbox"
-                    checked={useTitleAsBranch}
-                    onChange={(e) => setUseTitleAsBranch(e.target.checked)}
-                  />
-                  <span>Use session name as branch name</span>
-                </label>
-
-                <div className={field}>
-                  <label className={labelClass} htmlFor="omnibar-branch">
-                    Git Branch {!useTitleAsBranch && "*"}
-                  </label>
-                  <input
-                    id="omnibar-branch"
-                    type="text"
-                    className={fieldInput}
-                    placeholder={useTitleAsBranch ? sessionName || "Enter session name first" : "feature/my-feature"}
-                    value={useTitleAsBranch ? sessionName : branch}
-                    onChange={(e) => !useTitleAsBranch && setBranch(e.target.value)}
-                    disabled={useTitleAsBranch}
-                    style={{ opacity: useTitleAsBranch ? 0.6 : 1 }}
-                  />
-                  <span className={hint}>
-                    {useTitleAsBranch
-                      ? `Branch name will be: ${sessionName || "(enter session name)"}`
-                      : "Branch to create for the new worktree"}
-                  </span>
-                </div>
-              </>
-            )}
-
-            {/* Existing worktree path */}
-            {sessionType === "existing_worktree" && (
-              <div className={field}>
-                <label className={labelClass} htmlFor="omnibar-existing-worktree">
-                  Existing Worktree Path *
-                </label>
-                {worktrees.length > 0 ? (
-                  <select
-                    id="omnibar-existing-worktree"
-                    className={selectClass}
-                    value={existingWorktree}
-                    onChange={(e) => setExistingWorktree(e.target.value)}
-                  >
-                    <option value="">Select a worktree...</option>
-                    {worktrees.map((wt) => (
-                      <option key={wt.path} value={wt.path}>
-                        {wt.branch ? `${wt.branch} (${wt.path})` : wt.path}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="omnibar-existing-worktree"
-                    type="text"
-                    className={fieldInput}
-                    placeholder="/path/to/existing/worktree"
-                    value={existingWorktree}
-                    onChange={(e) => setExistingWorktree(e.target.value)}
-                  />
-                )}
-                <span className={hint}>
-                  {worktrees.length > 0
-                    ? "Select an existing git worktree for this repository"
-                    : "Absolute path to an existing git worktree"}
-                </span>
-              </div>
-            )}
-
-            {/* Working Directory (optional, for all types) */}
-            <div className={field}>
-              <label className={labelClass} htmlFor="omnibar-working-dir">
-                Working Directory
-              </label>
-              <input
-                id="omnibar-working-dir"
-                type="text"
-                className={fieldInput}
-                placeholder="src/api (optional)"
-                value={workingDir}
-                onChange={(e) => setWorkingDir(e.target.value)}
-              />
-              <span className={hint}>Optional: Start in a subdirectory (relative path)</span>
-            </div>
-
-            {/* Advanced Options */}
-            <div className={collapsible}>
-              <div
-                className={collapsibleHeader}
-                onClick={() => setShowAdvanced(!showAdvanced)}
-              >
-                <span className={collapsibleTitle}>Advanced Options</span>
-                <span
-                  className={`${collapsibleIcon} ${
-                    showAdvanced ? expanded : ""
-                  }`}
-                >
-                  ▼
-                </span>
-              </div>
-
-              {showAdvanced && (
-                <div className={collapsibleContent}>
-                  {/* Program */}
-                  <div className={field}>
-                    <label className={labelClass} htmlFor="omnibar-program">
-                      Program
-                    </label>
-                    <select
-                      id="omnibar-program"
-                      className={selectClass}
-                      value={program}
-                      onChange={(e) => setProgram(e.target.value)}
-                    >
-                      {PROGRAMS.map((p) => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Category */}
-                  <div className={field}>
-                    <label className={labelClass} htmlFor="omnibar-category">
-                      Category
-                    </label>
-                    <input
-                      id="omnibar-category"
-                      type="text"
-                      className={fieldInput}
-                      placeholder="e.g., Features, Bugfixes"
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Auto-Yes */}
-                  <label className={checkboxClass}>
-                    <input
-                      type="checkbox"
-                      checked={autoYes}
-                      onChange={(e) => setAutoYes(e.target.checked)}
-                    />
-                    <span>Auto-approve prompts (experimental)</span>
-                  </label>
-                </div>
-              )}
-            </div>
-          </div>
+          <OmnibarCreationPanel
+            formState={formState}
+            setFormField={setFormField}
+            onSubmit={handleSubmit}
+            onCancel={onClose}
+            worktrees={worktrees}
+            isSubmitting={isSubmitting}
+            canSubmit={canSubmit}
+            error={error}
+            showAdvanced={showAdvanced}
+            onToggleAdvanced={() => setUIField("showAdvanced", !uiState.showAdvanced)}
+            path={modeState.type === "creation_with_repo" ? modeState.path : undefined}
+          />
         )}
-
-        {/* Error Message */}
-        {error && <div className={errorClass}>{error}</div>}
-
-        {/* Footer */}
-        <div className={footer}>
-          <button
-            type="button"
-            className={`${buttonClass} ${buttonSecondary}`}
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={`${buttonClass} ${buttonPrimary}`}
-            onClick={handleSubmit}
-            disabled={!canSubmit || isSubmitting}
-          >
-            {isSubmitting ? "Creating..." : "Create Session"}
-          </button>
-        </div>
 
         {/* Keyboard Shortcuts */}
         <div className={shortcuts}>
+          <OmnibarModeBadge
+            mode={isDiscoveryMode ? "discovery" : "creation"}
+            onToggle={() =>
+              isDiscoveryMode
+                ? dispatchMode({ kind: "open_creation_direct" })
+                : dispatchMode({ kind: "reset_to_discovery" })
+            }
+          />
           <span className={shortcut}>
             <span className={shortcutKey}>Esc</span> Close
           </span>

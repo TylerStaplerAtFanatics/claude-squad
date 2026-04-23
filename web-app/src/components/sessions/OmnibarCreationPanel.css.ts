@@ -1,0 +1,65 @@
+import { style } from "@vanilla-extract/css";
+import { vars } from "../../styles/theme-contract.css";
+
+export const pathDisplay = style({
+  padding: `${vars.space[2]} ${vars.space[4]}`,
+  background: vars.color.surfaceSubtle,
+  borderBottom: `1px solid ${vars.color.borderSubtle}`,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textSecondary,
+  fontFamily: "monospace",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+});
+
+export const radioGroup = style({
+  display: "flex",
+  gap: vars.space[1],
+  flexWrap: "wrap",
+});
+
+export const radioBtn = style({
+  padding: `${vars.space[1]} ${vars.space[3]}`,
+  fontSize: vars.fontSize.sm,
+  fontWeight: 500,
+  borderRadius: vars.radii.sm,
+  border: `1px solid ${vars.color.borderColor}`,
+  background: "transparent",
+  color: vars.color.textSecondary,
+  cursor: "pointer",
+  transition: "all 0.1s ease",
+  selectors: {
+    "&:hover": {
+      background: vars.color.hoverBackground,
+      borderColor: vars.color.borderHover,
+    },
+    "&:focus-visible": {
+      outline: `2px solid ${vars.color.primary}`,
+      outlineOffset: "2px",
+    },
+  },
+});
+
+export const radioBtnActive = style({
+  background: vars.color.primary,
+  color: vars.color.primaryText,
+  borderColor: vars.color.primary,
+  selectors: {
+    "&:hover": {
+      background: vars.color.primaryHover,
+      borderColor: vars.color.primaryHover,
+    },
+  },
+});
+
+export const advancedSection = style({
+  overflow: "hidden",
+  maxHeight: 0,
+  transition: "max-height 0.25s ease-out",
+});
+
+export const advancedSectionOpen = style({
+  maxHeight: "600px",
+  transition: "max-height 0.3s ease-in",
+});
