@@ -123,9 +123,20 @@ jobs:
         run: |
           mkdir -p docs/demos
           NAMES=""
-          for webm in $(find tests/e2e/test-results -name "*.webm" 2>/dev/null \
-            | grep -iv "terminal-flickering\|stress-test\|terminal-stress" \
-            | head -5); do
+          # Prefer the demo flow first, then other feature tests in priority order.
+          # One video per test dir (video.webm only, skip retry dirs and video-N.webm).
+          # Exclude terminal stress tests — they're not feature demos.
+          WEBMS=$(
+            # 1. demo first
+            find tests/e2e/test-results/demo-Demo-Flow-chromium \
+              -maxdepth 1 -name "video.webm" 2>/dev/null | head -1
+            # 2. other feature flows (session, review-queue, history, workspace, smoke)
+            find tests/e2e/test-results -maxdepth 2 -name "video.webm" 2>/dev/null \
+              | grep -iv "terminal-flickering\|terminal-stress\|stress-test\|-retry[0-9]" \
+              | grep -v "demo-Demo-Flow" \
+              | head -4
+          )
+          for webm in $WEBMS; do
             dir=$(basename "$(dirname "$webm")")
             name=$(echo "$dir" | sed 's/-chromium$//;s/-firefox$//;s/-webkit$//')
             gif="docs/demos/${name}.gif"
