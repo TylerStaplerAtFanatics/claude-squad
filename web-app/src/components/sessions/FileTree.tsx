@@ -77,8 +77,9 @@ function fileNodeToTreeNode(fn: FileNode): TreeNode {
 /**
  * Build tree data from the directory contents map.
  * Recursively attaches loaded children to each directory node.
+ * Exported for unit testing.
  */
-function buildTreeData(
+export function buildTreeData(
   nodes: TreeNode[],
   dirContents: Map<string, TreeNode[]>
 ): TreeNode[] {
@@ -86,7 +87,9 @@ function buildTreeData(
     if (!node.isDir) return node;
     const loaded = dirContents.get(node.id);
     if (loaded === undefined) {
-      // Directory not yet loaded — provide empty array so it's expandable.
+      // children: [] makes isLeaf=false (react-arborist checks Array.isArray).
+      // This allows node.toggle() to fire, which triggers onToggle → handleToggle → loadDirectory.
+      // Children will be populated lazily after the first toggle.
       return { ...node, children: [] };
     }
     return {
@@ -246,7 +249,12 @@ function NodeRenderer({
     <div
       style={style}
       className={`${nodeClass} ${isSelected ? selected : ""} ${data.isIgnored ? ignored : ""}`}
-      onClick={() => node.activate()}
+      onClick={() => {
+        // Directories toggle open/close (fires onToggle → handleToggle → loadDirectory).
+        // Files/symlinks activate (fires onActivate → onFileSelect).
+        if (data.isDir) node.toggle();
+        else node.activate();
+      }}
     >
       <div
         className={nodeInner}
@@ -530,11 +538,12 @@ export function FileTree({
 
       const allNodes = buildTreeData(rootNodes, dirContents);
       const node = findNode(allNodes);
-      if (node?.isDir && !dirContents.has(id)) {
+      // Load if not yet fetched, or retry if a previous load errored.
+      if (node?.isDir && (!dirContents.has(id) || errorPaths.has(id))) {
         loadDirectory(id);
       }
     },
-    [rootNodes, dirContents, loadDirectory, searchResults]
+    [rootNodes, dirContents, loadDirectory, searchResults, errorPaths]
   );
 
   if (rootLoading) {
@@ -618,6 +627,8 @@ export function FileTree({
         idAccessor={(node) => node.id}
         childrenAccessor={(node) => {
           if (!node.isDir) return null;
+          // Returning [] (not null) for all dirs keeps isLeaf=false so node.toggle() works.
+          // Returning null would make the node a leaf and prevent any toggle from firing.
           return node.children ?? [];
         }}
         disableDrag={true}

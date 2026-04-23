@@ -485,9 +485,9 @@ func (s *SessionService) GetSession(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
 	}
 
-	// Find instance by ID (using Title as ID)
+	// Find instance by ID (UUID or legacy Title).
 	for _, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			return connect.NewResponse(&sessionv1.GetSessionResponse{
 				Session: adapters.InstanceToProto(inst),
 			}), nil
@@ -683,7 +683,7 @@ func (s *SessionService) UpdateSession(
 	var instance *session.Instance
 	var instanceIndex int
 	for i, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			instance = inst
 			instanceIndex = i
 			break
@@ -822,7 +822,7 @@ func (s *SessionService) DeleteSession(
 	}
 	found := false
 	for _, d := range dataSlice {
-		if d.Title == req.Msg.Id {
+		if d.Title == req.Msg.Id || d.UUID == req.Msg.Id {
 			found = true
 			break
 		}
@@ -987,7 +987,7 @@ func (s *SessionService) StreamTerminal(
 			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
 		}
 		for _, inst := range instances {
-			if inst.Title == initialMsg.SessionId {
+			if inst.MatchesID(initialMsg.SessionId) {
 				instance = inst
 				break
 			}
@@ -1255,20 +1255,7 @@ func (s *SessionService) GetSessionDiff(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session id is required"))
 	}
 
-	instances, err := s.loadInstancesWithWiring()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
-	}
-
-	// Find instance by ID (using Title as ID)
-	var instance *session.Instance
-	for _, inst := range instances {
-		if inst.Title == req.Msg.Id {
-			instance = inst
-			break
-		}
-	}
-
+	instance := s.findInstance(req.Msg.Id)
 	if instance == nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.Id))
 	}
@@ -1481,7 +1468,7 @@ func (s *SessionService) RenameSession(
 	var instance *session.Instance
 	var instanceIndex int
 	for i, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			instance = inst
 			instanceIndex = i
 			break
@@ -1552,7 +1539,7 @@ func (s *SessionService) RestartSession(
 	var instance *session.Instance
 	var instanceIndex int
 	for i, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			instance = inst
 			instanceIndex = i
 			break
