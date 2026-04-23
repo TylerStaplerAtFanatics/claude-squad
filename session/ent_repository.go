@@ -108,7 +108,8 @@ func (r *EntRepository) Create(ctx context.Context, data InstanceData) error {
 		SetUpdatedAt(data.UpdatedAt).
 		SetAutoYes(data.AutoYes).
 		SetProgram(data.Program).
-		SetIsExpanded(data.IsExpanded)
+		SetIsExpanded(data.IsExpanded).
+		SetNillableUUID(nilIfEmpty(data.UUID))
 
 	// Set optional fields
 	if data.WorkingDir != "" {
@@ -284,7 +285,8 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 		SetUpdatedAt(data.UpdatedAt).
 		SetAutoYes(data.AutoYes).
 		SetProgram(data.Program).
-		SetIsExpanded(data.IsExpanded)
+		SetIsExpanded(data.IsExpanded).
+		SetNillableUUID(nilIfEmpty(data.UUID))
 
 	// Update optional fields
 	if data.WorkingDir != "" {
@@ -709,10 +711,20 @@ func (r *EntRepository) Close() error {
 	return nil
 }
 
+// nilIfEmpty returns nil if s is empty, otherwise a pointer to s.
+// Used to pass optional string fields to Ent's SetNillable* builders.
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 // sessionToInstanceData converts an Ent Session entity to InstanceData
 func (r *EntRepository) sessionToInstanceData(sess *ent.Session) *InstanceData {
 	data := &InstanceData{
 		Title:               sess.Title,
+		UUID:                sess.UUID,
 		Path:                sess.Path,
 		WorkingDir:          sess.WorkingDir,
 		Branch:              sess.Branch,

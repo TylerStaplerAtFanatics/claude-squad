@@ -145,13 +145,14 @@ func (lh *lifecycleHandlers) createSession(ctx context.Context, req mcpgo.CallTo
 		}
 	}
 
-	// Check for title collision before starting.
-	instances, err := lh.store.LoadInstances()
+	// Check for title collision before starting. Use ListInstanceData (raw DB read)
+	// rather than LoadInstances to avoid spawning PTY processes as a side effect.
+	existing, err := lh.store.ListInstanceData()
 	if err != nil {
 		return errResult(ErrInternalError, fmt.Sprintf("load sessions: %v", err), ""), nil
 	}
-	for _, inst := range instances {
-		if inst.Title == title {
+	for _, data := range existing {
+		if data.Title == title {
 			return errResult(ErrInvalidArgument, fmt.Sprintf("session with title %q already exists", title),
 				"Choose a different title."), nil
 		}
@@ -202,11 +203,10 @@ func (lh *lifecycleHandlers) createSession(ctx context.Context, req mcpgo.CallTo
 		log.WarningLog.Printf("[mcp] hook injection failed for session %q: %v", title, err)
 	}
 
-	// Save to storage.
-	allInstances := append(instances, inst)
-	if err := lh.store.SaveInstances(allInstances); err != nil {
+	// Save to storage. AddInstance persists just this new instance.
+	if err := lh.store.AddInstance(inst); err != nil {
 		// Best-effort cleanup; don't fail the session just because save failed.
-		log.ErrorLog.Printf("[mcp] save instances failed after creating %q: %v", title, err)
+		log.ErrorLog.Printf("[mcp] save instance failed after creating %q: %v", title, err)
 		return errResult(ErrInternalError, fmt.Sprintf("save session: %v", err), ""), nil
 	}
 
@@ -236,7 +236,7 @@ func (lh *lifecycleHandlers) pauseSession(ctx context.Context, req mcpgo.CallToo
 		return errResult(ErrInvalidArgument, "session_id is required", ""), nil
 	}
 
-	inst, instances, idx, findErr := lh.findAndHydrate(sessionID)
+	inst, findErr := lh.findAndHydrate(sessionID)
 	if findErr != nil {
 		return findErr, nil
 	}
@@ -249,8 +249,7 @@ func (lh *lifecycleHandlers) pauseSession(ctx context.Context, req mcpgo.CallToo
 		return errResult(ErrInternalError, fmt.Sprintf("pause session: %v", err), ""), nil
 	}
 
-	instances[idx] = inst
-	if err := lh.store.SaveInstances(instances); err != nil {
+	if err := lh.store.SaveInstances([]*session.Instance{inst}); err != nil {
 		return errResult(ErrInternalError, fmt.Sprintf("save: %v", err), ""), nil
 	}
 
@@ -265,7 +264,7 @@ func (lh *lifecycleHandlers) resumeSession(ctx context.Context, req mcpgo.CallTo
 		return errResult(ErrInvalidArgument, "session_id is required", ""), nil
 	}
 
-	inst, instances, idx, findErr := lh.findAndHydrate(sessionID)
+	inst, findErr := lh.findAndHydrate(sessionID)
 	if findErr != nil {
 		return findErr, nil
 	}
@@ -280,8 +279,7 @@ func (lh *lifecycleHandlers) resumeSession(ctx context.Context, req mcpgo.CallTo
 		return errResult(ErrInternalError, fmt.Sprintf("resume session: %v", err), ""), nil
 	}
 
-	instances[idx] = inst
-	if err := lh.store.SaveInstances(instances); err != nil {
+	if err := lh.store.SaveInstances([]*session.Instance{inst}); err != nil {
 		return errResult(ErrInternalError, fmt.Sprintf("save: %v", err), ""), nil
 	}
 
@@ -303,40 +301,57 @@ func (lh *lifecycleHandlers) stopSession(ctx context.Context, req mcpgo.CallTool
 			"Call stop_session again with confirm=true to confirm."), nil
 	}
 
-	instances, err := lh.store.LoadInstances()
-	if err != nil {
-		return errResult(ErrInternalError, fmt.Sprintf("load sessions: %v", err), ""), nil
-	}
-
-	var inst *session.Instance
-	var idx int
-	for i, candidate := range instances {
-		if candidate.Title == sessionID {
-			inst = candidate
-			idx = i
-			break
-		}
-	}
+	// Prefer the live in-memory instance from the poller to avoid spawning a new PTY.
+	inst := lh.svc.FindLiveInstance(sessionID)
 	if inst == nil {
-		return errResult(ErrSessionNotFound, fmt.Sprintf("session %q not found", sessionID),
-			"Use list_sessions or search_sessions to find valid session IDs."), nil
-	}
-
-	// Hydrate for tmux access if the session is not paused (paused sessions have no tmux session).
-	if inst.Status != session.Paused && !inst.Started() {
-		if startErr := inst.Start(false); startErr != nil {
-			log.WarningLog.Printf("[mcp] hydration failed for stop %q: %v — attempting destroy anyway", sessionID, startErr)
+		// Not in poller — verify it exists in storage before attempting destroy.
+		existing, err := lh.store.ListInstanceData()
+		if err != nil {
+			return errResult(ErrInternalError, fmt.Sprintf("load sessions: %v", err), ""), nil
+		}
+		var found bool
+		for _, data := range existing {
+			if data.Title == sessionID || data.UUID == sessionID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return errResult(ErrSessionNotFound, fmt.Sprintf("session %q not found", sessionID),
+				"Use list_sessions or search_sessions to find valid session IDs."), nil
+		}
+		// Load just this one session so we can call Destroy() for tmux cleanup.
+		instances, err := lh.store.LoadInstances()
+		if err != nil {
+			return errResult(ErrInternalError, fmt.Sprintf("load sessions: %v", err), ""), nil
+		}
+		for _, candidate := range instances {
+			if candidate.MatchesID(sessionID) {
+				inst = candidate
+				break
+			}
 		}
 	}
 
-	if err := inst.Destroy(); err != nil {
-		log.WarningLog.Printf("[mcp] destroy session %q had errors: %v", sessionID, err)
+	if inst != nil {
+		// Hydrate for tmux access if the session is not paused (paused sessions have no tmux session).
+		if inst.Status != session.Paused && !inst.Started() {
+			if startErr := inst.Start(false); startErr != nil {
+				log.WarningLog.Printf("[mcp] hydration failed for stop %q: %v — attempting destroy anyway", sessionID, startErr)
+			}
+		}
+		if err := inst.Destroy(); err != nil {
+			log.WarningLog.Printf("[mcp] destroy session %q had errors: %v", sessionID, err)
+		}
 	}
+
+	// Remove from all pollers BEFORE storage deletion to close the race window
+	// where external discovery could re-add the session between delete and poller update.
+	lh.svc.RemoveFromAllPollers(sessionID)
 
 	if err := lh.store.DeleteInstance(sessionID); err != nil {
 		return errResult(ErrInternalError, fmt.Sprintf("delete from storage: %v", err), ""), nil
 	}
-	_ = idx
 
 	return okResult(MCPResult{Success: true}), nil
 }
@@ -348,18 +363,19 @@ func (lh *lifecycleHandlers) updateSession(ctx context.Context, req mcpgo.CallTo
 		return errResult(ErrInvalidArgument, "session_id is required", ""), nil
 	}
 
-	instances, err := lh.store.LoadInstances()
-	if err != nil {
-		return errResult(ErrInternalError, fmt.Sprintf("load sessions: %v", err), ""), nil
-	}
-
-	var inst *session.Instance
-	var idx int
-	for i, candidate := range instances {
-		if candidate.Title == sessionID {
-			inst = candidate
-			idx = i
-			break
+	// Prefer the live in-memory instance so we don't spawn a new PTY as a side effect
+	// of FromInstanceData. Fall back to LoadInstances only when the poller is not wired.
+	inst := lh.svc.FindLiveInstance(sessionID)
+	if inst == nil {
+		instances, err := lh.store.LoadInstances()
+		if err != nil {
+			return errResult(ErrInternalError, fmt.Sprintf("load sessions: %v", err), ""), nil
+		}
+		for _, candidate := range instances {
+			if candidate.MatchesID(sessionID) {
+				inst = candidate
+				break
+			}
 		}
 	}
 	if inst == nil {
@@ -399,8 +415,7 @@ func (lh *lifecycleHandlers) updateSession(ctx context.Context, req mcpgo.CallTo
 		}
 	}
 
-	instances[idx] = inst
-	if err := lh.store.SaveInstances(instances); err != nil {
+	if err := lh.store.SaveInstances([]*session.Instance{inst}); err != nil {
 		return errResult(ErrInternalError, fmt.Sprintf("save: %v", err), ""), nil
 	}
 
@@ -408,28 +423,40 @@ func (lh *lifecycleHandlers) updateSession(ctx context.Context, req mcpgo.CallTo
 	return okResult(lifecycleResult{MCPResult: MCPResult{Success: true}, Session: &detail}), nil
 }
 
-// findAndHydrate loads all instances, finds the target by ID, hydrates it by
-// connecting to its tmux session, and returns it along with the full instances
-// slice for subsequent SaveInstances calls.
+// findAndHydrate returns the live in-memory instance for sessionID, ensuring it is
+// connected to its tmux session (hydrated). It prefers the live instance from the
+// ReviewQueuePoller to avoid spawning PTY processes as a side effect. Falls back to
+// LoadInstances() when the poller is not wired or the session is not in the poller.
 // Returns a non-nil *mcpgo.CallToolResult (error result) when not found or not started.
-func (lh *lifecycleHandlers) findAndHydrate(sessionID string) (*session.Instance, []*session.Instance, int, *mcpgo.CallToolResult) {
-	instances, err := lh.store.LoadInstances()
-	if err != nil {
-		return nil, nil, 0, errResult(ErrInternalError, fmt.Sprintf("load sessions: %v", err), "")
+func (lh *lifecycleHandlers) findAndHydrate(sessionID string) (*session.Instance, *mcpgo.CallToolResult) {
+	// Try the live poller instance first — avoids LoadInstances() side effects.
+	if inst := lh.svc.FindLiveInstance(sessionID); inst != nil {
+		if !inst.Started() && inst.Status != session.Paused {
+			if startErr := inst.Start(false); startErr != nil {
+				return nil, errResult(ErrInternalError,
+					fmt.Sprintf("hydrate session %q: %v", sessionID, startErr), "")
+			}
+		}
+		return inst, nil
 	}
 
-	for i, inst := range instances {
-		if inst.Title == sessionID {
+	// Poller doesn't have the session (poller not wired, or external/untracked session).
+	instances, err := lh.store.LoadInstances()
+	if err != nil {
+		return nil, errResult(ErrInternalError, fmt.Sprintf("load sessions: %v", err), "")
+	}
+	for _, inst := range instances {
+		if inst.MatchesID(sessionID) {
 			if !inst.Started() && inst.Status != session.Paused {
 				if startErr := inst.Start(false); startErr != nil {
-					return nil, nil, 0, errResult(ErrInternalError,
+					return nil, errResult(ErrInternalError,
 						fmt.Sprintf("hydrate session %q: %v", sessionID, startErr), "")
 				}
 			}
-			return inst, instances, i, nil
+			return inst, nil
 		}
 	}
 
-	return nil, nil, 0, errResult(ErrSessionNotFound, fmt.Sprintf("session %q not found", sessionID),
+	return nil, errResult(ErrSessionNotFound, fmt.Sprintf("session %q not found", sessionID),
 		"Use list_sessions or search_sessions to find valid session IDs.")
 }

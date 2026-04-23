@@ -5,20 +5,29 @@ package session
 //
 // State machine diagram:
 //
-//	Creating  --> Running, Stopped
-//	Ready     --> Running, Stopped
-//	Running   --> Paused, NeedsApproval, Stopped
-//	Paused    --> Running, Stopped
+//	Creating      --> Running, Stopped
+//	Ready         --> Running, Paused, Stopped
+//	Running       --> Ready, Paused, NeedsApproval, Stopped
+//	Paused        --> Running, Stopped
 //	NeedsApproval --> Running, Paused, Stopped
-//	Loading   --> Running, Stopped
-//	Stopped   --> (terminal state, no outgoing transitions)
+//	Loading       --> Running, Paused, Stopped
+//	Stopped       --> (terminal state, no outgoing transitions)
+//
+// Design notes:
+//   - Creating is reserved for future use; new instances currently start at Ready.
+//   - Ready represents both the initial state (before first Start) and the activity
+//     state when Claude is idle / waiting for input.
+//   - Running <-> Ready allows the detection layer to reflect Claude's activity level
+//     without a separate status field.
+//   - Ready → Paused and Loading → Paused are needed so the worktree-deletion recovery
+//     path in FromInstanceData can use transitionTo instead of bypassing the state machine.
 var allowedTransitions = map[Status][]Status{
 	Creating:      {Running, Stopped},
-	Ready:         {Running, Stopped},
-	Running:       {Paused, NeedsApproval, Stopped},
+	Ready:         {Running, Paused, Stopped},
+	Running:       {Ready, Paused, NeedsApproval, Stopped},
 	Paused:        {Running, Stopped},
 	NeedsApproval: {Running, Paused, Stopped},
-	Loading:       {Running, Stopped},
+	Loading:       {Running, Paused, Stopped},
 	Stopped:       {},
 }
 

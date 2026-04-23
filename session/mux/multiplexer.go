@@ -19,6 +19,15 @@ import (
 	"github.com/tstapler/stapler-squad/session/tmux"
 )
 
+// MultiplexerOption is a functional option for configuring a Multiplexer.
+type MultiplexerOption func(*Multiplexer)
+
+// WithPaneExitSubscriber injects a PaneExitSubscriber for test isolation.
+// When set, startSessionMonitor uses the channel-based path instead of polling.
+func WithPaneExitSubscriber(s tmux.PaneExitSubscriber) MultiplexerOption {
+	return func(m *Multiplexer) { m.paneExitSub = s }
+}
+
 // Multiplexer handles PTY multiplexing for external Claude sessions.
 // It creates a tmux session with stapler-squad's naming convention, allowing
 // stapler-squad to discover and control the session (including killing it).
@@ -59,6 +68,10 @@ type Multiplexer struct {
 
 	// Hooks configuration file path (for cleanup)
 	hooksPath string
+
+	// paneExitSub delivers pane-exit notifications via a channel.
+	// nil means fall back to the polling monitorTmuxSessionPolling goroutine.
+	paneExitSub tmux.PaneExitSubscriber
 }
 
 // NewMultiplexer creates a new PTY multiplexer for the given command.
@@ -294,11 +307,11 @@ func (m *Multiplexer) Start() error {
 	}
 
 	// Start goroutines
-	m.wg.Add(4)
+	m.wg.Add(3)
 	go m.acceptClients()
 	go m.forwardPTYOutput()
 	go m.forwardStdinToPTY()
-	go m.monitorTmuxSession()
+	m.startSessionMonitor()
 
 	return nil
 }
@@ -583,9 +596,30 @@ func (m *Multiplexer) forwardStdinToPTY() {
 	}
 }
 
-// monitorTmuxSession monitors the tmux session to detect when the subprocess exits.
+// startSessionMonitor starts the appropriate session monitor.
+// If a PaneExitSubscriber is configured it uses the channel-based path (no polling).
+// Otherwise it falls back to the ticker-based monitorTmuxSessionPolling goroutine.
+func (m *Multiplexer) startSessionMonitor() {
+	if m.paneExitSub != nil {
+		exitCh := m.paneExitSub.SubscribePaneExit(m.ctx, m.tmuxSession)
+		go func() {
+			select {
+			case <-exitCh:
+				m.Shutdown()
+			case <-m.ctx.Done():
+				// context cancelled; registry already cleaned up subscription
+			}
+		}()
+		return
+	}
+	// fallback: existing ticker loop
+	m.wg.Add(1)
+	go m.monitorTmuxSessionPolling()
+}
+
+// monitorTmuxSessionPolling monitors the tmux session to detect when the subprocess exits.
 // When the subprocess completes, it triggers a graceful shutdown of the multiplexer.
-func (m *Multiplexer) monitorTmuxSession() {
+func (m *Multiplexer) monitorTmuxSessionPolling() {
 	defer m.wg.Done()
 
 	// Poll tmux session status every 500ms
@@ -680,6 +714,7 @@ func RunWithName(command string, args []string, sessionName string) (int, error)
 	} else {
 		m = NewMultiplexer(command, args)
 	}
+	m.paneExitSub = tmux.GetServerRegistry("")
 
 	if err := m.Start(); err != nil {
 		return 1, err

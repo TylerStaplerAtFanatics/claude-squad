@@ -5,5 +5,7 @@ import type { Message } from "@bufbuild/protobuf";
 // In @bufbuild/protobuf v2, Message is a plain TypeScript type (not a class),
 // so we use JSON round-trip to strip any non-serializable values.
 export function toPlainObject<T extends Message>(msg: T): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(msg)) as Record<string, unknown>;
+  // BigInt replacer: protobuf v2 represents int64/uint64 as bigint, which JSON.stringify rejects.
+  // Timestamp seconds fit safely in Number (epoch seconds won't exceed 2^53 for millennia).
+  return JSON.parse(JSON.stringify(msg, (_, v) => typeof v === "bigint" ? Number(v) : v)) as Record<string, unknown>;
 }

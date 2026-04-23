@@ -191,6 +191,11 @@ type Instance struct {
 	// settings-file injection is needed.
 	MCPServerURL string `json:"mcp_server_url,omitempty"`
 
+	// LaunchCommand is the full command passed to tmux on session start, including
+	// any injected flags (--resume, --mcp-server, -y, initial prompt). Set once on
+	// first start and updated on restart. Empty for external (mux-discovered) sessions.
+	LaunchCommand string `json:"launch_command,omitempty"`
+
 	// historyDetector is used by tryExtractConversationUUID. When nil the
 	// production inspector is used. Set in tests to inject a fake home dir.
 	historyDetector *HistoryFileDetector
@@ -301,6 +306,8 @@ func (i *Instance) ToInstanceData() InstanceData {
 		ForkedFromID:     i.ForkedFromID,
 		// History file linkage
 		HistoryFilePath: i.HistoryFilePath,
+		// Full launch command for diagnostics
+		LaunchCommand: i.LaunchCommand,
 	}
 
 	// Only include worktree data if gitWorktree is initialized
@@ -432,6 +439,8 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		ForkedFromID:     data.ForkedFromID,
 		// History file linkage
 		HistoryFilePath: data.HistoryFilePath,
+		// Launch command for diagnostics
+		LaunchCommand: data.LaunchCommand,
 	}
 
 	// MIGRATION: Assign UUID to existing sessions that pre-date UUID assignment
@@ -478,20 +487,22 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 	_ = log.GetSessionLoggers
 
 	// Check if the worktree still exists on disk if the instance is not paused.
-	// NOTE: This is a recovery path during deserialization. We bypass the state machine
-	// because the instance may be in any state (e.g., Ready, Loading) from which
-	// Paused is not a valid transition, yet the worktree is physically gone.
 	// No mutex is needed here because the instance is not yet shared.
 	if !instance.Paused() && instance.gitManager.HasWorktree() {
 		worktreePath := instance.gitManager.GetWorktreePath()
 		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-			// Worktree has been deleted, mark instance as paused
+			// Worktree has been deleted — use transitionTo so the state machine is respected.
+			// Ready → Paused and Loading → Paused are explicitly allowed for this case.
 			log.ForSession(instance.Title).Warning("Worktree directory doesn't exist at '%s', marking as paused", worktreePath)
-			instance.setStatus(Paused)
+			if err := instance.transitionTo(Paused); err != nil {
+				// If the transition is somehow invalid (e.g. already Stopped), fall back to setStatus.
+				log.ForSession(instance.Title).Warning("Could not transition to Paused via state machine (%v), using setStatus", err)
+				instance.setStatus(Paused)
+			}
 		}
 	}
 
-	if instance.Paused() {
+	if instance.Paused() || instance.Status == Stopped {
 		instance.started = true
 		// Use configurable prefix or default
 		tmuxPrefix := instance.TmuxPrefix
@@ -785,6 +796,13 @@ func (i *Instance) GetStableID() string {
 	return i.Title
 }
 
+// MatchesID reports whether id refers to this instance.
+// Accepts both the stable UUID and the legacy Title identifier so that all
+// service lookups work correctly regardless of which form the caller has.
+func (i *Instance) MatchesID(id string) bool {
+	return i.Title == id || i.GetStableID() == id
+}
+
 // GetTmuxSessionName returns the sanitized tmux session name for reconciliation.
 // Returns empty string for external or uninitialized sessions.
 func (i *Instance) GetTmuxSessionName() string {
@@ -867,6 +885,7 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	i.tmuxManager.ResetExitOnce()
 	i.tmuxManager.SetOnExitCallback(func(reason string) {
 		log.InfoLog.Printf("Instance '%s': unexpected exit detected via control mode (%s)", i.Title, reason)
+		log.ForSession(i.Title).Info("Session exited unexpectedly (reason: %s)", reason)
 		i.stateMutex.Lock()
 		if i.Status == Running || i.Status == Ready {
 			if err := i.transitionTo(Stopped); err != nil {
@@ -978,6 +997,7 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	i.stateMutex.Unlock()
 	i.started = true
 	i.fireLifecycleEvent(EventStarted, "")
+	log.ForSession(i.Title).Info("Session started (firstTimeSetup: %v)", firstTimeSetup)
 
 	// Start controller for new sessions only; loaded sessions are wired later by server.go.
 	if firstTimeSetup {
@@ -1009,6 +1029,7 @@ func (i *Instance) initTmuxSession() {
 	}
 	commandBuilder := NewClaudeCommandBuilder(i.Program, i.claudeSession)
 	enrichedProgram := commandBuilder.Build()
+	i.LaunchCommand = enrichedProgram
 	log.InfoLog.Printf("Creating tmux session for instance '%s' with program '%s'", i.Title, enrichedProgram)
 
 	tmuxPrefix := i.TmuxPrefix
@@ -1371,6 +1392,7 @@ func (i *Instance) Pause() error {
 		return fmt.Errorf("failed to transition to Paused: %w", err)
 	}
 	i.stateMutex.Unlock()
+	log.ForSession(i.Title).Info("Session paused")
 	_ = clipboard.WriteAll(i.gitManager.GetBranchName())
 	return nil
 }
@@ -1453,6 +1475,7 @@ func (i *Instance) Resume() error {
 		return fmt.Errorf("failed to transition to Running on resume: %w", err)
 	}
 	i.stateMutex.Unlock()
+	log.ForSession(i.Title).Info("Session resumed")
 
 	// Start ClaudeController for idle detection and automation
 	// This is non-critical - we log errors but don't fail the resume
@@ -1574,6 +1597,9 @@ func (i *Instance) Restart(preserveOutput bool) error {
 	if tmuxPrefix == "" {
 		tmuxPrefix = "staplersquad_" // Default fallback
 	}
+
+	// Record the full launch command for diagnostics (MCP injection verification, etc.)
+	i.LaunchCommand = program
 
 	// Use server socket isolation if specified, otherwise use prefix-only isolation
 	if i.TmuxServerSocket != "" {
