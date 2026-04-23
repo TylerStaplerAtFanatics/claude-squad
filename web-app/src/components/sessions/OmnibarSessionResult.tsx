@@ -9,6 +9,7 @@ interface OmnibarSessionResultProps {
   isHighlighted: boolean;
   id: string;
   onClick: (session: Session) => void;
+  onClone?: (session: Session) => void;
 }
 
 function statusDotVariant(
@@ -61,6 +62,7 @@ export function OmnibarSessionResult({
   isHighlighted,
   id,
   onClick,
+  onClone,
 }: OmnibarSessionResultProps) {
   const { session } = result;
   const dotVariant = statusDotVariant(session.status);
@@ -99,6 +101,23 @@ export function OmnibarSessionResult({
           <span className={styles.path}>{shortPath(session.path)}</span>
         )}
       </span>
+
+      {onClone && (
+        <button
+          className={styles.cloneButton}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClone(session);
+          }}
+          aria-label={`Clone session ${session.title}`}
+          tabIndex={isHighlighted ? 0 : -1}
+          title="Clone this session"
+          type="button"
+        >
+          ⊕
+        </button>
+      )}
     </li>
   );
 }
