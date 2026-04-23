@@ -4,7 +4,7 @@
 # Variables
 PROFILE_FLAGS ?=
 PROFILE_PORT ?= 6060
-SERVER_FLAGS ?= --remote-access --tmux-keep-server --profile
+SERVER_FLAGS ?= --remote-access --tmux-keep-server
 ifeq ($(shell uname -s),Darwin)
   export CGO_CFLAGS := -Wno-ignored-qualifiers
 else
