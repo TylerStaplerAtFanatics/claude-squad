@@ -136,8 +136,7 @@ jobs:
             # remaining feature flows
             find tests/e2e/test-results -maxdepth 2 -name "video.webm" 2>/dev/null \
               | grep -v "demo-Demo-Flow" \
-              | grep -iv "\-retry[0-9]" \
-              | head -5
+              | grep -iv "\-retry[0-9]"
           )
           for webm in $WEBMS; do
             dir=$(basename "$(dirname "$webm")")

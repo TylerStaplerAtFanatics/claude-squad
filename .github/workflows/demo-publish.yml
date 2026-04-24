@@ -82,8 +82,7 @@ jobs:
               -maxdepth 1 -name "video.webm" 2>/dev/null | head -1
             find tests/e2e/test-results -maxdepth 2 -name "video.webm" 2>/dev/null \
               | grep -iv "terminal-flickering\|terminal-stress\|stress-test\|-retry[0-9]" \
-              | grep -v "demo-Demo-Flow" \
-              | head -4
+              | grep -v "demo-Demo-Flow"
           )
           for webm in $WEBMS; do
             dir=$(basename "$(dirname "$webm")")
