@@ -2133,6 +2133,7 @@ func (s *SessionService) SearchFiles(
 
 // ─── Prompt History ───────────────────────────────────────────────────────────
 
+// +api: session:list-prompt-history
 // ListPromptHistory returns saved prompt history entries.
 func (s *SessionService) ListPromptHistory(
 	ctx context.Context,
@@ -2155,6 +2156,7 @@ func (s *SessionService) ListPromptHistory(
 	return connect.NewResponse(&sessionv1.ListPromptHistoryResponse{Entries: protos}), nil
 }
 
+// +api: session:delete-prompt-history
 // DeletePromptHistory removes a saved prompt from history.
 func (s *SessionService) DeletePromptHistory(
 	ctx context.Context,
@@ -2171,6 +2173,7 @@ func (s *SessionService) DeletePromptHistory(
 
 // ─── Batch Session Creation ───────────────────────────────────────────────────
 
+// +api: session:batch-create
 // BatchCreateSessions creates multiple sessions with bounded concurrency (max 3) and
 // per-repo serialization to prevent git worktree races.
 func (s *SessionService) BatchCreateSessions(
@@ -2299,6 +2302,7 @@ func (s *SessionService) BatchCreateSessions(
 
 // ─── One-Shot ─────────────────────────────────────────────────────────────────
 
+// +api: session:run-one-shot
 // RunOneShot executes `claude -p <prompt>` in the session's worktree and returns
 // the combined output along with an extracted PR URL and branch divergence status.
 func (s *SessionService) RunOneShot(
@@ -2414,6 +2418,7 @@ func checkBranchDivergence(workDir string) bool {
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
+// +api: project:create
 // CreateProject creates a new project for grouping sessions.
 func (s *SessionService) CreateProject(
 	ctx context.Context,
@@ -2422,6 +2427,7 @@ func (s *SessionService) CreateProject(
 	return s.projectSvc.CreateProject(ctx, req)
 }
 
+// +api: project:list
 // ListProjects returns all projects.
 func (s *SessionService) ListProjects(
 	ctx context.Context,
@@ -2430,6 +2436,7 @@ func (s *SessionService) ListProjects(
 	return s.projectSvc.ListProjects(ctx, req)
 }
 
+// +api: project:update
 // UpdateProject updates an existing project's metadata.
 func (s *SessionService) UpdateProject(
 	ctx context.Context,
@@ -2438,6 +2445,7 @@ func (s *SessionService) UpdateProject(
 	return s.projectSvc.UpdateProject(ctx, req)
 }
 
+// +api: project:delete
 // DeleteProject removes a project (sessions are unassigned, not deleted).
 func (s *SessionService) DeleteProject(
 	ctx context.Context,
@@ -2446,6 +2454,7 @@ func (s *SessionService) DeleteProject(
 	return s.projectSvc.DeleteProject(ctx, req)
 }
 
+// +api: project:assign-sessions
 // AssignSessionsToProject assigns one or more sessions to a project.
 func (s *SessionService) AssignSessionsToProject(
 	ctx context.Context,

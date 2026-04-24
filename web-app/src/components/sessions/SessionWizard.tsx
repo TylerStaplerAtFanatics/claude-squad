@@ -1,4 +1,5 @@
 "use client";
+// +feature: session-create-wizard session-title-autogen session-create-github-url
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";

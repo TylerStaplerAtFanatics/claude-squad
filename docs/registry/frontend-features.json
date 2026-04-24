@@ -61,6 +61,102 @@
       "tested": false,
       "testIds": [],
       "lastModified": "2026-04-18T17:28:17.610Z"
+    },
+    {
+      "id": "session-create-wizard",
+      "type": "frontend",
+      "frontend": {
+        "component": "SessionWizard",
+        "path": "web-app/src/components/sessions/SessionWizard.tsx",
+        "markerLine": 2
+      },
+      "tested": true,
+      "testIds": [
+        "web-app/tests/e2e/session-create-wizard.spec.ts"
+      ],
+      "lastModified": "2026-04-24T00:00:00Z"
+    },
+    {
+      "id": "session-title-autogen",
+      "type": "frontend",
+      "frontend": {
+        "component": "SessionWizard",
+        "path": "web-app/src/components/sessions/SessionWizard.tsx",
+        "markerLine": 2
+      },
+      "tested": true,
+      "testIds": [
+        "web-app/tests/e2e/session-title-autogen.spec.ts"
+      ],
+      "lastModified": "2026-04-24T00:00:00Z"
+    },
+    {
+      "id": "session-create-github-url",
+      "type": "frontend",
+      "frontend": {
+        "component": "SessionWizard",
+        "path": "web-app/src/components/sessions/SessionWizard.tsx",
+        "markerLine": 2
+      },
+      "tested": true,
+      "testIds": [
+        "web-app/tests/e2e/session-create-github-url.spec.ts"
+      ],
+      "lastModified": "2026-04-24T00:00:00Z"
+    },
+    {
+      "id": "session-create-omnibar",
+      "type": "frontend",
+      "frontend": {
+        "component": "Omnibar",
+        "path": "web-app/src/components/sessions/Omnibar.tsx",
+        "markerLine": 2
+      },
+      "tested": true,
+      "testIds": [
+        "web-app/tests/e2e/session-create-omnibar.spec.ts"
+      ],
+      "lastModified": "2026-04-24T00:00:00Z"
+    },
+    {
+      "id": "project-grouping",
+      "type": "frontend",
+      "frontend": {
+        "component": "BulkActions",
+        "path": "web-app/src/components/sessions/BulkActions.tsx",
+        "markerLine": 2
+      },
+      "tested": true,
+      "testIds": [
+        "web-app/tests/e2e/project-grouping.spec.ts"
+      ],
+      "lastModified": "2026-04-24T00:00:00Z"
+    },
+    {
+      "id": "session-bulk-select",
+      "type": "frontend",
+      "frontend": {
+        "component": "BulkActions",
+        "path": "web-app/src/components/sessions/BulkActions.tsx",
+        "markerLine": 2
+      },
+      "tested": true,
+      "testIds": [
+        "web-app/tests/e2e/project-grouping.spec.ts"
+      ],
+      "lastModified": "2026-04-24T00:00:00Z"
+    },
+    {
+      "id": "review-queue-pr-creation",
+      "type": "frontend",
+      "frontend": {
+        "component": "ReviewQueuePanel",
+        "path": "web-app/src/components/sessions/ReviewQueuePanel.tsx",
+        "markerLine": 2
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-24T00:00:00Z"
     }
   ]
 }
