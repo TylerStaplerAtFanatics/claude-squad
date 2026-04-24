@@ -146,6 +146,12 @@ install_macos() {
     mkdir -p "$plist_dir"
     mkdir -p "$log_dir"
 
+    # Build a PATH that always includes both Homebrew prefixes (Apple Silicon +
+    # Intel) so tools like tmux, git, and claude are found regardless of which
+    # prefix is active.  The current shell PATH is appended as a fallback so any
+    # user-specific entries (nvm, rbenv, etc.) are also present.
+    plist_path="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
     cat > "$plist_file" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -179,6 +185,8 @@ install_macos() {
     <dict>
         <key>HOME</key>
         <string>$HOME</string>
+        <key>PATH</key>
+        <string>$plist_path</string>
     </dict>
 
     <key>StandardOutPath</key>
