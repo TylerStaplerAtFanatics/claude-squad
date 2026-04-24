@@ -174,7 +174,7 @@ func init() {
 	// session.DefaultIsExpanded holds the default value on creation for the is_expanded field.
 	session.DefaultIsExpanded = sessionDescIsExpanded.Default.(bool)
 	// sessionDescOneShot is the schema descriptor for one_shot field.
-	sessionDescOneShot := sessionFields[24].Descriptor()
+	sessionDescOneShot := sessionFields[25].Descriptor()
 	// session.DefaultOneShot holds the default value on creation for the one_shot field.
 	session.DefaultOneShot = sessionDescOneShot.Default.(bool)
 	tagFields := schema.Tag{}.Fields()
