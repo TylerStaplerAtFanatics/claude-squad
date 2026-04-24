@@ -3,8 +3,9 @@ name: E2E Feature Video Capture
 # Runs on PRs that touch feature-marked files.
 # Only records feature demo specs (not benchmarks or a11y).
 # Sharded across 2 runners for faster execution.
-# Videos/GIFs are uploaded as unzipped artifacts (upload-artifact@v7, archive:false)
-# so reviewers can view them directly in the browser without downloading a ZIP.
+# GIFs are bundled into a single self-contained HTML preview page (archive:false)
+# so reviewers can view demos directly in the browser without downloading a ZIP.
+# Raw WebM recordings are uploaded as a ZIP for debugging.
 
 on:
   pull_request:
@@ -73,12 +74,6 @@ jobs:
 
       - name: Generate protos and build web UI
         uses: ./.github/actions/prepare
-
-      - name: Download generated files
-        uses: actions/download-artifact@v8
-        with:
-          name: generated-files
-        continue-on-error: true
 
       - name: Build binary
         run: go build -o stapler-squad .
@@ -172,13 +167,54 @@ jobs:
             echo "::warning::No GIFs produced in shard ${{ matrix.shard }} — WebM artifacts still available"
           fi
 
-      - name: Upload GIFs (shard ${{ matrix.shard }})
-        id: upload-gifs
+      - name: Bundle GIFs into HTML preview (shard ${{ matrix.shard }})
+        id: bundle-preview
         if: steps.convert-gifs.outputs.names != ''
+        run: |
+          PREVIEW="/tmp/demo-preview-shard${{ matrix.shard }}.html"
+          cat > "$PREVIEW" << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>E2E Feature Demos</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                   max-width: 1100px; margin: 0 auto; padding: 24px;
+                   background: #0d1117; color: #e6edf3; }
+            h1   { color: #58a6ff; margin-bottom: 4px; }
+            p.sub { color: #8b949e; margin-top: 0; font-size: .9em; }
+            .demo { margin: 32px 0; }
+            .demo h2 { color: #79c0ff; font-size: 1em; margin-bottom: 8px; }
+            img  { width: 100%; border-radius: 6px; border: 1px solid #30363d; }
+          </style>
+          </head>
+          <body>
+          <h1>🎬 E2E Feature Demos</h1>
+          <p class="sub">Shard ${{ matrix.shard }}/2 — auto-generated from CI run</p>
+          HTMLEOF
+
+          for gif in /tmp/demo-gifs/*.gif; do
+            [ -f "$gif" ] || continue
+            name=$(basename "$gif" .gif)
+            b64=$(base64 -w0 < "$gif")
+            printf '<div class="demo"><h2>%s</h2><img src="data:image/gif;base64,%s" alt="%s"></div>\n' \
+              "$name" "$b64" "$name" >> "$PREVIEW"
+          done
+
+          echo "</body></html>" >> "$PREVIEW"
+          SIZE=$(du -h "$PREVIEW" | cut -f1)
+          echo "Created $PREVIEW ($SIZE)"
+          echo "preview_path=$PREVIEW" >> $GITHUB_OUTPUT
+
+      - name: Upload GIF preview (shard ${{ matrix.shard }})
+        id: upload-gifs
+        if: steps.bundle-preview.outputs.preview_path != ''
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-gifs-pr${{ github.event.number }}-shard${{ matrix.shard }}
-          path: /tmp/demo-gifs/
+          name: e2e-preview-pr${{ github.event.number }}-shard${{ matrix.shard }}
+          path: ${{ steps.bundle-preview.outputs.preview_path }}
           retention-days: 30
           archive: false
         continue-on-error: true
@@ -191,7 +227,6 @@ jobs:
           name: e2e-videos-pr${{ github.event.number }}-shard${{ matrix.shard }}
           path: tests/e2e/test-results/
           retention-days: 30
-          archive: false
         continue-on-error: true
 
   notify:
@@ -217,7 +252,7 @@ jobs:
             });
 
             const gifArtifacts = artifacts
-              .filter(a => a.name.startsWith(`e2e-gifs-pr${pr}-shard`))
+              .filter(a => a.name.startsWith(`e2e-preview-pr${pr}-shard`))
               .sort((a, b) => a.name.localeCompare(b.name));
 
             const videoArtifacts = artifacts
@@ -228,7 +263,7 @@ jobs:
               const gifArtifact = gifArtifacts[i];
               const shard = i + 1;
               const parts = [];
-              if (gifArtifact) parts.push(`[GIFs shard ${shard}](${gifArtifact.url})`);
+              if (gifArtifact) parts.push(`[▶ Demo preview shard ${shard}](${gifArtifact.url})`);
               parts.push(`[recordings shard ${shard}](${a.url})`);
               return parts.join(' · ');
             });
@@ -250,7 +285,7 @@ jobs:
                 '',
                 ...shardLinks,
                 '',
-                '_Opens in browser without downloading (unzipped artifacts). Expires after 30 days._',
+                '_Demo preview opens directly in browser (single-file HTML). Raw WebM recordings in ZIP. Expires after 30 days._',
               ];
             }
 

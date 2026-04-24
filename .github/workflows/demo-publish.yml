@@ -33,12 +33,6 @@ jobs:
       - name: Generate protos and build web UI
         uses: ./.github/actions/prepare
 
-      - name: Download generated files
-        uses: actions/download-artifact@v8
-        with:
-          name: generated-files
-        continue-on-error: true
-
       - name: Build binary
         run: go build -o stapler-squad .
 
