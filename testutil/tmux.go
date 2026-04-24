@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -164,6 +165,7 @@ type TmuxTestServer struct {
 	socketName string
 	executor   executor.Executor
 	t          *testing.T
+	mu         sync.Mutex // serializes tmux new-session calls; the socket doesn't tolerate concurrent creates
 }
 
 // CreateIsolatedTmuxServer creates a new isolated tmux server for testing.
@@ -209,9 +211,14 @@ func (s *TmuxTestServer) GetSocketName() string {
 	return s.socketName
 }
 
-// CreateSession creates and starts a new tmux session on this isolated server
+// CreateSession creates and starts a new tmux session on this isolated server.
+// Session creation is serialized: the tmux socket does not handle concurrent
+// new-session invocations reliably, so concurrent callers queue here.
 func (s *TmuxTestServer) CreateSession(sessionName string, command string) (*tmux.TmuxSession, error) {
 	s.t.Helper()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	// Use tmux dependency injection to create session on isolated server
 	// Use a test-specific prefix to avoid conflicts with production sessions

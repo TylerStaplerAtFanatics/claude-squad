@@ -32,7 +32,7 @@ import * as fs from 'fs';
  *   08 - Final hero            back to sessions dashboard
  */
 
-const BASE_URL = process.env.TEST_SERVER_URL || 'http://localhost:8544';
+const BASE_URL = process.env.TEST_SERVER_URL || 'http://localhost:8543';
 const SNAP_DIR = process.env.PLAYWRIGHT_VIDEO_OUTPUT_DIR || '/tmp/demo-video-output';
 
 function snap(page: import('@playwright/test').Page, name: string) {
@@ -103,10 +103,10 @@ async function humanType(
   charDelayMs = 110,
 ) {
   await locator.click();
-  for (const char of text) {
-    await locator.press(char);
-    await locator.page().waitForTimeout(charDelayMs);
-  }
+  // pressSequentially types one character at a time with built-in delay,
+  // avoiding the stale-locator timeout that locator.press(char) hits when
+  // the form re-renders after focus.
+  await locator.pressSequentially(text, { delay: charDelayMs });
 }
 
 /**
@@ -194,7 +194,7 @@ async function injectClickHighlighter(page: import('@playwright/test').Page) {
   });
 }
 
-test('Demo Flow', async ({ page }) => {
+test('Demo Flow', { timeout: 120_000 }, async ({ page }) => {
 
   // Inject cursor + click-ripple visualiser before first navigation.
   await injectClickHighlighter(page);
