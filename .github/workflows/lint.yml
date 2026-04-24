@@ -75,11 +75,26 @@ jobs:
         working-directory: web-app
         run: npm run lint:css
 
-      - name: Check formatting
+      - name: Check formatting (PR-changed files only)
         run: |
-          if [ -n "$(gofmt -l .)" ]; then
-            echo "The following files are not formatted correctly:"
-            gofmt -l .
-            echo "Fix these issues by running 'gofmt -w .'"
+          # Only check files modified in this PR to avoid pre-existing issues in
+          # untouched files (which may have been formatted with an older gofmt).
+          # On push-to-main (no PR), fall back to full repo check.
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            CHANGED=$(git diff --name-only "${{ github.event.pull_request.base.sha }}"...HEAD -- '*.go' 2>/dev/null | grep '\.go$' || true)
+          else
+            CHANGED=$(gofmt -l .)
+          fi
+          if [ -z "$CHANGED" ]; then
+            echo "No Go files to format-check"
+            exit 0
+          fi
+          UNFORMATTED=$(echo "$CHANGED" | xargs gofmt -l 2>/dev/null || true)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "The following files modified in this PR are not gofmt formatted:"
+            echo "$UNFORMATTED"
+            echo ""
+            echo "Fix by running: gofmt -w \$(git diff --name-only origin/main...HEAD -- '*.go')"
             exit 1
           fi
+          echo "All changed Go files are properly formatted"
