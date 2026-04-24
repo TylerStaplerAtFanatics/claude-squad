@@ -164,9 +164,8 @@ install_macos() {
     <key>ProgramArguments</key>
     <array>
         <string>/bin/zsh</string>
-        <string>-l</string>
         <string>-c</string>
-        <string>exec $bin_path --remote-access</string>
+        <string>[ -f "$HOME/.zshrc" ] &amp;&amp; source "$HOME/.zshrc" 2&gt;/dev/null; exec $bin_path --remote-access</string>
     </array>
 
     <key>RunAtLoad</key>
