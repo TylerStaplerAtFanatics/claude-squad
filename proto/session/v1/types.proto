@@ -147,6 +147,10 @@ message Session {
 
   // Initial prompt that was injected into CLAUDE.md at session creation.
   string initial_prompt = 44;
+
+  // Full launch command as passed to tmux on session start, including injected flags
+  // (e.g. --resume <id>, --mcp-server ..., -y, initial prompt). Empty for external sessions.
+  string launch_command = 45;
 }
 
 // SessionStatus represents the current state of a session.
@@ -163,6 +167,10 @@ enum SessionStatus {
   SESSION_STATUS_PAUSED = 4;
   // Session needs user approval on a prompt.
   SESSION_STATUS_NEEDS_APPROVAL = 5;
+  // Session is being initialized (transient state before first start).
+  SESSION_STATUS_CREATING = 6;
+  // Session has been stopped (terminal state, cannot transition further).
+  SESSION_STATUS_STOPPED = 7;
 }
 
 // SessionType determines the session workflow.

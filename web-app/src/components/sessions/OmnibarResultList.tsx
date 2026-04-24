@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import { Session } from "@/gen/session/v1/types_pb";
 import type { SessionSearchResult } from "@/lib/hooks/useSessionSearch";
 import type { PathHistoryEntry } from "@/lib/hooks/usePathHistory";
@@ -14,6 +15,7 @@ interface OmnibarResultListProps {
   onSessionSelect: (session: Session) => void;
   onRepoSelect: (path: string) => void;
   onCreateNew: () => void;
+  onCloneSession?: (session: Session) => void;
   highlightedIndex: number; // controlled from parent (Omnibar)
   id: string; // listbox id, parent input aria-controls this
 }
@@ -60,14 +62,24 @@ export function OmnibarResultList({
   onSessionSelect,
   onRepoSelect,
   onCreateNew,
+  onCloneSession,
   highlightedIndex,
   id,
 }: OmnibarResultListProps) {
   const createNewIndex = sessionResults.length + repoEntries.length;
   const isCreateNewHighlighted = highlightedIndex === createNewIndex;
+  const listRef = useRef<HTMLUListElement>(null);
+
+  useEffect(() => {
+    if (highlightedIndex < 0 || !listRef.current) return;
+    const highlightedId = getHighlightedItemId(id, sessionResults, repoEntries, highlightedIndex);
+    if (!highlightedId) return;
+    const el = listRef.current.querySelector(`#${CSS.escape(highlightedId)}`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [highlightedIndex, id, sessionResults, repoEntries]);
 
   return (
-    <ul role="listbox" id={id} aria-label="Session search results" className={styles.list}>
+    <ul ref={listRef} role="listbox" id={id} aria-label="Session search results" className={styles.list}>
       {sessionResults.length > 0 && (
         <>
           <li role="presentation" aria-hidden="true" className={styles.sectionHeader}>
@@ -80,6 +92,7 @@ export function OmnibarResultList({
               isHighlighted={highlightedIndex === i}
               id={`${id}-session-${result.session.id}`}
               onClick={onSessionSelect}
+              onClone={onCloneSession}
             />
           ))}
         </>

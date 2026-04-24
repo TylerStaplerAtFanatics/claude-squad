@@ -2,11 +2,25 @@
 
 ## Priority Summary
 
-**P1** - Claude Config Editor Phase 3 (Web UI) - ✅ COMPLETE
-**P2** - Test Stabilization - Deferred until major features complete
+**P0** - Backend Architecture Story 6 (Task 6.1): ReviewQueuePoller maps keyed by Title not UUID — silent cache corruption on rename
+**P1** - BUG-013: xterm.js viewport jump on Claude repaints (High, 2-3h fix, confirmed root cause)
+**P1** - Backend Architecture Story 6 (Tasks 6.2, 6.3): InstanceReader interface injection + domain error types
+**P2** - Backend Architecture Stories 1-5 (InstanceStore abstraction leak, BuildRuntimeDeps, Repository split, GitHubPRStatus, mega-functions)
+**P2** - Backend Architecture Story 7: ReviewQueuePoller decomposition (TerminalContentCache, TmuxReconciler, LastActivity authority)
+**P2** - Backend Architecture Story 8: Transport-agnostic TerminalSession interface (replace SessionStreamer; EnsureConnectable; eliminate 42 tmux leakage points from server layer)
+**P3** - BUG-010: tmux prompt detection (High, needs investigation) / BUG-012: testutil failures (Medium)
 
-**Recent Completion**: Test Stabilization Bug Fixes (2025-12-05) - Fixed 4 category rendering bugs
-**Bug Status**: 7 bugs fixed (BUG-001 through BUG-007), 5 bugs open requiring investigation (BUG-008 through BUG-012)
+**Recent Completions (2026-04-22)**:
+- UUID persistence fix (session not found after restart — uuid field added to ent schema)
+- CreateSession clobbering live instances fix (LoadInstances hidden side effect isolated)
+
+**Recent Completions (2026-04-20)**:
+- Tmux Session Registry (T1-T6 all merged) — fork throttling eliminated
+- System Service Autostart (Stories 1-4 complete) — systemd + LaunchAgent + ssq-hooks
+- Session zombie/race-condition hardening (fix(session): 8fdb63d, a4fc2e6)
+- Full launch command tracking per session (feat: 3f20d89)
+
+**Bug Status**: Fixed: BUG-001..003, BUG-009 | Open-High: BUG-010, BUG-013 | Open-Medium: BUG-012 | Open-Low (review-queue gaps): GAP-001..004
 
 ---
 
@@ -110,50 +124,57 @@
 
 ---
 
-## Bug Tracking: Backend and Web UI (2026-03-20)
+## Bug Tracking (updated 2026-04-20)
 
-**Status**: 3 bugs fixed, 4 additional bugs require investigation
-**Total Effort**: 3 bugs fixed (BUG-001 through BUG-003)
+**Status**: 5 bugs fixed; 2 open-high, 1 open-medium, 4 open-low gaps
 
-### ✅ Fixed Bugs (BUG-001 through BUG-003)
+### Fixed Bugs
 
-**BUG-001** [HIGH]: LastAcknowledged Field Not Persisted ✅ FIXED
-- **Investigation Date**: 2025-11-30
-- **Result**: Field IS properly persisted, comprehensive tests passing
+**BUG-001** [HIGH]: LastAcknowledged Field Not Persisted — FIXED
+**BUG-002** [MEDIUM]: LastMeaningfulOutput Timestamp Reset — FIXED
+**BUG-003** [LOW]: Large State File Size (34MB JSON) — FIXED (42x reduction)
+**BUG-009** [HIGH]: Session Package Test Failures — FIXED
+**Review Queue BUG-001/002/003** [HIGH/MEDIUM/MEDIUM]: Duplicate notifications, session ID inconsistency, dedup — FIXED (2026-03-30)
 
-**BUG-002** [MEDIUM]: LastMeaningfulOutput Timestamp Reset ✅ FIXED
-- **Investigation Date**: 2025-11-30
-- **Result**: Signature-based change detection working correctly
+### Open Bugs — High Severity
 
-**BUG-003** [LOW]: Large State File Size (34MB JSON) ✅ FIXED (2025-12-01)
-- **Fix Date**: 2025-12-01
-- **Result**: 34 MB → ~800 KB (42x reduction) via diff content exclusion
+**BUG-013** [HIGH]: xterm.js Viewport Jumps to Top During Claude Rendering — Open
+- **Discovered**: 2026-04-09
+- **Impact**: Terminal in web UI jumps to top on every Claude repaint (ED3 sequence resets viewportY)
+- **Root Cause**: Confirmed — Claude emits `\x1b[2J\x1b[3J`; xterm.js ED3 resets viewportY=0
+- **Fix**: Strip ED3 when paired with ED2 in `DeltaApplicator.ts` and `XtermTerminal.tsx` write paths
+- **Effort**: 2h | **Files**: 2 (`DeltaApplicator.ts`, `XtermTerminal.tsx`)
+- **See**: [docs/bugs/open/BUG-013-xterm-viewport-corruption-from-ed3-sequence.md](docs/bugs/open/BUG-013-xterm-viewport-corruption-from-ed3-sequence.md)
 
-### 🟡 Open Bugs (Require Investigation)
+**BUG-010** [HIGH]: tmux Banner and Prompt Detection Failures — Investigating
+- **Impact**: Session startup detection unreliable; tests timeout waiting for prompt
+- **Root Cause**: Shell banners, ANSI escape codes, and timing races in prompt detection
+- **Effort**: 4-5h investigation + fix
+- **See**: [docs/bugs/open/BUG-010-tmux-banner-prompt-detection.md](docs/bugs/open/BUG-010-tmux-banner-prompt-detection.md)
 
-**BUG-009** [HIGH]: Session Package Test Failures ✅ FIXED
-- **Impact**: Core session management tests were failing, resolved
-- **Result**: Tests now pass.
-- **Priority**: P1 - Critical for core domain integrity
+### Open Bugs — Medium Severity
 
-**BUG-010** [HIGH]: tmux Banner and Prompt Detection Failures 🔍 Investigating
-- **Impact**: Session startup detection broken, tests timeout waiting for prompts
-- **Root Cause**: Shell banners interfere with prompt detection, timing issues
-- **Investigation Needed**: 4-5 hours (capture output, test shells, fix detection)
-- **Priority**: P1 - Blocks reliable session automation
+**BUG-012** [MEDIUM]: Testutil Package Failures — Investigating
+- **Impact**: Test infrastructure broken, blocks new test development
+- **Root Cause**: Outdated mocks or stale fixtures (TBD — requires go test ./testutil -v)
+- **Effort**: 4-6h investigation + fix
+- **See**: [docs/bugs/open/BUG-012-testutil-package-failures.md](docs/bugs/open/BUG-012-testutil-package-failures.md)
 
-**BUG-012** [MEDIUM]: Testutil Package Failures 🔍 Investigating
-- **Impact**: Test infrastructure broken, blocks test development
-- **Root Cause**: Outdated mocks, stale fixtures, helper function changes (TBD)
-- **Investigation Needed**: 4-6 hours (identify broken utilities, update mocks/fixtures)
-- **Priority**: P2 - Affects all test development
+### Open Gaps — Low Severity (Review Queue)
+
+- **GAP-001**: Approval timeout UX degrades silently — no proactive notification on timeout
+- **GAP-002**: No risk-weighted sorting within APPROVAL_PENDING tier (Won't Fix / MVP)
+- **GAP-003**: WebSocket reconnect falls back to 30s poll (no exponential backoff)
+- **GAP-004**: Multi-approval session shows only first approval in queue
+- **See**: [docs/bugs/open/review-queue-gaps.md](docs/bugs/open/review-queue-gaps.md)
 
 ### Bug Summary Statistics
 
-**Total Bugs Tracked**: 6
-**Fixed**: 3 (BUG-001, BUG-002, BUG-003)
-**Open - High**: 2 (BUG-009, BUG-010)
+**Total Tracked**: 13 (including review-queue gaps)
+**Fixed**: 7 (BUG-001, BUG-002, BUG-003, BUG-009, RQ-BUG-001, RQ-BUG-002, RQ-BUG-003)
+**Open - High**: 2 (BUG-010, BUG-013)
 **Open - Medium**: 1 (BUG-012)
+**Open - Low**: 4 (GAP-001..004)
 
 
 ### Bug Documentation Structure
@@ -197,6 +218,51 @@ Tests hang in `config.GetClaudeCommand()` which executes shell commands during s
 - [ ] Integrate teatest framework for TUI testing
 
 **See**: [Test Stabilization Epic](docs/tasks/test-stabilization-and-teatest-integration.md)
+
+---
+
+## COMPLETE: Tmux Session Registry (2026-04-20)
+
+**Status**: T1-T6 all merged — fork throttling eliminated
+**Epic**: Replace fork-heavy polling with push-based tmux control-mode event stream
+**Commits**: 5e474b0 (T1) → 2bc47ac (T2) → 2b8919f (T3) → 017f0b1 (T4) → e987331 (T5) → ca78293 (T6)
+
+**Result**: ~40 forks/sec → near-zero for session-status checks. cgroup throttle counter should no longer climb.
+
+**Remaining**: One release cycle in production to confirm; remove polling fallbacks in follow-up PR.
+
+**See**: [docs/tasks/tmux-session-registry.md](docs/tasks/tmux-session-registry.md)
+
+---
+
+## COMPLETE: System Service Autostart (2026-04-20)
+
+**Status**: Stories 1-4 complete (shell script, uninstall, Makefile, ssq-hooks subcommand)
+**Epic**: Install stapler-squad as systemd user service (Linux) or LaunchAgent (macOS) with `make install-service`
+
+**Delivered**:
+- `scripts/install-service.sh` — OS detection, binary resolution, idempotent install/uninstall
+- `make install-service` / `make uninstall-service` Makefile targets
+- `ssq-hooks install service [--uninstall]` Go subcommand
+
+**See**: [docs/tasks/system-service-autostart.md](docs/tasks/system-service-autostart.md)
+
+---
+
+## IN PROGRESS: Backend Architecture Improvements (2026-04-20)
+
+**Status**: Not started — plan drafted from architecture review (score 7.5/10)
+**Priority**: P1 for Stories 1-2 (structural risk compounds with new features)
+
+| Story | Problem | Priority | Effort |
+|---|---|---|---|
+| 1 | Fix InstanceStore abstraction leak (type assertion in NewSessionService) | P1 | 3-4h |
+| 2 | Refactor BuildRuntimeDeps (ordering bugs, 12-step monolith) | P1 | 3-4h |
+| 3 | Split Repository interface (21-method monolith) | P2 | 2-3h |
+| 4 | Extract GitHubPRStatus value object | P2 | 2-3h |
+| 5 | Split mega-functions (StreamTerminal 294 lines, CreateSession 165 lines) | P2 | 3-4h |
+
+**See**: [docs/tasks/backend-architecture-improvements.md](docs/tasks/backend-architecture-improvements.md)
 
 ---
 

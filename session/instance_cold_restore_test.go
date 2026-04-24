@@ -56,7 +56,7 @@ func TestColdRestore_WithUUID(t *testing.T) {
 	// appended by ClaudeCommandBuilder for Program="claude"; that is unit-tested
 	// separately in claude_command_builder_test.go.
 	inst.SetClaudeSession(&ClaudeSessionData{
-		SessionID:    "550e8400-e29b-41d4-a716-446655440000",
+		ConversationUUID: "550e8400-e29b-41d4-a716-446655440000",
 		LastAttached: time.Now(),
 	})
 

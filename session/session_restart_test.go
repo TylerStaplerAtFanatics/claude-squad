@@ -41,8 +41,8 @@ func testRestartWithValidClaudeSession(t *testing.T) {
 
 	// Set Claude session data with valid UUID
 	instance.SetClaudeSession(&ClaudeSessionData{
-		SessionID:      validSessionID,
-		ConversationID: "conv-123",
+		ConversationUUID: validSessionID,
+		SquadSessionID:   "conv-123",
 		ProjectName:    "test-project",
 		LastAttached:   time.Now(),
 		Settings: ClaudeSettings{
@@ -141,8 +141,8 @@ func testRestartWithInvalidUUID(t *testing.T) {
 
 	// Set Claude session data with INVALID UUID
 	instance.SetClaudeSession(&ClaudeSessionData{
-		SessionID:      invalidSessionID,
-		ConversationID: "conv-123",
+		ConversationUUID: invalidSessionID,
+		SquadSessionID:   "conv-123",
 		ProjectName:    "test-project",
 		LastAttached:   time.Now(),
 	})
@@ -183,8 +183,8 @@ func testRestartNonClaudeProgram(t *testing.T) {
 
 	// Set Claude session data (should be ignored for non-Claude programs)
 	instance.SetClaudeSession(&ClaudeSessionData{
-		SessionID:      validSessionID,
-		ConversationID: "conv-123",
+		ConversationUUID: validSessionID,
+		SquadSessionID:   "conv-123",
 		ProjectName:    "test-project",
 		LastAttached:   time.Now(),
 	})
@@ -225,8 +225,8 @@ func testHealthCheckerAutoRestart(t *testing.T) {
 
 	// Set Claude session data
 	instance.SetClaudeSession(&ClaudeSessionData{
-		SessionID:      validSessionID,
-		ConversationID: "conv-456",
+		ConversationUUID: validSessionID,
+		SquadSessionID:   "conv-456",
 		ProjectName:    "health-check-project",
 		LastAttached:   time.Now(),
 	})
@@ -284,8 +284,8 @@ func testLazyRecoveryRestart(t *testing.T) {
 
 	// Set Claude session data
 	instance.SetClaudeSession(&ClaudeSessionData{
-		SessionID:      validSessionID,
-		ConversationID: "conv-789",
+		ConversationUUID: validSessionID,
+		SquadSessionID:   "conv-789",
 		ProjectName:    "lazy-recovery-project",
 		LastAttached:   time.Now(),
 	})
@@ -399,8 +399,8 @@ func testCommandEnrichmentFlow(t *testing.T) {
 			// Set session data if provided
 			if tc.sessionID != "" {
 				instance.SetClaudeSession(&ClaudeSessionData{
-					SessionID:      tc.sessionID,
-					ConversationID: "conv-test",
+					ConversationUUID: tc.sessionID,
+					SquadSessionID:   "conv-test",
 					ProjectName:    "test-project",
 					LastAttached:   time.Now(),
 				})
@@ -447,8 +447,8 @@ func testMultipleRestartCycles(t *testing.T) {
 
 	// Set Claude session data
 	instance.SetClaudeSession(&ClaudeSessionData{
-		SessionID:      validSessionID,
-		ConversationID: "conv-multi",
+		ConversationUUID: validSessionID,
+		SquadSessionID:   "conv-multi",
 		ProjectName:    "multi-restart-project",
 		LastAttached:   time.Now(),
 	})
@@ -509,8 +509,8 @@ func testSessionDataPersistence(t *testing.T) {
 
 	// Set Claude session data
 	originalSession := &ClaudeSessionData{
-		SessionID:      validSessionID,
-		ConversationID: "conv-persist",
+		ConversationUUID: validSessionID,
+		SquadSessionID:   "conv-persist",
 		ProjectName:    "persistence-project",
 		LastAttached:   time.Now(),
 		Settings: ClaudeSettings{
@@ -539,8 +539,8 @@ func testSessionDataPersistence(t *testing.T) {
 	// Verify session data is still present
 	retrievedSession := instance.GetClaudeSession()
 	require.NotNil(t, retrievedSession, "Claude session data should be present")
-	assert.Equal(t, originalSession.SessionID, retrievedSession.SessionID)
-	assert.Equal(t, originalSession.ConversationID, retrievedSession.ConversationID)
+	assert.Equal(t, originalSession.ConversationUUID, retrievedSession.ConversationUUID)
+	assert.Equal(t, originalSession.SquadSessionID, retrievedSession.SquadSessionID)
 	assert.Equal(t, originalSession.ProjectName, retrievedSession.ProjectName)
 	assert.Equal(t, originalSession.Settings.AutoReattach, retrievedSession.Settings.AutoReattach)
 	assert.Equal(t, originalSession.Metadata["test_key"], retrievedSession.Metadata["test_key"])
@@ -552,13 +552,16 @@ func testSessionDataPersistence(t *testing.T) {
 	err = instance.Start(false)
 	require.NoError(t, err)
 
-	// Verify session data persists across restart
+	// Verify session data persists across restart — but SessionID is cleared
+	// intentionally so HistoryLinker can re-detect the actual UUID from the
+	// running process's open files (Claude may resume the same session or create
+	// a new one if the old UUID is no longer valid).
 	retrievedAfterRestart := instance.GetClaudeSession()
 	require.NotNil(t, retrievedAfterRestart, "Claude session data should persist after restart")
-	assert.Equal(t, validSessionID, retrievedAfterRestart.SessionID)
-	assert.Equal(t, "conv-persist", retrievedAfterRestart.ConversationID)
+	assert.Equal(t, "", retrievedAfterRestart.ConversationUUID, "ConversationUUID cleared after cold restore; HistoryLinker will re-detect")
+	assert.Equal(t, "conv-persist", retrievedAfterRestart.SquadSessionID)
 
-	t.Logf("✓ Claude session data persisted across restart")
+	t.Logf("✓ Claude session data (minus SessionID) persisted across restart")
 }
 
 // TestInstanceWithWorktreeAndClaudeSession verifies Claude sessions work with git worktrees
@@ -590,8 +593,8 @@ func TestInstanceWithWorktreeAndClaudeSession(t *testing.T) {
 
 	// Set Claude session data
 	instance.SetClaudeSession(&ClaudeSessionData{
-		SessionID:      validSessionID,
-		ConversationID: "conv-worktree",
+		ConversationUUID: validSessionID,
+		SquadSessionID:   "conv-worktree",
 		ProjectName:    "worktree-project",
 		LastAttached:   time.Now(),
 	})
@@ -619,7 +622,7 @@ func TestInstanceWithWorktreeAndClaudeSession(t *testing.T) {
 	// Verify Claude session data is present
 	claudeSession := instance.GetClaudeSession()
 	require.NotNil(t, claudeSession)
-	assert.Equal(t, validSessionID, claudeSession.SessionID)
+	assert.Equal(t, validSessionID, claudeSession.ConversationUUID)
 
 	// Kill and restart with worktree
 	err = instance.KillSession()

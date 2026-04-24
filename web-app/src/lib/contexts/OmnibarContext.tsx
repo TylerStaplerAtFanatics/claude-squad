@@ -16,6 +16,7 @@ const sessionTypeMap: Record<string, SessionType> = {
 interface OmnibarContextValue {
   isOpen: boolean;
   open: () => void;
+  openInCreationMode: () => void;
   close: () => void;
   toggle: () => void;
 }
@@ -36,21 +37,36 @@ interface OmnibarProviderProps {
 
 export function OmnibarProvider({ children }: OmnibarProviderProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [initialMode, setInitialMode] = useState<"discovery" | "creation">("discovery");
   const router = useRouter();
   const { authEnabled, authenticated, loading: authLoading } = useAuth();
   const { createSession } = useSessionService({
     enabled: !authLoading && (!authEnabled || authenticated),
   });
 
-  const open = useCallback(() => setIsOpen(true), []);
+  const open = useCallback(() => {
+    setInitialMode("discovery");
+    setIsOpen(true);
+  }, []);
+  const openInCreationMode = useCallback(() => {
+    setInitialMode("creation");
+    setIsOpen(true);
+  }, []);
   const close = useCallback(() => setIsOpen(false), []);
   const toggle = useCallback(() => setIsOpen((prev) => !prev), []);
 
-  // Global keyboard shortcut: Cmd+K or Ctrl+K
+  // Global keyboard shortcut: Cmd+K or Ctrl+K (discovery), Cmd+Shift+K (creation)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd+K (Mac) or Ctrl+K (Windows/Linux)
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      // Cmd+Shift+K (Mac) or Ctrl+Shift+K — open directly in creation mode
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "K") {
+        e.preventDefault();
+        openInCreationMode();
+        return;
+      }
+
+      // Cmd+K (Mac) or Ctrl+K (Windows/Linux) — discovery mode toggle
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "k") {
         e.preventDefault();
         toggle();
       }
@@ -64,7 +80,7 @@ export function OmnibarProvider({ children }: OmnibarProviderProps) {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [toggle, open]);
+  }, [toggle, open, openInCreationMode]);
 
   const handleNavigateToSession = useCallback(
     (sessionId: string) => {
@@ -103,6 +119,7 @@ export function OmnibarProvider({ children }: OmnibarProviderProps) {
   const value: OmnibarContextValue = {
     isOpen,
     open,
+    openInCreationMode,
     close,
     toggle,
   };
@@ -115,6 +132,7 @@ export function OmnibarProvider({ children }: OmnibarProviderProps) {
         onClose={close}
         onCreateSession={handleCreateSession}
         onNavigateToSession={handleNavigateToSession}
+        initialMode={initialMode}
       />
     </OmnibarContext.Provider>
   );

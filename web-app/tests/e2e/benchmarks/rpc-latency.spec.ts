@@ -81,10 +81,7 @@ test.describe('RPC Latency Benchmark', () => {
 
     // Expect at least enough valid samples after warmup
     const validSamples = totalSamples.length;
-    expect(validSamples).toBeGreaterThanOrEqual(
-      TOTAL_RUNS - WARMUP_RUNS,
-      `Expected at least ${TOTAL_RUNS - WARMUP_RUNS} valid samples, got ${validSamples}`,
-    );
+    expect(validSamples).toBeGreaterThanOrEqual(TOTAL_RUNS - WARMUP_RUNS);
 
     const ttfbStats = computeStats(ttfbSamples, WARMUP_RUNS);
     const totalStats = computeStats(totalSamples, WARMUP_RUNS);

@@ -673,7 +673,7 @@ The web UI provides a visual tag management interface:
 Use the "Group by" dropdown to switch between organizational views:
 - Dropdown selector in the filters section
 - Instant reorganization when strategy changes
-- All 8 grouping strategies available (matching TUI)
+- All 8 grouping strategies available
 - Session counts shown for each group
 
 ### Tag Filtering (Web UI)
@@ -809,7 +809,7 @@ Sessions run in isolated tmux sessions for:
 
 ### State Management
 
-**Application State**: Managed through BubbleTea's state machine with states like `stateDefault`, `stateNew`, `statePrompt`.
+**Application State**: Managed through React state and Redux in the web UI.
 
 **Session State**: Persisted in JSON format with status tracking (Running, Paused, Stopped).
 

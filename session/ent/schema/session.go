@@ -20,6 +20,11 @@ func (Session) Fields() []ent.Field {
 		field.String("title").
 			Unique().
 			NotEmpty(),
+		// uuid is a stable identifier assigned at creation time and persisted across restarts.
+		// Optional with empty-string default so existing rows (which have no uuid) migrate safely.
+		field.String("uuid").
+			Optional().
+			Default(""),
 		field.String("path").
 			NotEmpty(),
 		field.String("working_dir").

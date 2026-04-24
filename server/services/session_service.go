@@ -260,6 +260,17 @@ func (s *SessionService) GetInstanceStore() session.InstanceStore {
 	return s.storage
 }
 
+// FindLiveInstance returns the live in-memory instance held by the ReviewQueuePoller,
+// or nil if the poller is not wired or the session is not found. Use this instead of
+// LoadInstances() for read-only and mutation operations that need the live instance
+// (with its PTY handles and controller state).
+func (s *SessionService) FindLiveInstance(id string) *session.Instance {
+	if s.reviewQueuePoller == nil {
+		return nil
+	}
+	return s.reviewQueuePoller.FindInstance(id)
+}
+
 // GetApprovalStore returns the approval store for wiring up the HTTP hook handler.
 func (s *SessionService) GetApprovalStore() *ApprovalStore {
 	return s.approvalStore
@@ -493,9 +504,9 @@ func (s *SessionService) GetSession(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
 	}
 
-	// Find instance by ID (using Title as ID)
+	// Find instance by ID (UUID or legacy Title).
 	for _, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			return connect.NewResponse(&sessionv1.GetSessionResponse{
 				Session: adapters.InstanceToProto(inst),
 			}), nil
@@ -518,13 +529,15 @@ func (s *SessionService) CreateSession(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
 	}
 
-	// Check if session with this title already exists
-	instances, err := s.storage.LoadInstances()
+	// Check if session with this title already exists.
+	// Use ListInstanceData (raw DB rows) rather than LoadInstances to avoid
+	// the side-effect of FromInstanceData calling Start() on every session.
+	existing, err := s.storage.ListInstanceData()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list instances: %w", err))
 	}
-	for _, inst := range instances {
-		if inst.Title == req.Msg.Title {
+	for _, data := range existing {
+		if data.Title == req.Msg.Title {
 			return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("session with title '%s' already exists", req.Msg.Title))
 		}
 	}
@@ -645,11 +658,11 @@ func (s *SessionService) CreateSession(
 		log.WarningLog.Printf("[CreateSession] Failed to inject hook config for session '%s': %v", instance.Title, err)
 	}
 
-	// Save instance to storage
-	// Note: Storage uses SaveInstances (plural) which saves all instances
-	// We need to load, append, and save all instances
-	updatedInstances := append(instances, instance)
-	if err := s.storage.SaveInstances(updatedInstances); err != nil {
+	// Save only the new instance to storage.
+	// Using AddInstance avoids loading and re-writing all instances (which would call
+	// FromInstanceData/Start on every session and replace live poller instances with
+	// cold storage copies).
+	if err := s.storage.AddInstance(instance); err != nil {
 		// Cleanup on save failure
 		if destroyErr := instance.Destroy(); destroyErr != nil {
 			// Log cleanup error but return original save error
@@ -658,10 +671,11 @@ func (s *SessionService) CreateSession(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save instance: %w", err))
 	}
 
-	// CRITICAL: Update the ReviewQueuePoller's instance references after creating new session
+	// Add only the new session to the poller, preserving all existing live instances.
+	// Using AddInstance (not SetInstances) avoids replacing live instances with cold copies.
 	if s.reviewQueuePoller != nil {
-		s.reviewQueuePoller.SetInstances(updatedInstances)
-		log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after CreateSession for '%s'", instance.Title)
+		s.reviewQueuePoller.AddInstance(instance)
+		log.InfoLog.Printf("[ReviewQueue] Added new session '%s' to poller", instance.Title)
 	}
 
 	// Record initial_prompt in prompt history so it appears in the recent-prompts dropdown.
@@ -695,7 +709,7 @@ func (s *SessionService) UpdateSession(
 	var instance *session.Instance
 	var instanceIndex int
 	for i, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			instance = inst
 			instanceIndex = i
 			break
@@ -753,6 +767,12 @@ func (s *SessionService) UpdateSession(
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart session after program change: %w", err))
 			}
 		}
+	}
+
+	// Handle working directory update
+	if req.Msg.WorkingDir != nil {
+		instance.WorkingDir = *req.Msg.WorkingDir
+		updatedFields = append(updatedFields, "working_dir")
 	}
 
 	// Handle status change (pause/resume) LAST - after all metadata updates.
@@ -821,61 +841,65 @@ func (s *SessionService) DeleteSession(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session id is required"))
 	}
 
-	instances, err := s.storage.LoadInstances()
+	// Verify existence using raw data — no PTY side effects.
+	// Match by Title OR UUID so that sessions created after UUID assignment are found correctly.
+	dataSlice, err := s.storage.ListInstanceData()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list instances: %w", err))
 	}
-
-	// Find the instance to delete
-	var instance *session.Instance
-	for _, inst := range instances {
-		if inst.Title == req.Msg.Id {
-			instance = inst
+	sessionTitle := ""
+	for _, d := range dataSlice {
+		if d.Title == req.Msg.Id || d.UUID == req.Msg.Id {
+			sessionTitle = d.Title
 			break
 		}
 	}
-
-	if instance == nil {
+	if sessionTitle == "" {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.Id))
 	}
 
-	// Destroy the session (cleanup tmux + git worktree)
-	if err := instance.Destroy(); err != nil {
-		// Log error but continue with deletion from storage
-		log.WarningLog.Printf("Failed to cleanup session resources: %v", err)
-	}
+	// Remove from all pollers BEFORE deleting from storage. This is atomic from the
+	// poller's perspective and closes the race window where external discovery could
+	// re-add the session between storage deletion and the old LoadInstances() reload.
+	s.removeFromAllPollers(req.Msg.Id)
 
-	// Delete from storage
-	if err := s.storage.DeleteInstance(req.Msg.Id); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete instance from storage: %w", err))
-	}
-
-	// Remove from review queue immediately
-	if s.reviewQueueSvc != nil {
-		s.reviewQueueSvc.GetQueue().Remove(req.Msg.Id)
-		log.InfoLog.Printf("[ReviewQueue] Removed deleted session '%s' from review queue", req.Msg.Id)
-	}
-
-	// CRITICAL: Update the ReviewQueuePoller's instance references after deletion
-	// The poller still has references to the old instances list which includes the deleted session.
-	// Reload the instances and update the poller to prevent stale references.
-	if s.reviewQueuePoller != nil {
-		updatedInstances, err := s.storage.LoadInstances()
-		if err != nil {
-			log.ErrorLog.Printf("[ReviewQueue] Failed to reload instances after DeleteSession: %v", err)
-		} else {
-			s.reviewQueuePoller.SetInstances(updatedInstances)
-			log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after DeleteSession for '%s'", req.Msg.Id)
+	// Destroy tmux/git resources using the live in-memory instance if available.
+	if inst := s.FindLiveInstance(req.Msg.Id); inst != nil {
+		if err := inst.Destroy(); err != nil {
+			log.WarningLog.Printf("Failed to cleanup session resources for '%s': %v", req.Msg.Id, err)
 		}
 	}
 
-	// Publish SessionDeleted event to all watchers
+	// Delete from storage using Title (the storage key), not the client-supplied ID which may be a UUID.
+	if err := s.storage.DeleteInstance(sessionTitle); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete instance from storage: %w", err))
+	}
+
+	// Publish SessionDeleted event to all watchers.
 	s.eventBus.Publish(events.NewSessionDeletedEvent(req.Msg.Id))
 
 	return connect.NewResponse(&sessionv1.DeleteSessionResponse{
 		Success: true,
 		Message: fmt.Sprintf("Session '%s' deleted successfully", req.Msg.Id),
 	}), nil
+}
+
+// removeFromAllPollers removes the session from the review queue and all pollers.
+// Call this before deleting from storage to close the race window where LoadInstances()
+// could re-add the session via external discovery.
+func (s *SessionService) removeFromAllPollers(id string) {
+	if s.reviewQueueSvc != nil {
+		s.reviewQueueSvc.GetQueue().Remove(id)
+	}
+	if s.reviewQueuePoller != nil {
+		s.reviewQueuePoller.RemoveInstance(id)
+	}
+}
+
+// RemoveFromAllPollers is the exported version for use by MCP tools and other
+// callers outside the services package that need to clean up after deletion.
+func (s *SessionService) RemoveFromAllPollers(id string) {
+	s.removeFromAllPollers(id)
 }
 
 // WatchSessions streams real-time session events (created/updated/deleted).
@@ -990,7 +1014,7 @@ func (s *SessionService) StreamTerminal(
 			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
 		}
 		for _, inst := range instances {
-			if inst.Title == initialMsg.SessionId {
+			if inst.MatchesID(initialMsg.SessionId) {
 				instance = inst
 				break
 			}
@@ -1258,20 +1282,7 @@ func (s *SessionService) GetSessionDiff(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session id is required"))
 	}
 
-	instances, err := s.loadInstancesWithWiring()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
-	}
-
-	// Find instance by ID (using Title as ID)
-	var instance *session.Instance
-	for _, inst := range instances {
-		if inst.Title == req.Msg.Id {
-			instance = inst
-			break
-		}
-	}
-
+	instance := s.findInstance(req.Msg.Id)
 	if instance == nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.Id))
 	}
@@ -1484,7 +1495,7 @@ func (s *SessionService) RenameSession(
 	var instance *session.Instance
 	var instanceIndex int
 	for i, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			instance = inst
 			instanceIndex = i
 			break
@@ -1555,7 +1566,7 @@ func (s *SessionService) RestartSession(
 	var instance *session.Instance
 	var instanceIndex int
 	for i, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			instance = inst
 			instanceIndex = i
 			break
@@ -2030,16 +2041,16 @@ func (s *SessionService) findInstance(id string) *session.Instance {
 	return nil
 }
 
-// allInstances returns all live instances from both the poller and external discovery.
+// allInstances returns all managed (poller-tracked) live instances.
+// External discovery sessions are intentionally excluded: they are persisted via
+// the OnSessionAdded/OnSessionRemoved callbacks in dependencies.go, and including
+// them here would re-persist deleted external sessions during unrelated operations
+// such as CreateCheckpoint or ForkSession.
 func (s *SessionService) allInstances() []*session.Instance {
-	var result []*session.Instance
 	if s.reviewQueuePoller != nil {
-		result = append(result, s.reviewQueuePoller.GetInstances()...)
+		return s.reviewQueuePoller.GetInstances()
 	}
-	if s.externalDiscovery != nil {
-		result = append(result, s.externalDiscovery.GetSessions()...)
-	}
-	return result
+	return nil
 }
 
 // ListFiles returns the immediate children of a directory in a session's worktree.

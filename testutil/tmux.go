@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // TmuxWaiter provides utilities for waiting on tmux operations
@@ -240,9 +241,17 @@ func (s *TmuxTestServer) ListSessions() ([]string, error) {
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
 
-	// Parse session names (one per line)
-	names := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(names) == 1 && names[0] == "" {
+	// Parse session names (one per line), filtering the registry keepalive session
+	// created by TmuxServerRegistry.startControlMode() which should not be visible
+	// to test assertions about isolated server state.
+	keepaliveName := tmux.TmuxPrefix + "keepalive"
+	var names []string
+	for _, name := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if name != "" && name != keepaliveName {
+			names = append(names, name)
+		}
+	}
+	if names == nil {
 		return []string{}, nil
 	}
 	return names, nil
@@ -321,6 +330,15 @@ func (s *TmuxTestServer) KillServer() error {
 // This is automatically called via t.Cleanup() but can also be called manually.
 func (s *TmuxTestServer) Cleanup() {
 	s.t.Helper()
+
+	// Stop the server registry for this socket BEFORE killing the server.
+	// The registry runs a reconnectLoop goroutine that will restart the tmux
+	// server immediately after kill-server unless we cancel its context first.
+	tmux.StopServerRegistry(s.socketName)
+
+	// Give the reconnectLoop goroutine time to observe the cancellation
+	// before we issue kill commands.
+	time.Sleep(50 * time.Millisecond)
 
 	// Try to kill all sessions first (cleaner)
 	if err := s.KillAllSessions(); err != nil {

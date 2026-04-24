@@ -13,9 +13,8 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:    1024,
-	WriteBufferSize:   1024,
-	EnableCompression: true, // negotiate permessage-deflate with supporting clients
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
 		// Allow all origins for development
 		// TODO: Restrict origins in production
@@ -56,7 +55,7 @@ func (h *TerminalWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *htt
 
 	var instance *session.Instance
 	for _, inst := range instances {
-		if inst.Title == sessionID {
+		if inst.MatchesID(sessionID) {
 			instance = inst
 			break
 		}

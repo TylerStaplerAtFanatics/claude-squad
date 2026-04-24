@@ -2,11 +2,194 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// createTestStorage creates a temporary Storage backed by an Ent repository.
+// The caller should defer cleanup().
+func createTestStorage(t *testing.T) (*Storage, func()) {
+	t.Helper()
+	tmpDir, err := os.MkdirTemp("", "storage-test-*")
+	require.NoError(t, err)
+
+	dbPath := filepath.Join(tmpDir, fmt.Sprintf("test-%d.db", time.Now().UnixNano()))
+	repo, err := NewEntRepository(WithDatabasePath(dbPath))
+	require.NoError(t, err)
+
+	storage, err := NewStorageWithRepository(repo)
+	require.NoError(t, err)
+
+	cleanup := func() {
+		repo.Close()
+		os.RemoveAll(tmpDir)
+	}
+	return storage, cleanup
+}
+
+// TestStorage_UUID_PersistedThroughAddAndLoad is the primary regression test for
+// "session not found after restart".  It verifies that a UUID written via
+// AddInstance is returned unchanged by LoadInstances, i.e. it survives the
+// full storage round-trip through the Ent SQLite backend.
+func TestStorage_UUID_PersistedThroughAddAndLoad(t *testing.T) {
+	storage, cleanup := createTestStorage(t)
+	defer cleanup()
+
+	inst := &Instance{
+		Title:     "uuid-roundtrip",
+		UUID:      "my-stable-uuid",
+		Path:      "/tmp/test",
+		Status:    Paused,
+		Program:   "claude",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	// Paused sets started=true internally, which is required for SaveInstances.
+	// We use the same fast-path that FromInstanceData takes.
+	inst.started = true
+
+	require.NoError(t, storage.AddInstance(inst))
+
+	loaded, err := storage.LoadInstances()
+	require.NoError(t, err)
+	require.Len(t, loaded, 1)
+
+	assert.Equal(t, "my-stable-uuid", loaded[0].GetStableID(),
+		"UUID must survive AddInstance → LoadInstances round-trip")
+}
+
+// TestStorage_UUID_StableAcrossMultipleLoads verifies that the UUID returned by
+// LoadInstances is deterministic across repeated calls (no re-generation).
+func TestStorage_UUID_StableAcrossMultipleLoads(t *testing.T) {
+	storage, cleanup := createTestStorage(t)
+	defer cleanup()
+
+	inst := &Instance{
+		Title:     "multi-load",
+		UUID:      "consistent-uuid",
+		Path:      "/tmp/test",
+		Status:    Paused,
+		Program:   "claude",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	inst.started = true
+	require.NoError(t, storage.AddInstance(inst))
+
+	first, err := storage.LoadInstances()
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+
+	second, err := storage.LoadInstances()
+	require.NoError(t, err)
+	require.Len(t, second, 1)
+
+	assert.Equal(t, first[0].GetStableID(), second[0].GetStableID(),
+		"GetStableID must return the same value on repeated LoadInstances calls")
+}
+
+// TestStorage_UUID_MigrationAssignsAndPersists covers the upgrade path for
+// legacy sessions (UUID="" in storage). On the first LoadInstances the
+// migration in FromInstanceData assigns a new UUID.  That UUID is then saved
+// back by the caller (as happens in the startup background goroutine), and
+// the second LoadInstances should return the same UUID.
+func TestStorage_UUID_MigrationAssignsAndPersists(t *testing.T) {
+	storage, cleanup := createTestStorage(t)
+	defer cleanup()
+
+	// Insert a legacy session with no UUID (simulating pre-UUID schema data).
+	inst := &Instance{
+		Title:     "legacy-no-uuid",
+		UUID:      "", // explicitly empty — legacy session
+		Path:      "/tmp/test",
+		Status:    Paused,
+		Program:   "claude",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	inst.started = true
+	require.NoError(t, storage.AddInstance(inst))
+
+	// First load: migration assigns a new UUID.
+	loaded, err := storage.LoadInstances()
+	require.NoError(t, err)
+	require.Len(t, loaded, 1)
+
+	assignedUUID := loaded[0].GetStableID()
+	assert.NotEmpty(t, assignedUUID, "migration must assign a non-empty UUID to legacy sessions")
+
+	// Simulate the startup goroutine persisting the migrated UUID.
+	require.NoError(t, storage.SaveInstances(loaded))
+
+	// Second load (simulated restart): must return the same UUID.
+	reloaded, err := storage.LoadInstances()
+	require.NoError(t, err)
+	require.Len(t, reloaded, 1)
+
+	assert.Equal(t, assignedUUID, reloaded[0].GetStableID(),
+		"migrated UUID must be stable after SaveInstances + second LoadInstances")
+}
+
+// TestReviewQueuePoller_FindInstanceByUUID verifies that FindInstance resolves a
+// session by its UUID (the path used by WebSocket stream reconnections).
+// This is the specific lookup that was failing with "session not found" after restart.
+func TestReviewQueuePoller_FindInstanceByUUID(t *testing.T) {
+	queue := NewReviewQueue()
+	statusMgr := NewInstanceStatusManager()
+	poller := NewReviewQueuePoller(queue, statusMgr, nil)
+
+	inst := &Instance{
+		Title:   "my-session-title",
+		UUID:    "test-uuid-lookup",
+		Status:  Paused,
+		Program: "claude",
+	}
+	inst.started = true
+	poller.SetInstances([]*Instance{inst})
+
+	found := poller.FindInstance("test-uuid-lookup")
+	require.NotNil(t, found, "FindInstance must find session by UUID")
+	assert.Equal(t, "my-session-title", found.Title)
+}
+
+// TestReviewQueuePoller_AddInstanceByUUID verifies that AddInstance (as now used
+// by CreateSession) makes the new session findable by UUID without replacing
+// pre-existing instances.
+func TestReviewQueuePoller_AddInstanceByUUID(t *testing.T) {
+	queue := NewReviewQueue()
+	statusMgr := NewInstanceStatusManager()
+	poller := NewReviewQueuePoller(queue, statusMgr, nil)
+
+	existing := &Instance{
+		Title:   "existing-session",
+		UUID:    "existing-uuid",
+		Status:  Paused,
+		Program: "claude",
+	}
+	existing.started = true
+	poller.SetInstances([]*Instance{existing})
+
+	newcomer := &Instance{
+		Title:   "new-session",
+		UUID:    "new-uuid",
+		Status:  Paused,
+		Program: "claude",
+	}
+	newcomer.started = true
+	poller.AddInstance(newcomer)
+
+	// Both sessions must be findable.
+	assert.NotNil(t, poller.FindInstance("existing-uuid"),
+		"AddInstance must preserve pre-existing instances in the poller")
+	assert.NotNil(t, poller.FindInstance("new-uuid"),
+		"AddInstance must make the new session findable by UUID")
+}
 
 // TestDiffStatsDataSerializationExcludesContent verifies that the Content field
 // is excluded from JSON serialization to reduce state file size.

@@ -24,10 +24,9 @@ import (
 )
 
 var wsUpgrader = websocket.Upgrader{
-	ReadBufferSize:    1024,
-	WriteBufferSize:   1024,
-	EnableCompression: true, // negotiate permessage-deflate with supporting clients
-	CheckOrigin:       isAllowedOrigin,
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin:     isAllowedOrigin,
 }
 
 // isAllowedOrigin allows WebSocket upgrades from localhost and any HTTPS origin.
@@ -220,7 +219,7 @@ func (h *ConnectRPCWebSocketHandler) resolveSession(sessionID string) (*session.
 		// Try to find by session title/ID first
 		sessions := h.externalDiscovery.GetSessions()
 		for _, inst := range sessions {
-			if inst.Title == sessionID || inst.GetStableID() == sessionID {
+			if inst.MatchesID(sessionID) {
 				log.InfoLog.Printf("[resolveSession] Found external session '%s' via ExternalDiscovery", sessionID)
 				return inst, true // External session
 			}
@@ -446,22 +445,22 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 	// *tmux.TmuxSession type. *Instance satisfies this interface via delegation methods.
 	var streamer SessionStreamer = instance
 
-	if err := streamer.StartControlMode(); err != nil {
-		// If the tmux session no longer exists (e.g. process exited, server recovered),
-		// restore it before giving up so the user gets a live terminal on reconnect.
-		tmuxSession := instance.GetTmuxSession()
-		if tmuxSession != nil && !tmuxSession.DoesSessionExist() {
-			log.InfoLog.Printf("[streamViaControlMode] Session '%s' not in tmux, restoring before control mode", sessionID)
-			workDir := instance.GetWorkingDirectory()
-			if restoreErr := tmuxSession.RestoreWithWorkDir(workDir); restoreErr != nil {
-				return fmt.Errorf("tmux session missing and restore failed: %w", restoreErr)
-			}
-			if err := streamer.StartControlMode(); err != nil {
-				return fmt.Errorf("failed to start control mode after restore: %w", err)
-			}
-		} else {
-			return fmt.Errorf("failed to start control mode: %w", err)
+	// Check if the tmux session exists BEFORE starting control mode.
+	// StartControlMode() only returns an error if the process fails to launch — it does
+	// NOT return an error when tmux can't find the session, because that error arrives
+	// asynchronously via the output reader goroutine. We must check existence first so
+	// the restore path actually runs.
+	tmuxSession := instance.GetTmuxSession()
+	if tmuxSession != nil && !tmuxSession.DoesSessionExist() {
+		log.InfoLog.Printf("[streamViaControlMode] Session '%s' not in tmux, restoring before control mode", sessionID)
+		workDir := instance.GetWorkingDirectory()
+		if restoreErr := tmuxSession.RestoreWithWorkDir(workDir); restoreErr != nil {
+			return fmt.Errorf("tmux session missing and restore failed: %w", restoreErr)
 		}
+	}
+
+	if err := streamer.StartControlMode(); err != nil {
+		return fmt.Errorf("failed to start control mode: %w", err)
 	}
 	defer func() {
 		if err := streamer.StopControlMode(); err != nil {
