@@ -1,4 +1,5 @@
 "use client";
+// +feature: config-management settings
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { SessionService } from "@/gen/session/v1/session_pb";

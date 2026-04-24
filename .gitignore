@@ -46,4 +46,8 @@ benchmark_results.txt
 
 # Build artifacts
 build/
+
+# Scanner build artifacts
+tools/scanner/cmd
+tools/scanner/backend/cmd/scanner
 coverage.html

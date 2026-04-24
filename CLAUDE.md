@@ -952,8 +952,109 @@ make profile-cpu       # CPU profiling
 ### Tool Management
 ```bash
 make install-tools # Install all development tools
-make clean        # Clean build artifacts  
+make clean        # Clean build artifacts
 make clean-tools  # Remove installed tools (caution)
+```
+
+---
+
+## Feature Registry
+
+The project maintains a static feature registry in `docs/registry/` that maps backend RPCs and frontend components to feature IDs. This registry is committed to the repo and validated in CI.
+
+### Registry files
+- `docs/registry/backend-features.json` — all proto RPCs with handler file locations and marker status
+- `docs/registry/frontend-features.json` — all React pages/components with `// +feature:` markers
+- `docs/registry/coverage-gaps.json` — advisory cross-registry coverage report (best-effort)
+- `docs/registry/schema.json` — JSON schema for validation
+
+### Keeping the registry current
+```bash
+make registry-generate          # Regenerate both registries from source
+make registry-generate-backend  # Backend only
+make registry-generate-frontend # Frontend only
+make registry-diff              # Show what would change (dry run, no writes)
+```
+
+**Run `make registry-generate` and commit the updated JSON files whenever you:**
+- Add or rename a proto RPC in `proto/session/v1/session.proto`
+- Add a new React page or component
+- Add or move a `// +api:` or `// +feature:` marker
+
+CI will warn (non-blocking until 2026-05-02, then blocking) if the committed registry diverges >2% from what the scanner would generate.
+
+### Backend markers (`// +api:`)
+Add to the handler method in `server/services/` to confirm the RPC is intentionally implemented:
+```go
+// +api: session:create
+func (s *SessionService) CreateSession(...) {
+```
+
+### Frontend markers (`// +feature:`)
+Add within the **first 10 lines** of a React page/component file. Placement beyond line 10 is silently ignored — always put the marker at the top:
+```tsx
+// +feature: ui:session-list
+'use client';
+import ...
+```
+
+The ID convention is `ui:noun-noun` for frontend (e.g. `ui:session-list`, `ui:review-queue`).
+The backend convention is `domain:verb` (e.g. `session:create`, `review-queue:get`).
+
+> **Known limitation**: the gap reporter in `docs/registry/coverage-gaps.json` uses domain-prefix
+> matching between the two namespaces. It is advisory only — false negatives are expected for
+> multi-word domains (e.g. `review-queue:get` ↔ `ui:review-queue`).
+
+---
+
+## E2E Tests
+
+E2E tests live in `tests/e2e/` and use Playwright + Allure.
+
+### Running E2E tests
+```bash
+# Start a test server first (separate terminal)
+STAPLER_SQUAD_USE_CONTROL_MODE=false STAPLER_SQUAD_INSTANCE=e2e-local ./stapler-squad --tmux-keep-server &
+
+# Run all E2E tests
+cd tests/e2e && npm test
+
+# Run a specific spec
+cd tests/e2e && npx playwright test session-lifecycle.spec.ts
+
+# Open Allure report after a run
+make e2e-report
+
+# Run Lighthouse performance audit
+make e2e-lighthouse
+```
+
+### E2E test conventions (enforced in CI)
+1. **`// @feature` annotation** — every new spec file must begin with a comment mapping it to a registry feature ID:
+   ```ts
+   // @feature session:create, session:update, session:delete
+   ```
+2. **No `waitForTimeout`** — use deterministic waits only:
+   ```ts
+   // ✅ correct
+   await expect(locator).toHaveValue('text');
+   await page.waitForSelector('[data-testid="session-list"]');
+   // ❌ banned
+   await page.waitForTimeout(500);
+   ```
+3. **`data-testid` or ARIA roles** — no CSS class selectors or nth-child in locators.
+4. **Page Object Model** — add new page helpers to `tests/e2e/pages/`.
+
+### UX analysis (Story 5)
+The `ux-analysis` CI workflow runs on PRs touching `web-app/src/`. It:
+- Runs **Axe Core** (blocks on critical/serious WCAG 2.1 AA violations)
+- Runs **Lighthouse CI** (warns if performance score < 70, non-blocking)
+- Runs **Claude vision analysis** if `ANTHROPIC_API_KEY` secret is configured (advisory)
+
+To run locally:
+```bash
+cd tests/e2e && npx playwright test accessibility.spec.ts
+cd tests/e2e && npx lhci autorun --config=lighthouse.config.js
 ```
 
 The Makefile handles long-running benchmarks automatically and provides comprehensive development automation.

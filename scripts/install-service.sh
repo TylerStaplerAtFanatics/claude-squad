@@ -146,6 +146,12 @@ install_macos() {
     mkdir -p "$plist_dir"
     mkdir -p "$log_dir"
 
+    # Build a PATH that preserves the user's shell PATH first (so custom tools,
+    # go/bin, nvm, rbenv, etc. take precedence), then appends both Homebrew
+    # prefixes (Apple Silicon + Intel) as a fallback so tools like tmux, git,
+    # and claude are found even if not already on the shell PATH.
+    plist_path="$PATH:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin"
+
     cat > "$plist_file" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -157,8 +163,9 @@ install_macos() {
 
     <key>ProgramArguments</key>
     <array>
-        <string>$bin_path</string>
-        <string>--remote-access</string>
+        <string>/bin/zsh</string>
+        <string>-c</string>
+        <string>[ -f "$HOME/.zshrc" ] &amp;&amp; source "$HOME/.zshrc" 2&gt;/dev/null; exec $bin_path --remote-access</string>
     </array>
 
     <key>RunAtLoad</key>
@@ -178,7 +185,7 @@ install_macos() {
         <key>HOME</key>
         <string>$HOME</string>
         <key>PATH</key>
-        <string>$PATH</string>
+        <string>$plist_path</string>
     </dict>
 
     <key>StandardOutPath</key>

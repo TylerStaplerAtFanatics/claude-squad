@@ -160,22 +160,22 @@ func (rqs *ReviewQueueService) AcknowledgeSession(
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list instances: %w", err))
 		}
-		var found bool
+		sessionTitle := ""
 		for _, data := range dataSlice {
-			if data.Title == req.Msg.Id {
-				found = true
+			if data.Title == req.Msg.Id || data.UUID == req.Msg.Id {
+				sessionTitle = data.Title
 				break
 			}
 		}
-		if !found {
+		if sessionTitle == "" {
 			log.InfoLog.Printf("[ReviewQueue] AcknowledgeSession: session '%s' not found in storage, removed from queue", req.Msg.Id)
 			return connect.NewResponse(&sessionv1.AcknowledgeSessionResponse{
 				Success: true,
 				Message: fmt.Sprintf("Session '%s' removed from review queue", req.Msg.Id),
 			}), nil
 		}
-		// Persist the acknowledged timestamp directly without building a full Instance.
-		if err := rqs.storage.UpdateInstanceAcknowledged(req.Msg.Id); err != nil {
+		// Persist the acknowledged timestamp using Title (the storage key), not the client-supplied ID.
+		if err := rqs.storage.UpdateInstanceAcknowledged(sessionTitle); err != nil {
 			log.WarningLog.Printf("[ReviewQueue] AcknowledgeSession: failed to persist ack for '%s': %v", req.Msg.Id, err)
 		}
 		rqs.eventBus.Publish(events.NewSessionAcknowledgedEvent(req.Msg.Id, "user_acknowledged"))
