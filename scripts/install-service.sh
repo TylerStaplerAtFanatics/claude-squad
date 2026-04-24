@@ -157,8 +157,10 @@ install_macos() {
 
     <key>ProgramArguments</key>
     <array>
-        <string>$bin_path</string>
-        <string>--remote-access</string>
+        <string>/bin/zsh</string>
+        <string>-l</string>
+        <string>-c</string>
+        <string>exec $bin_path --remote-access</string>
     </array>
 
     <key>RunAtLoad</key>
@@ -177,8 +179,6 @@ install_macos() {
     <dict>
         <key>HOME</key>
         <string>$HOME</string>
-        <key>PATH</key>
-        <string>$PATH</string>
     </dict>
 
     <key>StandardOutPath</key>
