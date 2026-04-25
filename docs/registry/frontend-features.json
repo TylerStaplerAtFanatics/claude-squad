@@ -63,6 +63,42 @@
       "lastModified": "2026-04-18T17:28:17.610Z"
     },
     {
+      "id": "session-create-directory",
+      "type": "frontend",
+      "frontend": {
+        "component": "OmnibarCreationPanel",
+        "path": "web-app/src/components/sessions/OmnibarCreationPanel.tsx",
+        "markerLine": 21
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-24T00:00:00.000Z"
+    },
+    {
+      "id": "session-create-new-worktree",
+      "type": "frontend",
+      "frontend": {
+        "component": "OmnibarCreationPanel",
+        "path": "web-app/src/components/sessions/OmnibarCreationPanel.tsx",
+        "markerLine": 21
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-24T00:00:00.000Z"
+    },
+    {
+      "id": "session-create-existing-worktree",
+      "type": "frontend",
+      "frontend": {
+        "component": "OmnibarCreationPanel",
+        "path": "web-app/src/components/sessions/OmnibarCreationPanel.tsx",
+        "markerLine": 21
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-24T00:00:00.000Z"
+    },
+    {
       "id": "session-create-one-off",
       "type": "frontend",
       "frontend": {
