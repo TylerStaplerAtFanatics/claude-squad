@@ -105,10 +105,19 @@ type TmuxSession struct {
 	controlModeCmd         *exec.Cmd              // tmux -C attach process
 	controlModeStdout      io.ReadCloser          // stdout pipe for control mode notifications
 	controlModeStdin       io.WriteCloser         // stdin pipe for control mode commands
-	controlModeDone        chan struct{}          // Signal channel for control mode termination
+	controlModeDone        chan struct{}           // Signal channel for control mode termination
 	controlModeSubscribers map[string]chan []byte // WebSocket clients subscribed to control mode updates
-	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers map and controlModeExited
+	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers, controlModeExited, and pendingCmds
 	controlModeExited      bool                   // True after readControlModeOutput exits; new subscribers get pre-closed channel
+
+	// Control mode command dispatch (Phase 2)
+	// cmdSendMu serializes (enqueue + write-to-stdin) pairs so tmux receives commands
+	// in the same order as channels are added to pendingCmds.
+	cmdSendMu   sync.Mutex        // serializes enqueue+write in sendCMCommand and stdin close in StopControlMode
+	pendingCmds []chan cmdResult   // FIFO of pending response channels; protected by controlModeSubMu
+	cmdBodyBuf  strings.Builder   // body accumulator between %begin and %end; reader goroutine only
+	curCmdCh    chan cmdResult     // current in-flight response channel; reader goroutine only
+	inCmdResp   bool              // true while inside a %begin/%end block; reader goroutine only
 
 	// Exit detection: fired when the session exits unexpectedly (not via StopControlMode).
 	// onExit is called at most once per TmuxSession lifetime (guarded by onExitOnce).
@@ -1630,7 +1639,27 @@ func (t *TmuxSession) GetCursorPosition() (x, y int, err error) {
 
 // GetPaneDimensions returns the current dimensions of the tmux pane.
 // Returns width (columns) and height (rows).
+//
+// When STAPLER_SQUAD_CM_COMMANDS=true and control mode is running, the query is sent
+// over the existing control mode stdin pipe (zero new subprocesses). Otherwise it falls
+// back to the original subprocess path.
 func (t *TmuxSession) GetPaneDimensions() (width, height int, err error) {
+	if cmCommandsEnabled.Load() && t.controlModeStdin != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		body, cmErr := t.sendCMCommand(ctx,
+			"display-message", "-p", "-t", t.sanitizedName, "'#{pane_width} #{pane_height}'")
+		if cmErr == nil {
+			var paneWidth, paneHeight int
+			if _, parseErr := fmt.Sscanf(strings.TrimSpace(body), "%d %d", &paneWidth, &paneHeight); parseErr == nil {
+				return paneWidth, paneHeight, nil
+			}
+		}
+		if log.DebugLog != nil {
+			log.DebugLog.Printf("GetPaneDimensions CM path failed for '%s': %v; falling back to subprocess", t.sanitizedName, cmErr)
+		}
+	}
+
 	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
 		"#{pane_width} #{pane_height}")
 
