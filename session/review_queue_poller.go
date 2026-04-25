@@ -62,10 +62,13 @@ type ReviewQueuePoller struct {
 	// Content cache: avoids spawning a tmux capture-pane subprocess when the session
 	// has not produced new output since the last poll. For sessions with an active
 	// ClaudeController the idle detector's lastActivity timestamp (driven by PTY output
-	// reading, no subprocess) is used as a change signal.
+	// reading, no subprocess) is used as a change signal. For sessions without a
+	// ClaudeController, a 500ms TTL cache is used to limit subprocess calls to at most
+	// 2 per second regardless of the number of sessions.
 	cacheMu          sync.Mutex
 	lastSeenActivity map[string]time.Time // per-session: last IdleDetector.lastActivity seen
 	cachedContent    map[string]string    // per-session: content from last Preview() call
+	lastPreviewTime  map[string]time.Time // per-session: when Preview() was last called (for TTL cache)
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -96,6 +99,7 @@ func NewReviewQueuePollerWithConfig(queue *ReviewQueue, statusManager *InstanceS
 		statusDetector:   detection.NewStatusDetector(), // For detecting status in sessions without ClaudeController
 		lastSeenActivity: make(map[string]time.Time),
 		cachedContent:    make(map[string]string),
+		lastPreviewTime:  make(map[string]time.Time),
 	}
 }
 
@@ -130,6 +134,7 @@ func (rqp *ReviewQueuePoller) RemoveInstance(instanceTitle string) {
 	rqp.cacheMu.Lock()
 	delete(rqp.lastSeenActivity, instanceTitle)
 	delete(rqp.cachedContent, instanceTitle)
+	delete(rqp.lastPreviewTime, instanceTitle)
 	rqp.cacheMu.Unlock()
 }
 
@@ -391,6 +396,12 @@ func detectProcessing(inst *Instance, content string, statusInfo InstanceStatusI
 	return false
 }
 
+// previewCacheTTL is the maximum age of a cached Preview() result for sessions
+// without an active ClaudeController. At the default 2-second poll interval this
+// limits tmux capture-pane subprocess calls to at most 2 per second regardless of
+// the number of monitored sessions.
+const previewCacheTTL = 500 * time.Millisecond
+
 // getContent returns the terminal content for inst, using a cache to avoid
 // spawning a subprocess when no new output has arrived since the last poll.
 //
@@ -400,8 +411,9 @@ func detectProcessing(inst *Instance, content string, statusInfo InstanceStatusI
 // any new bytes arrived. If nothing changed, the last captured content is returned
 // directly, saving one `tmux capture-pane` subprocess per idle session per tick.
 //
-// For sessions without a ClaudeController: Preview() is always called (no change
-// signal is available without the controller's PTY reader).
+// For sessions without a ClaudeController: a 500ms TTL cache is used. At most one
+// Preview() subprocess call is issued per session per 500ms, even if the poller
+// fires multiple times within that window.
 //
 // The error case returns the last cached content (empty string on the first poll)
 // so callers can continue with empty content as before.
@@ -420,6 +432,19 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 				return cached
 			}
 		}
+	} else {
+		// No ClaudeController: use a TTL cache to avoid spawning a subprocess on
+		// every poll tick. If the cached content is still fresh, return it directly.
+		rqp.cacheMu.Lock()
+		lastCall := rqp.lastPreviewTime[inst.Title]
+		cached := rqp.cachedContent[inst.Title]
+		rqp.cacheMu.Unlock()
+
+		if !lastCall.IsZero() && time.Since(lastCall) < previewCacheTTL {
+			log.DebugLog.Printf("[ReviewQueue] Session '%s': TTL cache hit (age=%s, %d bytes)",
+				inst.Title, time.Since(lastCall).Round(time.Millisecond), len(cached))
+			return cached
+		}
 	}
 
 	content, err := inst.Preview()
@@ -435,6 +460,8 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 	rqp.cachedContent[inst.Title] = content
 	if statusInfo.IsControllerActive && !statusInfo.IdleState.LastActivity.IsZero() {
 		rqp.lastSeenActivity[inst.Title] = statusInfo.IdleState.LastActivity
+	} else {
+		rqp.lastPreviewTime[inst.Title] = time.Now()
 	}
 	rqp.cacheMu.Unlock()
 
