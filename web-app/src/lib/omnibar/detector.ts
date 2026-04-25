@@ -254,6 +254,31 @@ class LocalPathDetector implements Detector {
 }
 
 /**
+ * New Session detector — matches the "new/" prefix shortcut.
+ * Priority 35 places it before GitHubShorthand (40) so "new/foo" is always
+ * treated as a new-session command, not a GitHub owner/repo shorthand.
+ * Accepts case-insensitive "new/" prefix; extracts the query after the slash.
+ */
+class NewSessionDetector implements Detector {
+  name = "NewSession";
+  priority = 35;
+
+  private readonly PREFIX_RE = /^new\//i;
+
+  detect(input: string): DetectionResult | null {
+    const trimmed = input.trim();
+    if (!this.PREFIX_RE.test(trimmed)) return null;
+    const query = trimmed.replace(this.PREFIX_RE, "");
+    return {
+      type: InputType.NewSession,
+      confidence: 1.0,
+      parsedValue: query,
+      suggestedName: query,
+    };
+  }
+}
+
+/**
  * Session Search detector — catch-all for bare-text queries.
  * Fires for any non-empty input that no other detector claimed.
  * Priority 200 ensures it runs last (after LocalPath at priority 100).
@@ -323,6 +348,7 @@ export function createDefaultRegistry(): DetectorRegistry {
   registry.register(new GitHubPRDetector());
   registry.register(new GitHubBranchDetector());
   registry.register(new GitHubRepoDetector());
+  registry.register(new NewSessionDetector());
   registry.register(new GitHubShorthandDetector());
   registry.register(new PathWithBranchDetector());
   registry.register(new LocalPathDetector());

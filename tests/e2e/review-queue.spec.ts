@@ -14,8 +14,8 @@
 
 import { test, expect } from '@playwright/test';
 
-// Base URL is configured in playwright.config.ts to use the test server (port 8544)
-const BASE_URL = process.env.BASE_URL || 'http://localhost:8544';
+// Base URL falls back to the production server port; playwright.config.ts sets baseURL
+const BASE_URL = process.env.TEST_SERVER_URL || 'http://localhost:8543';
 
 test.describe('Review Queue Smoke Tests', () => {
   test('review queue page loads successfully', async ({ page }) => {

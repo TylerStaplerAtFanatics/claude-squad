@@ -42,8 +42,8 @@ func TestSelectiveLoading(t *testing.T) {
 		},
 		Tags: []string{"Frontend", "Urgent"},
 		ClaudeSession: ClaudeSessionData{
-			SessionID:      "claude-123",
-			ConversationID: "conv-456",
+			ConversationUUID: "claude-123",
+			SquadSessionID:   "conv-456",
 			ProjectName:    "my-project",
 		},
 	}
@@ -71,7 +71,7 @@ func TestSelectiveLoading(t *testing.T) {
 			assert.Equal(t, "/tmp/repo", session.Worktree.RepoPath)
 			assert.Equal(t, 100, session.DiffStats.Added)
 			assert.ElementsMatch(t, []string{"Frontend", "Urgent"}, session.Tags)
-			assert.Equal(t, "claude-123", session.ClaudeSession.SessionID)
+			assert.Equal(t, "claude-123", session.ClaudeSession.ConversationUUID)
 		})
 	}
 

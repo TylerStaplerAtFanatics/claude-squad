@@ -160,7 +160,7 @@ func (vh *vcsHandlers) findInstance(sessionID string) (*session.Instance, *mcpgo
 		return nil, errResult(ErrInternalError, "failed to load sessions", "")
 	}
 	for _, inst := range instances {
-		if inst.Title == sessionID {
+		if inst.MatchesID(sessionID) {
 			return inst, nil
 		}
 	}

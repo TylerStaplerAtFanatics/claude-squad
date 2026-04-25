@@ -352,7 +352,9 @@ export const error = style({
 export const emptySubtext = style({
   marginTop: `${vars.space["2"]} !important` as string,
   fontSize: `${vars.fontSize.base} !important` as string,
-  color: vars.color.textTertiary,
+  // textTertiary (#767676) is calibrated for pure white; on cardBackground (#f9f9f9)
+  // contrast drops to 4.31:1 (below WCAG AA 4.5:1). textMuted (#6b6b6b) = 4.92:1 ✅
+  color: vars.color.textMuted,
 });
 
 export const completionState = style({

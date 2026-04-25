@@ -1,8 +1,91 @@
 # Backend Architecture Improvements
 
-**Source review score**: 7.5 / 10  
-**Review date**: 2026-04-20  
+**Source review score**: 7.5 / 10
+**Review date**: 2026-04-20
+**Updated**: 2026-04-22 (Stories 6-7 added; ADRs 004-008 created; Story 8 added after tmux-leakage audit)
 **Module**: `github.com/tstapler/stapler-squad`
+
+---
+
+## Epic Overview
+
+### User Value
+
+Engineers maintaining and extending stapler-squad gain:
+
+- **Safer refactoring**: Narrow interfaces and compile-time assertions make breaking changes visible at build time rather than at runtime or in production logs.
+- **Honest test coverage**: Tests that inject fake `InstanceStore` values currently silently bypass rules and analytics code paths due to the type assertion in `NewSessionService`. After Story 1, fakes exercise the same code paths as production.
+- **Fewer runtime bugs**: The Title-keyed maps in `ReviewQueuePoller` (Story 6) are a live, silent cache-corruption bug. Fixing UUID keying eliminates an entire class of hard-to-reproduce issues.
+- **Faster unit tests**: `ReviewQueuePoller` currently requires a real SQLite database for any test. After Stories 6-7, it accepts interface fakes and runs without a database.
+- **Readable, maintainable code**: `BuildRuntimeDeps` (190 lines), `StreamTerminal` (294 lines), and `CreateSession` (165 lines) are replaced by clearly named, single-purpose functions that a new contributor can understand without reading the full file.
+
+### Success Metrics
+
+| Metric | Current state | Target after all stories |
+|--------|--------------|--------------------------|
+| Type assertions on `*session.Storage` outside `session/` | 2 (`session_service.go:103`, `GetStorage():232`) | 0 |
+| Methods on `Repository` interface | 21 | 4 sub-interfaces of 3-5 methods each |
+| Lines in `BuildRuntimeDeps` | ~190 | <30 (orchestrator only) |
+| Lines in `ReviewQueuePoller` | to be measured | Reduced by `TerminalContentCache` + `TmuxReconciler` extraction |
+| ReviewQueuePoller tests requiring SQLite | All | 0 (interface fakes only) |
+| `ReviewQueuePoller` map key type | `Instance.Title` (mutable) | `Instance.UUID` (stable) |
+| Independent `LastActivity` timestamps | 4 (ClaudeController, poller, ReviewState, ReviewItem) | 1 authoritative source |
+
+### Scope
+
+**In scope**:
+- Stories 1-7 as described in this document
+- All files listed in each story's "Files in scope" section
+- New files: `session/errors.go`, `session/terminal_content_cache.go`, `session/tmux_reconciler.go`, `session/storage_interfaces.go` (if needed)
+
+**Out of scope** (explicitly excluded per 2026-04-22 review):
+- `session/vc/` abstraction (git / jj providers) — stable, no issues identified
+- `executor/` circuit-breaker wrappers — must not be inlined or removed
+- Proto schema changes — no breaking API changes to gRPC/ConnectRPC endpoints
+- TUI (`app/`) — out of scope for backend architecture review
+- Database migration tooling (`session/ent/migrate/`) — ent-generated, do not hand-edit
+- `PRStatusPoller` internal logic — only the shape change in Story 4 (field grouping) touches it
+
+### Constraints
+
+- Go 1.21+ only; no generics-based solutions that require a newer toolchain
+- Zero behaviour changes — all refactors are structural; observable behaviour (API responses, terminal streaming, queue membership decisions) must not change
+- No breaking changes to public gRPC/ConnectRPC API (`proto/session/v1/`)
+- All existing tests must pass after each task — no accumulating broken state across tasks
+- Ent-generated files (`session/ent/`) must not be hand-edited; regenerate with `make generate-proto` if schema changes are needed
+- Linting must pass after each story (`make lint`); the build pipeline enforces this
+
+---
+
+## Architecture Decisions
+
+The following ADRs capture the key design choices embedded in this plan. Read the relevant ADR before implementing the corresponding story.
+
+- [ADR-004](../../project_plans/stapler-squad/decisions/ADR-004-interface-at-boundary.md): Narrow interfaces defined in domain package (`session/`) at the boundary, not in the consuming layer
+- [ADR-005](../../project_plans/stapler-squad/decisions/ADR-005-uuid-as-session-identity.md): UUID is the canonical session key; Title is display metadata and must not be used as a map key
+- [ADR-006](../../project_plans/stapler-squad/decisions/ADR-006-composed-constructor-interface.md): `SessionServiceStore` composed interface pattern — single injection point for `NewSessionService`
+- [ADR-007](../../project_plans/stapler-squad/decisions/ADR-007-terminal-content-cache-placement.md): `TerminalContentCache` belongs in `session/` layer, not in polling infrastructure
+- [ADR-008](../../project_plans/stapler-squad/decisions/ADR-008-lastactivity-single-publisher.md): `ClaudeController` is the authoritative `LastActivity` publisher; all other components derive from it
+- [ADR-009](../../project_plans/stapler-squad/decisions/ADR-009-terminal-session-interface.md): `TerminalSession` interface — transport-agnostic terminal abstraction; tmux concepts must not appear in `server/services/`
+
+---
+
+## Implementation Order
+
+Stories are ordered by the risk they carry if deferred. P0 must be done first; P2 stories are safe to batch or defer.
+
+| # | Story | Priority | Risk if deferred | Recommended sprint |
+|---|-------|----------|------------------|--------------------|
+| 6.1 | UUID keying in `ReviewQueuePoller` | P0 | Silent cache corruption on session rename or title collision | Sprint 1 |
+| 6.2 | `InstanceReader` interface; inject into poller | P1 | Poller untestable without SQLite; couples server to domain impl | Sprint 1 |
+| 6.3 | Domain error types (`ErrSessionNotFound`) | P1 | String-matched errors; fragile caller logic | Sprint 1 |
+| 1 | Fix `InstanceStore` abstraction leak | P1 | Fake stores silently bypass rules and analytics in tests | Sprint 1 |
+| 7 | Decompose `ReviewQueuePoller` | P1 | Poller grows more complex with each new feature; panic-prone | Sprint 2 |
+| 2 | Refactor `BuildRuntimeDeps` into `RuntimeWirer` | P2 | Ordering bugs compound as more steps are added | Sprint 2 |
+| 3 | Split `Repository` interface | P2 | Every mock stubs 21 methods; dual-model confusion | Sprint 2 |
+| 5 | Split mega-functions (`StreamTerminal`, `CreateSession`) | P2 | Large functions resist unit testing | Sprint 2 |
+| 8 | Transport-agnostic `TerminalSession` interface | P2 | Server layer hardwired to tmux; can never swap backend; lifecycle bugs like the session-restore race (Apr 2026) compound | Sprint 2 |
+| 4 | Extract `GitHubPRStatus` value object | P2 | JSON schema migration risk; do last, with careful review | Sprint 3 |
 
 ---
 
@@ -17,6 +100,7 @@ Stories are ordered by the risk reduction they deliver:
 | 1 | Fix `InstanceStore` abstraction leak | P1 | Silent loss of search/rules/analytics in tests; casting couples concrete types |
 | 2 | Refactor `BuildRuntimeDeps` | P1 | Ordering bugs compound as more steps are added |
 | 3 | Split `Repository` interface | P2 | Every mock must stub 21 methods; dual API causes confusion |
+| 8 | Transport-agnostic `TerminalSession` interface | P2 | 42 tmux leakage points in server layer; lifecycle bugs caused by caller managing what instance should own; backend swap impossible |
 | 4 | Extract `GitHubPRStatus` value object | P2 | 15 PR fields scattered across Instance lifecycle |
 | 5 | Split mega-functions | P2 | `StreamTerminal` (294 lines) and `CreateSession` (165 lines) resist unit testing |
 
@@ -785,6 +869,569 @@ Neither function can be tested without standing up a full `SessionService` and a
 
 ---
 
+## Story 6 — Fix `ReviewQueuePoller` Identity and Interface Bugs
+
+**Addresses**: P0 findings #1 and #2 (from 2026-04-22 review); P2 finding (error types)
+**Files in scope**: `session/review_queue_poller.go`, `session/storage.go`, `session/storage_interfaces.go` (new), `server/dependencies.go`
+
+### Problem
+
+`ReviewQueuePoller` keys three internal maps (`lastSeenActivity`, `cachedContent`, `FindInstance`) by `Instance.Title` — a user-editable string. If a session is renamed, the poller's cache silently de-syncs. If two sessions share a title at different points in time, entries collide. The correct key is `Instance.UUID`, which was added to the persistence layer in a recent fix but never propagated to the poller layer.
+
+In addition, `ReviewQueuePoller`'s constructor accepts `*session.Storage` directly. Any test that exercises poller logic must stand up a real SQLite database, making this one of the least testable components in the codebase.
+
+A related problem: `fmt.Errorf("session not found: %s", id)` is used throughout `Storage`, `ReviewQueuePoller`, and `SessionService`. Callers cannot distinguish a "not found" condition from other errors without string matching — a fragile anti-pattern.
+
+### Acceptance Criteria
+
+- All `ReviewQueuePoller` internal maps use `Instance.UUID` (a `string`) as keys.
+- `FindInstance(title string)` is renamed to `FindInstanceByUUID(uuid string)` and all callers updated.
+- `ApprovalMetadataProvider` interface (or equivalent) passes UUID, not Title, at all call sites.
+- `ReviewQueuePoller` constructor accepts `InstanceReader` (narrow interface) instead of `*session.Storage`.
+- `session.ErrSessionNotFound`, `session.ErrSessionAlreadyExists` defined as typed errors; used in `Storage` and `SessionService`.
+- All existing tests pass.
+
+### INVEST
+
+- **Independent**: UUID keying (Task 6.1) does not depend on interface extraction (Task 6.2) and both can proceed in parallel.
+- **Negotiable**: The exact interface name and method set of `InstanceReader` can be adjusted.
+- **Valuable**: Eliminates a class of subtle cache-corruption bugs; makes poller unit-testable.
+- **Estimable**: Mechanical rekeying + interface definition; no algorithm changes.
+- **Small**: 3 files, no logic changes.
+- **Testable**: A unit test constructing a `ReviewQueuePoller` with a fake `InstanceReader` proves the extraction.
+
+---
+
+#### Task 6.1 — Migrate `ReviewQueuePoller` maps from Title to UUID keys
+
+**Files**: `session/review_queue_poller.go`
+**Effort**: ~2 hours
+
+**Steps**:
+
+1. Audit every map and lookup in `review_queue_poller.go` that currently uses a session title as a key:
+
+   ```
+   grep -n "Title\|lastSeenActivity\|cachedContent\|FindInstance" session/review_queue_poller.go
+   ```
+
+2. Change every `map[string]...` that is keyed by Title to be keyed by UUID. The field comments must state the key type:
+
+   ```go
+   // lastSeenActivity maps Instance.UUID → last observed output signature.
+   lastSeenActivity map[string]string
+
+   // cachedContent maps Instance.UUID → most recently captured terminal output.
+   cachedContent map[string]string
+   ```
+
+3. Rename `FindInstance(title string) *session.Instance` to `FindInstanceByUUID(uuid string) *session.Instance`. Update all callers in `server/services/session_service.go` and `server/dependencies.go`.
+
+4. In `SetInstances`, when building the new internal map, key by `inst.UUID` (assert UUID is non-empty; log a warning and skip if empty to avoid replacing a keyed entry with blank).
+
+5. `go build ./...` must pass. Run `go test ./session/... ./server/...`.
+
+**Known risk**: Any caller that currently passes `instance.Title` to `FindInstance` must be updated to pass `instance.UUID`. Audit all call sites before renaming.
+
+---
+
+#### Task 6.2 — Define `InstanceReader` interface; inject into `ReviewQueuePoller`
+
+**Files**: `session/storage.go` (or `session/storage_interfaces.go`), `session/review_queue_poller.go`, `server/dependencies.go`
+**Effort**: ~2 hours
+**Depends on**: Task 6.1
+
+**Steps**:
+
+1. Identify every method called on the `*session.Storage` parameter inside `ReviewQueuePoller`. As of the review, this is limited to listing/loading instances for reconciliation.
+
+2. Define a narrow interface in `session/storage.go`:
+
+   ```go
+   // InstanceReader is the read-only storage interface required by ReviewQueuePoller.
+   // *Storage satisfies this interface.
+   type InstanceReader interface {
+       ListInstances(ctx context.Context) ([]*Instance, error)
+       // add any other read-only methods actually called by the poller
+   }
+
+   var _ InstanceReader = (*Storage)(nil)
+   ```
+
+3. Change the `ReviewQueuePoller` constructor to accept `InstanceReader` instead of `*session.Storage`:
+
+   ```go
+   func NewReviewQueuePoller(reader session.InstanceReader, ...) *ReviewQueuePoller
+   ```
+
+4. Update `server/dependencies.go` to pass the `*session.Storage` value (which satisfies `InstanceReader`) to `NewReviewQueuePoller`.
+
+5. `go build ./...` and `go test ./...` must pass.
+
+---
+
+#### Task 6.3 — Define domain error types; replace string-matched errors
+
+**Files**: `session/errors.go` (new), `session/storage.go`, `server/services/session_service.go`
+**Effort**: ~2 hours
+**Independent of**: Tasks 6.1 and 6.2
+
+**Steps**:
+
+1. Create `session/errors.go`:
+
+   ```go
+   package session
+
+   import "fmt"
+
+   // ErrSessionNotFound is returned when a session cannot be found by the given identifier.
+   type ErrSessionNotFound struct {
+       ID string
+   }
+
+   func (e ErrSessionNotFound) Error() string {
+       return fmt.Sprintf("session not found: %s", e.ID)
+   }
+
+   // ErrSessionAlreadyExists is returned when a session with the given title already exists.
+   type ErrSessionAlreadyExists struct {
+       Title string
+   }
+
+   func (e ErrSessionAlreadyExists) Error() string {
+       return fmt.Sprintf("session already exists: %s", e.Title)
+   }
+   ```
+
+2. Replace all `fmt.Errorf("session not found: ...")` occurrences in `session/storage.go` with `ErrSessionNotFound{ID: title}` (or UUID where applicable).
+
+3. In `server/services/session_service.go`, update callers that currently do string comparison (`strings.Contains(err.Error(), "session not found")`) to use `errors.As(err, &session.ErrSessionNotFound{})`.
+
+4. `go build ./...` and `go test ./...` must pass.
+
+---
+
+## Story 7 — Decompose `ReviewQueuePoller` into Single-Responsibility Components
+
+**Addresses**: P1 finding #5 (from 2026-04-22 review); P2 finding (LastActivity authority)
+**Files in scope**: `session/review_queue_poller.go`, `session/terminal_content_cache.go` (new), `session/tmux_reconciler.go` (new)
+
+### Problem
+
+`ReviewQueuePoller` owns five distinct responsibilities:
+
+1. Monitoring instance status and updating the `ReviewQueue`
+2. Caching terminal content (tmux capture-pane output)
+3. Spawning tmux subprocesses to capture terminal state
+4. Reconciling tmux reality against in-memory instance state (zombie/stale detection)
+5. Managing exponential backoff on errors
+
+The file is complex enough to require panic recovery. Testing any single behaviour requires understanding all five. The terminal content cache conceptually belongs closer to the PTY/scrollback layer; the tmux reconciler is an infrastructure concern that has no business being interleaved with queue management.
+
+A related problem: `lastSeenActivity` in `ReviewQueuePoller`, `lastActivity` in `ClaudeController.idleDetector`, `LastMeaningfulOutput` in `Instance.ReviewState`, and `LastActivity` in `ReviewQueue.ReviewItem` represent the same semantic concept but are updated independently, creating temporal inconsistency in queue membership decisions.
+
+### Acceptance Criteria
+
+- `TerminalContentCache` is a distinct type that owns tmux capture-pane invocations and the content cache map.
+- `TmuxReconciler` is a distinct type that owns zombie/stale instance detection and the reconciliation loop.
+- `ReviewQueuePoller` delegates to both and is reduced to: read status → update queue → backoff.
+- `ClaudeController` is documented as the authoritative source for `LastActivity`; all other stores query or subscribe rather than maintain their own clock.
+- Panic recovery is preserved in all background goroutines.
+- All existing tests pass.
+
+### INVEST
+
+- **Independent**: Can be done after Story 6 Task 6.1 (UUID keying) to avoid migrating the same maps twice.
+- **Negotiable**: The exact type names and method boundaries are flexible.
+- **Valuable**: Each extracted type is independently testable; `ReviewQueuePoller` scope is reduced to its core purpose.
+- **Estimable**: Mechanical extraction; no algorithm changes.
+- **Small**: 2 new files + reduced `review_queue_poller.go`; no interface changes at package boundaries.
+- **Testable**: A test constructing `TerminalContentCache` with a fake tmux executor proves the extraction.
+
+---
+
+#### Task 7.1 — Extract `TerminalContentCache`
+
+**Files**: `session/review_queue_poller.go`, `session/terminal_content_cache.go` (new)
+**Effort**: ~3 hours
+**Depends on**: Story 6 Task 6.1 (so cache is keyed by UUID from the start)
+
+**Steps**:
+
+1. Identify all fields and methods in `ReviewQueuePoller` related to terminal content:
+   - `cachedContent map[string]string` (the cache itself)
+   - The `tmux capture-pane` subprocess invocation logic
+   - The cache update and invalidation paths
+
+2. Create `session/terminal_content_cache.go`:
+
+   ```go
+   // TerminalContentCache captures and caches terminal output from tmux sessions.
+   // It is keyed by Instance.UUID.
+   type TerminalContentCache struct {
+       mu      sync.Mutex
+       content map[string]string // UUID → last captured output
+   }
+
+   func NewTerminalContentCache() *TerminalContentCache
+
+   // Capture runs tmux capture-pane for the given instance and updates the cache.
+   func (c *TerminalContentCache) Capture(inst *Instance) (string, error)
+
+   // Get returns the most recently captured content for the given UUID, or "" if not cached.
+   func (c *TerminalContentCache) Get(uuid string) string
+   ```
+
+3. In `ReviewQueuePoller`, replace the inline cache fields and tmux invocations with:
+
+   ```go
+   contentCache *TerminalContentCache
+   ```
+
+   Delegate all capture calls to `c.contentCache.Capture(inst)`.
+
+4. `go build ./...` must pass after each extraction step.
+
+---
+
+#### Task 7.2 — Extract `TmuxReconciler`
+
+**Files**: `session/review_queue_poller.go`, `session/tmux_reconciler.go` (new)
+**Effort**: ~3 hours
+**Depends on**: Task 7.1
+
+**Steps**:
+
+1. Identify all fields and methods in `ReviewQueuePoller` related to tmux state reconciliation:
+   - Zombie session detection logic
+   - Stale instance cleanup
+   - The reconciliation loop that compares in-memory state against `tmux ls` output
+
+2. Create `session/tmux_reconciler.go`:
+
+   ```go
+   // TmuxReconciler detects and handles stale or zombie tmux sessions.
+   type TmuxReconciler struct {
+       reader InstanceReader
+   }
+
+   func NewTmuxReconciler(reader InstanceReader) *TmuxReconciler
+
+   // Reconcile compares in-memory instances against live tmux sessions and
+   // marks stale instances as stopped.
+   func (r *TmuxReconciler) Reconcile(ctx context.Context, instances []*Instance) error
+   ```
+
+3. In `ReviewQueuePoller`, replace the inline reconciliation logic with:
+
+   ```go
+   reconciler *TmuxReconciler
+   ```
+
+   Call `p.reconciler.Reconcile(ctx, instances)` at the appropriate point in the poll loop.
+
+4. Preserve panic recovery: any goroutine spawned inside `TmuxReconciler` must wrap its body in a `defer func() { recover() }()` matching the existing pattern.
+
+5. `go build ./...` and `go test ./...` must pass.
+
+---
+
+#### Task 7.3 — Document `ClaudeController` as authoritative `LastActivity` publisher
+
+**Files**: `session/claude_controller.go`, `session/review_queue_poller.go`, `session/instance.go`
+**Effort**: ~1 hour
+**Depends on**: Task 7.2
+
+**Steps**:
+
+1. Add a doc comment to `ClaudeController`'s `lastActivity` field (or `idleDetector`):
+
+   ```go
+   // lastActivity is the authoritative record of when Claude last produced output.
+   // All other activity timestamps (ReviewState.LastMeaningfulOutput, ReviewQueue.ReviewItem.LastActivity)
+   // must be derived from this value — never maintained independently.
+   ```
+
+2. In `ReviewQueuePoller`, remove the `lastSeenActivity` map (after UUID keying from Story 6 is done) and replace it with a call to `inst.ClaudeController().LastActivity()` (or the equivalent accessor). If the accessor doesn't exist, add it.
+
+3. Add a comment in `Instance.ReviewState` above `LastMeaningfulOutput`:
+
+   ```go
+   // LastMeaningfulOutput is set by ReviewQueuePoller from ClaudeController.LastActivity().
+   // Do not update this field from any other code path.
+   ```
+
+4. `go build ./...` must pass. No test changes expected (behaviour is preserved).
+
+---
+
+## Story 8 — Transport-Agnostic `TerminalSession` Interface
+
+**Addresses**: Audit finding (2026-04-22) — 42 tmux leakage points across `server/services/`
+**Files in scope**: `server/services/session_streamer.go` (rename), `server/services/connectrpc_websocket.go`, `session/instance.go`, `server/services/session_service.go`, `server/services/debug_snapshot.go`
+
+### Problem
+
+The server layer knows far too much about tmux. An audit of `connectrpc_websocket.go` found 21 direct tmux call sites; the `SessionStreamer` interface itself names a tmux protocol feature (`StartControlMode`, `SubscribeControlModeUpdates`). Concrete problems:
+
+1. **Lifecycle bugs caused by misplaced logic.** The Apr 2026 session-restore bug (`DoesSessionExist` → `RestoreWithWorkDir`) lived in the WebSocket handler because there was no interface method that meant "make this session ready to stream". The handler had to reach through `GetTmuxSession()` and call tmux operations directly, bypassing any abstraction.
+
+2. **Backend is unswappable.** There is no seam where tmux could be replaced by docker exec, SSH, or a direct PTY without rewriting the server layer.
+
+3. **Mocks expose tmux concepts.** Any test double for `SessionStreamer` must implement `StartControlMode`, making test vocabulary leak implementation vocabulary.
+
+4. **Two resize methods doing the same thing.** `ResizePTY` and `SetWindowSize` are both called from the handler, both delegating to tmux. A domain-neutral `ResizeTerminal` replaces both.
+
+### Acceptance Criteria
+
+- `SessionStreamer` renamed to `TerminalSession` with domain-neutral method names.
+- `Instance` exposes `EnsureConnectable`, `Snapshot`, `ResizeTerminal`, `Subscribe`, `Unsubscribe` (domain-neutral wrappers).
+- `connectrpc_websocket.go` contains zero calls to `GetTmuxSession()`, `ResizePTY()`, `CapturePaneContentRaw()`, `SetWindowSize()`, `StartControlMode()`, or `StopControlMode()`.
+- `session_service.go` contains zero calls to `ResizePTY()`.
+- `debug_snapshot.go` contains zero calls to `CapturePaneContentRaw()`.
+- No behaviour changes. `go test ./...` passes.
+
+### INVEST
+
+- **Independent**: Interface renaming + thin wrappers on `Instance`; does not conflict with Stories 1-7 at compile time. (Task 8.3 shares `connectrpc_websocket.go` with Story 5 Task 5.2 — coordinate merges.)
+- **Negotiable**: Method signatures on `TerminalSession` are flexible; the constraint is zero tmux vocabulary in the interface or in its callers.
+- **Valuable**: Unlocks backend swap; eliminates an entire class of lifecycle bugs where callers manage what the instance should own.
+- **Estimable**: Mostly mechanical rename + wrapper delegation; main effort is identifying all call sites (audit above enumerates them).
+- **Small**: 5 files, ~120 lines of changes, mostly deletions.
+- **Testable**: `grep -rn "StartControlMode\|StopControlMode\|SubscribeControlModeUpdates\|ResizePTY\|CapturePaneContentRaw\|SetWindowSize\|GetTmuxSession" server/services/` returns zero results.
+
+---
+
+#### Task 8.1 — Define `TerminalSession` interface; rename `session_streamer.go`
+
+**Files**: `server/services/session_streamer.go` (rename to `server/services/terminal_session.go`)
+**Effort**: ~1 hour
+
+**Steps**:
+
+1. Rename `server/services/session_streamer.go` → `server/services/terminal_session.go`.
+
+2. Replace the `SessionStreamer` interface with `TerminalSession`:
+
+   ```go
+   // TerminalSession is the transport-agnostic interface the WebSocket streaming
+   // handler requires from a session. Callers know nothing about tmux, control mode,
+   // PTYs, or any other terminal multiplexer.
+   //
+   // *session.Instance satisfies this interface via the wrapper methods added in Story 8.
+   //
+   // Read ADR-009 before modifying this interface.
+   type TerminalSession interface {
+       // EnsureConnectable prepares the session for streaming.
+       // Implementations handle existence checks and backend restoration internally.
+       // Returns an error if the session cannot be made connectable.
+       EnsureConnectable(ctx context.Context) error
+
+       // Snapshot returns the current terminal content resized to (cols × rows).
+       // The returned bytes are raw ANSI terminal data suitable for replay in xterm.js.
+       Snapshot(ctx context.Context, cols, rows int) ([]byte, error)
+
+       // ResizeTerminal adjusts the terminal to the given dimensions.
+       ResizeTerminal(cols, rows int) error
+
+       // Subscribe registers a consumer for live output updates.
+       // Returns a stable subscriber ID and a receive-only channel of raw output bytes.
+       // The channel is closed when the session ends.
+       Subscribe() (id string, updates <-chan []byte)
+
+       // Unsubscribe removes the consumer registered under id.
+       Unsubscribe(id string)
+   }
+   ```
+
+3. `go build ./...` will fail until Task 8.2 adds the methods to `Instance`. Commit interface only; proceed to Task 8.2 immediately.
+
+**Note**: `context.Context` on `EnsureConnectable` and `Snapshot` is for future cancellation support. Current implementations may ignore it.
+
+---
+
+#### Task 8.2 — Add domain-neutral wrapper methods to `session.Instance`
+
+**Files**: `session/instance.go`
+**Effort**: ~2 hours
+**Depends on**: Task 8.1
+
+**Steps**:
+
+1. Add `EnsureConnectable(ctx context.Context) error`. This method internalises the lifecycle logic that previously lived in `streamViaControlMode`:
+
+   ```go
+   // EnsureConnectable prepares the session for terminal streaming.
+   // It checks whether the backing tmux session exists and restores it if not,
+   // then starts the streaming mechanism. Satisfies TerminalSession.
+   func (i *Instance) EnsureConnectable(_ context.Context) error {
+       ts := i.GetTmuxSession()
+       if ts != nil && !ts.DoesSessionExist() {
+           workDir := i.GetWorkingDirectory()
+           if err := ts.RestoreWithWorkDir(workDir); err != nil {
+               return fmt.Errorf("session restore failed: %w", err)
+           }
+       }
+       return i.StartControlMode()
+   }
+   ```
+
+2. Add `Snapshot(ctx context.Context, cols, rows int) ([]byte, error)`. This replaces the inline capture-pane + resize logic in the handler:
+
+   ```go
+   // Snapshot returns the current terminal content at the requested dimensions.
+   // Satisfies TerminalSession.
+   func (i *Instance) Snapshot(_ context.Context, cols, rows int) ([]byte, error) {
+       if err := i.ResizePTY(cols, rows); err != nil {
+           // Non-fatal: capture may still succeed at existing dimensions.
+           log.WarningLog.Printf("[Snapshot] resize to %dx%d failed: %v", cols, rows, err)
+       }
+       raw, err := i.CapturePaneContentRaw()
+       if err != nil {
+           return nil, err
+       }
+       return []byte(raw), nil
+   }
+   ```
+
+3. Add `ResizeTerminal(cols, rows int) error`. Replaces both `ResizePTY` and `SetWindowSize` at the call sites:
+
+   ```go
+   // ResizeTerminal adjusts the terminal to the given dimensions.
+   // Satisfies TerminalSession.
+   func (i *Instance) ResizeTerminal(cols, rows int) error {
+       return i.ResizePTY(cols, rows)
+   }
+   ```
+
+   `SetWindowSize` is already a delegating wrapper; `ResizePTY` is the canonical call. After call sites are updated in Task 8.3, both old methods may be unexported or removed if nothing outside `session/` calls them.
+
+4. Add `Subscribe() (string, <-chan []byte)` and `Unsubscribe(id string)` as thin wrappers:
+
+   ```go
+   func (i *Instance) Subscribe() (string, <-chan []byte) {
+       return i.SubscribeControlModeUpdates()
+   }
+
+   func (i *Instance) Unsubscribe(id string) {
+       i.UnsubscribeControlModeUpdates(id)
+   }
+   ```
+
+5. Add compile-time assertion in `session/instance.go`:
+
+   ```go
+   // Ensure Instance satisfies the server-layer TerminalSession interface.
+   // Import cycle prevention: assert against the interface copy in session/ if needed,
+   // or use a build tag. Preferred: assert in server/services/ test file.
+   ```
+
+   Add the assertion in a new `server/services/terminal_session_test.go`:
+
+   ```go
+   var _ TerminalSession = (*session.Instance)(nil)
+   ```
+
+6. `go build ./...` must pass.
+
+---
+
+#### Task 8.3 — Update `connectrpc_websocket.go` to use `TerminalSession`
+
+**Files**: `server/services/connectrpc_websocket.go`
+**Effort**: ~3 hours
+**Depends on**: Task 8.2
+**Coordinate with**: Story 5 Task 5.2 (both touch `connectrpc_websocket.go`)
+
+**Steps**:
+
+1. Replace `var streamer SessionStreamer = instance` with `var terminal TerminalSession = instance` throughout `streamViaControlMode`.
+
+2. Replace `streamer.StartControlMode()` and the surrounding `GetTmuxSession()` / `DoesSessionExist()` / `RestoreWithWorkDir()` block with a single call:
+
+   ```go
+   if err := terminal.EnsureConnectable(stream.Context()); err != nil {
+       return fmt.Errorf("session not connectable: %w", err)
+   }
+   defer func() {
+       // StopStreaming is still needed for cleanup; add as TerminalSession method in Task 8.4
+       if err := instance.StopControlMode(); err != nil {
+           log.WarningLog.Printf("[streamViaControlMode] stop: %v", err)
+       }
+   }()
+   ```
+
+   Note: `StopControlMode` can be promoted to `TerminalSession` as `StopStreaming()` in a follow-up or handled via `context.Context` cancellation. For this task, a direct call to `instance.StopControlMode()` is acceptable as a transitional measure — it is the only remaining tmux call in scope after this task.
+
+3. Replace all `instance.ResizePTY(...)` calls with `terminal.ResizeTerminal(...)`.
+
+4. Replace `instance.SetWindowSize(...)` calls with `terminal.ResizeTerminal(...)`.
+
+5. Replace `instance.CapturePaneContentRaw()` calls with `terminal.Snapshot(stream.Context(), targetCols, targetRows)`. Adjust the surrounding resize-nudge logic:
+
+   ```go
+   // The ±1 nudge is now encapsulated in Snapshot. Remove the inline nudge calls.
+   initialContent, err := terminal.Snapshot(stream.Context(), targetCols, targetRows)
+   if err != nil {
+       log.InfoLog.Printf("[streamViaControlMode] snapshot failed, proceeding empty: %v", err)
+       initialContent = nil
+   }
+   ```
+
+   **Known risk**: The current capture-pane path includes quiescence detection (waitForQuiescence) before capturing. `Snapshot` must preserve this ordering. Either pass quiescence state as an argument or keep the quiescence wait in the handler and call `terminal.ResizeTerminal` + `terminal.Snapshot` separately. Do not silently drop quiescence detection.
+
+6. Replace `streamer.SubscribeControlModeUpdates()` with `terminal.Subscribe()`.
+
+7. Replace `streamer.UnsubscribeControlModeUpdates(id)` with `terminal.Unsubscribe(id)`.
+
+8. Remove the `GetTmuxSession()` call entirely (now inside `EnsureConnectable`).
+
+9. Remove the `instance.TmuxPrefix` field access if it is only used to construct `tmuxSessionName` for logging. The log message is acceptable as a one-time lookup; if it is used elsewhere in the function, keep it as a local variable.
+
+10. `go build ./...` and `go test ./server/services/...` must pass.
+
+---
+
+#### Task 8.4 — Update remaining callers; deprecate old method names
+
+**Files**: `server/services/session_service.go`, `server/services/debug_snapshot.go`
+**Effort**: ~1 hour
+**Depends on**: Task 8.2
+
+**Steps**:
+
+1. In `session_service.go` (line 1172): replace `instance.ResizePTY(cols, rows)` with `instance.ResizeTerminal(cols, rows)`.
+
+2. In `debug_snapshot.go` (line 189): replace `inst.CapturePaneContentRaw()` with `inst.Snapshot(ctx, 0, 0)` (zero dimensions = current size; implementation may need a zero-size guard).
+
+3. Add deprecation comments on the old `Instance` methods that are now wrapped:
+
+   ```go
+   // Deprecated: use ResizeTerminal instead. Will be unexported in a future release.
+   func (i *Instance) ResizePTY(cols, rows int) error { ... }
+
+   // Deprecated: use Snapshot instead. Will be unexported in a future release.
+   func (i *Instance) CapturePaneContentRaw() (string, error) { ... }
+
+   // Deprecated: use ResizeTerminal instead. Will be unexported in a future release.
+   func (i *Instance) SetWindowSize(cols, rows int) error { ... }
+   ```
+
+   Do not remove them yet — they may be called from `session/` tests or from `TmuxManager`. Mark for removal after all callers are confirmed updated.
+
+4. Verify the zero-tmux-call invariant:
+
+   ```bash
+   grep -rn "StartControlMode\|StopControlMode\|SubscribeControlModeUpdates\|ResizePTY\|CapturePaneContentRaw\|SetWindowSize\|GetTmuxSession" server/services/
+   ```
+
+   This must return zero results (excluding the `terminal_session.go` interface file and any deprecation comments).
+
+5. `go build ./...` and `go test ./...` must pass.
+
+---
+
 ## Known Issues
 
 ### Potential Bugs Identified During Planning
@@ -873,9 +1520,16 @@ Story 4
 Story 5
   Task 5.3 ──► Task 5.4 ──► Task 5.5   (CreateSession path, independent of stream path)
   Task 5.1 ──► Task 5.2                 (StreamTerminal path, independent of create path)
+
+Story 8
+  Task 8.1 ──► Task 8.2 ──► Task 8.3 ──► Task 8.4
+                                │
+                     (Task 8.3 coordinates with Story 5 Task 5.2 — same file)
 ```
 
-Stories 1, 2, 3, 4, and 5 are mutually independent and can be worked on separate branches simultaneously. Within each story, tasks follow the order listed above.
+Stories 1, 2, 3, 4, 5, and 8 are mutually independent and can be worked on separate branches simultaneously. Within each story, tasks follow the order listed above.
+
+**Story 8 + Story 5 coordination**: Tasks 8.3 and 5.2 both modify `connectrpc_websocket.go`. If worked in parallel, merge Story 5 first (pure extraction, no interface changes) then apply Story 8 (interface rename, call-site updates). If worked sequentially, Story 8 after Story 5 is cleanest.
 
 ---
 
@@ -884,9 +1538,298 @@ Stories 1, 2, 3, 4, and 5 are mutually independent and can be worked on separate
 For a single developer, the recommended sequence is:
 
 1. **Story 5 first** (Tasks 5.1-5.5) — purely mechanical extraction within one file, zero interface changes, builds confidence and familiarity with the service layer.
-2. **Story 1** (Tasks 1.1-1.3) — highest risk reduction; removes the concrete type assertion that undermines test fidelity.
-3. **Story 2** (Tasks 2.1-2.3) — mechanical extraction in `dependencies.go`; reduces future ordering bugs.
-4. **Story 3** (Tasks 3.1-3.3) — interface split; can be done safely after Stories 1 and 2 have settled.
-5. **Story 4 last** (Tasks 4.1-4.2) — requires the JSON migration decision to be made carefully; do not merge until the migration strategy (flat fields vs. nested struct) is agreed.
+2. **Story 8** (Tasks 8.1-8.4) — immediately after Story 5; cleans up the interface while Story 5's extraction points are fresh. Eliminates the class of lifecycle bugs (session-restore race) that Story 5 alone cannot prevent.
+3. **Story 1** (Tasks 1.1-1.3) — highest risk reduction; removes the concrete type assertion that undermines test fidelity.
+4. **Story 2** (Tasks 2.1-2.3) — mechanical extraction in `dependencies.go`; reduces future ordering bugs.
+5. **Story 3** (Tasks 3.1-3.3) — interface split; can be done safely after Stories 1 and 2 have settled.
+6. **Story 4 last** (Tasks 4.1-4.2) — requires the JSON migration decision to be made carefully; do not merge until the migration strategy (flat fields vs. nested struct) is agreed.
 
-For a team of two developers, Stories 1+5 and Stories 2+3 can be worked in parallel. Story 4 should be reviewed by both before merging due to the schema impact.
+For a team of two developers, Stories 5+8 and Stories 1+2 can be worked in parallel. Story 3 follows Stories 1+2. Story 4 should be reviewed by both before merging due to the schema impact.
+
+---
+
+## Integration Checkpoints
+
+These are objectively verifiable gates between story groups. Do not move to the next group until the checkpoint passes.
+
+### Checkpoint 1 — After Story 6 (Tasks 6.1, 6.2, 6.3)
+
+All three tasks can be verified independently; together they constitute the P0/P1 bug-fix group.
+
+**6.1 — UUID keying**
+- `grep -n "Title" session/review_queue_poller.go` returns zero hits on map key assignments (`lastSeenActivity[`, `cachedContent[`).
+- `FindInstance` is absent from the codebase: `grep -rn "FindInstance[^B]" server/ session/` returns no results.
+- `FindInstanceByUUID` exists: `grep -rn "FindInstanceByUUID" server/ session/` returns at least two call sites.
+- `go build ./...` passes.
+
+**6.2 — InstanceReader interface**
+- `grep -n "storage \*Storage" session/review_queue_poller.go` returns zero hits.
+- `session.InstanceReader` exists: `grep -n "InstanceReader" session/storage.go` returns the interface definition and the compile-time assertion.
+- A test in `session/` or `server/services/` constructs `ReviewQueuePoller` with a fake `InstanceReader` (not `*session.Storage`) and the test file compiles.
+- `go test ./session/... ./server/...` passes.
+
+**6.3 — Domain error types**
+- `session/errors.go` exists and defines `ErrSessionNotFound` and `ErrSessionAlreadyExists`.
+- `grep -rn '"session not found' session/ server/` returns zero hits (all replaced with typed errors).
+- `grep -rn 'strings.Contains(err.Error()' server/services/session_service.go` returns zero hits for "session not found" pattern.
+- `go test ./...` passes.
+
+**Story 1 — InstanceStore abstraction leak**
+- `grep -n "\.(\*session\.Storage)" server/services/session_service.go` returns zero hits.
+- `GetStorage()` is absent: `grep -rn "GetStorage()" server/` returns zero hits.
+- `SessionServiceStore` exists in `server/services/session_service.go`.
+- A test in `server/services/` passes a fake `SessionServiceStore` (not `*session.Storage`) and exercises `RulesStore` or `AnalyticsStore` code paths without panicking or no-oping.
+- `go test ./server/services/...` passes.
+
+---
+
+### Checkpoint 2 — After Story 7 (Tasks 7.1, 7.2, 7.3)
+
+**7.1 — TerminalContentCache extracted**
+- `session/terminal_content_cache.go` exists.
+- `grep -n "cachedContent" session/review_queue_poller.go` returns zero hits (cache fields moved to `TerminalContentCache`).
+- A test in `session/` constructs `TerminalContentCache` with a fake tmux executor and calls `Capture` — it compiles and runs without a live tmux process.
+- `go build ./...` passes.
+
+**7.2 — TmuxReconciler extracted**
+- `session/tmux_reconciler.go` exists.
+- `go test ./session/...` passes with no panics in reconciliation paths.
+- Any goroutine spawned inside `TmuxReconciler` contains a `defer func() { recover() }()` block.
+
+**7.3 — ClaudeController authority documented**
+- `session/claude_controller.go` contains the doc comment marking `lastActivity` as the authoritative source.
+- `grep -n "lastSeenActivity" session/review_queue_poller.go` returns zero hits (map removed; replaced by `inst.ClaudeController().LastActivity()` call).
+- `session/instance.go` contains the doc comment on `LastMeaningfulOutput` restricting writers.
+- `go build ./...` passes.
+
+---
+
+### Checkpoint 3 — After Stories 2, 3, 5
+
+**Story 2 — RuntimeWirer**
+- `grep -c "^func " server/dependencies.go` returns a count reflecting that `BuildRuntimeDeps` itself is under 30 lines.
+- `RuntimeWirer` struct and at least three methods exist in `server/dependencies.go`.
+- `go test ./server/...` passes.
+
+**Story 3 — Repository split**
+- `grep -n "^type Repository " session/repository.go` returns the type alias (`= FullRepository`).
+- `grep -n "SessionRepository\|SessionDomainRepository\|RulesRepository\|AnalyticsRepository\|FullRepository" session/repository.go` returns all five interface definitions.
+- `grep -n "var _" session/ent_repository.go` returns five compile-time assertions.
+- `go build ./...` passes.
+
+**Story 5 — Mega-function split**
+- `resolveStreamInstance` exists as a method on `*SessionService`.
+- `runTerminalStream` exists as a method on `*SessionService`.
+- `validateCreateRequest` exists as a package-level function.
+- `buildInstanceFromRequest` exists as a package-level function.
+- `startAndWireInstance` exists as a method on `*SessionService`.
+- `go test ./server/services/...` passes; at least one new unit test calls `validateCreateRequest` or `buildInstanceFromRequest` without constructing a `SessionService`.
+
+---
+
+### Checkpoint 5 — After Story 8
+
+**8.1 — Interface defined**
+- `server/services/terminal_session.go` exists with `TerminalSession` interface declaring `EnsureConnectable`, `Snapshot`, `ResizeTerminal`, `Subscribe`, `Unsubscribe`.
+- `server/services/session_streamer.go` no longer exists (renamed).
+- `go build ./...` passes.
+
+**8.2 — Instance satisfies interface**
+- `grep -n "var _ TerminalSession" server/services/terminal_session_test.go` returns the compile-time assertion.
+- `go build ./...` passes.
+
+**8.3 — Server layer clean**
+- `grep -rn "StartControlMode\|StopControlMode\|SubscribeControlModeUpdates\|ResizePTY\|CapturePaneContentRaw\|SetWindowSize\|GetTmuxSession" server/services/` returns zero hits (excluding the interface definition file and any deprecation-comment lines).
+- `go test ./server/services/...` passes.
+
+**8.4 — Old callers updated**
+- `grep -rn "ResizePTY\|CapturePaneContentRaw" server/` returns zero hits.
+- Deprecated comments exist on the old `Instance` methods.
+- `go test ./...` passes.
+
+---
+
+### Checkpoint 4 — After Story 4 (optional; defer if schema migration is not ready)
+
+- `GitHubPRStatus` struct exists in `session/instance.go` or `session/github.go`.
+- `InstanceData.PRStatus` is a single field of type `GitHubPRStatus`.
+- If nested JSON serialisation is chosen: a migration test in `session/` loads a fixture file with the old flat field schema and verifies `PRStatus` is populated correctly.
+- If flat fields are preserved on `InstanceData` (in-memory only change): `grep -n "GitHubPRState\|GitHubPRIsDraft" session/instance.go` returns zero hits (fields removed from `Instance`, not from `InstanceData`).
+- `go test ./session/...` passes.
+
+---
+
+## Context Preparation Guide
+
+Read these files before starting each story. The list is minimal — only files whose design decisions directly constrain the implementation.
+
+### Before Story 6 (Tasks 6.1, 6.2, 6.3) — ReviewQueuePoller bugs
+
+| File | What to look for |
+|------|-----------------|
+| `session/review_queue_poller.go` | All map field declarations (lines 66-68); `NewReviewQueuePoller` constructor (line 83); `SetInstances` and `RemoveInstance` methods; all call sites of `lastSeenActivity` and `cachedContent` |
+| `session/storage.go` | `InstanceStore` interface definition (line 144); `InstanceData.UUID` field (line 13); existing `var _ InstanceStore = (*Storage)(nil)` pattern |
+| `session/instance.go` | `Instance.UUID` field; confirm UUID is set on construction |
+| `server/services/session_service.go` | Calls to `FindInstance` (the method being renamed); calls to `NewReviewQueuePoller` or `NewReviewQueuePollerWithConfig` |
+| `server/dependencies.go` | Call to `NewReviewQueuePoller` — this is the injection point that must be updated after Task 6.2 |
+
+Key concept: `ApprovalMetadataProvider.GetApprovalMetadataBySession(sessionID string)` already passes a session ID (likely UUID). Confirm whether `sessionID` is UUID or Title before Task 6.1 to determine if `ApprovalMetadataProvider` callers also need updating.
+
+---
+
+### Before Story 1 — InstanceStore abstraction leak
+
+| File | What to look for |
+|------|-----------------|
+| `server/services/session_service.go` | The type assertion at lines 103-105; `concStorage` usages (lines 134, 137, 140); `GetStorage()` at lines 232-237 and all its callers |
+| `server/services/rules_service.go` | Constructor signature — what type does it accept? What methods does it call on that argument? |
+| `server/services/review_queue_service.go` | Same as rules_service.go |
+| `session/storage.go` | `AllRules`, `UpsertRule`, `DeleteRule`, `RecordAnalytics`, `ListAnalytics` methods — these define the method sets for `RulesStorage` and `AnalyticsStorage` |
+| `server/dependencies.go` | Any call to `GetStorage()` that must be updated after it is removed |
+
+Key concept (ADR-006): The composed `SessionServiceStore` interface is defined in `server/services/session_service.go`, not in `session/`. Read ADR-006 before Task 1.3.
+
+---
+
+### Before Story 7 — ReviewQueuePoller decomposition
+
+| File | What to look for |
+|------|-----------------|
+| `session/review_queue_poller.go` | The full file — understand all five responsibilities before extracting any; identify which goroutines exist and where panic recovery is applied |
+| `session/claude_controller.go` | `InstanceContext` interface (line 16); `idleDetector` and `LastActivity()` accessor; this is the authority source per ADR-008 |
+| `session/instance.go` | `Instance.ReviewState` struct and `LastMeaningfulOutput` field |
+
+Dependency: Story 7 must follow Story 6 Task 6.1 (UUID keying) so extracted types are keyed by UUID from the start. Do not begin Story 7 until Story 6 Task 6.1 is merged.
+
+---
+
+### Before Story 2 — RuntimeWirer
+
+| File | What to look for |
+|------|-----------------|
+| `server/dependencies.go` | The full `BuildRuntimeDeps` function (lines 366-556); the twelve numbered-comment sections; the nil guard at line 368; the `ServiceDeps` struct |
+
+No interface changes. This is a purely mechanical extraction. The key risk is preserving the non-blocking goroutine semantics in `startControllers` — read the existing goroutine block carefully before extracting.
+
+---
+
+### Before Story 3 — Repository interface split
+
+| File | What to look for |
+|------|-----------------|
+| `session/repository.go` | The full `Repository` interface (lines 11-90); all 21 method signatures |
+| `session/ent_repository.go` | Confirm `EntRepository` implements all 21 methods; look for any methods that return `errors.New("not implemented")` |
+| `session/storage.go` | How `Storage` holds and delegates to `Repository`; the `Session`-first convenience methods (lines 343-367) — these map to `SessionDomainRepository` |
+
+The `Repository = FullRepository` type alias approach (Task 3.1 step 3) is a non-breaking change. Confirm the alias compiles before proceeding to Task 3.2.
+
+---
+
+### Before Story 5 — Mega-function split
+
+| File | What to look for |
+|------|-----------------|
+| `server/services/session_service.go` | `StreamTerminal` full body (lines 947-1238); `CreateSession` full body (lines 501-663); the `loadInstancesWithWiring()` side-effect call at line 974 (see Known Issues section) |
+
+No interface changes. The key risk in `StreamTerminal` is the `loadInstancesWithWiring()` fallback side effect (Task 5.1 Known Risk). Read it before extracting `resolveStreamInstance`.
+
+---
+
+### Before Story 8 — Transport-agnostic TerminalSession interface
+
+| File | What to look for |
+|------|-----------------|
+| `server/services/session_streamer.go` | The four existing `SessionStreamer` methods — these are what Task 8.1 replaces |
+| `server/services/connectrpc_websocket.go` | The full `streamViaControlMode` and `streamViaTmuxCapturePane` bodies; identify every call site in the audit table in Story 8 before making changes |
+| `session/instance.go` | The existing `StartControlMode`, `ResizePTY`, `CapturePaneContentRaw`, `SetWindowSize`, `GetTmuxSession` methods — these are what Task 8.2 wraps |
+| `server/services/session_service.go` | Line 1172: the `ResizePTY` call being moved to `ResizeTerminal` |
+| `server/services/debug_snapshot.go` | Line 189: the `CapturePaneContentRaw` call being moved to `Snapshot` |
+
+Read ADR-009 before beginning. The critical constraint: `EnsureConnectable` must internalise **all** of the tmux lifecycle logic (existence check + restore + start) so callers are reduced to a single method call.
+
+**Coordination check**: Confirm Story 5 Task 5.2 is merged before starting Task 8.3. Both tasks modify `connectrpc_websocket.go`.
+
+---
+
+### Before Story 4 — GitHubPRStatus value object
+
+| File | What to look for |
+|------|-----------------|
+| `session/storage.go` | PR status fields in `InstanceData` (lines 49-57); `UpdateInstancePRStatus` method (line 320) — the current flat-field update API |
+| `session/instance.go` | PR status fields in `Instance` (lines 159-176) |
+| `session/ent_repository.go` | Whether PR fields are stored as individual columns or as a JSON blob — this determines the migration strategy |
+
+**Stop and decide before Task 4.1**: Choose between (a) nested JSON struct (`pr_status: {...}`) with a migration step, or (b) in-memory-only `GitHubPRStatus` with flat fields preserved on `InstanceData`. Document the decision in a comment at the top of `session/storage.go`. The Known Issues section of this plan describes both options.
+
+---
+
+## Epic Success Criteria
+
+The epic is complete when all of the following are objectively true. Each criterion is verifiable by running the listed command or inspecting the listed location.
+
+### Structural
+
+1. **Zero type assertions on `*session.Storage` outside `session/`**
+   `grep -rn "\.(\*session\.Storage)" server/` returns zero results.
+
+2. **`SessionServiceStore` composed interface exists**
+   `grep -n "SessionServiceStore" server/services/session_service.go` returns the interface definition.
+
+3. **`GetStorage()` removed**
+   `grep -rn "GetStorage()" .` returns zero results.
+
+4. **`ReviewQueuePoller` maps keyed by UUID**
+   `grep -n "lastSeenActivity\|cachedContent" session/review_queue_poller.go` either returns zero results (if maps are fully removed per Story 7) or returns only UUID-keyed field declarations with the comment `// Instance.UUID →`.
+
+5. **`FindInstanceByUUID` replaces `FindInstance`**
+   `grep -rn "FindInstance[^B]" .` returns zero results.
+
+6. **Domain error types defined and used**
+   `session/errors.go` exists. `grep -rn '"session not found' session/ server/` returns zero results.
+
+7. **`TerminalContentCache` extracted**
+   `session/terminal_content_cache.go` exists with `NewTerminalContentCache`, `Capture`, and `Get` exported.
+
+8. **`TmuxReconciler` extracted**
+   `session/tmux_reconciler.go` exists with `NewTmuxReconciler` and `Reconcile` exported.
+
+9. **`Repository` split into four sub-interfaces**
+   `grep -n "^type.*Repository interface" session/repository.go` returns at least five lines (`SessionRepository`, `SessionDomainRepository`, `RulesRepository`, `AnalyticsRepository`, `FullRepository`).
+
+10. **`BuildRuntimeDeps` reduced to orchestrator**
+    The body of `BuildRuntimeDeps` in `server/dependencies.go` contains no inline logic — only calls to `RuntimeWirer` methods and a final `return`.
+
+10. **`TerminalSession` interface replaces `SessionStreamer`**
+    `grep -n "SessionStreamer" server/services/` returns zero results.
+    `grep -n "TerminalSession" server/services/terminal_session.go` returns the interface definition.
+
+11. **Server layer contains zero tmux vocabulary**
+    `grep -rn "StartControlMode\|StopControlMode\|SubscribeControlModeUpdates\|ResizePTY\|CapturePaneContentRaw\|SetWindowSize\|GetTmuxSession" server/services/` returns zero results (excluding the interface file and deprecation comments).
+
+12. **Compile-time assertion exists**
+    `grep -n "var _ TerminalSession" server/services/terminal_session_test.go` returns the assertion line.
+
+### Behavioural (no regressions)
+
+13. **Full test suite passes**
+    `go test ./...` exits 0.
+
+14. **Linting passes**
+    `make lint` exits 0.
+
+15. **Build passes**
+    `go build ./...` exits 0.
+
+### Test coverage (new coverage introduced)
+
+16. **ReviewQueuePoller unit-testable without SQLite**
+    At least one test in `session/` or `server/services/` constructs `ReviewQueuePoller` (or its successor after Story 7) using only interface fakes — no `*session.Storage`, no `*ent.Client`.
+
+17. **`validateCreateRequest` has a unit test**
+    At least one test calls `validateCreateRequest(req, instances)` directly (package-level function, no `SessionService` construction needed).
+
+18. **`TerminalContentCache` has a unit test**
+    At least one test in `session/` exercises `TerminalContentCache.Capture` and `Get` with a fake tmux executor.
+
+19. **`TerminalSession` compile-time assertion exists**
+    `server/services/terminal_session_test.go` contains `var _ TerminalSession = (*session.Instance)(nil)` and the file compiles.

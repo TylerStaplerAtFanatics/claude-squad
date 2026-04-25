@@ -97,7 +97,7 @@ func NewServer(addr string) *Server {
 	} else {
 		log.InfoLog.Printf("Server dependencies built in %v", time.Since(startTime))
 		// Start background components
-		serverCtx := context.Background()
+		serverCtx := connCtx
 		go deps.ReactiveQueueMgr.Start(serverCtx)
 		log.InfoLog.Printf("ReactiveQueueManager started")
 

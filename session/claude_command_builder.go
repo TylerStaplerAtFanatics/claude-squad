@@ -39,13 +39,13 @@ func (b *ClaudeCommandBuilder) Build() string {
 	}
 
 	// No session data means no resumption possible
-	if b.claudeSession == nil || b.claudeSession.SessionID == "" {
+	if b.claudeSession == nil || b.claudeSession.ConversationUUID == "" {
 		log.DebugLog.Printf("No Claude session data available for resumption")
 		return b.baseProgram
 	}
 
 	// Validate session ID format before using it
-	sessionID := b.claudeSession.SessionID
+	sessionID := b.claudeSession.ConversationUUID
 	if !isValidUUID(sessionID) {
 		log.WarningLog.Printf("Invalid UUID format for session ID: %s, skipping resumption", sessionID)
 		return b.baseProgram

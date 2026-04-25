@@ -6,8 +6,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/tstapler/stapler-squad/executor"
 	"github.com/tstapler/stapler-squad/session/tmux"
@@ -163,6 +165,7 @@ type TmuxTestServer struct {
 	socketName string
 	executor   executor.Executor
 	t          *testing.T
+	mu         sync.Mutex // serializes tmux new-session calls; the socket doesn't tolerate concurrent creates
 }
 
 // CreateIsolatedTmuxServer creates a new isolated tmux server for testing.
@@ -208,9 +211,14 @@ func (s *TmuxTestServer) GetSocketName() string {
 	return s.socketName
 }
 
-// CreateSession creates and starts a new tmux session on this isolated server
+// CreateSession creates and starts a new tmux session on this isolated server.
+// Session creation is serialized: the tmux socket does not handle concurrent
+// new-session invocations reliably, so concurrent callers queue here.
 func (s *TmuxTestServer) CreateSession(sessionName string, command string) (*tmux.TmuxSession, error) {
 	s.t.Helper()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	// Use tmux dependency injection to create session on isolated server
 	// Use a test-specific prefix to avoid conflicts with production sessions
@@ -357,6 +365,15 @@ func tmuxSocketPath(socketName string) string {
 // This is automatically called via t.Cleanup() but can also be called manually.
 func (s *TmuxTestServer) Cleanup() {
 	s.t.Helper()
+
+	// Stop the server registry for this socket BEFORE killing the server.
+	// The registry runs a reconnectLoop goroutine that will restart the tmux
+	// server immediately after kill-server unless we cancel its context first.
+	tmux.StopServerRegistry(s.socketName)
+
+	// Give the reconnectLoop goroutine time to observe the cancellation
+	// before we issue kill commands.
+	time.Sleep(50 * time.Millisecond)
 
 	// Try to kill all sessions first (cleaner)
 	if err := s.KillAllSessions(); err != nil {

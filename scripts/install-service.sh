@@ -146,6 +146,12 @@ install_macos() {
     mkdir -p "$plist_dir"
     mkdir -p "$log_dir"
 
+    # Build a PATH that preserves the user's shell PATH first (so custom tools,
+    # go/bin, nvm, rbenv, etc. take precedence), then appends both Homebrew
+    # prefixes (Apple Silicon + Intel) as a fallback so tools like tmux, git,
+    # and claude are found even if not already on the shell PATH.
+    plist_path="$PATH:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin"
+
     cat > "$plist_file" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -157,8 +163,9 @@ install_macos() {
 
     <key>ProgramArguments</key>
     <array>
-        <string>$bin_path</string>
-        <string>--remote-access</string>
+        <string>/bin/zsh</string>
+        <string>-c</string>
+        <string>[ -f "$HOME/.zshrc" ] &amp;&amp; source "$HOME/.zshrc" 2&gt;/dev/null; exec $bin_path --remote-access</string>
     </array>
 
     <key>RunAtLoad</key>
@@ -178,7 +185,7 @@ install_macos() {
         <key>HOME</key>
         <string>$HOME</string>
         <key>PATH</key>
-        <string>$PATH</string>
+        <string>$plist_path</string>
     </dict>
 
     <key>StandardOutPath</key>
@@ -213,6 +220,24 @@ EOF
     echo ""
     log_info "View logs:"
     echo "    tail -f $log_dir/service.log"
+
+    # ── Full Disk Access reminder ─────────────────────────────────────────────
+    # stapler-squad creates sessions in arbitrary directories (~/Documents,
+    # ~/Developer, etc.).  Without Full Disk Access, macOS pops a TCC consent
+    # dialog on every startup for each protected directory it touches.
+    # Granting Full Disk Access suppresses those dialogs permanently.
+    echo ""
+    log_info "macOS Privacy — Full Disk Access"
+    echo "    stapler-squad needs Full Disk Access to create sessions in any"
+    echo "    directory without macOS prompting for consent each time."
+    echo ""
+    echo "    To grant it:"
+    echo "      1. Open: System Settings → Privacy & Security → Full Disk Access"
+    echo "      2. Click '+' and add: $bin_path"
+    echo "      3. Restart the service: launchctl kickstart -k gui/\$(id -u)/com.stapler-squad"
+    echo ""
+    echo "    Opening Privacy & Security now..."
+    open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles" 2>/dev/null || true
 }
 
 # ── Uninstall ─────────────────────────────────────────────────────────────────

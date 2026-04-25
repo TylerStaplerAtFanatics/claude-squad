@@ -1,4 +1,5 @@
 "use client";
+// +feature: session-list session-search session-filter session-groupby
 
 import { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -14,6 +15,7 @@ import { useSessionService } from "@/lib/hooks/useSessionService";
 import { useSessionNotifications } from "@/lib/hooks/useSessionNotifications";
 import { useKeyboard } from "@/lib/hooks/useKeyboard";
 import { useAuth } from "@/lib/contexts/AuthContext";
+import { useOmnibar } from "@/lib/contexts/OmnibarContext";
 import { getApiBaseUrl } from "@/lib/config";
 import { SessionFormData } from "@/lib/validation/sessionSchema";
 import * as styles from "./page.css";
@@ -22,6 +24,7 @@ function HomeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { authEnabled, authenticated, loading: authLoading } = useAuth();
+  const { openInCreationMode } = useOmnibar();
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [activeTab, setActiveTab] = useState<SessionDetailTab>("info");
   const [isHelpOpen, setShowHelp] = useState(false);
@@ -108,7 +111,6 @@ function HomeContent() {
     restartSession,
     createCheckpoint,
     listCheckpoints,
-    forkSession,
     listSessions,
     updateSession,
     getSession,
@@ -318,28 +320,10 @@ function HomeContent() {
     });
   };
 
-  // Handle session duplication - open wizard modal with session data
-  const handleDuplicateSession = (sessionId: string) => {
-    wizardTriggerRef.current = document.activeElement as HTMLElement;
-    openedViaQueryParam.current = false;
-    getSession(sessionId).then((session) => {
-      if (session) {
-        setWizardInitialData({
-          title: `${session.title}-copy`,
-          path: session.path,
-          workingDir: session.workingDir || "",
-          branch: session.branch || "",
-          program: session.program || "claude",
-          category: session.category || "",
-          prompt: "",
-          autoYes: false,
-        });
-      }
-      setShowWizard(true);
-    }).catch(() => {
-      setShowWizard(true);
-    });
-  };
+  // Handle session clone - open omnibar in creation mode
+  const handleCloneSession = useCallback((_sessionId: string) => {
+    openInCreationMode();
+  }, [openInCreationMode]);
 
   // Handle new session - open wizard modal
   const handleNewSession = () => {
@@ -472,7 +456,7 @@ function HomeContent() {
             onPauseSession={pauseSession}
             onResumeSession={handleResumeRequest}
             onDirectResumeSession={handleDirectResume}
-            onDuplicateSession={handleDuplicateSession}
+            onCloneSession={handleCloneSession}
             onNewWorkspaceSession={handleNewWorkspaceSession}
             onRenameSession={renameSession}
             onRestartSession={restartSession}
@@ -480,7 +464,6 @@ function HomeContent() {
             onNewSession={handleNewSession}
             onCreateCheckpoint={createCheckpoint}
             onListCheckpoints={listCheckpoints}
-            onForkFromCheckpoint={forkSession}
           />
         )}
       </main>

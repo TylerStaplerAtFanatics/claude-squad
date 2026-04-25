@@ -390,6 +390,7 @@ func (s *SessionService) SetConfigService(svc *ConfigService) {
 
 // ListSessions returns all sessions with optional filtering.
 // This includes both managed sessions and external mux-enabled sessions.
+// +api: session:list
 func (s *SessionService) ListSessions(
 	ctx context.Context,
 	req *connect.Request[sessionv1.ListSessionsRequest],
@@ -485,9 +486,9 @@ func (s *SessionService) GetSession(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
 	}
 
-	// Find instance by ID (using Title as ID)
+	// Find instance by ID (UUID or legacy Title).
 	for _, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			return connect.NewResponse(&sessionv1.GetSessionResponse{
 				Session: adapters.InstanceToProto(inst),
 			}), nil
@@ -498,6 +499,7 @@ func (s *SessionService) GetSession(
 }
 
 // CreateSession initializes a new AI agent session with tmux and git worktree.
+// +api: session:create
 func (s *SessionService) CreateSession(
 	ctx context.Context,
 	req *connect.Request[sessionv1.CreateSessionRequest],
@@ -510,13 +512,15 @@ func (s *SessionService) CreateSession(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
 	}
 
-	// Check if session with this title already exists
-	instances, err := s.storage.LoadInstances()
+	// Check if session with this title already exists.
+	// Use ListInstanceData (raw DB rows) rather than LoadInstances to avoid
+	// the side-effect of FromInstanceData calling Start() on every session.
+	existing, err := s.storage.ListInstanceData()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list instances: %w", err))
 	}
-	for _, inst := range instances {
-		if inst.Title == req.Msg.Title {
+	for _, data := range existing {
+		if data.Title == req.Msg.Title {
 			return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("session with title '%s' already exists", req.Msg.Title))
 		}
 	}
@@ -626,6 +630,8 @@ func (s *SessionService) CreateSession(
 	// Start the session (initializes tmux + git worktree)
 	// Use Start(true) to indicate this is a first-time setup
 	if err := instance.Start(true); err != nil {
+		log.ErrorLog.Printf("[CreateSession] failed to start session '%s': %v", instance.Title, err)
+		log.ForSession(instance.Title).Error("[CreateSession] failed to start: %v", err)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start session: %w", err))
 	}
 
@@ -635,11 +641,11 @@ func (s *SessionService) CreateSession(
 		log.WarningLog.Printf("[CreateSession] Failed to inject hook config for session '%s': %v", instance.Title, err)
 	}
 
-	// Save instance to storage
-	// Note: Storage uses SaveInstances (plural) which saves all instances
-	// We need to load, append, and save all instances
-	updatedInstances := append(instances, instance)
-	if err := s.storage.SaveInstances(updatedInstances); err != nil {
+	// Save only the new instance to storage.
+	// Using AddInstance avoids loading and re-writing all instances (which would call
+	// FromInstanceData/Start on every session and replace live poller instances with
+	// cold storage copies).
+	if err := s.storage.AddInstance(instance); err != nil {
 		// Cleanup on save failure
 		if destroyErr := instance.Destroy(); destroyErr != nil {
 			// Log cleanup error but return original save error
@@ -648,10 +654,11 @@ func (s *SessionService) CreateSession(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save instance: %w", err))
 	}
 
-	// CRITICAL: Update the ReviewQueuePoller's instance references after creating new session
+	// Add only the new session to the poller, preserving all existing live instances.
+	// Using AddInstance (not SetInstances) avoids replacing live instances with cold copies.
 	if s.reviewQueuePoller != nil {
-		s.reviewQueuePoller.SetInstances(updatedInstances)
-		log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after CreateSession for '%s'", instance.Title)
+		s.reviewQueuePoller.AddInstance(instance)
+		log.InfoLog.Printf("[ReviewQueue] Added new session '%s' to poller", instance.Title)
 	}
 
 	// Publish SessionCreated event to all watchers
@@ -663,6 +670,7 @@ func (s *SessionService) CreateSession(
 }
 
 // UpdateSession modifies session properties (pause/resume, category, title).
+// +api: session:update
 func (s *SessionService) UpdateSession(
 	ctx context.Context,
 	req *connect.Request[sessionv1.UpdateSessionRequest],
@@ -680,7 +688,7 @@ func (s *SessionService) UpdateSession(
 	var instance *session.Instance
 	var instanceIndex int
 	for i, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			instance = inst
 			instanceIndex = i
 			break
@@ -735,9 +743,17 @@ func (s *SessionService) UpdateSession(
 		// If the session is running, restart it with the new program
 		if instance.Status == session.Running {
 			if err := instance.Restart(true); err != nil {
+				log.ErrorLog.Printf("[UpdateSession] failed to restart session '%s' after program change: %v", instance.Title, err)
+				log.ForSession(instance.Title).Error("[UpdateSession] failed to restart after program change: %v", err)
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart session after program change: %w", err))
 			}
 		}
+	}
+
+	// Handle working directory update
+	if req.Msg.WorkingDir != nil {
+		instance.WorkingDir = *req.Msg.WorkingDir
+		updatedFields = append(updatedFields, "working_dir")
 	}
 
 	// Handle status change (pause/resume) LAST - after all metadata updates.
@@ -798,6 +814,7 @@ func (s *SessionService) UpdateSession(
 }
 
 // DeleteSession stops and removes a session, cleaning up resources.
+// +api: session:delete
 func (s *SessionService) DeleteSession(
 	ctx context.Context,
 	req *connect.Request[sessionv1.DeleteSessionRequest],
@@ -807,18 +824,19 @@ func (s *SessionService) DeleteSession(
 	}
 
 	// Verify existence using raw data — no PTY side effects.
+	// Match by Title OR UUID so that sessions created after UUID assignment are found correctly.
 	dataSlice, err := s.storage.ListInstanceData()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list instances: %w", err))
 	}
-	found := false
+	sessionTitle := ""
 	for _, d := range dataSlice {
-		if d.Title == req.Msg.Id {
-			found = true
+		if d.Title == req.Msg.Id || d.UUID == req.Msg.Id {
+			sessionTitle = d.Title
 			break
 		}
 	}
-	if !found {
+	if sessionTitle == "" {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.Id))
 	}
 
@@ -834,8 +852,8 @@ func (s *SessionService) DeleteSession(
 		}
 	}
 
-	// Delete from storage.
-	if err := s.storage.DeleteInstance(req.Msg.Id); err != nil {
+	// Delete from storage using Title (the storage key), not the client-supplied ID which may be a UUID.
+	if err := s.storage.DeleteInstance(sessionTitle); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete instance from storage: %w", err))
 	}
 
@@ -868,6 +886,7 @@ func (s *SessionService) RemoveFromAllPollers(id string) {
 
 // WatchSessions streams real-time session events (created/updated/deleted).
 // Sends initial snapshot of all sessions, then subscribes to real-time updates.
+// +api: session:watch
 func (s *SessionService) WatchSessions(
 	ctx context.Context,
 	req *connect.Request[sessionv1.WatchSessionsRequest],
@@ -978,7 +997,7 @@ func (s *SessionService) StreamTerminal(
 			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
 		}
 		for _, inst := range instances {
-			if inst.Title == initialMsg.SessionId {
+			if inst.MatchesID(initialMsg.SessionId) {
 				instance = inst
 				break
 			}
@@ -1001,6 +1020,8 @@ func (s *SessionService) StreamTerminal(
 	// Get PTY for reading terminal output
 	ptyFile, err := instance.GetPTYReader()
 	if err != nil {
+		log.ErrorLog.Printf("[StreamSession] failed to get PTY reader for session '%s': %v", instance.Title, err)
+		log.ForSession(instance.Title).Error("[StreamSession] failed to get PTY reader: %v", err)
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get PTY reader: %w", err))
 	}
 
@@ -1233,6 +1254,7 @@ func (s *SessionService) StreamTerminal(
 		return nil // Clean shutdown
 	case err := <-errCh:
 		log.ErrorLog.Printf("StreamTerminal: error for session %s: %v", initialMsg.SessionId, err)
+		log.ForSession(initialMsg.SessionId).Error("StreamTerminal: stream error: %v", err)
 		return connect.NewError(connect.CodeInternal, err)
 	}
 }
@@ -1246,20 +1268,7 @@ func (s *SessionService) GetSessionDiff(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session id is required"))
 	}
 
-	instances, err := s.loadInstancesWithWiring()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
-	}
-
-	// Find instance by ID (using Title as ID)
-	var instance *session.Instance
-	for _, inst := range instances {
-		if inst.Title == req.Msg.Id {
-			instance = inst
-			break
-		}
-	}
-
+	instance := s.findInstance(req.Msg.Id)
 	if instance == nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("session not found: %s", req.Msg.Id))
 	}
@@ -1386,6 +1395,7 @@ func (s *SessionService) GetClaudeHistoryMessages(
 }
 
 // SearchClaudeHistory performs full-text search across Claude conversation history.
+// +api: history:search
 func (s *SessionService) SearchClaudeHistory(
 	ctx context.Context,
 	req *connect.Request[sessionv1.SearchClaudeHistoryRequest],
@@ -1472,7 +1482,7 @@ func (s *SessionService) RenameSession(
 	var instance *session.Instance
 	var instanceIndex int
 	for i, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			instance = inst
 			instanceIndex = i
 			break
@@ -1543,7 +1553,7 @@ func (s *SessionService) RestartSession(
 	var instance *session.Instance
 	var instanceIndex int
 	for i, inst := range instances {
-		if inst.Title == req.Msg.Id {
+		if inst.MatchesID(req.Msg.Id) {
 			instance = inst
 			instanceIndex = i
 			break
@@ -1556,6 +1566,8 @@ func (s *SessionService) RestartSession(
 
 	// Restart the instance
 	if err := instance.Restart(req.Msg.PreserveOutput); err != nil {
+		log.ErrorLog.Printf("[RestartSession] failed to restart session '%s': %v", instance.Title, err)
+		log.ForSession(instance.Title).Error("[RestartSession] failed to restart: %v", err)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart session: %w", err))
 	}
 
@@ -1605,6 +1617,7 @@ func (s *SessionService) GetWorkspaceInfo(
 }
 
 // ListWorkspaceTargets returns available switch targets for a session.
+// +api: workspace:list-targets
 func (s *SessionService) ListWorkspaceTargets(
 	ctx context.Context,
 	req *connect.Request[sessionv1.ListWorkspaceTargetsRequest],
@@ -1613,6 +1626,7 @@ func (s *SessionService) ListWorkspaceTargets(
 }
 
 // SwitchWorkspace switches a session's workspace to a different branch, revision, or worktree.
+// +api: workspace:switch
 func (s *SessionService) SwitchWorkspace(
 	ctx context.Context,
 	req *connect.Request[sessionv1.SwitchWorkspaceRequest],

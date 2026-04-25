@@ -170,7 +170,7 @@ func (th *terminalHandlers) readSessionOutput(_ context.Context, req mcpgo.CallT
 	}
 	found := false
 	for _, inst := range instances {
-		if inst.Title == sessionID {
+		if inst.MatchesID(sessionID) {
 			found = true
 			break
 		}
@@ -378,7 +378,7 @@ func (th *terminalHandlers) waitForOutput(_ context.Context, req mcpgo.CallToolR
 	}
 	found := false
 	for _, inst := range instances {
-		if inst.Title == sessionID {
+		if inst.MatchesID(sessionID) {
 			found = true
 			break
 		}
@@ -595,7 +595,7 @@ func (th *terminalHandlers) findInstance(sessionID string) (*session.Instance, *
 		return nil, errResult(ErrInternalError, "failed to load sessions", "")
 	}
 	for _, inst := range instances {
-		if inst.Title == sessionID {
+		if inst.MatchesID(sessionID) {
 			return inst, nil
 		}
 	}

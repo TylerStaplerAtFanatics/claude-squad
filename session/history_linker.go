@@ -13,7 +13,7 @@ import (
 const historyLinkerPollInterval = 5 * time.Second
 
 // HistoryLinker is a background service that correlates running sessions with
-// their Claude JSONL history files. It populates Instance.claudeSession.SessionID
+// their Claude JSONL history files. It populates Instance.claudeSession.ConversationUUID
 // and Instance.HistoryFilePath when a conversation file is detected.
 //
 // Detection uses two complementary paths:

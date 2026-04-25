@@ -311,7 +311,7 @@ func (lh *lifecycleHandlers) stopSession(ctx context.Context, req mcpgo.CallTool
 		}
 		var found bool
 		for _, data := range existing {
-			if data.Title == sessionID {
+			if data.Title == sessionID || data.UUID == sessionID {
 				found = true
 				break
 			}
@@ -326,7 +326,7 @@ func (lh *lifecycleHandlers) stopSession(ctx context.Context, req mcpgo.CallTool
 			return errResult(ErrInternalError, fmt.Sprintf("load sessions: %v", err), ""), nil
 		}
 		for _, candidate := range instances {
-			if candidate.Title == sessionID {
+			if candidate.MatchesID(sessionID) {
 				inst = candidate
 				break
 			}
@@ -372,7 +372,7 @@ func (lh *lifecycleHandlers) updateSession(ctx context.Context, req mcpgo.CallTo
 			return errResult(ErrInternalError, fmt.Sprintf("load sessions: %v", err), ""), nil
 		}
 		for _, candidate := range instances {
-			if candidate.Title == sessionID {
+			if candidate.MatchesID(sessionID) {
 				inst = candidate
 				break
 			}
@@ -446,7 +446,7 @@ func (lh *lifecycleHandlers) findAndHydrate(sessionID string) (*session.Instance
 		return nil, errResult(ErrInternalError, fmt.Sprintf("load sessions: %v", err), "")
 	}
 	for _, inst := range instances {
-		if inst.Title == sessionID {
+		if inst.MatchesID(sessionID) {
 			if !inst.Started() && inst.Status != session.Paused {
 				if startErr := inst.Start(false); startErr != nil {
 					return nil, errResult(ErrInternalError,

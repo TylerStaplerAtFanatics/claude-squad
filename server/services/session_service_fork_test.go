@@ -208,3 +208,70 @@ func TestForkSession_Success(t *testing.T) {
 	require.NotNil(t, resp.Msg.Session)
 	assert.Equal(t, "forked", resp.Msg.Session.Title)
 }
+
+// --------------------------------------------------------------------------
+// GetSessionDiff – UUID ID lookup (regression: frontend passes UUIDs)
+// --------------------------------------------------------------------------
+
+// TestGetSessionDiff_FindsByUUID verifies that GetSessionDiff resolves the
+// incoming session ID via UUID using the ReviewQueuePoller's MatchesID check.
+// Before the fix, only Title was matched, so UUID callers got CodeNotFound.
+func TestGetSessionDiff_FindsByUUID(t *testing.T) {
+	fix := setupForkTestFixture(t)
+	t.Cleanup(fix.cleanup)
+
+	const testUUID = "22222222-2222-2222-2222-222222222222"
+	addInstanceToPoller(fix.poller, &session.Instance{
+		UUID:    testUUID,
+		Title:   "diff-session",
+		Path:    "/tmp/test-diff",
+		Status:  session.Running,
+		Program: "claude",
+	})
+
+	resp, err := fix.svc.GetSessionDiff(context.Background(), connect.NewRequest(&sessionv1.GetSessionDiffRequest{
+		Id: testUUID,
+	}))
+
+	// Must NOT return CodeNotFound. /tmp/test-diff is not a git repo, so the
+	// diff will be empty — but the session must be found by UUID.
+	require.NoError(t, err, "GetSessionDiff should find the session by UUID")
+	require.NotNil(t, resp)
+}
+
+// TestGetSessionDiff_FindsByTitle verifies that legacy Title-based lookups
+// still work after the UUID migration.
+func TestGetSessionDiff_FindsByTitle(t *testing.T) {
+	fix := setupForkTestFixture(t)
+	t.Cleanup(fix.cleanup)
+
+	addInstanceToPoller(fix.poller, &session.Instance{
+		Title:   "diff-by-title",
+		Path:    "/tmp/test-diff-title",
+		Status:  session.Running,
+		Program: "claude",
+	})
+
+	resp, err := fix.svc.GetSessionDiff(context.Background(), connect.NewRequest(&sessionv1.GetSessionDiffRequest{
+		Id: "diff-by-title",
+	}))
+
+	require.NoError(t, err, "GetSessionDiff should still find the session by Title")
+	require.NotNil(t, resp)
+}
+
+// TestGetSessionDiff_UnknownIDReturnsNotFound verifies that an ID matching no
+// session UUID or Title produces CodeNotFound.
+func TestGetSessionDiff_UnknownIDReturnsNotFound(t *testing.T) {
+	fix := setupForkTestFixture(t)
+	t.Cleanup(fix.cleanup)
+
+	_, err := fix.svc.GetSessionDiff(context.Background(), connect.NewRequest(&sessionv1.GetSessionDiffRequest{
+		Id: "no-such-session",
+	}))
+
+	require.Error(t, err)
+	var connectErr *connect.Error
+	require.ErrorAs(t, err, &connectErr)
+	assert.Equal(t, connect.CodeNotFound, connectErr.Code())
+}

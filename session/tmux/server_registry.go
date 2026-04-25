@@ -309,7 +309,6 @@ func (r *TmuxServerRegistry) reconnectLoop() {
 		r.healthMu.Lock()
 		r.healthy = true
 		r.healthMu.Unlock()
-		backoff = backoffBase // reset backoff on successful connect
 
 		// Yield so that other goroutines can observe the healthy state before
 		// readLines processes the first event (which may immediately clear it).
@@ -317,8 +316,19 @@ func (r *TmuxServerRegistry) reconnectLoop() {
 
 		log.InfoLog.Printf("[registry] control-mode connected (socket=%q)", r.serverSocket)
 
+		connectTime := time.Now()
+
 		// readLines blocks until the process exits or the context is cancelled.
 		r.readLines(scanner)
+
+		// Only reset backoff if the connection was stable for a meaningful
+		// duration. Resetting on a connection that dies immediately (e.g. tmux
+		// server unhealthy, keepalive session missing) would prevent exponential
+		// backoff from protecting against fork-rate explosion.
+		const minStableConnection = 5 * time.Second
+		if time.Since(connectTime) >= minStableConnection {
+			backoff = backoffBase
+		}
 
 		// Closing stdin signals tmux to exit cleanly (it sends %exit on EOF).
 		stdin.Close()
@@ -452,6 +462,23 @@ func GetServerRegistry(socket string) *TmuxServerRegistry {
 	_ = r.Start(context.Background())
 	globalRegistries[socket] = r
 	return r
+}
+
+// StopServerRegistry stops and removes the registry for the given socket.
+// Safe to call even if no registry was ever created for the socket.
+// After this call, GetServerRegistry(socket) will create a fresh registry.
+// Intended for test cleanup to prevent reconnectLoop from restarting a
+// tmux server after it has been killed.
+func StopServerRegistry(socket string) {
+	globalRegistryMu.Lock()
+	r, ok := globalRegistries[socket]
+	if ok {
+		delete(globalRegistries, socket)
+	}
+	globalRegistryMu.Unlock()
+	if r != nil {
+		r.Stop()
+	}
 }
 
 // globalRegistryMu guards globalRegistries.

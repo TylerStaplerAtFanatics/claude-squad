@@ -339,6 +339,9 @@ message UpdateSessionRequest {
   // Update session tags. If non-empty, replaces all existing tags.
   // To clear all tags, send tags=[""] (single empty string).
   repeated string tags = 6;
+
+  // Update working directory. Empty string clears the override (uses workspace root).
+  optional string working_dir = 7;
 }
 
 message UpdateSessionResponse {
