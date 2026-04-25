@@ -224,6 +224,12 @@ test-race: ensure-tools proto-gen ## Run tests with race detector enabled
 test-integration: ensure-tools proto-gen ## Run integration tests (requires real tmux)
 	go test -race -tags integration ./...
 
+test-ux-polish: ## Run squad-ux-polish tests derived from feature registry (no server/tmux required)
+	@RUN=$$(python3 -c "import json; d=json.load(open('docs/registry/backend-features.json')); ids=[t for f in d['features'] for t in f.get('testIds',[])]; print('|'.join(sorted(set(ids))))"); \
+	echo "Running: $$RUN"; \
+	go test ./server/services/ -run "$$RUN" -v -timeout 120s
+	go test ./session/prompts/... -v -timeout 30s
+
 # Performance benchmarks
 benchmark: ensure-tools proto-gen ## Run all benchmarks
 	@echo "Running comprehensive benchmarks..."

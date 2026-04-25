@@ -735,8 +735,12 @@
         "markerFound": true,
         "handlerFile": "server/services/session_service.go"
       },
-      "tested": false,
-      "testIds": [],
+      "tested": true,
+      "testIds": [
+        "TestListPromptHistory_EmptyInitially",
+        "TestListPromptHistory_ReturnsEntriesAfterRecord",
+        "TestListPromptHistory_EntryFieldsPopulated"
+      ],
       "lastModified": "2026-04-24T00:00:00Z"
     },
     {
@@ -749,8 +753,12 @@
         "markerFound": true,
         "handlerFile": "server/services/session_service.go"
       },
-      "tested": false,
-      "testIds": [],
+      "tested": true,
+      "testIds": [
+        "TestDeletePromptHistory_EmptyID",
+        "TestDeletePromptHistory_RemovesEntry",
+        "TestDeletePromptHistory_DeleteOneKeepsOthers"
+      ],
       "lastModified": "2026-04-24T00:00:00Z"
     },
     {
@@ -799,8 +807,12 @@
         "markerFound": true,
         "handlerFile": "server/services/session_service.go"
       },
-      "tested": false,
-      "testIds": [],
+      "tested": true,
+      "testIds": [
+        "TestCreateProject_Success",
+        "TestCreateProject_EmptyName",
+        "TestCreateProject_NilStorage"
+      ],
       "lastModified": "2026-04-24T00:00:00Z"
     },
     {
@@ -813,8 +825,12 @@
         "markerFound": true,
         "handlerFile": "server/services/session_service.go"
       },
-      "tested": false,
-      "testIds": [],
+      "tested": true,
+      "testIds": [
+        "TestListProjects_EmptyInitially",
+        "TestListProjects_AfterCreate",
+        "TestListProjects_NilStorageReturnsEmpty"
+      ],
       "lastModified": "2026-04-24T00:00:00Z"
     },
     {
@@ -827,8 +843,11 @@
         "markerFound": true,
         "handlerFile": "server/services/session_service.go"
       },
-      "tested": false,
-      "testIds": [],
+      "tested": true,
+      "testIds": [
+        "TestUpdateProject_Success",
+        "TestUpdateProject_NilStorage"
+      ],
       "lastModified": "2026-04-24T00:00:00Z"
     },
     {
@@ -841,8 +860,12 @@
         "markerFound": true,
         "handlerFile": "server/services/session_service.go"
       },
-      "tested": false,
-      "testIds": [],
+      "tested": true,
+      "testIds": [
+        "TestDeleteProject_Success",
+        "TestDeleteProject_EmptyID",
+        "TestDeleteProject_NilStorage"
+      ],
       "lastModified": "2026-04-24T00:00:00Z"
     },
     {
@@ -855,8 +878,12 @@
         "markerFound": true,
         "handlerFile": "server/services/session_service.go"
       },
-      "tested": false,
-      "testIds": [],
+      "tested": true,
+      "testIds": [
+        "TestAssignSessionsToProject_EmptyProjectID",
+        "TestAssignSessionsToProject_NilStorage",
+        "TestAssignSessionsToProject_EmptySessions"
+      ],
       "lastModified": "2026-04-24T00:00:00Z"
     }
   ]

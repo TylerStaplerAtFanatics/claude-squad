@@ -31,19 +31,11 @@
     "file:get-content",
     "file:search",
     "path:list-completions",
-    "worktree:list",
-    "session:list-prompt-history",
-    "session:delete-prompt-history",
-    "project:create",
-    "project:list",
-    "project:update",
-    "project:delete",
-    "project:assign-sessions"
+    "worktree:list"
   ],
   "unmatchedFrontend": [
     "config-management",
-    "review-queue",
-    "review-queue-pr-creation"
+    "review-queue"
   ],
   "generatedAt": "2026-04-24T00:00:00Z"
 }
