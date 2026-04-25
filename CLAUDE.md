@@ -836,6 +836,27 @@ Add via: `gh pr edit <number> --add-label "patch"` (create label first if it doe
 4. Run `make generate-proto` to regenerate code
 5. Test with `make restart-web`
 
+### Feature Testing Registry
+
+This project uses two complementary registries that must be kept in sync when adding any new omnibar capability. See `.claude/rules/feature-testing-registry.md` for the complete guide and checklists.
+
+**1. OmnibarAction discriminated union** (`web-app/src/lib/omnibar/actions/`)
+- `types.ts` — the exhaustive union of all omnibar actions (`navigate_session`, `create_session`, `clone_session`, etc.)
+- `dispatch.ts` — one `switch` case per action type; TypeScript's exhaustiveness check catches any missing case at compile time
+- `dispatch.test.ts` — one `describe` block per action type; every registered action must have a test
+
+**2. DetectorRegistry** (`web-app/src/lib/omnibar/detector.ts`)
+- `DetectorRegistry` class with `register()` + priority ordering
+- `createDefaultRegistry()` — the canonical list of all registered detectors (GitHub PR, branch, repo, path, session search, etc.)
+- `detector.test.ts` — tests named `DetectorName_should_action_When_condition` with structured test IDs (`T-UNIT-TS-*`, `T-PITFALL-*`)
+
+**When adding a new omnibar feature:**
+1. If it needs a new user-triggerable action → add to `OmnibarAction` union + `dispatch.ts` case + `dispatch.test.ts` describe block
+2. If it auto-detects a new input pattern → add a `Detector` class + register in `createDefaultRegistry()` + add tests
+3. If it is a new session creation mode → also see the 7-point backend checklist in `.claude/rules/session-creation-registry.md`
+
+**One-off session** is the reference implementation for a creation mode that does NOT need a new detector (UI-only selection) but DOES need handling in `dispatch.ts` when `sessionType: "one_off"` arrives via a `create_session` action — it maps to `oneOff: true` with `sessionType: undefined`.
+
 ### New Session Filters
 1. Add filter parameters to ConnectRPC service definitions
 2. Implement filter logic in `session/storage.go` or service layer
