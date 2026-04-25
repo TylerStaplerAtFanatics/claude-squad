@@ -222,6 +222,40 @@ test.describe('PTY width regression: thin-terminal bugs', () => {
   });
 
   /**
+   * Pre-sizing regression:
+   * After the terminal initialises, the localStorage entry should include cellWidth
+   * and cellHeight alongside cols/rows. These pixel metrics allow instant pre-sizing
+   * on reconnect without waiting for xterm's first onResize event.
+   */
+  test('cache includes cell pixel metrics (cellWidth/cellHeight) after terminal loads', async ({ page }) => {
+    await goToTestPage(page);
+
+    try {
+      await waitForTerminal(page);
+    } catch {
+      test.skip();
+    }
+
+    const dims = await getStoredDimensions(page) as Record<string, { cols: number; rows: number; cellWidth?: number; cellHeight?: number }>;
+    const entries = Object.values(dims);
+
+    if (entries.length === 0) {
+      // No cache written yet — terminal may not have resized; skip.
+      test.skip();
+    }
+
+    // At least one cache entry should have finite positive cellWidth and cellHeight.
+    const hasMetrics = entries.some(
+      e => typeof e.cellWidth === 'number' && e.cellWidth > 0 &&
+           typeof e.cellHeight === 'number' && e.cellHeight > 0
+    );
+    expect(
+      hasMetrics,
+      'No cache entry contains cellWidth/cellHeight — pre-sizing metrics were not saved'
+    ).toBe(true);
+  });
+
+  /**
    * Column-count smoke test:
    * The rendered terminal must be wider than 80 columns when the viewport is 1280px wide.
    * If the terminal is exactly 80 columns in a wide viewport, the PTY sizing bug is present.

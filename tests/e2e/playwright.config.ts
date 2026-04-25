@@ -58,5 +58,24 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      // DOM-renderer project: disables WebGL entirely so xterm.js falls back to
+      // its built-in DOM renderer.  Text content appears in real .xterm-rows > div
+      // spans, making terminal output directly readable from the browser without
+      // relying on tmux capture-pane.  Use this project for any test that needs to
+      // assert on rendered terminal content via the DOM (e.g. countRenderedRows,
+      // reading text from .xterm-rows).
+      //
+      // How it works: XtermTerminal.tsx guards WebglAddon behind
+      //   if (typeof WebGL2RenderingContext !== 'undefined')
+      // --disable-webgl makes that check false → no addon loads → DOM renderer.
+      name: 'chromium-dom',
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          args: ['--disable-webgl', '--disable-3d-apis', '--disable-gpu-sandbox'],
+        },
+      },
+    },
   ],
 });
