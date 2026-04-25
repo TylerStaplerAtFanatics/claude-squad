@@ -161,6 +161,32 @@ async function countRenderedRows(page: Page): Promise<number> {
 }
 
 /**
+ * Read all visible text from xterm.js DOM rows.
+ * Only works with the DOM renderer (chromium-dom project); returns '' with WebGL.
+ */
+async function readRenderedText(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll('.xterm-rows > div'));
+    return rows.map(r => r.textContent || '').join('\n');
+  });
+}
+
+/**
+ * Return the column count xterm reports, derived from cell width measured against
+ * the screen element.  Works with any renderer.
+ */
+async function measureXtermCols(page: Page): Promise<number | null> {
+  return page.evaluate(() => {
+    const screen = document.querySelector('.xterm-screen') as HTMLElement | null;
+    const ruler  = document.querySelector('.xterm-char-measure-element') as HTMLElement | null;
+    if (!screen || !ruler) return null;
+    const cellWidth = ruler.getBoundingClientRect().width;
+    if (cellWidth <= 0) return null;
+    return Math.round(screen.getBoundingClientRect().width / cellWidth);
+  });
+}
+
+/**
  * Snapshot JS heap size (Chrome only; 0 in other browsers).
  */
 async function heapSize(page: Page): Promise<number> {
@@ -297,11 +323,25 @@ test.describe('tmux roundtrip: full-cycle terminal integration', () => {
 
     await page.screenshot({ path: `test-results/roundtrip-tui-${RUN_ID}.png` });
 
-    // Check that xterm rows have some content (proves rendering happened in browser)
+    expect(found, `TUI marker "${tuiMarker}" never appeared — top may have failed`).toBe(true);
+
+    // With the DOM renderer (chromium-dom project), assert that text actually
+    // appears in .xterm-rows — proving the browser rendered the output, not just
+    // that tmux received it.
     const renderedRows = await countRenderedRows(page);
     console.log(`  xterm rendered rows with content: ${renderedRows}`);
-
-    expect(found, `TUI marker "${tuiMarker}" never appeared — top may have failed`).toBe(true);
+    if (renderedRows > 0) {
+      // DOM renderer is active — assert at least a few rows have content
+      expect(
+        renderedRows,
+        'xterm DOM rows are empty — terminal may not have rendered TUI output',
+      ).toBeGreaterThan(3);
+      const renderedText = await readRenderedText(page);
+      console.log(`  xterm DOM text sample: ${renderedText.slice(0, 120).replace(/\n/g, ' ↵ ')}`);
+    } else {
+      // WebGL renderer — text is on canvas; DOM check skipped (tmux assertion above is sufficient)
+      console.log('  WebGL renderer active — DOM text check skipped');
+    }
   });
 
   // ── 3. Large scrollback ─────────────────────────────────────────────────────
@@ -363,5 +403,75 @@ test.describe('tmux roundtrip: full-cycle terminal integration', () => {
     if (heapBefore > 0 && heapGrowthMB > 50) {
       console.warn(`⚠️ JS heap grew ${heapGrowthMB.toFixed(1)} MB during scrollback — investigate memory retention`);
     }
+  });
+
+  // ── 4. Window resize ────────────────────────────────────────────────────────
+
+  test('window resize: PTY dimensions update when viewport changes size', async ({ page }) => {
+    checkSkip();
+    test.setTimeout(30_000);
+
+    await openSessionTerminal(page, sessionId);
+
+    // Measure initial column count
+    const colsBefore = await measureXtermCols(page);
+    console.log(`  Initial xterm cols: ${colsBefore}`);
+
+    // Shrink the viewport by ~40% width — forces a ResizeObserver + fit() cycle
+    const viewport = page.viewportSize();
+    const narrowWidth = Math.round((viewport?.width ?? 1280) * 0.6);
+    await page.setViewportSize({ width: narrowWidth, height: viewport?.height ?? 720 });
+
+    // Allow ResizeObserver debounce (250 ms) + double-rAF to settle
+    await sleep(600);
+
+    const colsAfterShrink = await measureXtermCols(page);
+    console.log(`  Cols after shrink to ${narrowWidth}px: ${colsAfterShrink}`);
+
+    // Restore original viewport
+    await page.setViewportSize({ width: viewport?.width ?? 1280, height: viewport?.height ?? 720 });
+    await sleep(600);
+
+    const colsAfterRestore = await measureXtermCols(page);
+    console.log(`  Cols after restore to ${viewport?.width ?? 1280}px: ${colsAfterRestore}`);
+
+    // Verify PTY received the new dimensions via tmux — `tput cols` reports what
+    // the PTY thinks the width is (matches the TIOCSWINSZ ioctl sent by the server)
+    const resizeMarker = `resize-${RUN_ID}`;
+    await typeInTerminal(page, `printf 'cols=%s\\n' "$(tput cols)" && printf '%s\\n' '${resizeMarker}'`);
+    const deadline = Date.now() + 8_000;
+    let paneOutput = '';
+    while (Date.now() < deadline) {
+      paneOutput = await captureTmuxPane(tmuxSession);
+      if (paneOutput.includes(resizeMarker)) break;
+      await sleep(200);
+    }
+
+    await page.screenshot({ path: `test-results/roundtrip-resize-${RUN_ID}.png` });
+
+    expect(paneOutput.includes(resizeMarker), 'resize marker never appeared in tmux pane').toBe(true);
+
+    // After restore the PTY col count should match (or be very close to) xterm's col count
+    if (colsAfterRestore !== null) {
+      const match = paneOutput.match(/cols=(\d+)/);
+      if (match) {
+        const ptyColsAfterRestore = parseInt(match[1], 10);
+        console.log(`  PTY cols (tput cols): ${ptyColsAfterRestore}, xterm cols: ${colsAfterRestore}`);
+        expect(
+          Math.abs(ptyColsAfterRestore - colsAfterRestore),
+          `PTY width (${ptyColsAfterRestore}) diverged from xterm width (${colsAfterRestore}) after resize — TIOCSWINSZ may not have fired`,
+        ).toBeLessThanOrEqual(2); // allow 2-col tolerance for rounding
+      }
+    }
+
+    // Narrower viewport must have produced fewer columns
+    if (colsBefore !== null && colsAfterShrink !== null) {
+      expect(
+        colsAfterShrink,
+        `Cols did not decrease after viewport shrink (before: ${colsBefore}, after: ${colsAfterShrink}) — ResizeObserver may not have fired`,
+      ).toBeLessThan(colsBefore);
+    }
+
+    console.log('✅ Window resize: PTY dimensions updated correctly');
   });
 });
