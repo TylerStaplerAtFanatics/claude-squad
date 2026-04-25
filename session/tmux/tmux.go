@@ -1300,13 +1300,29 @@ func (t *TmuxSession) SetWindowSize(cols, rows int) error {
 		log.InfoLog.Printf("✅ PTY resized successfully for session '%s'", t.sanitizedName)
 	}
 
-	// Also resize the tmux window itself to ensure the dimensions are applied
-	// This ensures the tmux pane reflects the new size
+	// Also resize the tmux window itself to ensure the dimensions are applied.
 	log.InfoLog.Printf("🔧 Running tmux resize-window command for '%s' to %dx%d", t.sanitizedName, cols, rows)
-	cmd := t.buildTmuxCommand("resize-window", "-t", t.sanitizedName, "-x", fmt.Sprintf("%d", cols), "-y", fmt.Sprintf("%d", rows))
-	if err := t.cmdExec.Run(cmd); err != nil {
-		log.ErrorLog.Printf("❌ tmux resize-window failed for '%s': %v", t.sanitizedName, err)
-		return fmt.Errorf("failed to resize tmux window: %w", err)
+	colsStr := fmt.Sprintf("%d", cols)
+	rowsStr := fmt.Sprintf("%d", rows)
+	if t.cmEnabled() {
+		ctx, cancel := cmCtx()
+		defer cancel()
+		if _, cmErr := t.sendCMCommand(ctx,
+			"resize-window", "-t", t.sanitizedName, "-x", colsStr, "-y", rowsStr); cmErr != nil {
+			log.DebugLog.Printf("SetWindowSize CM path failed for '%s': %v; falling back", t.sanitizedName, cmErr)
+			// Fall through to subprocess below.
+			cmd := t.buildTmuxCommand("resize-window", "-t", t.sanitizedName, "-x", colsStr, "-y", rowsStr)
+			if err := t.cmdExec.Run(cmd); err != nil {
+				log.ErrorLog.Printf("❌ tmux resize-window failed for '%s': %v", t.sanitizedName, err)
+				return fmt.Errorf("failed to resize tmux window: %w", err)
+			}
+		}
+	} else {
+		cmd := t.buildTmuxCommand("resize-window", "-t", t.sanitizedName, "-x", colsStr, "-y", rowsStr)
+		if err := t.cmdExec.Run(cmd); err != nil {
+			log.ErrorLog.Printf("❌ tmux resize-window failed for '%s': %v", t.sanitizedName, err)
+			return fmt.Errorf("failed to resize tmux window: %w", err)
+		}
 	}
 
 	// Verify the resize actually worked and save the actual dimensions for future
@@ -1523,6 +1539,20 @@ func (t *TmuxSession) DoesSessionExistNoCache() bool {
 // forcing the process running inside to redraw at current dimensions.
 // This is critical after resizing to update cursor positions and line wrapping.
 func (t *TmuxSession) RefreshClient() error {
+	// CM path: send refresh-client over the existing control mode connection.
+	if t.cmEnabled() {
+		ctx, cancel := cmCtx()
+		defer cancel()
+		if _, cmErr := t.sendCMCommand(ctx, "refresh-client", "-t", t.sanitizedName); cmErr == nil {
+			return nil
+		}
+		// Fall through to subprocess path if CM fails (open question: refresh-client
+		// targeting the CM connection itself may behave differently).
+		if log.DebugLog != nil {
+			log.DebugLog.Printf("RefreshClient CM path failed for '%s'; falling back to subprocess", t.sanitizedName)
+		}
+	}
+
 	// Method 1: Use refresh-client command (preferred)
 	cmd := t.buildTmuxCommand("refresh-client", "-t", t.sanitizedName)
 	if err := t.cmdExec.Run(cmd); err != nil {
@@ -1545,21 +1575,42 @@ func (t *TmuxSession) RefreshClient() error {
 	return nil
 }
 
-// CapturePaneContent captures the content of the tmux pane
+// cmEnabled returns true when the CM command dispatch path should be attempted.
+// Must be called before any sendCMCommand call.
+func (t *TmuxSession) cmEnabled() bool {
+	return cmCommandsEnabled.Load() && t.controlModeStdin != nil
+}
+
+// cmCtx returns a 3-second context for use with sendCMCommand.
+func cmCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 3*time.Second)
+}
+
+// CapturePaneContent captures the content of the tmux pane.
+// When STAPLER_SQUAD_CM_COMMANDS=true and control mode is running, the query is sent
+// over the control mode stdin pipe (zero new subprocesses); otherwise falls back to subprocess.
 func (t *TmuxSession) CapturePaneContent() (string, error) {
-	// Add -e flag to preserve escape sequences (ANSI color codes)
+	if t.cmEnabled() {
+		ctx, cancel := cmCtx()
+		defer cancel()
+		body, cmErr := t.sendCMCommand(ctx, "capture-pane", "-p", "-e", "-J", "-t", t.sanitizedName)
+		if cmErr == nil {
+			return sanitizeUTF8String([]byte(body)), nil
+		}
+		if log.DebugLog != nil {
+			log.DebugLog.Printf("CapturePaneContent CM path failed for '%s': %v; falling back", t.sanitizedName, cmErr)
+		}
+	}
+
 	cmd := t.buildTmuxCommand("capture-pane", "-p", "-e", "-J", "-t", t.sanitizedName)
 	output, err := t.cmdExec.Output(cmd)
 	if err != nil {
-		// Log detailed error information for debugging
 		if log.ErrorLog != nil {
 			log.ErrorLog.Printf("Failed to capture pane content for session '%s': %v", t.sanitizedName, err)
 			log.ErrorLog.Printf("Tmux command: %s", cmd.String())
 		}
 		return "", fmt.Errorf("error capturing pane content for session '%s': %v", t.sanitizedName, err)
 	}
-	// Convert bytes to valid UTF-8 string, replacing invalid sequences
-	// This prevents downstream parsing errors while preserving ANSI sequences
 	return sanitizeUTF8String(output), nil
 }
 
@@ -1567,9 +1618,18 @@ func (t *TmuxSession) CapturePaneContent() (string, error) {
 // This is essential for hybrid streaming where we need to preserve exact cursor positioning.
 // The -J flag (join wrapped lines) strips cursor positioning codes, breaking TUI rendering.
 func (t *TmuxSession) CapturePaneContentRaw() (string, error) {
-	// -p: Print to stdout
-	// -e: Include escape sequences (colors, cursor movements)
-	// NO -J: Preserve wrapped lines with their original ANSI positioning codes
+	if t.cmEnabled() {
+		ctx, cancel := cmCtx()
+		defer cancel()
+		body, cmErr := t.sendCMCommand(ctx, "capture-pane", "-p", "-e", "-t", t.sanitizedName)
+		if cmErr == nil {
+			return sanitizeUTF8String([]byte(body)), nil
+		}
+		if log.DebugLog != nil {
+			log.DebugLog.Printf("CapturePaneContentRaw CM path failed for '%s': %v; falling back", t.sanitizedName, cmErr)
+		}
+	}
+
 	cmd := t.buildTmuxCommand("capture-pane", "-p", "-e", "-t", t.sanitizedName)
 	output, err := t.cmdExec.Output(cmd)
 	if err != nil {
@@ -1581,17 +1641,27 @@ func (t *TmuxSession) CapturePaneContentRaw() (string, error) {
 	return sanitizeUTF8String(output), nil
 }
 
-// CapturePaneContentWithOptions captures the pane content with additional options
-// start and end specify the starting and ending line numbers (use "-" for the start/end of history)
+// CapturePaneContentWithOptions captures the pane content with additional options.
+// start and end specify the starting and ending line numbers (use "-" for the start/end of history).
 func (t *TmuxSession) CapturePaneContentWithOptions(start, end string) (string, error) {
-	// Add -e flag to preserve escape sequences (ANSI color codes)
+	if t.cmEnabled() {
+		ctx, cancel := cmCtx()
+		defer cancel()
+		body, cmErr := t.sendCMCommand(ctx, "capture-pane", "-p", "-e", "-J",
+			"-S", start, "-E", end, "-t", t.sanitizedName)
+		if cmErr == nil {
+			return sanitizeUTF8String([]byte(body)), nil
+		}
+		if log.DebugLog != nil {
+			log.DebugLog.Printf("CapturePaneContentWithOptions CM path failed for '%s': %v; falling back", t.sanitizedName, cmErr)
+		}
+	}
+
 	cmd := t.buildTmuxCommand("capture-pane", "-p", "-e", "-J", "-S", start, "-E", end, "-t", t.sanitizedName)
 	output, err := t.cmdExec.Output(cmd)
 	if err != nil {
 		return "", fmt.Errorf("failed to capture tmux pane content with options: %v", err)
 	}
-	// Convert bytes to valid UTF-8 string, replacing invalid sequences
-	// This prevents downstream parsing errors while preserving ANSI sequences
 	return sanitizeUTF8String(output), nil
 }
 
@@ -1619,6 +1689,22 @@ func (t *TmuxSession) FilterBanners(content string) (filteredContent string, ban
 // GetCursorPosition returns the current cursor position in the tmux pane.
 // Returns cursor X (column) and Y (row) coordinates, both 0-based.
 func (t *TmuxSession) GetCursorPosition() (x, y int, err error) {
+	if t.cmEnabled() {
+		ctx, cancel := cmCtx()
+		defer cancel()
+		body, cmErr := t.sendCMCommand(ctx,
+			"display-message", "-p", "-t", t.sanitizedName, "'#{cursor_x} #{cursor_y}'")
+		if cmErr == nil {
+			var cx, cy int
+			if _, parseErr := fmt.Sscanf(strings.TrimSpace(body), "%d %d", &cx, &cy); parseErr == nil {
+				return cx, cy, nil
+			}
+		}
+		if log.DebugLog != nil {
+			log.DebugLog.Printf("GetCursorPosition CM path failed for '%s': %v; falling back", t.sanitizedName, cmErr)
+		}
+	}
+
 	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
 		"#{cursor_x} #{cursor_y}")
 
@@ -1627,7 +1713,6 @@ func (t *TmuxSession) GetCursorPosition() (x, y int, err error) {
 		return 0, 0, fmt.Errorf("failed to get cursor position for session '%s': %w", t.sanitizedName, err)
 	}
 
-	// Parse "x y" format
 	var cursorX, cursorY int
 	_, err = fmt.Sscanf(strings.TrimSpace(string(output)), "%d %d", &cursorX, &cursorY)
 	if err != nil {
@@ -1789,6 +1874,19 @@ func sanitizeUTF8String(rawBytes []byte) string {
 // GetPaneCurrentPath returns the current working directory of the tmux pane.
 // This is used by CaptureCurrentState to persist cwd before shutdown for cold restore.
 func (t *TmuxSession) GetPaneCurrentPath() (string, error) {
+	if t.cmEnabled() {
+		ctx, cancel := cmCtx()
+		defer cancel()
+		body, cmErr := t.sendCMCommand(ctx,
+			"display-message", "-p", "-t", t.sanitizedName, "#{pane_current_path}")
+		if cmErr == nil {
+			return strings.TrimSpace(body), nil
+		}
+		if log.DebugLog != nil {
+			log.DebugLog.Printf("GetPaneCurrentPath CM path failed for '%s': %v; falling back", t.sanitizedName, cmErr)
+		}
+	}
+
 	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
 		"#{pane_current_path}")
 
@@ -1803,6 +1901,23 @@ func (t *TmuxSession) GetPaneCurrentPath() (string, error) {
 // GetPanePID returns the PID of the foreground process in the pane.
 // This is used by HistoryLinker to correlate open files with session records.
 func (t *TmuxSession) GetPanePID() (int32, error) {
+	if t.cmEnabled() {
+		ctx, cancel := cmCtx()
+		defer cancel()
+		body, cmErr := t.sendCMCommand(ctx,
+			"display-message", "-p", "-t", t.sanitizedName, "#{pane_pid}")
+		if cmErr == nil {
+			pidStr := strings.TrimSpace(body)
+			pid, parseErr := strconv.ParseInt(pidStr, 10, 32)
+			if parseErr == nil {
+				return int32(pid), nil
+			}
+		}
+		if log.DebugLog != nil {
+			log.DebugLog.Printf("GetPanePID CM path failed for '%s': %v; falling back", t.sanitizedName, cmErr)
+		}
+	}
+
 	cmd := t.buildTmuxCommand("display-message", "-p", "-t", t.sanitizedName,
 		"#{pane_pid}")
 
