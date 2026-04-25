@@ -22,6 +22,7 @@ import (
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/server/notifications"
 	"github.com/tstapler/stapler-squad/session"
+	"github.com/tstapler/stapler-squad/session/namegen"
 	"github.com/tstapler/stapler-squad/session/search"
 
 	"connectrpc.com/connect"
@@ -506,7 +507,7 @@ func (s *SessionService) CreateSession(
 	if req.Msg.Title == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("title is required"))
 	}
-	if req.Msg.Path == "" {
+	if !req.Msg.OneOff && req.Msg.Path == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
 	}
 
@@ -545,6 +546,20 @@ func (s *SessionService) CreateSession(
 		}
 
 		log.InfoLog.Printf("[CreateSession] Resolved to local path: %s (branch: %s)", resolvedPath, branch)
+	}
+
+	// One-off session: generate a fresh directory and override resolvedPath.
+	if req.Msg.OneOff {
+		cfg := config.LoadConfig()
+		baseDir, err := cfg.OneOffBaseDirOrDefault()
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to resolve one_off_base_dir: %w", err))
+		}
+		generatedPath, err := namegen.GenerateAndCreate(baseDir, 10)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create one-off directory: %w", err))
+		}
+		resolvedPath = generatedPath
 	}
 
 	// Resolve session defaults (global → directory → profile), then apply explicit request fields on top.
@@ -589,6 +604,11 @@ func (s *SessionService) CreateSession(
 		} else if branch != "" {
 			sessionType = session.SessionTypeNewWorktree
 		}
+	}
+
+	// Force directory type for one-off sessions (overrides explicit session_type).
+	if req.Msg.OneOff {
+		sessionType = session.SessionTypeDirectory
 	}
 
 	// Build instance options
