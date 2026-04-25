@@ -1,4 +1,5 @@
 "use client";
+// +feature: terminal-pre-sizing terminal-dimension-cache
 
 import { useEffect, useRef, useCallback, useState } from "react";
 
