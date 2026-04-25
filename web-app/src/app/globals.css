@@ -100,7 +100,8 @@
   --border-strong: #9ca3af;
 
   /* Tertiary text — below --text-muted, for de-emphasised metadata */
-  --text-tertiary: #9ca3af;
+  /* #767676 gives 4.55:1 on white (#ffffff) — minimum WCAG AA */
+  --text-tertiary: #767676;
 
   /* Accent — tinted background for selected/highlighted items */
   --accent-bg: rgba(0, 112, 243, 0.08);
@@ -202,8 +203,8 @@
     --input-focus-border: #2d9cdb;
     --input-text: #ededed;
 
-    /* Tertiary text */
-    --text-tertiary: #6b7280;
+    /* Tertiary text — #808080 gives 4.64:1 on #1a1a1a (card bg) — WCAG AA */
+    --text-tertiary: #808080;
 
     /* Accent tinted backgrounds */
     --accent-bg: rgba(45, 156, 219, 0.1);
