@@ -1,0 +1,82 @@
+{
+  "version": "1",
+  "generatedAt": "2026-04-24T00:00:00.000Z",
+  "features": [
+    {
+      "id": "config-management",
+      "type": "frontend",
+      "frontend": {
+        "component": "ConfigEditorPage",
+        "path": "web-app/src/app/config/page.tsx",
+        "markerLine": 2
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-18T17:28:17.611Z"
+    },
+    {
+      "id": "history-search",
+      "type": "frontend",
+      "frontend": {
+        "component": "HistoryBrowserPage",
+        "path": "web-app/src/app/history/page.tsx",
+        "markerLine": 2
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-18T17:28:17.610Z"
+    },
+    {
+      "id": "session-list",
+      "type": "frontend",
+      "frontend": {
+        "component": "Home",
+        "path": "web-app/src/app/page.tsx",
+        "markerLine": 2
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-18T17:28:17.608Z"
+    },
+    {
+      "id": "review-queue",
+      "type": "frontend",
+      "frontend": {
+        "component": "ReviewQueuePage",
+        "path": "web-app/src/app/review-queue/page.tsx",
+        "markerLine": 2
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-18T17:28:17.609Z"
+    },
+    {
+      "id": "approval-rules",
+      "type": "frontend",
+      "frontend": {
+        "component": "RulesPage",
+        "path": "web-app/src/app/rules/page.tsx",
+        "markerLine": 2
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-18T17:28:17.610Z"
+    },
+    {
+      "id": "session-create-one-off",
+      "type": "frontend",
+      "frontend": {
+        "component": "OmnibarCreationPanel",
+        "path": "web-app/src/components/sessions/OmnibarCreationPanel.tsx",
+        "markerLine": 21
+      },
+      "tested": true,
+      "testIds": [
+        "one-off-session-creation > shows one-off option in creation panel",
+        "one-off-session-creation > hides path input when one-off is selected",
+        "one-off-session-creation > creates session with one_off flag"
+      ],
+      "lastModified": "2026-04-24T00:00:00.000Z"
+    }
+  ]
+}
