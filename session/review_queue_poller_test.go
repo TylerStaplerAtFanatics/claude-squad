@@ -275,9 +275,9 @@ func TestReviewQueue_SortsByLastActivity(t *testing.T) {
 	t.Logf("  3. %s - Last activity: %s ago", items[2].SessionID, detection.FormatDuration(time.Since(items[2].LastActivity)))
 }
 
-// newTestPoller creates a ReviewQueuePoller wired with a fresh queue and status manager,
+// newSimpleTestPoller creates a ReviewQueuePoller wired with a fresh queue and status manager,
 // with nil storage (no persistence). Safe to use in unit tests.
-func newTestPoller() *ReviewQueuePoller {
+func newSimpleTestPoller() *ReviewQueuePoller {
 	queue := NewReviewQueue()
 	statusMgr := NewInstanceStatusManager()
 	return NewReviewQueuePoller(queue, statusMgr, nil)
@@ -300,7 +300,7 @@ func newTestPollerInstance(title, uuid string) *Instance {
 // TestReviewQueuePoller_SetInstances_ReplacesAll verifies that SetInstances replaces
 // all previously tracked instances with the provided slice.
 func TestReviewQueuePoller_SetInstances_ReplacesAll(t *testing.T) {
-	poller := newTestPoller()
+	poller := newSimpleTestPoller()
 
 	first := newTestPollerInstance("session-a", "uuid-a")
 	second := newTestPollerInstance("session-b", "uuid-b")
@@ -321,7 +321,7 @@ func TestReviewQueuePoller_SetInstances_ReplacesAll(t *testing.T) {
 // TestReviewQueuePoller_AddInstance_AppendsWithoutReplacing verifies that AddInstance
 // appends a new instance without removing existing ones.
 func TestReviewQueuePoller_AddInstance_AppendsWithoutReplacing(t *testing.T) {
-	poller := newTestPoller()
+	poller := newSimpleTestPoller()
 
 	first := newTestPollerInstance("session-a", "uuid-a")
 	poller.SetInstances([]*Instance{first})
@@ -338,7 +338,7 @@ func TestReviewQueuePoller_AddInstance_AppendsWithoutReplacing(t *testing.T) {
 // TestReviewQueuePoller_RemoveInstance_ByTitle verifies that RemoveInstance removes
 // the instance matching the given title and leaves others intact.
 func TestReviewQueuePoller_RemoveInstance_ByTitle(t *testing.T) {
-	poller := newTestPoller()
+	poller := newSimpleTestPoller()
 
 	a := newTestPollerInstance("session-a", "uuid-a")
 	b := newTestPollerInstance("session-b", "uuid-b")
@@ -358,7 +358,7 @@ func TestReviewQueuePoller_RemoveInstance_ByTitle(t *testing.T) {
 // TestReviewQueuePoller_RemoveInstance_NotFound_NoError verifies that calling
 // RemoveInstance with an unknown ID does not panic and leaves the list unchanged.
 func TestReviewQueuePoller_RemoveInstance_NotFound_NoError(t *testing.T) {
-	poller := newTestPoller()
+	poller := newSimpleTestPoller()
 
 	a := newTestPollerInstance("session-a", "uuid-a")
 	poller.SetInstances([]*Instance{a})
@@ -375,7 +375,7 @@ func TestReviewQueuePoller_RemoveInstance_NotFound_NoError(t *testing.T) {
 // TestReviewQueuePoller_GetMonitoredCount verifies that GetMonitoredCount returns
 // the number of currently tracked instances.
 func TestReviewQueuePoller_GetMonitoredCount(t *testing.T) {
-	poller := newTestPoller()
+	poller := newSimpleTestPoller()
 
 	if poller.GetMonitoredCount() != 0 {
 		t.Fatalf("expected 0 monitored instances initially, got %d", poller.GetMonitoredCount())
@@ -395,7 +395,7 @@ func TestReviewQueuePoller_GetMonitoredCount(t *testing.T) {
 // TestReviewQueuePoller_FindInstance_ByTitle verifies that FindInstance returns
 // the correct instance when looked up by title.
 func TestReviewQueuePoller_FindInstance_ByTitle(t *testing.T) {
-	poller := newTestPoller()
+	poller := newSimpleTestPoller()
 
 	a := newTestPollerInstance("session-a", "uuid-a")
 	b := newTestPollerInstance("session-b", "uuid-b")
@@ -413,7 +413,7 @@ func TestReviewQueuePoller_FindInstance_ByTitle(t *testing.T) {
 // TestReviewQueuePoller_FindInstance_ByUUID verifies that FindInstance returns
 // the correct instance when looked up by UUID.
 func TestReviewQueuePoller_FindInstance_ByUUID(t *testing.T) {
-	poller := newTestPoller()
+	poller := newSimpleTestPoller()
 
 	a := newTestPollerInstance("session-a", "uuid-a")
 	b := newTestPollerInstance("session-b", "uuid-b")
@@ -431,7 +431,7 @@ func TestReviewQueuePoller_FindInstance_ByUUID(t *testing.T) {
 // TestReviewQueuePoller_FindInstance_NotFound verifies that FindInstance returns
 // nil when the given ID does not match any tracked instance.
 func TestReviewQueuePoller_FindInstance_NotFound(t *testing.T) {
-	poller := newTestPoller()
+	poller := newSimpleTestPoller()
 
 	poller.SetInstances([]*Instance{
 		newTestPollerInstance("session-a", "uuid-a"),
@@ -448,7 +448,7 @@ func TestReviewQueuePoller_FindInstance_NotFound(t *testing.T) {
 // TestReviewQueuePoller_IsRunning_InitiallyFalse verifies that a newly created
 // poller reports IsRunning() == false before Start is called.
 func TestReviewQueuePoller_IsRunning_InitiallyFalse(t *testing.T) {
-	poller := newTestPoller()
+	poller := newSimpleTestPoller()
 
 	if poller.IsRunning() {
 		t.Error("expected IsRunning() == false before Start(), got true")
