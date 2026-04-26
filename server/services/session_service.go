@@ -585,33 +585,7 @@ func (s *SessionService) CreateSession(
 	}
 
 	// Determine session type - use explicit session_type if provided, otherwise infer from fields
-	var sessionType session.SessionType
-	if req.Msg.SessionType != sessionv1.SessionType_SESSION_TYPE_UNSPECIFIED {
-		// Use explicit session_type from request
-		switch req.Msg.SessionType {
-		case sessionv1.SessionType_SESSION_TYPE_DIRECTORY:
-			sessionType = session.SessionTypeDirectory
-		case sessionv1.SessionType_SESSION_TYPE_NEW_WORKTREE:
-			sessionType = session.SessionTypeNewWorktree
-		case sessionv1.SessionType_SESSION_TYPE_EXISTING_WORKTREE:
-			sessionType = session.SessionTypeExistingWorktree
-		default:
-			sessionType = session.SessionTypeDirectory
-		}
-	} else {
-		// Fall back to inference logic for backward compatibility
-		sessionType = session.SessionTypeDirectory
-		if req.Msg.ExistingWorktree != "" {
-			sessionType = session.SessionTypeExistingWorktree
-		} else if branch != "" {
-			sessionType = session.SessionTypeNewWorktree
-		}
-	}
-
-	// Force directory type for one-off sessions (overrides explicit session_type).
-	if req.Msg.OneOff {
-		sessionType = session.SessionTypeDirectory
-	}
+	sessionType := resolveSessionType(req.Msg, branch)
 
 	// Build instance options
 	instanceOpts := session.InstanceOptions{
@@ -687,6 +661,35 @@ func (s *SessionService) CreateSession(
 	return connect.NewResponse(&sessionv1.CreateSessionResponse{
 		Session: adapters.InstanceToProto(instance),
 	}), nil
+}
+
+// resolveSessionType maps a CreateSessionRequest + resolved branch to a session.SessionType.
+// Priority: one_off (always directory) > explicit session_type > inference from branch/existing_worktree.
+func resolveSessionType(msg *sessionv1.CreateSessionRequest, branch string) session.SessionType {
+	var st session.SessionType
+	if msg.SessionType != sessionv1.SessionType_SESSION_TYPE_UNSPECIFIED {
+		switch msg.SessionType {
+		case sessionv1.SessionType_SESSION_TYPE_DIRECTORY:
+			st = session.SessionTypeDirectory
+		case sessionv1.SessionType_SESSION_TYPE_NEW_WORKTREE:
+			st = session.SessionTypeNewWorktree
+		case sessionv1.SessionType_SESSION_TYPE_EXISTING_WORKTREE:
+			st = session.SessionTypeExistingWorktree
+		default:
+			st = session.SessionTypeDirectory
+		}
+	} else {
+		st = session.SessionTypeDirectory
+		if msg.ExistingWorktree != "" {
+			st = session.SessionTypeExistingWorktree
+		} else if branch != "" {
+			st = session.SessionTypeNewWorktree
+		}
+	}
+	if msg.OneOff {
+		st = session.SessionTypeDirectory
+	}
+	return st
 }
 
 // UpdateSession modifies session properties (pause/resume, category, title).
