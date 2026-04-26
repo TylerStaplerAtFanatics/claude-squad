@@ -728,6 +728,146 @@
       "tested": false,
       "testIds": [],
       "lastModified": "2026-04-16T16:37:58.133405767-07:00"
+    },
+    {
+      "id": "unfinished:list",
+      "type": "backend",
+      "backend": {
+        "service": "UnfinishedWorkService",
+        "method": "ListUnfinishedWork",
+        "protoFile": "proto/session/v1/unfinished.proto",
+        "markerFound": true,
+        "handlerFile": "server/services/unfinished_work_service.go"
+      },
+      "tested": true,
+      "testIds": ["TestScanner_ScanWorktrees", "TestScanner_CircuitBreaker", "TestScanner_FilterDismissed"],
+      "lastModified": "2026-04-26T00:00:00.000Z"
+    },
+    {
+      "id": "unfinished:watch",
+      "type": "backend",
+      "backend": {
+        "service": "UnfinishedWorkService",
+        "method": "WatchUnfinishedWork",
+        "protoFile": "proto/session/v1/unfinished.proto",
+        "markerFound": true,
+        "handlerFile": "server/services/unfinished_work_service.go"
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-26T00:00:00.000Z"
+    },
+    {
+      "id": "unfinished:scan",
+      "type": "backend",
+      "backend": {
+        "service": "UnfinishedWorkService",
+        "method": "ScanUnfinishedWork",
+        "protoFile": "proto/session/v1/unfinished.proto",
+        "markerFound": true,
+        "handlerFile": "server/services/unfinished_work_service.go"
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-26T00:00:00.000Z"
+    },
+    {
+      "id": "unfinished:dismiss",
+      "type": "backend",
+      "backend": {
+        "service": "UnfinishedWorkService",
+        "method": "DismissWorktree",
+        "protoFile": "proto/session/v1/unfinished.proto",
+        "markerFound": true,
+        "handlerFile": "server/services/unfinished_work_service.go"
+      },
+      "tested": true,
+      "testIds": ["TestStateStore_DismissWorktree", "TestStateStore_IsDismissed"],
+      "lastModified": "2026-04-26T00:00:00.000Z"
+    },
+    {
+      "id": "unfinished:undismiss",
+      "type": "backend",
+      "backend": {
+        "service": "UnfinishedWorkService",
+        "method": "UndismissWorktree",
+        "protoFile": "proto/session/v1/unfinished.proto",
+        "markerFound": true,
+        "handlerFile": "server/services/unfinished_work_service.go"
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-26T00:00:00.000Z"
+    },
+    {
+      "id": "unfinished:snooze",
+      "type": "backend",
+      "backend": {
+        "service": "UnfinishedWorkService",
+        "method": "SnoozeWorktree",
+        "protoFile": "proto/session/v1/unfinished.proto",
+        "markerFound": true,
+        "handlerFile": "server/services/unfinished_work_service.go"
+      },
+      "tested": true,
+      "testIds": ["TestStateStore_SnoozeWorktree", "TestStateStore_IsSnoozeActive"],
+      "lastModified": "2026-04-26T00:00:00.000Z"
+    },
+    {
+      "id": "unfinished:get-ai-summary",
+      "type": "backend",
+      "backend": {
+        "service": "UnfinishedWorkService",
+        "method": "GetWorktreeAISummary",
+        "protoFile": "proto/session/v1/unfinished.proto",
+        "markerFound": true,
+        "handlerFile": "server/services/unfinished_work_service.go"
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-26T00:00:00.000Z"
+    },
+    {
+      "id": "unfinished:commit-push",
+      "type": "backend",
+      "backend": {
+        "service": "UnfinishedWorkService",
+        "method": "QuickCommitPush",
+        "protoFile": "proto/session/v1/unfinished.proto",
+        "markerFound": true,
+        "handlerFile": "server/services/unfinished_work_service.go"
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-26T00:00:00.000Z"
+    },
+    {
+      "id": "unfinished:get-config",
+      "type": "backend",
+      "backend": {
+        "service": "UnfinishedWorkService",
+        "method": "GetUnfinishedWorkConfig",
+        "protoFile": "proto/session/v1/unfinished.proto",
+        "markerFound": true,
+        "handlerFile": "server/services/unfinished_work_service.go"
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-26T00:00:00.000Z"
+    },
+    {
+      "id": "unfinished:update-config",
+      "type": "backend",
+      "backend": {
+        "service": "UnfinishedWorkService",
+        "method": "UpdateUnfinishedWorkConfig",
+        "protoFile": "proto/session/v1/unfinished.proto",
+        "markerFound": true,
+        "handlerFile": "server/services/unfinished_work_service.go"
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-26T00:00:00.000Z"
     }
   ]
 }

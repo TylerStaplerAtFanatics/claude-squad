@@ -133,6 +133,18 @@
       "lastModified": "2026-04-24T00:00:00.000Z"
     },
     {
+      "id": "unfinished-work",
+      "type": "frontend",
+      "frontend": {
+        "component": "UnfinishedTab",
+        "path": "web-app/src/app/unfinished/page.tsx",
+        "markerLine": 2
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-26T00:00:00.000Z"
+    },
+    {
       "id": "terminal-dimension-cache",
       "type": "frontend",
       "frontend": {

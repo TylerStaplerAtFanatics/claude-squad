@@ -43,16 +43,8 @@ export function UnfinishedItemDetail({ worktree }: UnfinishedItemDetailProps) {
     if (worktree.sessionId) {
       router.push(routes.sessionDetail(worktree.sessionId));
     } else {
-      // Navigate to home with new session params for this worktree
-      router.push(
-        `/?new=true&worktree=${encodeURIComponent(worktree.worktreePath)}&branch=${encodeURIComponent(worktree.branch)}`
-      );
+      router.push(routes.sessionCreate);
     }
-  }, [router, worktree]);
-
-  const handleViewFiles = useCallback(() => {
-    // Navigate to home with file browser opened at the worktree path
-    router.push(`/?files=${encodeURIComponent(worktree.worktreePath)}`);
   }, [router, worktree]);
 
   const handleSummarize = useCallback(async () => {
@@ -119,9 +111,6 @@ export function UnfinishedItemDetail({ worktree }: UnfinishedItemDetailProps) {
         </button>
         <button className={styles.btn} onClick={() => setShowCommitModal(true)}>
           Commit &amp; Push
-        </button>
-        <button className={styles.btn} onClick={handleViewFiles}>
-          View Files
         </button>
         <button
           className={styles.btn}

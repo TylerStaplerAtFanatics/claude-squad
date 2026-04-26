@@ -15,7 +15,7 @@ export const routes = {
   settingsDefaults: "/settings/defaults",
   settingsUnfinished: "/settings/unfinished",
   login: "/login",
-  sessionDetail: (id: string) => `/sessions/${id}`,
+  sessionDetail: (id: string) => `/?session=${id}`,
 } as const;
 
 export type Route = typeof routes;
