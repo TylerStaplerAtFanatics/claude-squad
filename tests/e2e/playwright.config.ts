@@ -29,6 +29,7 @@ export default defineConfig({
   reporter: [
     ['list'], // Console output
     ['html', { outputFolder: './playwright-report' }],
+    ['allure-playwright', { outputFolder: 'allure-results' }],
   ],
 
   // Global test setup
@@ -42,8 +43,11 @@ export default defineConfig({
     // Screenshot on failure
     screenshot: 'only-on-failure',
 
-    // Video on failure
-    video: 'retain-on-failure',
+    // Video: always-on when RECORD_FEATURES=true, otherwise retain on failure
+    video: process.env.RECORD_FEATURES === 'true' ? 'on' : 'retain-on-failure',
+
+    // Test results output directory
+    outputDir: 'test-results/',
 
     // Test timeout
     actionTimeout: 10000,
@@ -56,7 +60,32 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          // SwiftShader: software WebGL so terminal canvas renders in headless CI
+          args: ['--use-gl=swiftshader', '--disable-gpu-sandbox'],
+        },
+      },
+    },
+    {
+      // DOM-renderer project: disables WebGL entirely so xterm.js falls back to
+      // its built-in DOM renderer.  Text content appears in real .xterm-rows > div
+      // spans, making terminal output directly readable from the browser without
+      // relying on tmux capture-pane.  Use this project for any test that needs to
+      // assert on rendered terminal content via the DOM (e.g. countRenderedRows,
+      // reading text from .xterm-rows).
+      //
+      // How it works: XtermTerminal.tsx guards WebglAddon behind
+      //   if (typeof WebGL2RenderingContext !== 'undefined')
+      // --disable-webgl makes that check false → no addon loads → DOM renderer.
+      name: 'chromium-dom',
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          args: ['--disable-webgl', '--disable-3d-apis', '--disable-gpu-sandbox'],
+        },
+      },
     },
   ],
 });

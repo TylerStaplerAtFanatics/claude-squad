@@ -314,6 +314,10 @@ message CreateSessionRequest {
   // Optional: Session type (directory, new_worktree, existing_worktree).
   // If not specified, backend will infer from other fields (branch, existing_worktree).
   SessionType session_type = 13;
+
+  // Optional: If true, ignore the path field and generate a fresh directory
+  // under one_off_base_dir. The session title is still required.
+  bool one_off = 14;
 }
 
 message CreateSessionResponse {

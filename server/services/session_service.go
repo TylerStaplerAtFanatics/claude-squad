@@ -22,6 +22,7 @@ import (
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/server/notifications"
 	"github.com/tstapler/stapler-squad/session"
+	"github.com/tstapler/stapler-squad/session/namegen"
 	"github.com/tstapler/stapler-squad/session/search"
 
 	"connectrpc.com/connect"
@@ -390,6 +391,7 @@ func (s *SessionService) SetConfigService(svc *ConfigService) {
 
 // ListSessions returns all sessions with optional filtering.
 // This includes both managed sessions and external mux-enabled sessions.
+// +api: session:list
 func (s *SessionService) ListSessions(
 	ctx context.Context,
 	req *connect.Request[sessionv1.ListSessionsRequest],
@@ -498,6 +500,7 @@ func (s *SessionService) GetSession(
 }
 
 // CreateSession initializes a new AI agent session with tmux and git worktree.
+// +api: session:create
 func (s *SessionService) CreateSession(
 	ctx context.Context,
 	req *connect.Request[sessionv1.CreateSessionRequest],
@@ -506,7 +509,7 @@ func (s *SessionService) CreateSession(
 	if req.Msg.Title == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("title is required"))
 	}
-	if req.Msg.Path == "" {
+	if !req.Msg.OneOff && req.Msg.Path == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
 	}
 
@@ -547,6 +550,20 @@ func (s *SessionService) CreateSession(
 		log.InfoLog.Printf("[CreateSession] Resolved to local path: %s (branch: %s)", resolvedPath, branch)
 	}
 
+	// One-off session: generate a fresh directory and override resolvedPath.
+	if req.Msg.OneOff {
+		cfg := config.LoadConfig()
+		baseDir, err := cfg.OneOffBaseDirOrDefault()
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to resolve one_off_base_dir: %w", err))
+		}
+		generatedPath, err := namegen.GenerateAndCreate(baseDir, 10)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create one-off directory: %w", err))
+		}
+		resolvedPath = generatedPath
+	}
+
 	// Resolve session defaults (global → directory → profile), then apply explicit request fields on top.
 	// skip_defaults bypasses this for scripted or explicit-empty sessions.
 	program := req.Msg.Program
@@ -568,28 +585,7 @@ func (s *SessionService) CreateSession(
 	}
 
 	// Determine session type - use explicit session_type if provided, otherwise infer from fields
-	var sessionType session.SessionType
-	if req.Msg.SessionType != sessionv1.SessionType_SESSION_TYPE_UNSPECIFIED {
-		// Use explicit session_type from request
-		switch req.Msg.SessionType {
-		case sessionv1.SessionType_SESSION_TYPE_DIRECTORY:
-			sessionType = session.SessionTypeDirectory
-		case sessionv1.SessionType_SESSION_TYPE_NEW_WORKTREE:
-			sessionType = session.SessionTypeNewWorktree
-		case sessionv1.SessionType_SESSION_TYPE_EXISTING_WORKTREE:
-			sessionType = session.SessionTypeExistingWorktree
-		default:
-			sessionType = session.SessionTypeDirectory
-		}
-	} else {
-		// Fall back to inference logic for backward compatibility
-		sessionType = session.SessionTypeDirectory
-		if req.Msg.ExistingWorktree != "" {
-			sessionType = session.SessionTypeExistingWorktree
-		} else if branch != "" {
-			sessionType = session.SessionTypeNewWorktree
-		}
-	}
+	sessionType := resolveSessionType(req.Msg, branch)
 
 	// Build instance options
 	instanceOpts := session.InstanceOptions{
@@ -667,7 +663,37 @@ func (s *SessionService) CreateSession(
 	}), nil
 }
 
+// resolveSessionType maps a CreateSessionRequest + resolved branch to a session.SessionType.
+// Priority: one_off (always directory) > explicit session_type > inference from branch/existing_worktree.
+func resolveSessionType(msg *sessionv1.CreateSessionRequest, branch string) session.SessionType {
+	var st session.SessionType
+	if msg.SessionType != sessionv1.SessionType_SESSION_TYPE_UNSPECIFIED {
+		switch msg.SessionType {
+		case sessionv1.SessionType_SESSION_TYPE_DIRECTORY:
+			st = session.SessionTypeDirectory
+		case sessionv1.SessionType_SESSION_TYPE_NEW_WORKTREE:
+			st = session.SessionTypeNewWorktree
+		case sessionv1.SessionType_SESSION_TYPE_EXISTING_WORKTREE:
+			st = session.SessionTypeExistingWorktree
+		default:
+			st = session.SessionTypeDirectory
+		}
+	} else {
+		st = session.SessionTypeDirectory
+		if msg.ExistingWorktree != "" {
+			st = session.SessionTypeExistingWorktree
+		} else if branch != "" {
+			st = session.SessionTypeNewWorktree
+		}
+	}
+	if msg.OneOff {
+		st = session.SessionTypeDirectory
+	}
+	return st
+}
+
 // UpdateSession modifies session properties (pause/resume, category, title).
+// +api: session:update
 func (s *SessionService) UpdateSession(
 	ctx context.Context,
 	req *connect.Request[sessionv1.UpdateSessionRequest],
@@ -811,6 +837,7 @@ func (s *SessionService) UpdateSession(
 }
 
 // DeleteSession stops and removes a session, cleaning up resources.
+// +api: session:delete
 func (s *SessionService) DeleteSession(
 	ctx context.Context,
 	req *connect.Request[sessionv1.DeleteSessionRequest],
@@ -882,6 +909,7 @@ func (s *SessionService) RemoveFromAllPollers(id string) {
 
 // WatchSessions streams real-time session events (created/updated/deleted).
 // Sends initial snapshot of all sessions, then subscribes to real-time updates.
+// +api: session:watch
 func (s *SessionService) WatchSessions(
 	ctx context.Context,
 	req *connect.Request[sessionv1.WatchSessionsRequest],
@@ -1390,6 +1418,7 @@ func (s *SessionService) GetClaudeHistoryMessages(
 }
 
 // SearchClaudeHistory performs full-text search across Claude conversation history.
+// +api: history:search
 func (s *SessionService) SearchClaudeHistory(
 	ctx context.Context,
 	req *connect.Request[sessionv1.SearchClaudeHistoryRequest],
@@ -1611,6 +1640,7 @@ func (s *SessionService) GetWorkspaceInfo(
 }
 
 // ListWorkspaceTargets returns available switch targets for a session.
+// +api: workspace:list-targets
 func (s *SessionService) ListWorkspaceTargets(
 	ctx context.Context,
 	req *connect.Request[sessionv1.ListWorkspaceTargetsRequest],
@@ -1619,6 +1649,7 @@ func (s *SessionService) ListWorkspaceTargets(
 }
 
 // SwitchWorkspace switches a session's workspace to a different branch, revision, or worktree.
+// +api: workspace:switch
 func (s *SessionService) SwitchWorkspace(
 	ctx context.Context,
 	req *connect.Request[sessionv1.SwitchWorkspaceRequest],

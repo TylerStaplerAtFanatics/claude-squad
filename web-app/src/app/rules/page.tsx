@@ -1,4 +1,5 @@
 "use client";
+// +feature: approval-rules rules-management
 
 import { ApprovalRulesPanel } from "@/components/sessions/ApprovalRulesPanel";
 import { ApprovalAnalyticsPanel } from "@/components/sessions/ApprovalAnalyticsPanel";

@@ -126,6 +126,33 @@ otlp_config:
 - `cache.hit`, `cache.refresh_duration_ms` - Cache performance
 - `sync.sessions_added`, `sync.sessions_updated` - Index sync metrics
 
+### Bundling tmux (optional, for single-binary deployment)
+
+Stapler Squad can bundle a pinned tmux 3.4 binary directly into the `stapler-squad` binary so
+deployment requires no external tmux installation.
+
+```bash
+# One-time setup: build tmux 3.4 from the third_party/tmux git submodule
+git submodule update --init third_party/tmux  # required once after clone
+make build-tmux                               # compiles tmux (~30s); Bazel caches artifacts
+
+# Copy the built binary into the embed dir and build an embedded stapler-squad
+make build-embedded         # equivalent to: make build-tmux-embed && go build -tags embed_tmux .
+
+# At runtime, the embedded binary is extracted to ~/.cache/stapler-squad/tmux/ on first start.
+# TMUX_BIN env var overrides the embedded binary (useful for tests or debugging):
+TMUX_BIN=/path/to/tmux ./stapler-squad
+```
+
+Without the `embed_tmux` tag (the default `make build`), the binary uses `TMUX_BIN` env var or
+falls back to the system `tmux` in `PATH`.
+
+```bash
+# Run tests against the pinned tmux binary (reproducible across machines):
+make test-with-pinned-tmux
+# Equivalent: TMUX_BIN=$(pwd)/bin/tmux go test -race ./...
+```
+
 ### Testing
 ```bash
 # Build first (generates proto files) then run all tests
@@ -836,6 +863,27 @@ Add via: `gh pr edit <number> --add-label "patch"` (create label first if it doe
 4. Run `make generate-proto` to regenerate code
 5. Test with `make restart-web`
 
+### Feature Testing Registry
+
+This project uses two complementary registries that must be kept in sync when adding any new omnibar capability. See `.claude/rules/feature-testing-registry.md` for the complete guide and checklists.
+
+**1. OmnibarAction discriminated union** (`web-app/src/lib/omnibar/actions/`)
+- `types.ts` — the exhaustive union of all omnibar actions (`navigate_session`, `create_session`, `clone_session`, etc.)
+- `dispatch.ts` — one `switch` case per action type; TypeScript's exhaustiveness check catches any missing case at compile time
+- `dispatch.test.ts` — one `describe` block per action type; every registered action must have a test
+
+**2. DetectorRegistry** (`web-app/src/lib/omnibar/detector.ts`)
+- `DetectorRegistry` class with `register()` + priority ordering
+- `createDefaultRegistry()` — the canonical list of all registered detectors (GitHub PR, branch, repo, path, session search, etc.)
+- `detector.test.ts` — tests named `DetectorName_should_action_When_condition` with structured test IDs (`T-UNIT-TS-*`, `T-PITFALL-*`)
+
+**When adding a new omnibar feature:**
+1. If it needs a new user-triggerable action → add to `OmnibarAction` union + `dispatch.ts` case + `dispatch.test.ts` describe block
+2. If it auto-detects a new input pattern → add a `Detector` class + register in `createDefaultRegistry()` + add tests
+3. If it is a new session creation mode → also see the 7-point backend checklist in `.claude/rules/session-creation-registry.md`
+
+**One-off session** is the reference implementation for a creation mode that does NOT need a new detector (UI-only selection) but DOES need handling in `dispatch.ts` when `sessionType: "one_off"` arrives via a `create_session` action — it maps to `oneOff: true` with `sessionType: undefined`.
+
 ### New Session Filters
 1. Add filter parameters to ConnectRPC service definitions
 2. Implement filter logic in `session/storage.go` or service layer
@@ -905,8 +953,10 @@ make ci           # Full CI pipeline: proto check → web build → Go build →
 1. Verifies proto-generated files are up to date (no uncommitted regeneration needed)
 2. Builds the Next.js web UI (`npm run build` in `web-app/`)
 3. Builds the Go binary
-4. Runs all Go tests (`go test ./...`)
+4. Runs all Go tests (`go test ./...`) — requires `tmux` on PATH (install via `brew install tmux` or `apt-get install tmux`)
 5. Runs `golangci-lint`
+
+For reproducible tmux tests across machines, use `make test-with-pinned-tmux` instead (requires `make build-tmux` first).
 
 Frontend tests (Jest) are **not** part of `make ci` — run them separately:
 ```bash
@@ -933,8 +983,109 @@ make profile-cpu       # CPU profiling
 ### Tool Management
 ```bash
 make install-tools # Install all development tools
-make clean        # Clean build artifacts  
+make clean        # Clean build artifacts
 make clean-tools  # Remove installed tools (caution)
+```
+
+---
+
+## Feature Registry
+
+The project maintains a static feature registry in `docs/registry/` that maps backend RPCs and frontend components to feature IDs. This registry is committed to the repo and validated in CI.
+
+### Registry files
+- `docs/registry/backend-features.json` — all proto RPCs with handler file locations and marker status
+- `docs/registry/frontend-features.json` — all React pages/components with `// +feature:` markers
+- `docs/registry/coverage-gaps.json` — advisory cross-registry coverage report (best-effort)
+- `docs/registry/schema.json` — JSON schema for validation
+
+### Keeping the registry current
+```bash
+make registry-generate          # Regenerate both registries from source
+make registry-generate-backend  # Backend only
+make registry-generate-frontend # Frontend only
+make registry-diff              # Show what would change (dry run, no writes)
+```
+
+**Run `make registry-generate` and commit the updated JSON files whenever you:**
+- Add or rename a proto RPC in `proto/session/v1/session.proto`
+- Add a new React page or component
+- Add or move a `// +api:` or `// +feature:` marker
+
+CI will warn (non-blocking until 2026-05-02, then blocking) if the committed registry diverges >2% from what the scanner would generate.
+
+### Backend markers (`// +api:`)
+Add to the handler method in `server/services/` to confirm the RPC is intentionally implemented:
+```go
+// +api: session:create
+func (s *SessionService) CreateSession(...) {
+```
+
+### Frontend markers (`// +feature:`)
+Add within the **first 10 lines** of a React page/component file. Placement beyond line 10 is silently ignored — always put the marker at the top:
+```tsx
+// +feature: ui:session-list
+'use client';
+import ...
+```
+
+The ID convention is `ui:noun-noun` for frontend (e.g. `ui:session-list`, `ui:review-queue`).
+The backend convention is `domain:verb` (e.g. `session:create`, `review-queue:get`).
+
+> **Known limitation**: the gap reporter in `docs/registry/coverage-gaps.json` uses domain-prefix
+> matching between the two namespaces. It is advisory only — false negatives are expected for
+> multi-word domains (e.g. `review-queue:get` ↔ `ui:review-queue`).
+
+---
+
+## E2E Tests
+
+E2E tests live in `tests/e2e/` and use Playwright + Allure.
+
+### Running E2E tests
+```bash
+# Start a test server first (separate terminal)
+STAPLER_SQUAD_USE_CONTROL_MODE=false STAPLER_SQUAD_INSTANCE=e2e-local ./stapler-squad --tmux-keep-server &
+
+# Run all E2E tests
+cd tests/e2e && npm test
+
+# Run a specific spec
+cd tests/e2e && npx playwright test session-lifecycle.spec.ts
+
+# Open Allure report after a run
+make e2e-report
+
+# Run Lighthouse performance audit
+make e2e-lighthouse
+```
+
+### E2E test conventions (enforced in CI)
+1. **`// @feature` annotation** — every new spec file must begin with a comment mapping it to a registry feature ID:
+   ```ts
+   // @feature session:create, session:update, session:delete
+   ```
+2. **No `waitForTimeout`** — use deterministic waits only:
+   ```ts
+   // ✅ correct
+   await expect(locator).toHaveValue('text');
+   await page.waitForSelector('[data-testid="session-list"]');
+   // ❌ banned
+   await page.waitForTimeout(500);
+   ```
+3. **`data-testid` or ARIA roles** — no CSS class selectors or nth-child in locators.
+4. **Page Object Model** — add new page helpers to `tests/e2e/pages/`.
+
+### UX analysis (Story 5)
+The `ux-analysis` CI workflow runs on PRs touching `web-app/src/`. It:
+- Runs **Axe Core** (blocks on critical/serious WCAG 2.1 AA violations)
+- Runs **Lighthouse CI** (warns if performance score < 70, non-blocking)
+- Runs **Claude vision analysis** if `ANTHROPIC_API_KEY` secret is configured (advisory)
+
+To run locally:
+```bash
+cd tests/e2e && npx playwright test accessibility.spec.ts
+cd tests/e2e && npx lhci autorun --config=lighthouse.config.js
 ```
 
 The Makefile handles long-running benchmarks automatically and provides comprehensive development automation.

@@ -273,26 +273,30 @@ describe('Bug 3: ResizeObserver calls fitAddon.fit() on zero-size container', ()
     });
   }
 
-  it('FAILS today — fit() should NOT run when container collapses to zero size', () => {
+  it('fit() should NOT run when container collapses to zero size', () => {
     jest.useFakeTimers();
     const harness = getHarness();
     const { flush } = captureRaf();
 
     render(<XtermTerminal onResize={jest.fn()} />);
-    flush(); // initial fit
+    flush(); // initial fit via double-rAF
+
+    // XtermTerminal schedules a secondary setTimeout(fit, 100) inside the double-rAF
+    // to handle edge cases where the initial fit runs before cell metrics are ready.
+    // Drain that timer (and any rAF it schedules) before capturing the baseline count,
+    // so we only measure fit() calls caused by the zero-size collapse.
+    act(() => { jest.runAllTimers(); });
 
     const fitCountAfterInit = harness.fitCalledCount;
 
     // Simulate container collapsing to zero (tab goes to background / is hidden)
     fireResizeObserver(0, 0);
 
-    // Advance the debounce timer (10ms for first few resizes)
+    // Advance past the debounce delay — the guard at XtermTerminal.tsx line 304
+    // (`width > 0 && height > 0`) must prevent the debounced fit() from being scheduled.
     act(() => { jest.advanceTimersByTime(20); });
-    flush();
 
-    // Bug 3: fit() was called on a zero-size container.
-    // Correct behaviour: fit() should NOT be triggered when width=0 OR height=0.
-    expect(harness.fitCalledCount).toBe(fitCountAfterInit); // ← FAILS today
+    expect(harness.fitCalledCount).toBe(fitCountAfterInit);
 
     jest.useRealTimers();
   });

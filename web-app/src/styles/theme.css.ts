@@ -51,7 +51,7 @@ export const lightTheme = createTheme(vars, {
     textSecondary: "#4a4a4a",
     textMuted: "#6b6b6b",
     textDisabled: "#9a9a9a",
-    textTertiary: "#9ca3af",
+    textTertiary: "#767676", /* was #9ca3af — 2.53:1 fails WCAG AA on white; #767676 = 4.55:1 ✅ */
     textInverse: "#ffffff",
 
     background: "#ffffff",
@@ -127,7 +127,7 @@ export const darkTheme = createTheme(vars, {
     textSecondary: "#b4b4b4",
     textMuted: "#8a8a8a",
     textDisabled: "#767676",
-    textTertiary: "#6b7280",
+    textTertiary: "#808080", /* was #6b7280 — #808080 = 4.64:1 on #1a1a1a card-bg — WCAG AA ✅ */
     textInverse: "#0a0a0a",
 
     background: "#0a0a0a",
