@@ -463,6 +463,26 @@ func (_u *SessionUpdate) ClearLastAcknowledged() *SessionUpdate {
 	return _u
 }
 
+// SetMcpServerURL sets the "mcp_server_url" field.
+func (_u *SessionUpdate) SetMcpServerURL(v string) *SessionUpdate {
+	_u.mutation.SetMcpServerURL(v)
+	return _u
+}
+
+// SetNillableMcpServerURL sets the "mcp_server_url" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableMcpServerURL(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetMcpServerURL(*v)
+	}
+	return _u
+}
+
+// ClearMcpServerURL clears the value of the "mcp_server_url" field.
+func (_u *SessionUpdate) ClearMcpServerURL() *SessionUpdate {
+	_u.mutation.ClearMcpServerURL()
+	return _u
+}
+
 // SetWorktreeID sets the "worktree" edge to the Worktree entity by ID.
 func (_u *SessionUpdate) SetWorktreeID(id int) *SessionUpdate {
 	_u.mutation.SetWorktreeID(id)
@@ -772,6 +792,12 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.LastAcknowledgedCleared() {
 		_spec.ClearField(session.FieldLastAcknowledged, field.TypeTime)
+	}
+	if value, ok := _u.mutation.McpServerURL(); ok {
+		_spec.SetField(session.FieldMcpServerURL, field.TypeString, value)
+	}
+	if _u.mutation.McpServerURLCleared() {
+		_spec.ClearField(session.FieldMcpServerURL, field.TypeString)
 	}
 	if _u.mutation.WorktreeCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1356,6 +1382,26 @@ func (_u *SessionUpdateOne) ClearLastAcknowledged() *SessionUpdateOne {
 	return _u
 }
 
+// SetMcpServerURL sets the "mcp_server_url" field.
+func (_u *SessionUpdateOne) SetMcpServerURL(v string) *SessionUpdateOne {
+	_u.mutation.SetMcpServerURL(v)
+	return _u
+}
+
+// SetNillableMcpServerURL sets the "mcp_server_url" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableMcpServerURL(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetMcpServerURL(*v)
+	}
+	return _u
+}
+
+// ClearMcpServerURL clears the value of the "mcp_server_url" field.
+func (_u *SessionUpdateOne) ClearMcpServerURL() *SessionUpdateOne {
+	_u.mutation.ClearMcpServerURL()
+	return _u
+}
+
 // SetWorktreeID sets the "worktree" edge to the Worktree entity by ID.
 func (_u *SessionUpdateOne) SetWorktreeID(id int) *SessionUpdateOne {
 	_u.mutation.SetWorktreeID(id)
@@ -1695,6 +1741,12 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 	}
 	if _u.mutation.LastAcknowledgedCleared() {
 		_spec.ClearField(session.FieldLastAcknowledged, field.TypeTime)
+	}
+	if value, ok := _u.mutation.McpServerURL(); ok {
+		_spec.SetField(session.FieldMcpServerURL, field.TypeString, value)
+	}
+	if _u.mutation.McpServerURLCleared() {
+		_spec.ClearField(session.FieldMcpServerURL, field.TypeString)
 	}
 	if _u.mutation.WorktreeCleared() {
 		edge := &sqlgraph.EdgeSpec{

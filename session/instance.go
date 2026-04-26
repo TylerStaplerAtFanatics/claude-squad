@@ -308,6 +308,8 @@ func (i *Instance) ToInstanceData() InstanceData {
 		HistoryFilePath: i.HistoryFilePath,
 		// Full launch command for diagnostics
 		LaunchCommand: i.LaunchCommand,
+		// MCP server URL for re-injection on restart
+		MCPServerURL: i.MCPServerURL,
 	}
 
 	// Only include worktree data if gitWorktree is initialized
@@ -444,6 +446,8 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		HistoryFilePath: data.HistoryFilePath,
 		// Launch command for diagnostics
 		LaunchCommand: data.LaunchCommand,
+		// MCP server URL for re-injection on restart
+		MCPServerURL: data.MCPServerURL,
 	}
 
 	// MIGRATION: Assign UUID to existing sessions that pre-date UUID assignment

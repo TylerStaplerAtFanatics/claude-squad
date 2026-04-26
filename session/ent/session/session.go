@@ -62,6 +62,8 @@ const (
 	FieldLastViewed = "last_viewed"
 	// FieldLastAcknowledged holds the string denoting the last_acknowledged field in the database.
 	FieldLastAcknowledged = "last_acknowledged"
+	// FieldMcpServerURL holds the string denoting the mcp_server_url field in the database.
+	FieldMcpServerURL = "mcp_server_url"
 	// EdgeWorktree holds the string denoting the worktree edge name in mutations.
 	EdgeWorktree = "worktree"
 	// EdgeDiffStats holds the string denoting the diff_stats edge name in mutations.
@@ -127,6 +129,7 @@ var Columns = []string{
 	FieldLastAddedToQueue,
 	FieldLastViewed,
 	FieldLastAcknowledged,
+	FieldMcpServerURL,
 }
 
 var (
@@ -292,6 +295,11 @@ func ByLastViewed(opts ...sql.OrderTermOption) OrderOption {
 // ByLastAcknowledged orders the results by the last_acknowledged field.
 func ByLastAcknowledged(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLastAcknowledged, opts...).ToFunc()
+}
+
+// ByMcpServerURL orders the results by the mcp_server_url field.
+func ByMcpServerURL(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMcpServerURL, opts...).ToFunc()
 }
 
 // ByWorktreeField orders the results by worktree field.

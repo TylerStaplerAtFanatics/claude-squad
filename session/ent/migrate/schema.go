@@ -204,6 +204,7 @@ var (
 		{Name: "last_added_to_queue", Type: field.TypeTime, Nullable: true},
 		{Name: "last_viewed", Type: field.TypeTime, Nullable: true},
 		{Name: "last_acknowledged", Type: field.TypeTime, Nullable: true},
+		{Name: "mcp_server_url", Type: field.TypeString, Nullable: true},
 	}
 	// SessionsTable holds the schema information for the "sessions" table.
 	SessionsTable = &schema.Table{

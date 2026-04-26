@@ -158,6 +158,9 @@ func (r *EntRepository) Create(ctx context.Context, data InstanceData) error {
 	if !data.LastAcknowledged.IsZero() {
 		sessionCreate.SetLastAcknowledged(data.LastAcknowledged)
 	}
+	if data.MCPServerURL != "" {
+		sessionCreate.SetMcpServerURL(data.MCPServerURL)
+	}
 
 	sess, err := sessionCreate.Save(ctx)
 	if err != nil {
@@ -335,6 +338,9 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 	}
 	if !data.LastAcknowledged.IsZero() {
 		sessionUpdate.SetLastAcknowledged(data.LastAcknowledged)
+	}
+	if data.MCPServerURL != "" {
+		sessionUpdate.SetMcpServerURL(data.MCPServerURL)
 	}
 
 	if err := sessionUpdate.Exec(ctx); err != nil {
@@ -740,6 +746,7 @@ func (r *EntRepository) sessionToInstanceData(sess *ent.Session) *InstanceData {
 		IsExpanded:          sess.IsExpanded,
 		TmuxPrefix:          sess.TmuxPrefix,
 		LastOutputSignature: sess.LastOutputSignature,
+		MCPServerURL:        sess.McpServerURL,
 	}
 
 	// Set optional time fields
