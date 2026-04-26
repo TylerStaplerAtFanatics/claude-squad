@@ -90,8 +90,10 @@ export const btnSubmit = style({
   background: vars.color.primary,
   color: vars.color.textInverse,
   transition: "background 0.12s",
-  ":hover:not(:disabled)": {
-    background: vars.color.primaryHover,
+  selectors: {
+    "&:hover:not(:disabled)": {
+      background: vars.color.primaryHover,
+    },
   },
   ":disabled": {
     opacity: 0.5,

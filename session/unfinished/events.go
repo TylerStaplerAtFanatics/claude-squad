@@ -32,14 +32,6 @@ func newUnfinishedWorkUpdatedEvent(r ScanResult) *events.Event {
 	}
 }
 
-func newUnfinishedWorkRemovedEvent(repoPath, branch string) *events.Event {
-	return &events.Event{
-		Type:      EventUnfinishedWorkRemoved,
-		Timestamp: time.Now(),
-		Context:   repoPath + "|" + branch,
-	}
-}
-
 func newScanCompletedEvent() *events.Event {
 	return &events.Event{
 		Type:      EventUnfinishedScanCompleted,
