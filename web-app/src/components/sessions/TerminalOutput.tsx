@@ -67,6 +67,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
   const lastResizeRef = useRef<{ cols: number; rows: number } | null>(null);
   const refreshCountRef = useRef(0);
   const isMountedRef = useRef(true);
+  const isFittingRef = useRef(false);
   const sizeStabilityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasInitiatedConnectionRef = useRef(false);
   const hasCachedDimensionsRef = useRef(false);
@@ -579,18 +580,25 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
   }, [isVisible]);
 
   // visualViewport resize listener — re-fits terminal when the on-screen keyboard
-  // appears/disappears on mobile (visualViewport changes don't fire window resize)
+  // appears/disappears on mobile (visualViewport changes don't fire window resize).
+  // isFittingRef guard prevents resize loops on iOS where fit() triggers another resize event.
   useEffect(() => {
     const vp = window.visualViewport;
     if (!vp) return;
 
     const onVpResize = () => {
-      setTimeout(() => xtermRef.current?.fit(), 300);
+      if (isFittingRef.current) return;
+      isFittingRef.current = true;
+      // Increase debounce on mobile (400ms) to wait for keyboard animation to finish
+      setTimeout(() => {
+        xtermRef.current?.fit();
+        requestAnimationFrame(() => { isFittingRef.current = false; });
+      }, isMobile ? 400 : 300);
     };
 
     vp.addEventListener('resize', onVpResize);
     return () => vp.removeEventListener('resize', onVpResize);
-  }, []);
+  }, [isMobile]);
 
   // Reset loading state when switching sessions and trigger reconnect
   useEffect(() => {
@@ -1015,21 +1023,22 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       {isKeyboardVisible && (
         <div className={styles.mobileKeyboard}>
           <div className={styles.mobileKeyRow}>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b'); }} aria-label="Escape">Esc</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('/'); }} aria-label="Forward slash">/</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('-'); }} aria-label="Hyphen">-</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[H'); }} aria-label="Home">Home</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[A'); }} aria-label="Up arrow">↑</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[F'); }} aria-label="End">End</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[5~'); }} aria-label="Page up">PgUp</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b'); }} aria-label="Escape" data-testid="mobile-key">Esc</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('/'); }} aria-label="Forward slash" data-testid="mobile-key">/</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('-'); }} aria-label="Hyphen" data-testid="mobile-key">-</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[H'); }} aria-label="Home" data-testid="mobile-key">Home</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[A'); }} aria-label="Up arrow" data-testid="mobile-key">↑</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[F'); }} aria-label="End" data-testid="mobile-key">End</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[5~'); }} aria-label="Page up" data-testid="mobile-key">PgUp</button>
           </div>
           <div className={styles.mobileKeyRow}>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\t'); }} aria-label="Tab">Tab</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\t'); }} aria-label="Tab" data-testid="mobile-key">Tab</button>
             <button
               className={`${styles.mobileKey} ${ctrlActive ? styles.mobileKeyActive : ''}`}
               onPointerDown={(e) => { e.preventDefault(); setCtrlActive(p => !p); setAltActive(false); }}
               aria-label={ctrlActive ? 'Ctrl active — press next key' : 'Control modifier'}
               aria-pressed={ctrlActive}
+              data-testid="mobile-key"
             >
               Ctrl
             </button>
@@ -1038,13 +1047,14 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
               onPointerDown={(e) => { e.preventDefault(); setAltActive(p => !p); setCtrlActive(false); }}
               aria-label={altActive ? 'Alt active — press next key' : 'Alt modifier'}
               aria-pressed={altActive}
+              data-testid="mobile-key"
             >
               Alt
             </button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[D'); }} aria-label="Left arrow">←</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[B'); }} aria-label="Down arrow">↓</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[C'); }} aria-label="Right arrow">→</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[6~'); }} aria-label="Page down">PgDn</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[D'); }} aria-label="Left arrow" data-testid="mobile-key">←</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[B'); }} aria-label="Down arrow" data-testid="mobile-key">↓</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[C'); }} aria-label="Right arrow" data-testid="mobile-key">→</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[6~'); }} aria-label="Page down" data-testid="mobile-key">PgDn</button>
           </div>
         </div>
       )}

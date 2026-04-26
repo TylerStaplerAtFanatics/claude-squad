@@ -101,6 +101,11 @@ export const fullscreenButton = style({
   lineHeight: 1,
   transition: "color 0.2s, background 0.2s",
   borderRadius: "4px",
+  minWidth: "var(--min-touch-target, 44px)",
+  minHeight: "var(--min-touch-target, 44px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   selectors: {
     "&:hover": {
       color: vars.color.terminalHeaderFg,
@@ -155,6 +160,11 @@ export const navButton = style({
   transition: "color 0.2s, background 0.2s",
   borderRadius: "4px",
   fontWeight: "bold",
+  minWidth: "var(--min-touch-target, 44px)",
+  minHeight: "var(--min-touch-target, 44px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   selectors: {
     "&:hover": {
       color: vars.color.terminalHeaderFg,
@@ -176,6 +186,11 @@ export const closeButton = style({
   padding: "0.5rem",
   lineHeight: 1,
   transition: "color 0.2s",
+  minWidth: "var(--min-touch-target, 44px)",
+  minHeight: "var(--min-touch-target, 44px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   selectors: {
     "&:hover": {
       color: vars.color.terminalHeaderFg,

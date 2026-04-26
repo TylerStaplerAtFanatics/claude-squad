@@ -338,6 +338,10 @@ export const mobileKey = style({
   // Tighter padding so 7 keys fit per row on a 375 px screen
   padding: "0.45rem 0.25rem",
   minWidth: 0, // allow flex shrink below content width
+  minHeight: "var(--min-touch-target, 44px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   background: "#3c3c3c",
   border: "1px solid #555",
   borderBottom: "3px solid #333",
