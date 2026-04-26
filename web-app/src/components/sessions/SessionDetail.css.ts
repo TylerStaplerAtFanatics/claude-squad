@@ -440,6 +440,99 @@ export const noTerminalSubtext = style({
   lineHeight: 1.5,
 });
 
+// ⋯ More actions button in header
+export const moreActionsButton = style({
+  background: "transparent",
+  border: "none",
+  fontSize: "1.5rem",
+  cursor: "pointer",
+  color: vars.color.terminalTextMuted,
+  padding: "0.5rem",
+  lineHeight: 1,
+  transition: "color 0.2s, background 0.2s",
+  borderRadius: "4px",
+  minWidth: "var(--min-touch-target, 44px)",
+  minHeight: "var(--min-touch-target, 44px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  selectors: {
+    "&:hover": {
+      color: vars.color.terminalHeaderFg,
+      background: vars.color.terminalHoverBg,
+    },
+  },
+});
+
+// Action sheet list
+export const actionSheet = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  marginTop: "0.5rem",
+});
+
+export const actionSheetItem = style({
+  minHeight: "52px",
+  padding: "0 16px",
+  textAlign: "left",
+  fontSize: "16px",
+  borderRadius: "8px",
+  background: "transparent",
+  border: "none",
+  cursor: "pointer",
+  color: vars.color.textPrimary,
+  display: "flex",
+  alignItems: "center",
+  transition: "background 0.12s",
+  selectors: {
+    "&:hover": {
+      background: vars.color.hoverBackground,
+    },
+    "&:active": {
+      background: vars.color.hoverBackground,
+    },
+  },
+});
+
+export const actionSheetItemDestructive = style({
+  color: "var(--error)",
+});
+
+export const actionDivider = style({
+  border: "none",
+  borderTop: `1px solid ${vars.color.borderColor}`,
+  margin: "8px 0",
+});
+
+// Generic action buttons for confirm dialogs
+export const actionButton = style({
+  padding: "0.5rem 1rem",
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: "6px",
+  background: vars.color.cardBackground,
+  color: vars.color.textPrimary,
+  cursor: "pointer",
+  fontSize: "0.875rem",
+  transition: "background 0.15s",
+  selectors: {
+    "&:hover": {
+      background: vars.color.hoverBackground,
+    },
+  },
+});
+
+export const actionButtonDanger = style({
+  background: "var(--error)",
+  color: "white",
+  border: "none",
+  selectors: {
+    "&:hover": {
+      opacity: 0.9,
+    },
+  },
+});
+
 // Mobile-fullscreen overrides — applied when isFullscreen is true.
 // Vanilla-extract can't express @media inside compound selectors, so we use
 // separate exported classes that SessionDetail.tsx applies conditionally.

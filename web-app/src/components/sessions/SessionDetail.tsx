@@ -14,6 +14,10 @@ import { useSessionService } from "@/lib/hooks/useSessionService";
 import { SessionVcsProvider } from "@/lib/contexts/SessionVcsContext";
 import { getApiBaseUrl } from "@/lib/config";
 import { getProgramDisplay, isKnownProgram, PROGRAMS } from "@/lib/constants/programs";
+import { Modal, ModalContent, ModalTitle, ModalFooter } from "@/components/ui/Modal";
+import { ResumeSessionModal } from "./ResumeSessionModal";
+import { useAppSelector } from "@/lib/store";
+import { selectAllSessions } from "@/lib/store/sessionsSlice";
 import * as styles from "./SessionDetail.css";
 
 // Dynamically import TerminalOutput with SSR disabled (xterm.js requires browser environment)
@@ -90,7 +94,12 @@ export function SessionDetail({
   const [programValue, setProgramValue] = useState(session.program || "");
   const [isEditingWorkingDir, setIsEditingWorkingDir] = useState(false);
   const [workingDirValue, setWorkingDirValue] = useState(session.workingDir || "");
-  const { updateSession } = useSessionService();
+  // Action sheet state
+  const [actionSheetOpen, setActionSheetOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const { updateSession, deleteSession, pauseSession } = useSessionService();
+  const allSessions = useAppSelector(selectAllSessions);
 
   // Terminal instance pool: keeps up to 8 session terminals alive (LRU, oldest first)
   const [pooledSessionIds, setPooledSessionIds] = useState<string[]>([]);
@@ -198,6 +207,32 @@ export function SessionDetail({
     setIsEditingWorkingDir(false);
   };
 
+  // Action sheet handlers
+  const handlePauseResume = async () => {
+    if (session.status === SessionStatus.PAUSED) {
+      setActionSheetOpen(false);
+      setShowResumeModal(true);
+    } else {
+      await pauseSession(session.id);
+      setActionSheetOpen(false);
+    }
+  };
+
+  const handleDeleteClick = () => {
+    if (session.status === SessionStatus.RUNNING || session.status === SessionStatus.NEEDS_APPROVAL) {
+      setShowDeleteConfirm(true);
+    } else {
+      handleConfirmDelete();
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    setShowDeleteConfirm(false);
+    setActionSheetOpen(false);
+    await deleteSession(session.id);
+    onClose();
+  };
+
   return (
     <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ""}`}>
       <div className={`${styles.header} ${isFullscreen ? styles.fullscreenMobileHeader : ""}`} data-testid="session-header">
@@ -271,6 +306,15 @@ export function SessionDetail({
               ⎇ Switch
             </button>
           )}
+          {/* More actions — opens action sheet */}
+          <button
+            className={styles.moreActionsButton}
+            onClick={() => setActionSheetOpen(true)}
+            aria-label="Session actions"
+            data-testid="more-actions-button"
+          >
+            ⋯
+          </button>
           {/* Close — conventional rightmost */}
           <button
             className={styles.closeButton}
@@ -688,6 +732,80 @@ export function SessionDetail({
             // The session will be updated via the event bus
             setShowWorkspaceSwitchModal(false);
           }}
+        />
+      )}
+
+      {/* Action Sheet — Radix Dialog with bottom-sheet behavior on mobile via globals.css */}
+      <Modal open={actionSheetOpen} onOpenChange={setActionSheetOpen}>
+        <ModalContent fallbackTitle={session.title} data-testid="action-sheet">
+          <ModalTitle>{session.title}</ModalTitle>
+          <div className={styles.actionSheet}>
+            {/* Pause/Resume — hide for external sessions */}
+            {session.instanceType !== InstanceType.EXTERNAL && (
+              <button
+                className={styles.actionSheetItem}
+                onClick={handlePauseResume}
+                data-testid="action-pause"
+              >
+                {session.status === SessionStatus.PAUSED ? '▶ Resume' : '⏸ Pause'}
+              </button>
+            )}
+            {/* Switch workspace */}
+            {session.instanceType !== InstanceType.EXTERNAL && (
+              <button
+                className={styles.actionSheetItem}
+                onClick={() => { setActionSheetOpen(false); setShowWorkspaceSwitchModal(true); }}
+              >
+                ⎇ Switch Workspace
+              </button>
+            )}
+            <hr className={styles.actionDivider} />
+            <button
+              className={`${styles.actionSheetItem} ${styles.actionSheetItemDestructive}`}
+              onClick={handleDeleteClick}
+              data-testid="action-delete"
+            >
+              🗑 Delete
+            </button>
+          </div>
+        </ModalContent>
+      </Modal>
+
+      {/* Delete confirmation dialog */}
+      <Modal open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <ModalContent fallbackTitle="Confirm delete" data-testid="delete-confirm-dialog">
+          <ModalTitle>Delete session?</ModalTitle>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+            This session is currently running. Stop and delete it?
+          </p>
+          <ModalFooter>
+            <button
+              className={styles.actionButton}
+              onClick={() => setShowDeleteConfirm(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className={`${styles.actionButton} ${styles.actionButtonDanger}`}
+              onClick={handleConfirmDelete}
+              data-testid="delete-confirm"
+            >
+              Delete
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Resume session modal */}
+      {showResumeModal && (
+        <ResumeSessionModal
+          session={session}
+          sessions={allSessions}
+          onConfirm={async (updates) => {
+            await updateSession(session.id, { title: updates.title, tags: updates.tags });
+            setShowResumeModal(false);
+          }}
+          onCancel={() => setShowResumeModal(false)}
         />
       )}
     </div>
