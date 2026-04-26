@@ -126,6 +126,33 @@ otlp_config:
 - `cache.hit`, `cache.refresh_duration_ms` - Cache performance
 - `sync.sessions_added`, `sync.sessions_updated` - Index sync metrics
 
+### Bundling tmux (optional, for single-binary deployment)
+
+Stapler Squad can bundle a pinned tmux 3.4 binary directly into the `stapler-squad` binary so
+deployment requires no external tmux installation.
+
+```bash
+# One-time setup: build tmux 3.4 from the third_party/tmux git submodule
+git submodule update --init third_party/tmux  # required once after clone
+make build-tmux                               # compiles tmux (~30s); Bazel caches artifacts
+
+# Copy the built binary into the embed dir and build an embedded stapler-squad
+make build-embedded         # equivalent to: make build-tmux-embed && go build -tags embed_tmux .
+
+# At runtime, the embedded binary is extracted to ~/.cache/stapler-squad/tmux/ on first start.
+# TMUX_BIN env var overrides the embedded binary (useful for tests or debugging):
+TMUX_BIN=/path/to/tmux ./stapler-squad
+```
+
+Without the `embed_tmux` tag (the default `make build`), the binary uses `TMUX_BIN` env var or
+falls back to the system `tmux` in `PATH`.
+
+```bash
+# Run tests against the pinned tmux binary (reproducible across machines):
+make test-with-pinned-tmux
+# Equivalent: TMUX_BIN=$(pwd)/bin/tmux go test -race ./...
+```
+
 ### Testing
 ```bash
 # Build first (generates proto files) then run all tests
@@ -926,8 +953,10 @@ make ci           # Full CI pipeline: proto check → web build → Go build →
 1. Verifies proto-generated files are up to date (no uncommitted regeneration needed)
 2. Builds the Next.js web UI (`npm run build` in `web-app/`)
 3. Builds the Go binary
-4. Runs all Go tests (`go test ./...`)
+4. Runs all Go tests (`go test ./...`) — requires `tmux` on PATH (install via `brew install tmux` or `apt-get install tmux`)
 5. Runs `golangci-lint`
+
+For reproducible tmux tests across machines, use `make test-with-pinned-tmux` instead (requires `make build-tmux` first).
 
 Frontend tests (Jest) are **not** part of `make ci` — run them separately:
 ```bash

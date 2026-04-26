@@ -68,8 +68,6 @@ jobs:
     needs: prepare
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -82,22 +80,11 @@ jobs:
         with:
           name: generated-files
 
-      - name: Install tmux build dependencies
-        run: sudo apt-get install -y automake libevent-dev libncurses-dev pkg-config
+      - name: Install tmux (system)
+        run: sudo apt-get install -y tmux
 
-      - name: Cache pinned tmux binary
-        uses: actions/cache@v4
-        id: tmux-cache
-        with:
-          path: bin/tmux
-          key: tmux-3.4-${{ runner.os }}-${{ hashFiles('third_party/tmux/configure.ac') }}
-
-      - name: Build pinned tmux
-        if: steps.tmux-cache.outputs.cache-hit != 'true'
-        run: ./scripts/build-tmux.sh
-
-      - name: Run tests (with pinned tmux)
-        run: TMUX_BIN="$(pwd)/bin/tmux" go test -race -v ./...
+      - name: Run tests
+        run: go test -race -v ./...
 
       - name: Set up Node.js (for coverage report)
         uses: actions/setup-node@v4
