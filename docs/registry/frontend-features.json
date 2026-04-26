@@ -63,6 +63,58 @@
       "lastModified": "2026-04-18T17:28:17.610Z"
     },
     {
+      "id": "session-create-directory",
+      "type": "frontend",
+      "frontend": {
+        "component": "OmnibarCreationPanel",
+        "path": "web-app/src/components/sessions/OmnibarCreationPanel.tsx",
+        "markerLine": 21
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-24T00:00:00.000Z"
+    },
+    {
+      "id": "session-create-new-worktree",
+      "type": "frontend",
+      "frontend": {
+        "component": "OmnibarCreationPanel",
+        "path": "web-app/src/components/sessions/OmnibarCreationPanel.tsx",
+        "markerLine": 21
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-24T00:00:00.000Z"
+    },
+    {
+      "id": "session-create-existing-worktree",
+      "type": "frontend",
+      "frontend": {
+        "component": "OmnibarCreationPanel",
+        "path": "web-app/src/components/sessions/OmnibarCreationPanel.tsx",
+        "markerLine": 21
+      },
+      "tested": false,
+      "testIds": [],
+      "lastModified": "2026-04-24T00:00:00.000Z"
+    },
+    {
+      "id": "session-create-one-off",
+      "type": "frontend",
+      "frontend": {
+        "component": "OmnibarCreationPanel",
+        "path": "web-app/src/components/sessions/OmnibarCreationPanel.tsx",
+        "markerLine": 21
+      },
+      "tested": true,
+      "testIds": [
+        "one-off-session-creation > shows one-off option in creation panel",
+        "one-off-session-creation > hides path input when one-off is selected",
+        "one-off-session-creation > creates session with one_off flag"
+      ],
+      "lastModified": "2026-04-24T00:00:00.000Z"
+    },
+    {
       "id": "terminal-pre-sizing",
       "type": "frontend",
       "frontend": {

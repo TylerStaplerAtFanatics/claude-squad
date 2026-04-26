@@ -45,7 +45,7 @@ endif
 		touch $(ASDF_STAMP); \
 	fi
 
-.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse
+.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse build-tmux build-tmux-embed build-embedded clean-tmux init-submodules test-with-pinned-tmux
 
 # Default target
 help: ## Show this help message
@@ -174,6 +174,56 @@ build-mux: ensure-tools ## Build the claude-mux PTY multiplexer binary
 install-mux: ensure-tools ## Build and install claude-mux to ~/.local/bin
 	@./scripts/install-mux.sh
 
+# ── Pinned tmux binary (for test isolation) ────────────────────────────────
+# Builds tmux 3.4 from the third_party/tmux git submodule.
+# Tests use TMUX_BIN=bin/tmux to run against the pinned binary instead of the
+# system tmux, ensuring reproducible results across developer machines and CI.
+#
+# Bazel caches the C build artifacts — subsequent runs are instant.
+# Without Bazel, falls back to make (full recompile each clean build).
+
+BIN_TMUX        := bin/tmux
+TMUX_BUILD_STAMP := .tmux-build.stamp
+
+# Stamp-file approach: only rebuild when submodule source changes
+$(BIN_TMUX): $(TMUX_BUILD_STAMP)
+	@true
+
+$(TMUX_BUILD_STAMP): third_party/tmux/configure.ac
+	@$(MAKE) build-tmux
+	@touch $(TMUX_BUILD_STAMP)
+
+init-submodules: ## Initialize git submodules (required once after clone)
+	git submodule update --init --recursive
+
+build-tmux: ## Build pinned tmux 3.4 binary from third_party/tmux submodule
+	@echo "Building pinned tmux binary..."
+	@if command -v bazel >/dev/null 2>&1 && [ -f third_party/tmux/configure.ac ]; then \
+		echo "Using Bazel (artifacts cached)..."; \
+		bazel build //third_party/tmux:tmux && \
+		mkdir -p bin && \
+		cp "$$(bazel info bazel-bin)/third_party/tmux/tmux" $(BIN_TMUX) && \
+		chmod +x $(BIN_TMUX) && \
+		echo "✅ tmux built via Bazel at $(BIN_TMUX)"; \
+	else \
+		./scripts/build-tmux.sh; \
+	fi
+
+build-tmux-embed: build-tmux ## Copy built tmux into the embed dir for go build -tags embed_tmux
+	@mkdir -p session/tmux/embed
+	@cp $(BIN_TMUX) session/tmux/embed/tmux
+	@echo "✅ session/tmux/embed/tmux ready ($(shell $(BIN_TMUX) -V 2>/dev/null || echo unknown))"
+
+build-embedded: build-tmux-embed ## Build stapler-squad with tmux bundled inside the binary
+	go build -tags embed_tmux -o stapler-squad .
+	@echo "✅ stapler-squad built with embedded tmux"
+
+clean-tmux: ## Remove the built tmux binary and submodule build artifacts
+	@./scripts/build-tmux.sh --clean
+	@rm -f $(TMUX_BUILD_STAMP)
+	@rm -f session/tmux/embed/tmux
+	@echo "✅ tmux artifacts cleaned"
+
 install-service: build ## Install stapler-squad as a system service (systemd on Linux, LaunchAgent on macOS)
 	@STAPLER_SQUAD_BIN="$(CURDIR)/stapler-squad" ./scripts/install-service.sh
 
@@ -223,6 +273,9 @@ test-race: ensure-tools proto-gen ## Run tests with race detector enabled
 
 test-integration: ensure-tools proto-gen ## Run integration tests (requires real tmux)
 	go test -race -tags integration ./...
+
+test-with-pinned-tmux: ensure-tools proto-gen $(BIN_TMUX) ## Run tests using the pinned tmux binary (reproducible)
+	TMUX_BIN=$(CURDIR)/$(BIN_TMUX) go test -race ./...
 
 # Performance benchmarks
 benchmark: ensure-tools proto-gen ## Run all benchmarks

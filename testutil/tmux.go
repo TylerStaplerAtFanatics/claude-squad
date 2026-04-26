@@ -171,8 +171,8 @@ type TmuxTestServer struct {
 func CreateIsolatedTmuxServer(t *testing.T) *TmuxTestServer {
 	t.Helper()
 
-	// Check if tmux is available
-	if _, err := exec.LookPath("tmux"); err != nil {
+	// Check if the configured tmux binary is available
+	if _, err := exec.LookPath(tmux.Binary()); err != nil {
 		t.Skip("tmux not available, skipping test")
 	}
 
@@ -234,7 +234,7 @@ func (s *TmuxTestServer) CreateSessionWithoutStarting(sessionName string, comman
 func (s *TmuxTestServer) ListSessions() ([]string, error) {
 	s.t.Helper()
 
-	cmd := exec.Command("tmux", "-L", s.socketName, "list-sessions", "-F", "#{session_name}")
+	cmd := exec.Command(tmux.Binary(), "-L", s.socketName, "list-sessions", "-F", "#{session_name}")
 	output, err := s.executor.Output(cmd)
 	if err != nil {
 		// No sessions or no server running is not an error - return empty list
@@ -268,7 +268,7 @@ func (s *TmuxTestServer) ListSessions() ([]string, error) {
 func (s *TmuxTestServer) SessionExists(sessionName string) bool {
 	s.t.Helper()
 
-	cmd := exec.Command("tmux", "-L", s.socketName, "has-session", "-t", sessionName)
+	cmd := exec.Command(tmux.Binary(), "-L", s.socketName, "has-session", "-t", sessionName)
 	err := s.executor.Run(cmd)
 	return err == nil
 }
@@ -277,7 +277,7 @@ func (s *TmuxTestServer) SessionExists(sessionName string) bool {
 func (s *TmuxTestServer) KillSession(sessionName string) error {
 	s.t.Helper()
 
-	cmd := exec.Command("tmux", "-L", s.socketName, "kill-session", "-t", sessionName)
+	cmd := exec.Command(tmux.Binary(), "-L", s.socketName, "kill-session", "-t", sessionName)
 	// Use CombinedOutput to get both stdout and stderr
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -321,7 +321,7 @@ func (s *TmuxTestServer) KillAllSessions() error {
 func (s *TmuxTestServer) KillServer() error {
 	s.t.Helper()
 
-	cmd := exec.Command("tmux", "-L", s.socketName, "kill-server")
+	cmd := exec.Command(tmux.Binary(), "-L", s.socketName, "kill-server")
 	err := s.executor.Run(cmd)
 	if err != nil {
 		// Server already gone is not an error
@@ -390,7 +390,7 @@ func CleanupTmuxSessionsWithPrefix(t *testing.T, prefix string) {
 	execImpl := executor.MakeExecutor()
 
 	// List all sessions
-	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
+	cmd := exec.Command(tmux.Binary(), "list-sessions", "-F", "#{session_name}")
 	output, err := execImpl.Output(cmd)
 	if err != nil {
 		// No sessions running is fine
@@ -405,7 +405,7 @@ func CleanupTmuxSessionsWithPrefix(t *testing.T, prefix string) {
 	sessions := strings.Split(strings.TrimSpace(string(output)), "\n")
 	for _, sessionName := range sessions {
 		if strings.HasPrefix(sessionName, prefix) {
-			killCmd := exec.Command("tmux", "kill-session", "-t", sessionName)
+			killCmd := exec.Command(tmux.Binary(), "kill-session", "-t", sessionName)
 			if err := execImpl.Run(killCmd); err != nil {
 				t.Logf("Warning: failed to kill session %s: %v", sessionName, err)
 			}

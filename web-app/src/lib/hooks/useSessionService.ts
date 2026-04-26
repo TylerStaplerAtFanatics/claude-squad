@@ -156,6 +156,7 @@ export function useSessionService(
           autoYes: request.autoYes,
           existingWorktree: request.existingWorktree,
           sessionType: request.sessionType,
+          oneOff: request.oneOff ?? false,
         });
 
         // Add to store (with duplicate check handled by entity adapter upsertOne)
