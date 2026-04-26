@@ -175,7 +175,7 @@ install-mux: ensure-tools ## Build and install claude-mux to ~/.local/bin
 	@./scripts/install-mux.sh
 
 install-service: build ## Install stapler-squad as a system service (systemd on Linux, LaunchAgent on macOS)
-	@STAPLER_SQUAD_BIN="$(CURDIR)/stapler-squad" ./scripts/install-service.sh
+	@STAPLER_SQUAD_BIN="$(CURDIR)/stapler-squad" ./scripts/install-service.sh $(if $(NO_PROFILE),--no-profile) $(if $(PROFILE_PORT),--profile-port $(PROFILE_PORT))
 
 uninstall-service: ## Remove the system service and disable auto-start on login
 	@./scripts/install-service.sh --uninstall
