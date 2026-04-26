@@ -48,16 +48,18 @@ fi
 # ── init submodule if needed ───────────────────────────────────────────────
 
 if [[ ! -f "$SUBMODULE_DIR/configure.ac" ]]; then
-  # Prefer git submodule if the submodule is registered in git's object model.
-  # Fall back to git clone when the developer hasn't run `git submodule add` yet
-  # (e.g., first setup before the PR is merged into main).
-  if (cd "$ROOT" && git submodule status third_party/tmux &>/dev/null); then
+  # Check for a proper git submodule gitlink (mode 160000 in the index).
+  # `git submodule status` exits 0 even when not registered, so we check the index directly.
+  if git -C "$ROOT" ls-files --stage third_party/tmux 2>/dev/null | grep -q '^160000 '; then
     log "Initializing third_party/tmux submodule..."
     (cd "$ROOT" && git submodule update --init third_party/tmux)
   else
-    log "Cloning tmux 3.4 into third_party/tmux..."
-    git clone --depth 1 --branch 3.4 https://github.com/tmux/tmux.git "$SUBMODULE_DIR"
-    log "Tip: run 'git submodule add -b 3.4 https://github.com/tmux/tmux.git third_party/tmux' to register this as a proper submodule."
+    log "Cloning tmux 3.4 into third_party/tmux (gitlink not registered; run 'git submodule add' to fix)..."
+    # Clone into a temp dir then merge so we preserve any existing files (e.g. BUILD.bazel).
+    TMUX_TMP="$(mktemp -d)"
+    git clone --depth 1 --branch 3.4 https://github.com/tmux/tmux.git "$TMUX_TMP"
+    cp -rn "$TMUX_TMP"/. "$SUBMODULE_DIR/"   # -n = no-clobber, keeps our BUILD.bazel
+    rm -rf "$TMUX_TMP"
   fi
 fi
 
