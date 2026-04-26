@@ -47,6 +47,24 @@ describe("dispatchOmnibarAction", () => {
     });
   });
 
+  describe("create_session (one-off)", () => {
+    it("dispatchOmnibarAction_should_setOneOffTrue_When_sessionTypeIsOneOff", () => {
+      const deps = makeDeps();
+      const action: OmnibarAction = {
+        type: "create_session",
+        path: "",
+        sessionType: "one_off",
+        title: "scratch session",
+        program: "claude",
+      };
+      dispatchOmnibarAction(action, deps);
+      expect(deps.createSession).toHaveBeenCalledWith(
+        expect.objectContaining({ oneOff: true, sessionType: undefined })
+      );
+      expect(deps.close).toHaveBeenCalled();
+    });
+  });
+
   describe("clone_session", () => {
     it("dispatchOmnibarAction_should_callCreateSession_When_cloneSessionAction", () => {
       const deps = makeDeps();

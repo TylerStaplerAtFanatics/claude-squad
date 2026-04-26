@@ -13,7 +13,8 @@ import (
 
 // ReviewQueuePollerConfig contains configuration for the review queue poller.
 type ReviewQueuePollerConfig struct {
-	PollInterval       time.Duration // How often to check sessions
+	PollInterval       time.Duration // How often to check sessions (fast path, default 2s)
+	SlowPollInterval   time.Duration // Interval when review queue is empty (default 8s); 0 = no backoff
 	IdleThreshold      time.Duration // Duration before considering session idle and adding to queue
 	InputWaitDuration  time.Duration // Time waiting for input before flagging
 	StalenessThreshold time.Duration // Duration since last meaningful output before considering stale
@@ -24,6 +25,7 @@ type ReviewQueuePollerConfig struct {
 func DefaultReviewQueuePollerConfig() ReviewQueuePollerConfig {
 	return ReviewQueuePollerConfig{
 		PollInterval:       2 * time.Second,  // Poll every 2 seconds for immediate detection
+		SlowPollInterval:   8 * time.Second,  // Back off to 8s when queue is empty
 		IdleThreshold:      5 * time.Second,  // Add to queue after 5s idle for immediate user notifications
 		InputWaitDuration:  3 * time.Second,  // Flag if waiting for input > 3s (reduced from 5s)
 		StalenessThreshold: 2 * time.Minute,  // Flag if no meaningful output for 2 minutes (reduced from 5min)
@@ -62,15 +64,23 @@ type ReviewQueuePoller struct {
 	// Content cache: avoids spawning a tmux capture-pane subprocess when the session
 	// has not produced new output since the last poll. For sessions with an active
 	// ClaudeController the idle detector's lastActivity timestamp (driven by PTY output
-	// reading, no subprocess) is used as a change signal.
+	// reading, no subprocess) is used as a change signal. For sessions without a
+	// ClaudeController, a 500ms TTL cache is used to limit subprocess calls to at most
+	// 2 per second regardless of the number of sessions.
 	cacheMu          sync.Mutex
 	lastSeenActivity map[string]time.Time // per-session: last IdleDetector.lastActivity seen
 	cachedContent    map[string]string    // per-session: content from last Preview() call
+	lastPreviewTime  map[string]time.Time // per-session: when Preview() was last called (for TTL cache)
 
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	mu     sync.RWMutex
+
+	// activityCh is an optional channel that signals the poll loop to snap back to
+	// the fast interval. Wired by ReactiveQueueManager on EventApprovalResponse and
+	// EventUserInteraction. A nil channel is never selected (safe in select statements).
+	activityCh <-chan struct{}
 
 	// Backoff state: tracks consecutive poll errors to apply exponential delay.
 	consecutiveErrors int
@@ -96,6 +106,7 @@ func NewReviewQueuePollerWithConfig(queue *ReviewQueue, statusManager *InstanceS
 		statusDetector:   detection.NewStatusDetector(), // For detecting status in sessions without ClaudeController
 		lastSeenActivity: make(map[string]time.Time),
 		cachedContent:    make(map[string]string),
+		lastPreviewTime:  make(map[string]time.Time),
 	}
 }
 
@@ -130,6 +141,7 @@ func (rqp *ReviewQueuePoller) RemoveInstance(instanceTitle string) {
 	rqp.cacheMu.Lock()
 	delete(rqp.lastSeenActivity, instanceTitle)
 	delete(rqp.cachedContent, instanceTitle)
+	delete(rqp.lastPreviewTime, instanceTitle)
 	rqp.cacheMu.Unlock()
 }
 
@@ -138,6 +150,15 @@ func (rqp *ReviewQueuePoller) SetApprovalProvider(provider ApprovalMetadataProvi
 	rqp.mu.Lock()
 	defer rqp.mu.Unlock()
 	rqp.approvalProvider = provider
+}
+
+// SetActivityChannel wires an external signal channel to the poll loop. When a signal
+// arrives on ch, the loop snaps back to the fast interval (PollInterval). Must be called
+// before Start(); subsequent calls have no effect once the loop is running.
+func (rqp *ReviewQueuePoller) SetActivityChannel(ch <-chan struct{}) {
+	rqp.mu.Lock()
+	rqp.activityCh = ch
+	rqp.mu.Unlock()
 }
 
 // Start begins polling for idle sessions.
@@ -207,17 +228,50 @@ func (rqp *ReviewQueuePoller) cleanupOrphanedItems() {
 }
 
 // pollLoop is the main polling loop that runs in the background.
+//
+// Adaptive interval: when an activityCh is wired and the review queue becomes empty,
+// the loop backs off to SlowPollInterval (8s by default). Any signal on activityCh
+// snaps the interval back to PollInterval (2s) immediately.
 func (rqp *ReviewQueuePoller) pollLoop() {
 	defer rqp.wg.Done()
 
-	ticker := time.NewTicker(rqp.config.PollInterval)
-	defer ticker.Stop()
+	fastInterval := rqp.config.PollInterval
+	slowInterval := rqp.config.SlowPollInterval
+	if slowInterval <= 0 {
+		slowInterval = fastInterval
+	}
+
+	// Capture activityCh once; must be set before Start() for the snap behavior to work.
+	// A nil channel is never selected in a select statement, so the adaptive path is
+	// simply skipped when no activity channel is wired.
+	rqp.mu.RLock()
+	actCh := rqp.activityCh
+	rqp.mu.RUnlock()
+
+	interval := fastInterval
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
 
 	for {
 		select {
 		case <-rqp.ctx.Done():
 			return
-		case <-ticker.C:
+
+		case <-actCh:
+			// Snap back to fast interval on external activity signal.
+			if interval != fastInterval {
+				log.DebugLog.Printf("[ReviewQueuePoller] Activity signal received — snapping to fast interval (%s)", fastInterval)
+				interval = fastInterval
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(interval)
+			}
+
+		case <-timer.C:
 			rqp.tickCount++
 
 			if err := rqp.checkSessionsSafe(); err != nil {
@@ -230,9 +284,21 @@ func (rqp *ReviewQueuePoller) pollLoop() {
 					return
 				case <-time.After(backoff):
 				}
+				timer.Reset(interval)
 				continue
 			}
 			rqp.consecutiveErrors = 0
+
+			// Adaptive interval: back off when queue is empty and activity channel is wired.
+			if actCh != nil && len(rqp.queue.List()) == 0 {
+				if interval != slowInterval {
+					log.DebugLog.Printf("[ReviewQueuePoller] Queue empty — backing off to slow interval (%s)", slowInterval)
+				}
+				interval = slowInterval
+			} else {
+				interval = fastInterval
+			}
+			timer.Reset(interval)
 
 			// Periodic reconciliation: verify in-memory state matches tmux reality.
 			// Runs every ReconcileInterval ticks; skipped when ReconcileInterval is 0.
@@ -331,6 +397,11 @@ func (rqp *ReviewQueuePoller) reconcileSessions() {
 	}
 }
 
+// checkSessionsConcurrency caps the number of sessions checked simultaneously,
+// limiting concurrent subprocess (capture-pane) calls to avoid fork exhaustion
+// on macOS (kern.maxprocperuid).
+const checkSessionsConcurrency = 5
+
 // checkSessions checks all instances and updates the review queue.
 func (rqp *ReviewQueuePoller) checkSessions() {
 	rqp.mu.RLock()
@@ -338,9 +409,18 @@ func (rqp *ReviewQueuePoller) checkSessions() {
 	copy(instances, rqp.instances)
 	rqp.mu.RUnlock()
 
+	sem := make(chan struct{}, checkSessionsConcurrency)
+	var wg sync.WaitGroup
 	for _, inst := range instances {
-		rqp.checkSession(inst)
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(i *Instance) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			rqp.checkSession(i)
+		}(inst)
 	}
+	wg.Wait()
 }
 
 // detectProcessing checks if session is actively processing after user interaction.
@@ -391,6 +471,12 @@ func detectProcessing(inst *Instance, content string, statusInfo InstanceStatusI
 	return false
 }
 
+// previewCacheTTL is the maximum age of a cached Preview() result for sessions
+// without an active ClaudeController. At the default 2-second poll interval this
+// limits tmux capture-pane subprocess calls to at most 2 per second regardless of
+// the number of monitored sessions.
+const previewCacheTTL = 500 * time.Millisecond
+
 // getContent returns the terminal content for inst, using a cache to avoid
 // spawning a subprocess when no new output has arrived since the last poll.
 //
@@ -400,8 +486,9 @@ func detectProcessing(inst *Instance, content string, statusInfo InstanceStatusI
 // any new bytes arrived. If nothing changed, the last captured content is returned
 // directly, saving one `tmux capture-pane` subprocess per idle session per tick.
 //
-// For sessions without a ClaudeController: Preview() is always called (no change
-// signal is available without the controller's PTY reader).
+// For sessions without a ClaudeController: a 500ms TTL cache is used. At most one
+// Preview() subprocess call is issued per session per 500ms, even if the poller
+// fires multiple times within that window.
 //
 // The error case returns the last cached content (empty string on the first poll)
 // so callers can continue with empty content as before.
@@ -420,6 +507,19 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 				return cached
 			}
 		}
+	} else {
+		// No ClaudeController: use a TTL cache to avoid spawning a subprocess on
+		// every poll tick. If the cached content is still fresh, return it directly.
+		rqp.cacheMu.Lock()
+		lastCall := rqp.lastPreviewTime[inst.Title]
+		cached := rqp.cachedContent[inst.Title]
+		rqp.cacheMu.Unlock()
+
+		if !lastCall.IsZero() && time.Since(lastCall) < previewCacheTTL {
+			log.DebugLog.Printf("[ReviewQueue] Session '%s': TTL cache hit (age=%s, %d bytes)",
+				inst.Title, time.Since(lastCall).Round(time.Millisecond), len(cached))
+			return cached
+		}
 	}
 
 	content, err := inst.Preview()
@@ -435,6 +535,8 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 	rqp.cachedContent[inst.Title] = content
 	if statusInfo.IsControllerActive && !statusInfo.IdleState.LastActivity.IsZero() {
 		rqp.lastSeenActivity[inst.Title] = statusInfo.IdleState.LastActivity
+	} else {
+		rqp.lastPreviewTime[inst.Title] = time.Now()
 	}
 	rqp.cacheMu.Unlock()
 

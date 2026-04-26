@@ -335,14 +335,18 @@ message CreateSessionRequest {
   // If not specified, backend will infer from other fields (branch, existing_worktree).
   SessionType session_type = 13;
 
+  // Optional: If true, ignore the path field and generate a fresh directory
+  // under one_off_base_dir. The session title is still required.
+  bool one_off = 14;
+
   // Optional: Initial prompt to inject via CLAUDE.md (no size limit; shell-safe).
-  string initial_prompt = 14;
+  string initial_prompt = 15;
 
   // Optional: Run claude in one-shot mode (-p flag); session exits after task completes.
-  bool one_shot = 15;
+  bool one_shot = 16;
 
   // Optional: Associate session with a project ID.
-  string project_id = 16;
+  string project_id = 17;
 }
 
 message CreateSessionResponse {

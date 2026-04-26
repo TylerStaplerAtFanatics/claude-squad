@@ -126,6 +126,33 @@ otlp_config:
 - `cache.hit`, `cache.refresh_duration_ms` - Cache performance
 - `sync.sessions_added`, `sync.sessions_updated` - Index sync metrics
 
+### Bundling tmux (optional, for single-binary deployment)
+
+Stapler Squad can bundle a pinned tmux 3.4 binary directly into the `stapler-squad` binary so
+deployment requires no external tmux installation.
+
+```bash
+# One-time setup: build tmux 3.4 from the third_party/tmux git submodule
+git submodule update --init third_party/tmux  # required once after clone
+make build-tmux                               # compiles tmux (~30s); Bazel caches artifacts
+
+# Copy the built binary into the embed dir and build an embedded stapler-squad
+make build-embedded         # equivalent to: make build-tmux-embed && go build -tags embed_tmux .
+
+# At runtime, the embedded binary is extracted to ~/.cache/stapler-squad/tmux/ on first start.
+# TMUX_BIN env var overrides the embedded binary (useful for tests or debugging):
+TMUX_BIN=/path/to/tmux ./stapler-squad
+```
+
+Without the `embed_tmux` tag (the default `make build`), the binary uses `TMUX_BIN` env var or
+falls back to the system `tmux` in `PATH`.
+
+```bash
+# Run tests against the pinned tmux binary (reproducible across machines):
+make test-with-pinned-tmux
+# Equivalent: TMUX_BIN=$(pwd)/bin/tmux go test -race ./...
+```
+
 ### Testing
 ```bash
 # Build first (generates proto files) then run all tests
@@ -836,6 +863,27 @@ Add via: `gh pr edit <number> --add-label "patch"` (create label first if it doe
 4. Run `make generate-proto` to regenerate code
 5. Test with `make restart-web`
 
+### Feature Testing Registry
+
+This project uses two complementary registries that must be kept in sync when adding any new omnibar capability. See `.claude/rules/feature-testing-registry.md` for the complete guide and checklists.
+
+**1. OmnibarAction discriminated union** (`web-app/src/lib/omnibar/actions/`)
+- `types.ts` — the exhaustive union of all omnibar actions (`navigate_session`, `create_session`, `clone_session`, etc.)
+- `dispatch.ts` — one `switch` case per action type; TypeScript's exhaustiveness check catches any missing case at compile time
+- `dispatch.test.ts` — one `describe` block per action type; every registered action must have a test
+
+**2. DetectorRegistry** (`web-app/src/lib/omnibar/detector.ts`)
+- `DetectorRegistry` class with `register()` + priority ordering
+- `createDefaultRegistry()` — the canonical list of all registered detectors (GitHub PR, branch, repo, path, session search, etc.)
+- `detector.test.ts` — tests named `DetectorName_should_action_When_condition` with structured test IDs (`T-UNIT-TS-*`, `T-PITFALL-*`)
+
+**When adding a new omnibar feature:**
+1. If it needs a new user-triggerable action → add to `OmnibarAction` union + `dispatch.ts` case + `dispatch.test.ts` describe block
+2. If it auto-detects a new input pattern → add a `Detector` class + register in `createDefaultRegistry()` + add tests
+3. If it is a new session creation mode → also see the 7-point backend checklist in `.claude/rules/session-creation-registry.md`
+
+**One-off session** is the reference implementation for a creation mode that does NOT need a new detector (UI-only selection) but DOES need handling in `dispatch.ts` when `sessionType: "one_off"` arrives via a `create_session` action — it maps to `oneOff: true` with `sessionType: undefined`.
+
 ### New Session Filters
 1. Add filter parameters to ConnectRPC service definitions
 2. Implement filter logic in `session/storage.go` or service layer
@@ -924,8 +972,10 @@ make ci           # Full CI pipeline: proto check → web build → Go build →
 1. Verifies proto-generated files are up to date (no uncommitted regeneration needed)
 2. Builds the Next.js web UI (`npm run build` in `web-app/`)
 3. Builds the Go binary
-4. Runs all Go tests (`go test ./...`)
+4. Runs all Go tests (`go test ./...`) — requires `tmux` on PATH (install via `brew install tmux` or `apt-get install tmux`)
 5. Runs `golangci-lint`
+
+For reproducible tmux tests across machines, use `make test-with-pinned-tmux` instead (requires `make build-tmux` first).
 
 Frontend tests (Jest) are **not** part of `make ci` — run them separately:
 ```bash
