@@ -32,6 +32,7 @@ import { XtermTerminal, type XtermTerminalHandle } from "./XtermTerminal";
 import { TerminalStreamManager } from "@/lib/terminal/TerminalStreamManager";
 import { getCachedDimensions, saveDimensions } from "@/lib/terminal/TerminalDimensionCache";
 import { track } from "@/lib/telemetry";
+import { useViewport } from "@/components/providers/ViewportProvider";
 import * as styles from "./TerminalOutput.css";
 
 interface TerminalOutputProps {
@@ -174,19 +175,27 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     });
   }, []);
 
-  // Mobile detection — used to default mouse tracking mode
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(max-width: 768px)').matches || 'ontouchstart' in window;
+  // Mobile detection — use shared ViewportProvider hook for consistency
+  const { isMobile } = useViewport();
+
+  // Toolbar collapsed/expanded state — persisted in localStorage
+  const [toolbarExpanded, setToolbarExpanded] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const s = localStorage.getItem('stapler-squad-toolbar-expanded');
+      return s === null ? true : s === 'true';
+    } catch {
+      return true;
+    }
   });
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 768px)');
-    const handle = () => setIsMobile(mq.matches || 'ontouchstart' in window);
-    mq.addEventListener('change', handle);
-    return () => mq.removeEventListener('change', handle);
-  }, []);
+    try {
+      localStorage.setItem('stapler-squad-toolbar-expanded', String(toolbarExpanded));
+    } catch {
+      // localStorage unavailable — continue without persistence
+    }
+  }, [toolbarExpanded]);
 
   // Mouse tracking mode: "none" on mobile (enables xterm selection + touch scroll),
   // "any" on desktop (forwards mouse events to terminal app for vim/tmux mouse support).
@@ -849,6 +858,17 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
           )}
         </div>
         <div className={styles.actions}>
+          {/* Toolbar toggle — always visible on mobile; hidden on desktop via CSS */}
+          <button
+            className={styles.toolbarToggle}
+            onClick={() => setToolbarExpanded(v => !v)}
+            aria-label={toolbarExpanded ? 'Collapse toolbar' : 'Expand toolbar'}
+            aria-expanded={toolbarExpanded}
+            data-testid="toolbar-toggle"
+          >
+            {toolbarExpanded ? '▲' : '▼'}
+          </button>
+          {/* Reconnect always visible when needed, regardless of toolbar state */}
           {showReconnectButton && (
             <button
               className={styles.toolbarButton}
@@ -859,103 +879,107 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
               🔄 Reconnect
             </button>
           )}
-          <button
-            className={`${styles.toolbarButton} ${styles.devOnly} ${debugMode ? styles.debugActive : ''}`}
-            onClick={handleToggleDebug}
-            title={debugMode ? "Disable debug logging" : "Enable debug logging"}
-            aria-label={debugMode ? "Disable debug mode" : "Enable debug mode"}
-            style={debugMode ? { backgroundColor: '#2a4', color: 'white', fontWeight: 'bold' } : {}}
-          >
-            🛠️ {debugMode ? 'Debug ON' : 'Debug'}
-          </button>
-          <button
-            className={`${styles.toolbarButton} ${styles.devOnly}`}
-            onClick={() => {
-              if (isRecording) {
-                stopRecording();
-                setIsRecording(false);
-              } else {
-                startRecording();
-                setIsRecording(true);
-              }
-            }}
-            title={isRecording ? "Stop recording" : "Start recording terminal output"}
-            style={isRecording ? { backgroundColor: '#ff4444', color: 'white' } : {}}
-          >
-            {isRecording ? '⏹️ Stop Rec' : '⏺️ Record'}
-          </button>
-          <select
-            value={streamingMode}
-            onChange={(e) => setStreamingMode(e.target.value as "raw" | "raw-compressed" | "state" | "hybrid")}
-            className={`${styles.toolbarButton} ${styles.devOnly}`}
-            title="Terminal streaming mode - choose how terminal output is delivered"
-            aria-label="Select terminal streaming mode"
-            disabled={!isConnected}
-            style={{ minWidth: '140px' }}
-          >
-            <option value="raw">🚀 Raw</option>
-            <option value="raw-compressed">📦 Raw+LZMA</option>
-            <option value="state">🔄 State Sync</option>
-            <option value="hybrid">🔬 Hybrid</option>
-          </select>
-          <button
-            className={styles.toolbarButton}
-            onClick={handleManualResize}
-            title="Resize terminal to fit container"
-            aria-label="Resize terminal"
-          >
-            ↔️ Resize
-          </button>
-          {/* Mobile-primary buttons first so they're always visible at 375px */}
-          <button
-            className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle}`}
-            onClick={toggleMobileKeyboard}
-            aria-label={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
-            aria-expanded={isKeyboardVisible}
-            title={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
-          >
-            ⌨️ {isKeyboardVisible ? 'Hide Keys' : 'Show Keys'}
-          </button>
-          <button
-            className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle} ${mouseMode === 'any' ? styles.mouseModeActive : ''}`}
-            onClick={toggleMouseMode}
-            aria-label={mouseMode === 'none' ? 'Enable mouse mode for terminal apps (vim, tmux)' : 'Disable mouse mode — enables text selection'}
-            title={mouseMode === 'none' ? 'Mouse OFF — tap to enable for vim/tmux' : 'Mouse ON — tap to disable, enables selection'}
-          >
-            🖱️ {mouseMode === 'none' ? 'Mouse' : 'Mouse ON'}
-          </button>
-          <button
-            className={styles.toolbarButton}
-            onClick={handlePaste}
-            title="Paste from clipboard — text is sent directly, images are saved to a temp file and the path is inserted"
-            aria-label="Paste from clipboard"
-          >
-            {pasteError ? `⚠️ ${pasteError}` : '📎 Paste'}
-          </button>
-          <button
-            className={styles.toolbarButton}
-            onClick={handleCopyOutput}
-            title="Copy selected terminal text to clipboard"
-            aria-label="Copy terminal output to clipboard"
-          >
-            📋 Copy
-          </button>
-          <button
-            className={styles.toolbarButton}
-            onClick={handleScrollToBottom}
-            title="Scroll to bottom"
-            aria-label="Scroll to bottom"
-          >
-            ↓ Bottom
-          </button>
-          <button
-            className={styles.toolbarButton}
-            onClick={handleClear}
-            title="Clear terminal"
-            aria-label="Clear terminal"
-          >
-            🗑️ Clear
-          </button>
+          {toolbarExpanded && (
+            <div className={styles.toolbarActions} data-testid="toolbar-actions">
+              <button
+                className={`${styles.toolbarButton} ${styles.devOnly} ${debugMode ? styles.debugActive : ''}`}
+                onClick={handleToggleDebug}
+                title={debugMode ? "Disable debug logging" : "Enable debug logging"}
+                aria-label={debugMode ? "Disable debug mode" : "Enable debug mode"}
+                style={debugMode ? { backgroundColor: '#2a4', color: 'white', fontWeight: 'bold' } : {}}
+              >
+                🛠️ {debugMode ? 'Debug ON' : 'Debug'}
+              </button>
+              <button
+                className={`${styles.toolbarButton} ${styles.devOnly}`}
+                onClick={() => {
+                  if (isRecording) {
+                    stopRecording();
+                    setIsRecording(false);
+                  } else {
+                    startRecording();
+                    setIsRecording(true);
+                  }
+                }}
+                title={isRecording ? "Stop recording" : "Start recording terminal output"}
+                style={isRecording ? { backgroundColor: '#ff4444', color: 'white' } : {}}
+              >
+                {isRecording ? '⏹️ Stop Rec' : '⏺️ Record'}
+              </button>
+              <select
+                value={streamingMode}
+                onChange={(e) => setStreamingMode(e.target.value as "raw" | "raw-compressed" | "state" | "hybrid")}
+                className={`${styles.toolbarButton} ${styles.devOnly}`}
+                title="Terminal streaming mode - choose how terminal output is delivered"
+                aria-label="Select terminal streaming mode"
+                disabled={!isConnected}
+                style={{ minWidth: '140px' }}
+              >
+                <option value="raw">🚀 Raw</option>
+                <option value="raw-compressed">📦 Raw+LZMA</option>
+                <option value="state">🔄 State Sync</option>
+                <option value="hybrid">🔬 Hybrid</option>
+              </select>
+              <button
+                className={styles.toolbarButton}
+                onClick={handleManualResize}
+                title="Resize terminal to fit container"
+                aria-label="Resize terminal"
+              >
+                ↔️ Resize
+              </button>
+              {/* Mobile-primary buttons first so they're always visible at 375px */}
+              <button
+                className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle}`}
+                onClick={toggleMobileKeyboard}
+                aria-label={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
+                aria-expanded={isKeyboardVisible}
+                title={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
+              >
+                ⌨️ {isKeyboardVisible ? 'Hide Keys' : 'Show Keys'}
+              </button>
+              <button
+                className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle} ${mouseMode === 'any' ? styles.mouseModeActive : ''}`}
+                onClick={toggleMouseMode}
+                aria-label={mouseMode === 'none' ? 'Enable mouse mode for terminal apps (vim, tmux)' : 'Disable mouse mode — enables text selection'}
+                title={mouseMode === 'none' ? 'Mouse OFF — tap to enable for vim/tmux' : 'Mouse ON — tap to disable, enables selection'}
+              >
+                🖱️ {mouseMode === 'none' ? 'Mouse' : 'Mouse ON'}
+              </button>
+              <button
+                className={styles.toolbarButton}
+                onClick={handlePaste}
+                title="Paste from clipboard — text is sent directly, images are saved to a temp file and the path is inserted"
+                aria-label="Paste from clipboard"
+              >
+                {pasteError ? `⚠️ ${pasteError}` : '📎 Paste'}
+              </button>
+              <button
+                className={styles.toolbarButton}
+                onClick={handleCopyOutput}
+                title="Copy selected terminal text to clipboard"
+                aria-label="Copy terminal output to clipboard"
+              >
+                📋 Copy
+              </button>
+              <button
+                className={styles.toolbarButton}
+                onClick={handleScrollToBottom}
+                title="Scroll to bottom"
+                aria-label="Scroll to bottom"
+              >
+                ↓ Bottom
+              </button>
+              <button
+                className={styles.toolbarButton}
+                onClick={handleClear}
+                title="Clear terminal"
+                aria-label="Clear terminal"
+              >
+                🗑️ Clear
+              </button>
+            </div>
+          )}
         </div>
       </div>
       <div className={styles.terminal}>
