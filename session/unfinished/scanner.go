@@ -32,21 +32,21 @@ const (
 
 // ScanResult holds the complete unfinished-work state for a single git worktree.
 type ScanResult struct {
-	RepoPath    string
-	Branch      string
+	RepoPath     string
+	Branch       string
 	WorktreePath string
-	RepoName    string
-	DisplayPath string
+	RepoName     string
+	DisplayPath  string
 
 	HasUncommitted bool
 	AheadCount     int
 	BehindCount    int
 	DefaultBranch  string
 
-	ChangedFiles   int
-	LinesAdded     int
-	LinesRemoved   int
-	AheadMessages  []string
+	ChangedFiles  int
+	LinesAdded    int
+	LinesRemoved  int
+	AheadMessages []string
 
 	LastModified time.Time
 	ScanTime     time.Time
@@ -141,16 +141,16 @@ type scanTask struct {
 
 // Scanner is the central coordinator for the unfinished-work background scan.
 type Scanner struct {
-	scanQueue   chan scanTask
-	resultStore sync.Map    // map[string]ScanResult  (key = repoPath+"|"+branch)
-	repoSet     sync.Map    // map[string]bool (tracked repo paths, from any source)
-	cacheStore  sync.Map    // map[string]*worktreeCache (key = worktreePath)
-	breakerStore sync.Map   // map[string]*circuitBreaker (key = repoPath)
+	scanQueue    chan scanTask
+	resultStore  sync.Map // map[string]ScanResult  (key = repoPath+"|"+branch)
+	repoSet      sync.Map // map[string]bool (tracked repo paths, from any source)
+	cacheStore   sync.Map // map[string]*worktreeCache (key = worktreePath)
+	breakerStore sync.Map // map[string]*circuitBreaker (key = repoPath)
 
 	eventBus   *events.EventBus
 	stateStore *StateStore
 
-	triggerCh  chan struct{} // signals coordinator to run a full scan now
+	triggerCh  chan struct{}  // signals coordinator to run a full scan now
 	scanDoneCh chan time.Time // emits timestamp after each full scan completes
 
 	tickInterval time.Duration // default 30s, overridable in tests
@@ -681,9 +681,9 @@ func (s *Scanner) InvalidateCache(worktreePath string) {
 // --- Circuit breaker ---
 
 type circuitBreaker struct {
-	mu           sync.Mutex
+	mu                  sync.Mutex
 	consecutiveTimeouts int
-	backoffUntil time.Time
+	backoffUntil        time.Time
 }
 
 func (s *Scanner) getBreakerFor(repoPath string) *circuitBreaker {
