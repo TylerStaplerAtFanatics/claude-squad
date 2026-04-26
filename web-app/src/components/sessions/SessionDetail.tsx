@@ -200,8 +200,17 @@ export function SessionDetail({
 
   return (
     <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ""}`}>
-      <div className={`${styles.header} ${isFullscreen ? styles.fullscreenMobileHeader : ""}`}>
-        <h2 className={`${styles.title} ${isFullscreen ? styles.fullscreenMobileTitle : ""}`}>{session.title}</h2>
+      <div className={`${styles.header} ${isFullscreen ? styles.fullscreenMobileHeader : ""}`} data-testid="session-header">
+        <h2
+          className={`${styles.title} ${isFullscreen ? styles.fullscreenMobileTitle : ""}`}
+          title={session.title}
+          data-testid="session-header-title"
+        >
+          {session.title}
+          <span className={styles.statusBadge} data-testid="session-status-badge">
+            {getStatusLabel(session.status)}
+          </span>
+        </h2>
         <ActionBar gap="sm" justify="end" scroll className={`${styles.headerActions} ${isFullscreen ? styles.fullscreenMobileHeaderActions : ""}`}>
           {/* Fullscreen — most used when viewing terminal/diff/vcs */}
           {(activeTab === "terminal" || activeTab === "diff" || activeTab === "vcs") && (

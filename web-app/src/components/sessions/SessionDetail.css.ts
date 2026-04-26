@@ -26,6 +26,10 @@ export const header = style({
   padding: "1.5rem",
   borderBottom: `1px solid ${vars.color.terminalBorder}`,
   background: vars.color.terminalHeaderBg,
+  position: "sticky",
+  top: 0,
+  zIndex: 10,
+  flexShrink: 0,
   selectors: {
     [`.${fullscreen} &`]: {
       padding: "0.5rem 1rem",
@@ -45,6 +49,9 @@ export const title = style({
   fontSize: "1.5rem",
   fontWeight: 600,
   color: vars.color.terminalHeaderFg,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
   selectors: {
     [`.${fullscreen} &`]: {
       fontSize: "1rem",
@@ -54,8 +61,23 @@ export const title = style({
     "screen and (max-width: 768px)": {
       fontSize: "1.125rem",
       flex: "1 1 100%",
+      maxWidth: "calc(100vw - 120px)",
     },
   },
+});
+
+export const statusBadge = style({
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "0.125rem 0.5rem",
+  borderRadius: "9999px",
+  fontSize: "0.75rem",
+  fontWeight: 600,
+  flexShrink: 0,
+  marginLeft: "0.5rem",
+  background: vars.color.terminalHoverBg,
+  color: vars.color.terminalTextMuted,
+  border: `1px solid ${vars.color.terminalBorder}`,
 });
 
 export const headerActions = style({
