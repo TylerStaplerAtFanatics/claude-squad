@@ -74,8 +74,9 @@ function makeTestStore() {
 }
 
 function makeWrapper(store: ReturnType<typeof makeTestStore>) {
+  // Pass children as a prop (not a 3rd arg) to satisfy Provider's TS type signature
   return ({ children }: { children: React.ReactNode }) =>
-    React.createElement(Provider, { store }, children);
+    React.createElement(Provider, { store, children });
 }
 
 // Simple queue item factory
