@@ -16,8 +16,10 @@ export const main = style({
   width: "100%",
   margin: "0 auto",
   "@media": {
-    "screen and (max-width: 768px)": {
+    "screen and (max-width: 900px)": {
       padding: "1rem",
+      // Ensure content clears the bottom nav on mobile
+      paddingBottom: "calc(var(--bottom-nav-height, 56px) + max(env(safe-area-inset-bottom, 0px), 0px) + 1rem)",
     },
   },
 });
