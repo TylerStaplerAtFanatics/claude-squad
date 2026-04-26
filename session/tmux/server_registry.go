@@ -145,22 +145,31 @@ func (r *TmuxServerRegistry) SubscribePaneExit(ctx context.Context, sessionName 
 	go func() {
 		select {
 		case <-ctx.Done():
-			// Remove our channel from the subscriber list and close it.
+			// Remove ch from the subscriber list. Only close ch if we actually
+			// found and removed it — if firePaneExit already removed it, that
+			// goroutine owns the close and we must not double-close.
 			r.subsMu.Lock()
 			existing := r.subscribers[sessionName]
 			filtered := existing[:0]
+			removed := false
 			for _, c := range existing {
 				if c != ch {
 					filtered = append(filtered, c)
+				} else {
+					removed = true
 				}
 			}
-			if len(filtered) == 0 {
-				delete(r.subscribers, sessionName)
-			} else {
-				r.subscribers[sessionName] = filtered
+			if removed {
+				if len(filtered) == 0 {
+					delete(r.subscribers, sessionName)
+				} else {
+					r.subscribers[sessionName] = filtered
+				}
 			}
 			r.subsMu.Unlock()
-			close(ch)
+			if removed {
+				close(ch)
+			}
 		case <-ch:
 			// Closed by firePaneExit; nothing to do.
 		case <-r.ctx.Done():
