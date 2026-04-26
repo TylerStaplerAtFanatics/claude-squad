@@ -71,6 +71,10 @@ jobs:
           skip-cache: false
           only-new-issues: false
 
+      - name: ESLint (no-100vh, mobile regression rules)
+        working-directory: web-app
+        run: npx next lint --max-warnings 0
+
       - name: CSS lint (stylelint + undefined variable check)
         working-directory: web-app
         run: npm run lint:css
