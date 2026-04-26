@@ -21,7 +21,7 @@ describe("usePushNotifications – fetch URL construction", () => {
     global.fetch = mockFetch;
 
     // jsdom doesn't provide these Push/Notification APIs — stub them
-    (window as Record<string, unknown>).PushManager = {};
+    (window as unknown as Record<string, unknown>).PushManager = {};
     Object.defineProperty(window, "Notification", {
       writable: true,
       configurable: true,
@@ -44,7 +44,7 @@ describe("usePushNotifications – fetch URL construction", () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
-    delete (window as Record<string, unknown>).PushManager;
+    delete (window as unknown as Record<string, unknown>).PushManager;
     delete (global as Record<string, unknown>).fetch;
   });
 

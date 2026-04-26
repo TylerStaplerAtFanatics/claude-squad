@@ -47,7 +47,7 @@ let capturedOnResize: ((cols: number, rows: number) => void) | null = null;
  */
 jest.mock('../XtermTerminal', () => {
   const React = require('react');
-  const XtermTerminal = React.forwardRef<any, any>((props: any, ref: any) => {
+  const XtermTerminal = React.forwardRef((props: any, ref: any) => {
     capturedOnResize = props.onResize ?? null;
     React.useImperativeHandle(ref, () => mockXtermHandle);
     return React.createElement('div', { 'data-testid': 'mock-xterm' });
@@ -94,7 +94,25 @@ import { getCachedDimensions } from '@/lib/terminal/TerminalDimensionCache';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeStreamMock(overrides: Partial<ReturnType<typeof makeStreamMock>> = {}) {
+type StreamMock = {
+  isConnected: boolean;
+  error: Error | null;
+  connect: jest.Mock;
+  disconnect: jest.Mock;
+  sendInput: jest.Mock;
+  sendInputWithEcho: jest.Mock;
+  resize: jest.Mock;
+  scrollbackLoaded: boolean;
+  requestScrollback: jest.Mock;
+  sendFlowControl: jest.Mock;
+  getIsApplyingState: jest.Mock;
+  sspNegotiated: boolean;
+  startRecording: jest.Mock;
+  stopRecording: jest.Mock;
+  output: string;
+};
+
+function makeStreamMock(overrides: Partial<StreamMock> = {}): StreamMock {
   const mockConnect = jest.fn();
   return {
     isConnected: false,
