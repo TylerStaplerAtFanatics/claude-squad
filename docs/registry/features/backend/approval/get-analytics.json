@@ -5,7 +5,11 @@
   "method": "GetApprovalAnalytics",
   "protoFile": "proto/session/v1/session.proto",
   "markerFound": false,
-  "tested": false,
-  "testIds": [],
+  "tested": true,
+  "testIds": [
+    "TestGetApprovalAnalytics_ReturnsEmptySummaryWhenNoData",
+    "TestGetApprovalAnalytics_CustomWindowDays",
+    "TestClassify_DailyBucketAutoApproveRate"
+  ],
   "lastModified": "2026-04-23T21:58:51.909634295-07:00"
 }

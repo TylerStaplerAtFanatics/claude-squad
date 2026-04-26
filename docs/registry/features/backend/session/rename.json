@@ -5,7 +5,12 @@
   "method": "RenameSession",
   "protoFile": "proto/session/v1/session.proto",
   "markerFound": false,
-  "tested": false,
-  "testIds": [],
+  "tested": true,
+  "testIds": [
+    "TestRenameSession_MissingSessionID",
+    "TestRenameSession_MissingNewTitle",
+    "TestRenameSession_DuplicateTitle",
+    "TestRenameSession_SessionNotFound"
+  ],
   "lastModified": "2026-04-23T21:58:51.909634295-07:00"
 }
