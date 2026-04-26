@@ -5,7 +5,7 @@ export const container = style({
   padding: "20px",
   maxWidth: "1600px",
   margin: "0 auto",
-  minHeight: "calc(100vh - 80px)",
+  minHeight: "calc(var(--viewport-height, 100dvh) - 80px)",
   display: "flex",
   flexDirection: "column",
   "@media": {

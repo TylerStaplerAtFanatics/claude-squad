@@ -375,8 +375,7 @@ a {
 
 @media (max-width: 768px) {
   .modal {
-    max-height: calc(100vh - 5rem);
-    max-height: calc(100dvh - 5rem);
+    max-height: calc(var(--viewport-height) - 5rem);
     border-radius: 12px 12px 0 0;
     width: 100%;
     max-width: 100%;

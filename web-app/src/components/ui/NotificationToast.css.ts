@@ -12,7 +12,7 @@ export const toast = style({
   bottom: "24px",
   right: "24px",
   width: "380px",
-  maxHeight: "calc(100vh - 48px)",
+  maxHeight: "calc(var(--viewport-height, 100dvh) - 48px)",
   background: vars.color.modalBackground,
   border: `2px solid var(--priority-color, ${vars.color.primary})`,
   borderRadius: "12px",

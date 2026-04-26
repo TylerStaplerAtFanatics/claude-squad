@@ -2,7 +2,7 @@ import { style } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
 
 export const page = style({
-  minHeight: "100vh",
+  minHeight: "var(--viewport-height, 100dvh)",
   background: vars.color.background,
   padding: "2rem",
   "@media": {
