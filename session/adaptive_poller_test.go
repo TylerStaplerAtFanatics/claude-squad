@@ -55,13 +55,13 @@ func TestAdaptivePoller_BackoffToIdleInterval(t *testing.T) {
 
 	// Wait for first tick to happen (fast interval).
 	time.Sleep(fastInterval + 10*time.Millisecond)
-	firstTickCount := poller.tickCount
+	firstTickCount := poller.tickCount.Load()
 
 	// At this point the queue is empty and the activity channel is wired.
 	// The next tick should be at slowInterval, not fastInterval.
 	// After another fastInterval, the tick count should NOT have increased.
 	time.Sleep(fastInterval + 10*time.Millisecond)
-	tickAfterFast := poller.tickCount
+	tickAfterFast := poller.tickCount.Load()
 
 	if tickAfterFast != firstTickCount {
 		t.Errorf("expected tick count to stay at %d during slow interval backoff, got %d (poller fired again at fast rate)",
@@ -93,7 +93,7 @@ func TestAdaptivePoller_SnapOnApprovalResponse(t *testing.T) {
 
 	// Wait for the first tick (fast interval) and the backoff to kick in.
 	time.Sleep(fastInterval*2 + 20*time.Millisecond)
-	tickBeforeSignal := poller.tickCount
+	tickBeforeSignal := poller.tickCount.Load()
 
 	// The loop is now on slowInterval; record the time and send the activity signal.
 	signalTime := time.Now()
@@ -101,7 +101,7 @@ func TestAdaptivePoller_SnapOnApprovalResponse(t *testing.T) {
 
 	// Wait fastInterval + generous margin for the snap-to-fast to fire another tick.
 	time.Sleep(fastInterval*3 + 50*time.Millisecond)
-	tickAfterSignal := poller.tickCount
+	tickAfterSignal := poller.tickCount.Load()
 	elapsed := time.Since(signalTime)
 
 	if tickAfterSignal <= tickBeforeSignal {

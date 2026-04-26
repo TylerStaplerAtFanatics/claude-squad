@@ -8,6 +8,7 @@ import (
 	"github.com/tstapler/stapler-squad/session/tmux"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -85,7 +86,7 @@ type ReviewQueuePoller struct {
 	// Backoff state: tracks consecutive poll errors to apply exponential delay.
 	consecutiveErrors int
 	// tickCount tracks poll loop iterations for reconciliation scheduling.
-	tickCount int
+	tickCount atomic.Int64
 }
 
 // NewReviewQueuePoller creates a new poller for automatically managing the review queue.
@@ -272,7 +273,7 @@ func (rqp *ReviewQueuePoller) pollLoop() {
 			}
 
 		case <-timer.C:
-			rqp.tickCount++
+			rqp.tickCount.Add(1)
 
 			if err := rqp.checkSessionsSafe(); err != nil {
 				rqp.consecutiveErrors++
@@ -307,7 +308,7 @@ func (rqp *ReviewQueuePoller) pollLoop() {
 				if ticksPerReconcile < 1 {
 					ticksPerReconcile = 1
 				}
-				if rqp.tickCount%ticksPerReconcile == 0 {
+				if rqp.tickCount.Load()%int64(ticksPerReconcile) == 0 {
 					rqp.reconcileSessions()
 				}
 			}
