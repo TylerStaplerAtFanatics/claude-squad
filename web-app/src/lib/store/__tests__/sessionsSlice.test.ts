@@ -179,4 +179,124 @@ describe("sessionsSlice", () => {
       expect(selectSessionById(store.getState() as any, "s1")).toBeUndefined();
     });
   });
+
+  describe("delete tombstone — prevents ghost resurrection on stream reconnect", () => {
+    // Regression: when the WatchSessions stream reconnects it calls listSessions()
+    // and dispatches setSessions() (full replace). If the server delete hadn't fully
+    // propagated yet, the session was included in the response and reappeared in the UI.
+
+    it("setSessions does not restore a session that was removed", () => {
+      const store = makeStore();
+      store.dispatch(setSessions([makeSession("s1"), makeSession("s2")]));
+      store.dispatch(removeSession("s1"));
+
+      // Simulate reconnect snapshot that still includes s1 (server lag)
+      store.dispatch(setSessions([makeSession("s1"), makeSession("s2")]));
+
+      const state = store.getState() as any;
+      expect(selectSessionById(state, "s1")).toBeUndefined();
+      expect(selectSessionsTotal(state)).toBe(1);
+      expect(selectSessionById(state, "s2")).toBeDefined();
+    });
+
+    it("setSessions does not restore any of multiple removed sessions", () => {
+      const store = makeStore();
+      store.dispatch(setSessions([makeSession("a"), makeSession("b"), makeSession("c")]));
+      store.dispatch(removeSession("a"));
+      store.dispatch(removeSession("b"));
+
+      // Reconnect snapshot includes all three (slow server)
+      store.dispatch(setSessions([makeSession("a"), makeSession("b"), makeSession("c")]));
+
+      const state = store.getState() as any;
+      expect(selectSessionById(state, "a")).toBeUndefined();
+      expect(selectSessionById(state, "b")).toBeUndefined();
+      expect(selectSessionById(state, "c")).toBeDefined();
+      expect(selectSessionsTotal(state)).toBe(1);
+    });
+
+    it("setSessions still loads non-deleted sessions normally", () => {
+      const store = makeStore();
+      store.dispatch(setSessions([makeSession("old")]));
+      store.dispatch(removeSession("old"));
+
+      // Reconnect brings in brand-new sessions
+      store.dispatch(setSessions([makeSession("new1"), makeSession("new2")]));
+
+      const state = store.getState() as any;
+      expect(selectSessionById(state, "old")).toBeUndefined();
+      expect(selectSessionsTotal(state)).toBe(2);
+    });
+
+    it("setSessions from a clean snapshot (no stale sessions) is unaffected", () => {
+      const store = makeStore();
+      store.dispatch(setSessions([makeSession("s1"), makeSession("s2")]));
+      store.dispatch(removeSession("s1"));
+
+      // Reconnect snapshot has already dropped s1 server-side
+      store.dispatch(setSessions([makeSession("s2"), makeSession("s3")]));
+
+      const state = store.getState() as any;
+      expect(selectSessionsTotal(state)).toBe(2);
+      expect(selectSessionById(state, "s1")).toBeUndefined();
+      expect(selectSessionById(state, "s2")).toBeDefined();
+      expect(selectSessionById(state, "s3")).toBeDefined();
+    });
+
+    it("upsertSession does not restore a removed session (in-flight update event)", () => {
+      const store = makeStore();
+      store.dispatch(setSessions([makeSession("s1")]));
+      store.dispatch(removeSession("s1"));
+
+      // A lagging sessionUpdated stream event arrives after the delete
+      store.dispatch(upsertSession(makeSession("s1", "ghost update")));
+
+      const state = store.getState() as any;
+      expect(selectSessionById(state, "s1")).toBeUndefined();
+      expect(selectSessionsTotal(state)).toBe(0);
+    });
+
+    it("tombstone survives repeated setSessions calls (multiple reconnects)", () => {
+      const store = makeStore();
+      store.dispatch(setSessions([makeSession("s1"), makeSession("s2")]));
+      store.dispatch(removeSession("s1"));
+
+      // Three consecutive reconnect snapshots still including s1
+      store.dispatch(setSessions([makeSession("s1"), makeSession("s2")]));
+      store.dispatch(setSessions([makeSession("s1"), makeSession("s2")]));
+      store.dispatch(setSessions([makeSession("s1"), makeSession("s2")]));
+
+      const state = store.getState() as any;
+      expect(selectSessionById(state, "s1")).toBeUndefined();
+      expect(selectSessionById(state, "s2")).toBeDefined();
+    });
+
+    it("removeSession on an id not in the store still tombstones it", () => {
+      const store = makeStore();
+      store.dispatch(setSessions([makeSession("s2")]));
+
+      // Remove a session that was never loaded (e.g. deleted before initial fetch)
+      store.dispatch(removeSession("ghost"));
+
+      store.dispatch(setSessions([makeSession("ghost"), makeSession("s2")]));
+
+      const state = store.getState() as any;
+      expect(selectSessionById(state, "ghost")).toBeUndefined();
+      expect(selectSessionById(state, "s2")).toBeDefined();
+    });
+
+    it("tombstone does not affect sessions with different ids", () => {
+      const store = makeStore();
+      store.dispatch(setSessions([makeSession("target"), makeSession("bystander")]));
+      store.dispatch(removeSession("target"));
+
+      store.dispatch(setSessions([makeSession("bystander"), makeSession("newcomer")]));
+
+      const state = store.getState() as any;
+      expect(selectSessionById(state, "target")).toBeUndefined();
+      expect(selectSessionById(state, "bystander")).toBeDefined();
+      expect(selectSessionById(state, "newcomer")).toBeDefined();
+      expect(selectSessionsTotal(state)).toBe(2);
+    });
+  });
 });
