@@ -24,6 +24,10 @@ type ReactiveQueueManager struct {
 	statusManager *session.InstanceStatusManager
 	storage       *session.Storage // For persisting timestamps
 
+	// activityCh is sent to when EventApprovalResponse or EventUserInteraction arrives,
+	// causing the poll loop to snap back to its fast interval immediately.
+	activityCh chan struct{}
+
 	// Streaming clients for WatchReviewQueue
 	streamClients   map[string]*reviewQueueStreamClient
 	streamClientsMu sync.RWMutex
@@ -65,12 +69,17 @@ func NewReactiveQueueManager(
 	statusManager *session.InstanceStatusManager,
 	storage *session.Storage,
 ) *ReactiveQueueManager {
+	// Buffered so senders never block even if the poll loop is momentarily busy.
+	activityCh := make(chan struct{}, 1)
+	poller.SetActivityChannel(activityCh)
+
 	return &ReactiveQueueManager{
 		queue:         queue,
 		poller:        poller,
 		eventBus:      eventBus,
 		statusManager: statusManager,
 		storage:       storage,
+		activityCh:    activityCh,
 		streamClients: make(map[string]*reviewQueueStreamClient),
 	}
 }
@@ -150,6 +159,14 @@ func (rqm *ReactiveQueueManager) Stop() {
 	log.InfoLog.Printf("[ReactiveQueueManager] Stopped")
 }
 
+// signalActivity non-blockingly notifies the poll loop to snap to its fast interval.
+func (rqm *ReactiveQueueManager) signalActivity() {
+	select {
+	case rqm.activityCh <- struct{}{}:
+	default:
+	}
+}
+
 // handleUserInteraction handles user interaction events and immediately re-evaluates the queue.
 func (rqm *ReactiveQueueManager) handleUserInteraction(event *events.Event) {
 	sessionID := event.SessionID
@@ -177,6 +194,9 @@ func (rqm *ReactiveQueueManager) handleUserInteraction(event *events.Event) {
 			log.ErrorLog.Printf("Failed to persist LastUserResponse for '%s': %v", sessionID, err)
 		}
 	}
+
+	// Snap the poll loop back to fast interval so any new prompt surfaces quickly.
+	rqm.signalActivity()
 
 	// Immediate re-evaluation using exported method
 	rqm.poller.CheckSession(inst)
@@ -219,6 +239,9 @@ func (rqm *ReactiveQueueManager) handleApprovalResponse(event *events.Event) {
 
 	// Immediate removal from queue
 	rqm.queue.Remove(sessionID)
+
+	// Snap the poll loop back to fast interval so any follow-up prompts surface quickly.
+	rqm.signalActivity()
 }
 
 // ReviewQueueObserver implementation - publishes events to streaming clients

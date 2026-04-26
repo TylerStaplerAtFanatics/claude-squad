@@ -9,11 +9,27 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // ErrNoPR is returned by GetPRForBranch when no pull request exists for the branch.
 var ErrNoPR = errors.New("no pull request found for branch")
+
+// authResult caches the outcome of a gh auth status check with an expiry time.
+type authResult struct {
+	err    error
+	expiry time.Time
+}
+
+var (
+	ghAuthState atomic.Value        // stores authResult
+	ghAuthGroup singleflight.Group  //nolint:exhaustruct
+)
+
+const ghAuthTTL = 5 * time.Minute
 
 // PRInfo contains metadata about a GitHub pull request
 type PRInfo struct {
@@ -110,19 +126,46 @@ type ghCommentResponse struct {
 	Line int    `json:"line,omitempty"`
 }
 
-// CheckGHAuth checks if GitHub CLI is installed and authenticated
+// CheckGHAuth checks if GitHub CLI is installed and authenticated.
+// Results are cached for 5 minutes. Concurrent callers that trigger a refresh
+// share a single subprocess invocation via singleflight.
 func CheckGHAuth() error {
-	// Check if gh is installed
-	if _, err := exec.LookPath("gh"); err != nil {
-		return fmt.Errorf("GitHub CLI (gh) is not installed. Please install it: https://cli.github.com/")
+	// Fast path: return cached result if still fresh.
+	if v := ghAuthState.Load(); v != nil {
+		if r := v.(authResult); time.Now().Before(r.expiry) {
+			return r.err
+		}
 	}
 
-	// Check if gh is authenticated
-	cmd := exec.Command("gh", "auth", "status")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("GitHub CLI is not authenticated. Please run 'gh auth login' first")
-	}
+	// Slow path: at most one goroutine runs the subprocess; others wait and
+	// reuse the result.
+	res, err, _ := ghAuthGroup.Do("auth", func() (interface{}, error) {
+		var authErr error
 
+		// Check if gh is installed.
+		if _, lookErr := exec.LookPath("gh"); lookErr != nil {
+			authErr = fmt.Errorf("GitHub CLI (gh) is not installed. Please install it: https://cli.github.com/")
+		} else {
+			// Check if gh is authenticated.
+			cmd := exec.Command("gh", "auth", "status")
+			if runErr := cmd.Run(); runErr != nil {
+				authErr = fmt.Errorf("GitHub CLI is not authenticated. Please run 'gh auth login' first")
+			}
+		}
+
+		ghAuthState.Store(authResult{err: authErr, expiry: time.Now().Add(ghAuthTTL)})
+		return authErr, nil
+	})
+
+	// singleflight itself never returns a non-nil error here (we always return
+	// nil from the Do closure and carry the real error in res), but handle it
+	// defensively.
+	if err != nil {
+		return err
+	}
+	if res != nil {
+		return res.(error)
+	}
 	return nil
 }
 
