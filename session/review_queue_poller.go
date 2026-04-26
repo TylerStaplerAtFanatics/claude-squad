@@ -397,6 +397,11 @@ func (rqp *ReviewQueuePoller) reconcileSessions() {
 	}
 }
 
+// checkSessionsConcurrency caps the number of sessions checked simultaneously,
+// limiting concurrent subprocess (capture-pane) calls to avoid fork exhaustion
+// on macOS (kern.maxprocperuid).
+const checkSessionsConcurrency = 5
+
 // checkSessions checks all instances and updates the review queue.
 func (rqp *ReviewQueuePoller) checkSessions() {
 	rqp.mu.RLock()
@@ -404,9 +409,18 @@ func (rqp *ReviewQueuePoller) checkSessions() {
 	copy(instances, rqp.instances)
 	rqp.mu.RUnlock()
 
+	sem := make(chan struct{}, checkSessionsConcurrency)
+	var wg sync.WaitGroup
 	for _, inst := range instances {
-		rqp.checkSession(inst)
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(i *Instance) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			rqp.checkSession(i)
+		}(inst)
 	}
+	wg.Wait()
 }
 
 // detectProcessing checks if session is actively processing after user interaction.

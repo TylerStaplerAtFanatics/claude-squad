@@ -1273,16 +1273,13 @@ func (i *Instance) HasUpdated() (updated bool, hasPrompt bool) {
 		return false, false
 	}
 
-	updated, hasPrompt = i.tmuxManager.HasUpdated()
+	var content string
+	updated, hasPrompt, content = i.tmuxManager.HasUpdated()
 
-	// Update timestamps when content has actually changed
-	// This ensures LastMeaningfulOutput is updated even when no web UI client is connected,
-	// preventing false "stale session" notifications in the review queue.
-	if updated {
-		// Capture content for timestamp update (forceUpdate=false to respect banner filtering)
-		if content, err := i.tmuxManager.CapturePaneContent(); err == nil {
-			i.UpdateTerminalTimestamps(content, false)
-		}
+	// Update timestamps when content has actually changed.
+	// HasUpdated returns the already-captured content, so no second CapturePaneContent call needed.
+	if updated && content != "" {
+		i.UpdateTerminalTimestamps(content, false)
 	}
 
 	return updated, hasPrompt

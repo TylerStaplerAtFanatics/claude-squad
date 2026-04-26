@@ -141,7 +141,7 @@ const LegacyTmuxPrefix = "claudesquad_"
 const (
 	sessionExistsTimeout        = 3 * time.Second
 	sessionExistsNoCacheTimeout = 5 * time.Second
-	existsCacheDefaultTTL       = 500 * time.Millisecond
+	existsCacheDefaultTTL       = 5 * time.Second // registry fast-path is push-based; this is only the subprocess fallback
 	sessionCreateTimeout        = 10 * time.Second
 	sessionPollInitialDelay     = 5 * time.Millisecond
 )
@@ -824,11 +824,11 @@ func (t *TmuxSession) GetPTY() (*os.File, error) {
 
 // HasUpdated checks if the tmux pane content has changed since the last tick. It also returns true if
 // the tmux pane has a prompt for aider or claude code.
-func (t *TmuxSession) HasUpdated() (updated bool, hasPrompt bool) {
+func (t *TmuxSession) HasUpdated() (updated bool, hasPrompt bool, content string) {
 	content, err := t.CapturePaneContent()
 	if err != nil {
 		log.ErrorLog.Printf("error capturing pane content in status monitor: %v", err)
-		return false, false
+		return false, false, ""
 	}
 
 	// Filter out the tmux status line (bottom line with clock) before checking for updates
@@ -840,9 +840,9 @@ func (t *TmuxSession) HasUpdated() (updated bool, hasPrompt bool) {
 
 	if !bytes.Equal(t.monitor.hash(contentWithoutStatusLine), t.monitor.prevOutputHash) {
 		t.monitor.prevOutputHash = t.monitor.hash(contentWithoutStatusLine)
-		return true, hasPrompt
+		return true, hasPrompt, content
 	}
-	return false, hasPrompt
+	return false, hasPrompt, content
 }
 
 // filterStatusLine removes the tmux status line (last line) from the content
