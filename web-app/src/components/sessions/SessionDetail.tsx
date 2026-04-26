@@ -16,6 +16,7 @@ import { getApiBaseUrl } from "@/lib/config";
 import { getProgramDisplay, isKnownProgram, PROGRAMS } from "@/lib/constants/programs";
 import { Modal, ModalContent, ModalTitle, ModalFooter } from "@/components/ui/Modal";
 import { ResumeSessionModal } from "./ResumeSessionModal";
+import { TagEditor } from "./TagEditor";
 import { useAppSelector } from "@/lib/store";
 import { selectAllSessions } from "@/lib/store/sessionsSlice";
 import * as styles from "./SessionDetail.css";
@@ -98,7 +99,13 @@ export function SessionDetail({
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showResumeModal, setShowResumeModal] = useState(false);
-  const { updateSession, deleteSession, pauseSession } = useSessionService();
+  // Rename state
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renameValue, setRenameValue] = useState(session.title);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  // Tag editor state
+  const [showTagEditor, setShowTagEditor] = useState(false);
+  const { updateSession, deleteSession, pauseSession, renameSession } = useSessionService();
   const allSessions = useAppSelector(selectAllSessions);
 
   // Terminal instance pool: keeps up to 8 session terminals alive (LRU, oldest first)
@@ -231,6 +238,17 @@ export function SessionDetail({
     setActionSheetOpen(false);
     await deleteSession(session.id);
     onClose();
+  };
+
+  const handleRenameSave = async () => {
+    const trimmed = renameValue.trim();
+    if (!trimmed) {
+      setRenameError("Session name cannot be empty");
+      return;
+    }
+    setRenameError(null);
+    await renameSession(session.id, trimmed);
+    setShowRenameModal(false);
   };
 
   return (
@@ -750,6 +768,20 @@ export function SessionDetail({
                 {session.status === SessionStatus.PAUSED ? '▶ Resume' : '⏸ Pause'}
               </button>
             )}
+            <button
+              className={styles.actionSheetItem}
+              onClick={() => { setActionSheetOpen(false); setRenameValue(session.title); setShowRenameModal(true); }}
+              data-testid="action-rename"
+            >
+              ✏️ Rename
+            </button>
+            <button
+              className={styles.actionSheetItem}
+              onClick={() => { setActionSheetOpen(false); setShowTagEditor(true); }}
+              data-testid="action-edit-tags"
+            >
+              🏷 Edit Tags
+            </button>
             {/* Switch workspace */}
             {session.instanceType !== InstanceType.EXTERNAL && (
               <button
@@ -795,6 +827,50 @@ export function SessionDetail({
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* Rename modal */}
+      <Modal open={showRenameModal} onOpenChange={setShowRenameModal}>
+        <ModalContent fallbackTitle="Rename session">
+          <ModalTitle>Rename session</ModalTitle>
+          <input
+            type="text"
+            value={renameValue}
+            onChange={(e) => { setRenameValue(e.target.value); setRenameError(null); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRenameSave();
+              else if (e.key === 'Escape') setShowRenameModal(false);
+            }}
+            autoFocus
+            style={{ fontSize: '16px', width: '100%', padding: '0.5rem', marginTop: '0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--input-background)', color: 'var(--input-text)' }}
+            data-testid="rename-input"
+          />
+          {renameError && (
+            <p style={{ color: 'var(--error)', fontSize: '0.875rem', marginTop: '0.25rem' }}>{renameError}</p>
+          )}
+          <ModalFooter>
+            <button className={styles.actionButton} onClick={() => setShowRenameModal(false)}>
+              Cancel
+            </button>
+            <button
+              className={`${styles.actionButton} ${styles.actionButtonSave}`}
+              onClick={handleRenameSave}
+              data-testid="rename-save"
+            >
+              Save
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Tag editor */}
+      {showTagEditor && (
+        <TagEditor
+          tags={session.tags || []}
+          sessionTitle={session.title}
+          onSave={(tags) => { updateSession(session.id, { tags }); setShowTagEditor(false); }}
+          onCancel={() => setShowTagEditor(false)}
+        />
+      )}
 
       {/* Resume session modal */}
       {showResumeModal && (

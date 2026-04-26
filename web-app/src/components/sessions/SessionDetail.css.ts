@@ -533,6 +533,17 @@ export const actionButtonDanger = style({
   },
 });
 
+export const actionButtonSave = style({
+  background: vars.color.primary,
+  color: "white",
+  border: "none",
+  selectors: {
+    "&:hover": {
+      background: vars.color.primaryDark,
+    },
+  },
+});
+
 // Mobile-fullscreen overrides — applied when isFullscreen is true.
 // Vanilla-extract can't express @media inside compound selectors, so we use
 // separate exported classes that SessionDetail.tsx applies conditionally.
