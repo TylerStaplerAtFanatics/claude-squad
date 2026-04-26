@@ -1,0 +1,115 @@
+package session
+
+import (
+	"context"
+	"testing"
+	"time"
+)
+
+// newTestPoller creates a ReviewQueuePoller with a minimal configuration suitable for
+// unit tests: no storage, no status manager, no instances. It uses a short fastInterval
+// and a longer slowInterval so tests can observe adaptive behavior within milliseconds.
+func newTestPoller(t *testing.T, fastInterval, slowInterval time.Duration) (*ReviewQueuePoller, *ReviewQueue) {
+	t.Helper()
+	queue := NewReviewQueue()
+	config := ReviewQueuePollerConfig{
+		PollInterval:     fastInterval,
+		SlowPollInterval: slowInterval,
+		ReconcileInterval: 0, // disable reconciliation
+	}
+	poller := NewReviewQueuePollerWithConfig(queue, nil, nil, config)
+	return poller, queue
+}
+
+// TestAdaptivePoller_BackoffToIdleInterval verifies that when the review queue is empty
+// the poll loop backs off to SlowPollInterval (R10).
+//
+// Strategy: use a very short fastInterval (10ms) and a longer slowInterval (200ms) so that
+// we can observe the interval change without making the test slow. We start the poller with
+// no sessions and no activity channel; after the first tick (which finds the queue empty),
+// the loop should switch to slowInterval and NOT fire again within 2×fastInterval.
+func TestAdaptivePoller_BackoffToIdleInterval(t *testing.T) {
+	fastInterval := 20 * time.Millisecond
+	slowInterval := 300 * time.Millisecond
+
+	poller, queue := newTestPoller(t, fastInterval, slowInterval)
+	_ = queue // queue is empty; the poller backs off after the first tick
+
+	// Wire an activity channel so backoff logic is active.
+	actCh := make(chan struct{}, 1)
+	poller.SetActivityChannel(actCh)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	poller.Start(ctx)
+	defer poller.Stop()
+
+	// After 2 fast intervals the loop should have fired once and backed off.
+	// If still on fastInterval it would fire a second time within 3×fastInterval.
+	// Wait 3×fastInterval + margin and count actual poll ticks via a sentinel approach:
+	// we add and immediately remove a session to create a measurable signal without
+	// side effects (the poller only pops Running sessions, so a Paused entry is inert
+	// for queue logic but counts zero ticks). Instead, we observe tick timing directly
+	// via the tickCount field (unexported but accessible within the same package).
+
+	// Wait for first tick to happen (fast interval).
+	time.Sleep(fastInterval + 10*time.Millisecond)
+	firstTickCount := poller.tickCount.Load()
+
+	// At this point the queue is empty and the activity channel is wired.
+	// The next tick should be at slowInterval, not fastInterval.
+	// After another fastInterval, the tick count should NOT have increased.
+	time.Sleep(fastInterval + 10*time.Millisecond)
+	tickAfterFast := poller.tickCount.Load()
+
+	if tickAfterFast != firstTickCount {
+		t.Errorf("expected tick count to stay at %d during slow interval backoff, got %d (poller fired again at fast rate)",
+			firstTickCount, tickAfterFast)
+	}
+}
+
+// TestAdaptivePoller_SnapOnApprovalResponse verifies that a signal on the activity
+// channel causes the poll loop to snap back to PollInterval immediately (R11).
+//
+// Strategy: start with a very slow interval (500ms) and an activity channel. After the
+// first tick the poller backs off. Then send a signal on the activity channel and verify
+// that the loop fires again within fastInterval + margin (rather than waiting the full
+// slow interval).
+func TestAdaptivePoller_SnapOnApprovalResponse(t *testing.T) {
+	fastInterval := 20 * time.Millisecond
+	slowInterval := 500 * time.Millisecond
+
+	poller, _ := newTestPoller(t, fastInterval, slowInterval)
+
+	actCh := make(chan struct{}, 1)
+	poller.SetActivityChannel(actCh)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	poller.Start(ctx)
+	defer poller.Stop()
+
+	// Wait for the first tick (fast interval) and the backoff to kick in.
+	time.Sleep(fastInterval*2 + 20*time.Millisecond)
+	tickBeforeSignal := poller.tickCount.Load()
+
+	// The loop is now on slowInterval; record the time and send the activity signal.
+	signalTime := time.Now()
+	actCh <- struct{}{}
+
+	// Wait fastInterval + generous margin for the snap-to-fast to fire another tick.
+	time.Sleep(fastInterval*3 + 50*time.Millisecond)
+	tickAfterSignal := poller.tickCount.Load()
+	elapsed := time.Since(signalTime)
+
+	if tickAfterSignal <= tickBeforeSignal {
+		t.Errorf("expected at least one additional tick after activity signal within %s, got none (elapsed: %s)",
+			fastInterval*3+50*time.Millisecond, elapsed)
+	}
+	if elapsed >= slowInterval {
+		t.Errorf("tick after signal took %s which is >= slowInterval %s — snap did not occur",
+			elapsed, slowInterval)
+	}
+}

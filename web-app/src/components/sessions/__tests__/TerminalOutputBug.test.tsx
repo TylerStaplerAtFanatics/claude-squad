@@ -88,7 +88,7 @@ import { TerminalOutput } from '../TerminalOutput';
 // eslint-disable-next-line import/first
 import { useTerminalStream } from '@/lib/hooks/useTerminalStream';
 // eslint-disable-next-line import/first
-import { getCachedDimensions } from '@/lib/terminal/TerminalDimensionCache';
+import { getCachedDimensions, saveDimensions } from '@/lib/terminal/TerminalDimensionCache';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -206,53 +206,31 @@ describe('Bug 2a: stale cache causes connect() with wrong dims on mount', () => 
 });
 
 // ---------------------------------------------------------------------------
-// Bug 2b — handleTerminalResize uses stale `lastResize` for initDims
+// Bug 2b fix — fast-connect uses current event dims, not stale lastResizeRef
 //
-// This path is reached when hasCachedDimensionsRef=true but
-// hasInitiatedConnectionRef=false at the time onResize fires.
-// The bug: `const initDims = lastResize ?? { cols, rows }` captures the
-// PREVIOUS value of lastResizeRef, not the current one.
+// Old code: `const initDims = lastResize ?? { cols, rows }` — where lastResize
+// was pre-seeded from the cache in the init effect.  If the cache held (220,55)
+// and the actual container was (200,50), connect fired at (220,55).
+//
+// Fix (de78256f): init effect no longer seeds lastResizeRef; initDims changed
+// to `{ cols, rows }` — always the current resize event's dimensions.
 // ---------------------------------------------------------------------------
-describe('Bug 2b: handleTerminalResize uses stale lastResize for connect dims', () => {
-  it('FAILS today — connect should use current dims (200×50), not stale lastResize (80×24)', async () => {
-    // Simulate second load: cache has stale 80×24
-    (getCachedDimensions as jest.Mock).mockReturnValue({ cols: 80, rows: 24 });
+describe('Bug 2b fix: fast-connect uses current event dims, not stale lastResizeRef', () => {
+  it('connect uses current resize event dims when they differ from the cached value', async () => {
+    // Cache was saved when the window was 220×55.  The window has since been resized.
+    (getCachedDimensions as jest.Mock).mockReturnValue({ cols: 220, rows: 55 });
     const stream = makeStreamMock();
     (useTerminalStream as jest.Mock).mockReturnValue(stream);
 
     renderTerminalOutput();
 
-    // The session-switch effect already called connect(80,24) from the stale cache.
-    // Clear to isolate what handleTerminalResize does on its own.
-    stream.connect.mockClear();
+    // First resize fires with the real current container size (200×50).
+    // Old bug (initDims = lastResizeRef): would connect(220,55) from the stale cache.
+    // Fix (initDims = {cols,rows}):      must connect(200,50).
+    await act(async () => { capturedOnResize?.(200, 50); });
 
-    // Bug 1 simulation: XtermTerminal fires onResize(80, 24) at mount.
-    // Since lastResizeRef is already {80,24}, sizeChanged=false → nothing happens.
-    await act(async () => {
-      capturedOnResize?.(80, 24);
-    });
-    expect(stream.connect).not.toHaveBeenCalled();
-
-    // fitAddon.fit() fires: XtermTerminal reports real container size (200×50).
-    // Bug 2b: lastResize = {80,24} (old ref value), initDims = {80,24} → connect(80,24).
-    // Correct: connect should use the current dims → connect(200,50).
-    //
-    // Note: if Bug 2a already fired connect, hasInitiatedConnectionRef=true and this
-    // path is skipped entirely — demonstrating how Bug 1+2a together prevent correction.
-    await act(async () => {
-      capturedOnResize?.(200, 50);
-    });
-
-    // The most recent connect call (if any from this path) should use 200×50
-    const connectCalls = stream.connect.mock.calls;
-    if (connectCalls.length > 0) {
-      const lastCall = connectCalls[connectCalls.length - 1];
-      // FAILS today: last call is connect(80, 24), not connect(200, 50)
-      expect(lastCall).toEqual([200, 50]);
-    } else {
-      // Also a bug: connect was never called (Bug 2a already fired it with wrong dims)
-      throw new Error('connect() was never called after onResize(200, 50) — Bug 2a prevented it');
-    }
+    expect(stream.connect).toHaveBeenCalledWith(200, 50);
+    expect(stream.connect).not.toHaveBeenCalledWith(220, 55);
   });
 });
 
@@ -260,16 +238,24 @@ describe('Bug 2b: handleTerminalResize uses stale lastResize for connect dims', 
 // Correct behaviour reference — what should happen with a VALID cache
 // ---------------------------------------------------------------------------
 describe('Baseline: valid cache should fast-connect with correct dims', () => {
-  it('connect is called with valid cached dims (220×55) on mount', () => {
+  it('connect is called with valid cached dims (220×55) on first resize', async () => {
     // This test should PASS today and after the fix — it verifies that the
     // fast-connect optimisation still works when the cache is valid.
+    // Fast-connect happens on first resize (not synchronously on mount) so that
+    // the actual terminal dimensions are used rather than stale cached defaults.
     (getCachedDimensions as jest.Mock).mockReturnValue({ cols: 220, rows: 55 });
     const stream = makeStreamMock();
     (useTerminalStream as jest.Mock).mockReturnValue(stream);
 
     renderTerminalOutput();
 
-    // Valid cache dims (non-xterm-default) should be used for immediate fast-connect
+    // No connect before any resize fires (cache no longer triggers immediate connect)
+    expect(stream.connect).not.toHaveBeenCalled();
+
+    // First resize fires with the actual container dims (matching cache)
+    await act(async () => { capturedOnResize?.(220, 55); });
+
+    // Fast-connect uses the actual resize dims (which happen to match the cache)
     expect(stream.connect).toHaveBeenCalledWith(220, 55);
   });
 
@@ -298,63 +284,288 @@ describe('Baseline: valid cache should fast-connect with correct dims', () => {
 });
 
 // ---------------------------------------------------------------------------
-// MIN_COLS / MIN_ROWS guard — tiny dimensions are rejected
+// MIN_COLS / MIN_ROWS guards — prevent cache poisoning from transient tiny dims
+//
+// xterm.js may fire onResize(10, 6) or similar before CSS layout is complete.
+// If persisted to localStorage, the next session load would connect at those
+// dimensions, re-render the TUI at tiny size, and produce garbled output.
+// Guards: saveDimensions is skipped and hasCachedDimensionsRef is reset when
+// cols < 30 (MIN_COLS) or rows < 10 (MIN_ROWS).
 // ---------------------------------------------------------------------------
-describe('MIN dimension guard: tiny dims are rejected at every entry point', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-  });
-
-  it('saveDimensions is NOT called when onResize fires with tiny dims (10×6)', async () => {
-    const { saveDimensions } = require('@/lib/terminal/TerminalDimensionCache');
+describe('MIN_COLS/MIN_ROWS: tiny dims do not corrupt the cache or trigger fast-connect', () => {
+  it('resize below MIN_COLS/MIN_ROWS does not call saveDimensions', async () => {
+    (getCachedDimensions as jest.Mock).mockReturnValue(null);
     const stream = makeStreamMock();
     (useTerminalStream as jest.Mock).mockReturnValue(stream);
-    (getCachedDimensions as jest.Mock).mockReturnValue(null);
-
     renderTerminalOutput();
 
-    // Resize fires with tiny pre-layout dims (below MIN_COLS=30, MIN_ROWS=10)
+    // Pre-layout transient resize (common on hidden tabs and early xterm mounts)
     await act(async () => { capturedOnResize?.(10, 6); });
 
-    expect(saveDimensions).not.toHaveBeenCalledWith('session-1', 10, 6);
+    expect(saveDimensions).not.toHaveBeenCalled();
   });
 
-  it('tiny cache entry (10×6) falls through to the stability timer, not fast-connect', async () => {
-    (getCachedDimensions as jest.Mock).mockReturnValue({ cols: 10, rows: 6 });
-    const stream = makeStreamMock();
-    (useTerminalStream as jest.Mock).mockReturnValue(stream);
-
-    renderTerminalOutput();
-
-    // Tiny cached dims should NOT trigger immediate connect
-    expect(stream.connect).not.toHaveBeenCalled();
-
-    // When a valid resize arrives, the stability timer should fire normally
-    await act(async () => { capturedOnResize?.(200, 50); });
-    expect(stream.connect).not.toHaveBeenCalled(); // still in stability window
-
-    await act(async () => { jest.advanceTimersByTime(100); });
-    expect(stream.connect).toHaveBeenCalledWith(200, 50);
-  });
-
-  it('tiny onResize dims (10×6) do not connect even with a valid cache present', async () => {
-    // Cache has valid dims but the first resize arrives tiny
+  it('valid cache + tiny first resize: resets fast-connect path and does not connect', async () => {
+    // Cache is valid but the first resize event is at tiny pre-layout dims.
+    // The guard must reset hasCachedDimensionsRef so we fall through to the
+    // stability wait rather than fast-connecting at 10×6.
     (getCachedDimensions as jest.Mock).mockReturnValue({ cols: 220, rows: 55 });
     const stream = makeStreamMock();
     (useTerminalStream as jest.Mock).mockReturnValue(stream);
+    renderTerminalOutput();
+
+    await act(async () => { capturedOnResize?.(10, 6); });
+
+    expect(stream.connect).not.toHaveBeenCalled();
+  });
+
+  it('resize at exactly MIN boundary (30×10) is accepted: saves and fast-connects', async () => {
+    (getCachedDimensions as jest.Mock).mockReturnValue({ cols: 30, rows: 10 });
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+    renderTerminalOutput();
+
+    await act(async () => { capturedOnResize?.(30, 10); });
+
+    expect(saveDimensions).toHaveBeenCalledWith(expect.any(String), 30, 10);
+    expect(stream.connect).toHaveBeenCalledWith(30, 10);
+  });
+
+  it('resize one below MIN boundary (29×9) is rejected: no save, no connect', async () => {
+    (getCachedDimensions as jest.Mock).mockReturnValue(null);
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+    renderTerminalOutput();
+
+    await act(async () => { capturedOnResize?.(29, 9); });
+
+    expect(saveDimensions).not.toHaveBeenCalled();
+    expect(stream.connect).not.toHaveBeenCalled();
+  });
+
+  it('sub-minimum cache entry at load time is ignored (hasCached stays false)', async () => {
+    // Even if a stale tiny entry somehow reached localStorage, the init effect
+    // must discard it so hasCachedDimensionsRef is never set to true for bad dims.
+    (getCachedDimensions as jest.Mock).mockReturnValue({ cols: 20, rows: 8 });
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+    renderTerminalOutput();
+
+    // First resize at real dims: no cached fast-connect because cache was rejected
+    jest.useFakeTimers();
+    await act(async () => { capturedOnResize?.(200, 50); });
+    // Still in stability wait (no valid cache to skip it)
+    expect(stream.connect).not.toHaveBeenCalled();
+
+    await act(async () => { jest.advanceTimersByTime(100); });
+    expect(stream.connect).toHaveBeenCalledWith(200, 50);
+    jest.useRealTimers();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pre-sizing: immediate connect using cached cell pixel dimensions
+//
+// When the dimension cache includes cellWidth/cellHeight (pixels per col/row),
+// TerminalOutput can pre-calculate cols×rows from the container's pixel size
+// in the init effect — before xterm.js fires its first onResize event.
+// The session-switch effect then finds lastResizeRef already populated and
+// calls connect() immediately, eliminating the 50ms stability wait entirely.
+// ---------------------------------------------------------------------------
+describe('Pre-sizing: immediate connect using cached cell pixel metrics', () => {
+  // Container size that yields exactly 200×50 with cell dims 8.4×17.0:
+  //   floor(1680 / 8.4)  = floor(200)   = 200 cols
+  //   floor(850  / 17.0) = floor(50)    = 50  rows
+  const CELL_WIDTH = 8.4;
+  const CELL_HEIGHT = 17.0;
+  const CONTAINER_W = 1680;
+  const CONTAINER_H = 850;
+
+  function mockRect(width: number, height: number) {
+    jest.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+      width, height, top: 0, left: 0, bottom: height, right: width, x: 0, y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+  }
+
+  it('connects immediately before any onResize when cell metrics are cached', () => {
+    mockRect(CONTAINER_W, CONTAINER_H);
+    (getCachedDimensions as jest.Mock).mockReturnValue({
+      cols: 200, rows: 50, cellWidth: CELL_WIDTH, cellHeight: CELL_HEIGHT,
+    });
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
 
     renderTerminalOutput();
 
-    // Fast-connect fires synchronously on mount from session-switch effect (220×55)
-    expect(stream.connect).toHaveBeenCalledWith(220, 55);
-    const callsBefore = (stream.connect as jest.Mock).mock.calls.length;
+    // Pre-sized: floor(1680/8.4)=200, floor(850/17.0)=50 → connect fires on mount
+    expect(stream.connect).toHaveBeenCalledWith(200, 50);
+    expect(stream.connect).toHaveBeenCalledTimes(1);
+  });
 
-    // A subsequent tiny resize (e.g., layout thrash) should NOT cause a second connect
-    await act(async () => { capturedOnResize?.(10, 6); });
-    expect((stream.connect as jest.Mock).mock.calls.length).toBe(callsBefore);
+  it('uses floor division so cols/rows never exceed what fits in the container', () => {
+    // 1682 / 8.4 = 200.24 → floor = 200 (not 201)
+    mockRect(1682, 851);
+    (getCachedDimensions as jest.Mock).mockReturnValue({
+      cols: 200, rows: 50, cellWidth: CELL_WIDTH, cellHeight: CELL_HEIGHT,
+    });
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+
+    renderTerminalOutput();
+
+    expect(stream.connect).toHaveBeenCalledWith(200, 50);
+  });
+
+  it('does not connect when container has zero size (hidden / not yet laid out)', () => {
+    mockRect(0, 0);
+    (getCachedDimensions as jest.Mock).mockReturnValue({
+      cols: 200, rows: 50, cellWidth: CELL_WIDTH, cellHeight: CELL_HEIGHT,
+    });
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+
+    renderTerminalOutput();
+
+    // Container is zero-size → pre-sizing skipped → no immediate connect
+    expect(stream.connect).not.toHaveBeenCalled();
+  });
+
+  it('falls back to fast-connect path when cache has no cell metrics', async () => {
+    mockRect(CONTAINER_W, CONTAINER_H);
+    // Cache without cell dimensions → existing fast-connect behaviour
+    (getCachedDimensions as jest.Mock).mockReturnValue({ cols: 200, rows: 50 });
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+
+    renderTerminalOutput();
+
+    // No immediate connect (no cell metrics → no pre-sizing)
+    expect(stream.connect).not.toHaveBeenCalled();
+
+    // Fast-connect fires on first resize event (hasCachedDimensionsRef=true path)
+    await act(async () => { capturedOnResize?.(200, 50); });
+    expect(stream.connect).toHaveBeenCalledWith(200, 50);
+  });
+
+  it('skips pre-sizing when calculated dims are below MIN_COLS/MIN_ROWS threshold', () => {
+    // Tiny container: floor(100/8.4) = 11 < MIN_COLS=30
+    mockRect(100, 50);
+    (getCachedDimensions as jest.Mock).mockReturnValue({
+      cols: 200, rows: 50, cellWidth: CELL_WIDTH, cellHeight: CELL_HEIGHT,
+    });
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+
+    renderTerminalOutput();
+
+    // Pre-calculated dims are sub-minimum → no pre-sizing → no immediate connect
+    expect(stream.connect).not.toHaveBeenCalled();
+  });
+
+  it('skips pre-sizing when cache has cellWidth but no cellHeight', () => {
+    mockRect(CONTAINER_W, CONTAINER_H);
+    (getCachedDimensions as jest.Mock).mockReturnValue({
+      cols: 200, rows: 50, cellWidth: CELL_WIDTH,
+      // cellHeight absent — partial cache entry; both required
+    });
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+
+    renderTerminalOutput();
+
+    expect(stream.connect).not.toHaveBeenCalled();
+  });
+
+  it('skips pre-sizing when cache has cellHeight but no cellWidth', () => {
+    mockRect(CONTAINER_W, CONTAINER_H);
+    (getCachedDimensions as jest.Mock).mockReturnValue({
+      cols: 200, rows: 50, cellHeight: CELL_HEIGHT,
+      // cellWidth absent — partial cache entry; both required
+    });
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+
+    renderTerminalOutput();
+
+    expect(stream.connect).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cell dim extraction: saving cellWidth/cellHeight from xterm's private API
+//
+// When xterm provides _core._renderService.dimensions.css.cell, TerminalOutput
+// should save those pixel metrics alongside cols/rows so future mounts can
+// pre-size without waiting for xterm to fire onResize.
+// ---------------------------------------------------------------------------
+describe('Cell dim extraction: saves pixel metrics from xterm private API', () => {
+  it('saves cell pixel dimensions to cache when terminal provides them', async () => {
+    (getCachedDimensions as jest.Mock).mockReturnValue(null);
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+
+    // Give the mock handle a terminal with cell dimensions available
+    (mockXtermHandle as any).terminal = {
+      _core: {
+        _renderService: {
+          dimensions: {
+            css: { cell: { width: 8.4, height: 17.0 } },
+          },
+        },
+      },
+    };
+
+    renderTerminalOutput();
+    await act(async () => { capturedOnResize?.(200, 50); });
+
+    expect(saveDimensions).toHaveBeenCalledWith(
+      expect.any(String), 200, 50, 8.4, 17.0,
+    );
+
+    // Restore
+    (mockXtermHandle as any).terminal = null;
+  });
+
+  it('saves only cols/rows when terminal cell API is unavailable', async () => {
+    (getCachedDimensions as jest.Mock).mockReturnValue(null);
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+    // terminal remains null → no private API available
+
+    renderTerminalOutput();
+    await act(async () => { capturedOnResize?.(200, 50); });
+
+    // Called with exactly 3 args (no cellWidth/cellHeight)
+    expect(saveDimensions).toHaveBeenCalledWith(expect.any(String), 200, 50);
+    expect(saveDimensions).not.toHaveBeenCalledWith(
+      expect.any(String), 200, 50, expect.any(Number), expect.any(Number),
+    );
+  });
+
+  it('saves only cols/rows when cell dims are non-finite', async () => {
+    (getCachedDimensions as jest.Mock).mockReturnValue(null);
+    const stream = makeStreamMock();
+    (useTerminalStream as jest.Mock).mockReturnValue(stream);
+
+    (mockXtermHandle as any).terminal = {
+      _core: {
+        _renderService: {
+          dimensions: {
+            css: { cell: { width: NaN, height: 17.0 } },
+          },
+        },
+      },
+    };
+
+    renderTerminalOutput();
+    await act(async () => { capturedOnResize?.(200, 50); });
+
+    expect(saveDimensions).toHaveBeenCalledWith(expect.any(String), 200, 50);
+    expect(saveDimensions).not.toHaveBeenCalledWith(
+      expect.any(String), 200, 50, expect.any(Number), expect.any(Number),
+    );
+
+    (mockXtermHandle as any).terminal = null;
   });
 });

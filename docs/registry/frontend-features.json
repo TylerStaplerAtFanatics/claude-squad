@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "generatedAt": "2026-04-20T17:25:09.800Z",
+  "generatedAt": "2026-04-24T00:00:00.000Z",
   "features": [
     {
       "id": "config-management",
@@ -61,6 +61,39 @@
       "tested": false,
       "testIds": [],
       "lastModified": "2026-04-18T17:28:17.610Z"
+    },
+    {
+      "id": "terminal-pre-sizing",
+      "type": "frontend",
+      "frontend": {
+        "component": "TerminalOutput",
+        "path": "web-app/src/components/sessions/TerminalOutput.tsx",
+        "markerLine": 2
+      },
+      "tested": true,
+      "testIds": [
+        "TerminalOutputBug > Pre-sizing > connects immediately before any onResize when cell metrics are cached",
+        "TerminalOutputBug > Pre-sizing > falls back to fast-connect path when cache has no cell metrics",
+        "TerminalOutputBug > Pre-sizing > does not connect when container has zero size",
+        "TerminalOutputBug > Pre-sizing > skips pre-sizing when calculated dims are below MIN_COLS/MIN_ROWS threshold",
+        "TerminalOutputBug > Cell dim extraction > saves cell pixel dimensions to cache when terminal provides them"
+      ],
+      "lastModified": "2026-04-24T00:00:00.000Z"
+    },
+    {
+      "id": "terminal-dimension-cache",
+      "type": "frontend",
+      "frontend": {
+        "component": "TerminalOutput",
+        "path": "web-app/src/components/sessions/TerminalOutput.tsx",
+        "markerLine": 2
+      },
+      "tested": true,
+      "testIds": [
+        "TerminalOutputBug > Baseline > connect is called with valid cached dims (220x55) on first resize",
+        "TerminalOutputBug > Bug 2b fix > connect uses current resize event dims when they differ from the cached value"
+      ],
+      "lastModified": "2026-04-24T00:00:00.000Z"
     }
   ]
 }
