@@ -371,10 +371,13 @@ func TestReviewQueuePoller_AcknowledgmentSnooze_ConditionLogic(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Reproduce the old condition that caused the bypass.
+			// oldCondition=true  → snooze block is entered (not bypassed)
+			// oldCondition=false → snooze block is skipped (bypassed = the bug)
 			oldCondition := !tc.shouldAdd || tc.priority == PriorityLow || !tc.isControllerActive
-			if oldCondition == tc.wantOldBypassSkip {
-				t.Errorf("old condition should be %v for this scenario (wantOldBypassSkip=%v)",
-					!tc.wantOldBypassSkip, tc.wantOldBypassSkip)
+			oldBypassed := !oldCondition
+			if oldBypassed != tc.wantOldBypassSkip {
+				t.Errorf("expected old-code bypass=%v for scenario %q, got bypass=%v (oldCondition=%v)",
+					tc.wantOldBypassSkip, tc.name, oldBypassed, oldCondition)
 			}
 
 			// After the fix, IsAcknowledgedAfterOutput is checked unconditionally.
