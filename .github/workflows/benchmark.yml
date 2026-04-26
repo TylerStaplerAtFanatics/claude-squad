@@ -66,7 +66,7 @@ jobs:
             -benchmem \
             -count=8 \
             -timeout=10m \
-            ./... | tee tier1-bench.txt
+            ./server/events ./server/terminal ./server/services ./session/scrollback | tee tier1-bench.txt
 
       - name: Compare against baseline (PR only)
         if: github.event_name == 'pull_request'
