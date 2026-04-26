@@ -194,17 +194,25 @@ func TestSubscriberExitsOnContextCancel(t *testing.T) {
 	n := &mockNotifier{name: "test"}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
+	// Record count before starting, then immediately start subscriber.
+	// We capture before+StartDeliverySubscriber atomically so the baseline
+	// is not contaminated by goroutines from other parallel tests.
 	before := runtime.NumGoroutine()
 	StartDeliverySubscriber(ctx, bus, []Notifier{n})
 
-	time.Sleep(10 * time.Millisecond)
-	assert.Greater(t, runtime.NumGoroutine(), before)
+	// Poll until the new goroutine appears (up to 200ms).
+	// Using assert.Eventually avoids a fixed sleep that races against the scheduler.
+	assert.Eventually(t, func() bool {
+		return runtime.NumGoroutine() > before
+	}, 200*time.Millisecond, 5*time.Millisecond, "subscriber goroutine should start")
 
+	// Cancel the context and poll until the goroutine exits.
 	cancel()
-	time.Sleep(50 * time.Millisecond)
-	assert.LessOrEqual(t, runtime.NumGoroutine(), before+1,
-		"subscriber goroutine should exit after context cancel")
+	assert.Eventually(t, func() bool {
+		return runtime.NumGoroutine() <= before+1
+	}, 500*time.Millisecond, 10*time.Millisecond, "subscriber goroutine should exit after context cancel")
 }
 
 // IT-2.1 — APPROVAL_NEEDED at LOW priority triggers delivery [R5]

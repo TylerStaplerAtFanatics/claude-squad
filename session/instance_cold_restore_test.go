@@ -30,6 +30,9 @@ func coldRestoreSocket(t *testing.T) string {
 // unit level in claude_command_builder_test.go; this test verifies the lifecycle
 // (dead tmux → HasClaudeSession=true → Running).
 func TestColdRestore_WithUUID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that starts real tmux sessions")
+	}
 	checkTmuxAvailable(t)
 
 	title := fmt.Sprintf("test-cold-%d", time.Now().UnixNano())
@@ -83,6 +86,9 @@ func TestColdRestore_WithUUID(t *testing.T) {
 // there is no Claude conversation UUID, Start(false) still creates a fresh tmux
 // session and the instance transitions to Running.
 func TestColdRestore_WithoutUUID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that starts real tmux sessions")
+	}
 	checkTmuxAvailable(t)
 
 	title := fmt.Sprintf("test-cold-%d", time.Now().UnixNano())
@@ -124,6 +130,9 @@ func TestColdRestore_WithoutUUID(t *testing.T) {
 // TestHotRestore_ExistingSession verifies that when the tmux session is already
 // alive, Start(false) attaches to it (hot restore) rather than creating a new one.
 func TestHotRestore_ExistingSession(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that starts real tmux sessions")
+	}
 	checkTmuxAvailable(t)
 
 	title := fmt.Sprintf("test-hot-%d", time.Now().UnixNano())

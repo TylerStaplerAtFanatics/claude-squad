@@ -694,6 +694,14 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance) {
 							context = "Uncommitted changes ready to commit"
 							log.InfoLog.Printf("[ReviewQueue] Session '%s': Uncommitted changes detected", inst.Title)
 						}
+					} else {
+						// Worktree is clean — if session was queued solely for uncommitted
+						// changes, remove it immediately so it doesn't persist through the
+						// rate-limiter window after a commit.
+						if existing, exists := rqp.queue.Get(inst.Title); exists && existing.Reason == ReasonUncommittedChanges {
+							log.InfoLog.Printf("[ReviewQueue] Session '%s': Changes committed - removing UncommittedChanges entry", inst.Title)
+							rqp.queue.Remove(inst.Title)
+						}
 					}
 				}
 			}
@@ -794,6 +802,14 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance) {
 						shouldAdd = true
 						context = "Uncommitted changes ready to commit"
 						log.InfoLog.Printf("[ReviewQueue] Session '%s': Uncommitted changes detected", inst.Title)
+					}
+				} else {
+					// Worktree is clean — if session was queued solely for uncommitted
+					// changes, remove it immediately so it doesn't persist through the
+					// rate-limiter window after a commit.
+					if existing, exists := rqp.queue.Get(inst.Title); exists && existing.Reason == ReasonUncommittedChanges {
+						log.InfoLog.Printf("[ReviewQueue] Session '%s': Changes committed - removing UncommittedChanges entry", inst.Title)
+						rqp.queue.Remove(inst.Title)
 					}
 				}
 			}
