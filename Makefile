@@ -54,16 +54,20 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z0-9._-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # Registry targets
+# Per-feature files live under docs/registry/features/ — one file per RPC/component.
+# They are the committed source of truth; the monolithic aggregate files are generated.
+BACKEND_FEATURES_DIR := docs/registry/features/backend
+FRONTEND_FEATURES_DIR := docs/registry/features/frontend
 REGISTRY_OUTPUT_DIR ?= docs/registry
 BACKEND_SCANNER_BIN := tools/scanner/backend/cmd/scanner
 FRONTEND_SCANNER := tools/scanner/frontend/src/main.ts
 
-registry-generate-backend: ## Generate backend feature registry from proto + handler markers
+registry-generate-backend: ## Scan proto+markers → write per-feature files under docs/registry/features/backend/
 	@echo "Building backend scanner..."
 	@cd tools/scanner && go build -o backend/cmd/scanner ./backend/cmd/
 	@echo "Scanning backend features..."
-	@./$(BACKEND_SCANNER_BIN) proto/session/v1/session.proto server/services/ $(REGISTRY_OUTPUT_DIR)/backend-features.json
-	@echo "✅ Backend registry written to $(REGISTRY_OUTPUT_DIR)/backend-features.json"
+	@./$(BACKEND_SCANNER_BIN) proto/session/v1/session.proto server/services/ $(BACKEND_FEATURES_DIR)
+	@echo "✅ Backend per-feature files written to $(BACKEND_FEATURES_DIR)/"
 
 registry-generate-frontend: ## Generate frontend feature registry from React component markers
 	@echo "Installing frontend scanner dependencies..."
@@ -77,7 +81,12 @@ registry-generate-frontend: ## Generate frontend feature registry from React com
 		$(REGISTRY_OUTPUT_DIR)/coverage-gaps.json
 	@echo "✅ Frontend registry written to $(REGISTRY_OUTPUT_DIR)/frontend-features.json"
 
-registry-generate: registry-generate-backend registry-generate-frontend ## Generate both backend and frontend registries
+registry-aggregate: ## Assemble per-feature files → monolithic JSON (for tooling that needs the flat format)
+	@python3 tools/scanner/aggregate.py $(BACKEND_FEATURES_DIR) $(REGISTRY_OUTPUT_DIR)/backend-features.json
+	@python3 tools/scanner/aggregate.py $(FRONTEND_FEATURES_DIR) $(REGISTRY_OUTPUT_DIR)/frontend-features.json
+	@echo "✅ Monolithic registries aggregated from per-feature files"
+
+registry-generate: registry-generate-backend registry-generate-frontend registry-aggregate ## Generate per-feature files and aggregate monolithic registries
 
 registry-diff: ## Show what would change in registry without writing files (dry run)
 	@echo "Comparing current code against committed registries..."
@@ -224,8 +233,8 @@ test-race: ensure-tools proto-gen ## Run tests with race detector enabled
 test-integration: ensure-tools proto-gen ## Run integration tests (requires real tmux)
 	go test -race -tags integration ./...
 
-test-ux-polish: ## Run squad-ux-polish tests derived from feature registry (no server/tmux required)
-	@RUN=$$(python3 -c "import json; d=json.load(open('docs/registry/backend-features.json')); ids=[t for f in d['features'] for t in f.get('testIds',[])]; print('|'.join(sorted(set(ids))))"); \
+test-ux-polish: ## Run tests registered in docs/registry/features/ (no server/tmux required)
+	@RUN=$$(python3 -c "import json,glob; ids=[t for p in glob.glob('docs/registry/features/backend/**/*.json',recursive=True) for t in json.load(open(p)).get('testIds',[])]; print('|'.join(sorted(set(ids))))"); \
 	echo "Running: $$RUN"; \
 	go test ./server/services/ -run "$$RUN" -v -timeout 120s
 	go test ./session/prompts/... -v -timeout 30s
