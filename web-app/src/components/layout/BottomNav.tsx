@@ -8,6 +8,7 @@ import * as styles from "./BottomNav.css";
 
 const navItems = [
   { href: routes.home, label: "Sessions", icon: "⊞" },
+  { href: routes.unfinished, label: "Unfinished", icon: "✎" },
   { href: routes.reviewQueue, label: "Review", icon: "📋" },
   { href: routes.rules, label: "Rules", icon: "📜" },
   { href: routes.history, label: "History", icon: "🕐" },
