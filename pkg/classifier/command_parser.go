@@ -191,10 +191,13 @@ var (
 // still triggers the deny rule and `rtk git push` still escalates.
 // proxy is rtk's explicit proxy sub-mode (`rtk proxy <cmd>` → `proxy <cmd>`);
 // it must also be unwrapped so the underlying command is evaluated by normal rules.
+// command is a POSIX shell builtin that invokes a command bypassing shell functions
+// and aliases (e.g., `command ls -la`); it must be unwrapped so the underlying
+// program is evaluated by normal rules.
 var wrapperCommands = map[string]bool{
 	"sudo": true, "exec": true, "time": true, "nice": true,
 	"nohup": true, "env": true, "watch": true,
-	"rtk": true, "proxy": true,
+	"rtk": true, "proxy": true, "command": true,
 }
 
 // deepSubcommandPrograms is the set of programs that use two-level subcommand hierarchies
@@ -211,6 +214,7 @@ var deepSubcommandPrograms = map[string]bool{
 	"kubectl": true, // kubectl get pods, kubectl apply
 	"docker":  true, // docker container run, docker image pull
 	"heroku":  true, // heroku apps:info, heroku config:set
+	"ip":      true, // ip route show, ip addr add, ip link set
 }
 
 // prefixFlagArgs maps programs to the set of flags that each consume one additional

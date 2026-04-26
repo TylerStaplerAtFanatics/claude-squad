@@ -872,6 +872,24 @@ func SeedRules() []Rule {
 			Source:    "seed",
 		},
 		{
+			// git filter-repo and filter-branch rewrite history, potentially discarding commits
+			// and making backups mandatory. These must fire at 500 to override the git allow rules.
+			ID:       "seed-escalate-git-filter-history",
+			Name:     "Escalate git history-rewrite operations",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs:    []string{"git"},
+				Subcommands: []string{"filter-repo", "filter-branch"},
+			},
+			Decision:    Escalate,
+			RiskLevel:   RiskHigh,
+			Reason:      "git filter-repo/filter-branch rewrites history and cannot be undone without a backup.",
+			Alternative: "Ensure a complete backup exists (e.g. git clone --mirror) before proceeding.",
+			Priority:    500,
+			Enabled:     true,
+			Source:      "seed",
+		},
+		{
 			// curl with file output flags (-o/-O/--output) writes response bodies to disk.
 			// Must fire at 500 to override seed-allow-curl-read at 100.
 			ID:             "seed-escalate-curl-output",
@@ -997,6 +1015,8 @@ func SeedRules() []Rule {
 					// Additional read-only plumbing and inspection subcommands.
 					"merge-base", "ls-tree", "grep", "check-ignore",
 					"diff-tree", "cat-file", "for-each-ref", "count-objects",
+					// Configuration and remote inspection.
+					"config", "ls-remote",
 				},
 			},
 			Decision:  AutoAllow,
@@ -1465,6 +1485,144 @@ func SeedRules() []Rule {
 			Source:    "seed",
 		},
 		{
+			// javap disassembles Java .class files to show their bytecode and signatures.
+			// It is a read-only inspection tool — no files are created or modified.
+			ID:       "seed-allow-bash-javap",
+			Name:     "Allow javap (Java bytecode disassembler)",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"javap"},
+			},
+			Decision:  AutoAllow,
+			RiskLevel: RiskLow,
+			Reason:    "javap disassembles Java class files; it is a read-only inspection tool.",
+			Priority:  100,
+			Enabled:   true,
+			Source:    "seed",
+		},
+		{
+			// jar is the standard Java archive tool used for creating, listing, and
+			// extracting JARs/AARs/WARs. All forms (tf=list, xf=extract, cf=create) are
+			// standard build-step operations. The deny rules protect .env and .git.
+			ID:       "seed-allow-bash-jar",
+			Name:     "Allow jar (Java archive tool)",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"jar"},
+			},
+			Decision:  AutoAllow,
+			RiskLevel: RiskLow,
+			Reason:    "jar creates, lists, and extracts Java archives; a standard build step.",
+			Priority:  100,
+			Enabled:   true,
+			Source:    "seed",
+		},
+		{
+			// unzip is commonly used in JVM/Android workflows to inspect AAR/APK archives
+			// and in general for extracting downloaded packages.
+			ID:       "seed-allow-bash-unzip",
+			Name:     "Allow unzip archive extraction",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"unzip"},
+			},
+			Decision:  AutoAllow,
+			RiskLevel: RiskLow,
+			Reason:    "unzip extracts archives; a standard build and inspection step.",
+			Priority:  100,
+			Enabled:   true,
+			Source:    "seed",
+		},
+		{
+			// xargs pipes stdin lines to a command. Only allow it when the wrapped
+			// command is from the known-safe read-only set; dangerous programs (rm, bash,
+			// sh, chmod, etc.) are not listed and will escalate via the default path.
+			//
+			// Subcommand extraction for xargs: extractSubcommand skips leading flags
+			// (e.g., -n1, -I{}) and returns the first non-flag token, which is the
+			// command being invoked (e.g., "grep" from "xargs -n1 grep -l pattern").
+			ID:       "seed-allow-bash-xargs-safe",
+			Name:     "Allow xargs with read-only commands",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs:    []string{"xargs"},
+				Subcommands: []string{"grep", "rg", "ag", "ls", "cat", "head", "tail", "wc", "file", "stat", "echo", "sort", "diff", "md5sum", "sha256sum", "find", "javap", "jar"},
+			},
+			Decision:  AutoAllow,
+			RiskLevel: RiskLow,
+			Reason:    "xargs with read-only commands is safe; write programs (rm, bash, chmod, etc.) escalate.",
+			Priority:  100,
+			Enabled:   true,
+			Source:    "seed",
+		},
+		{
+			// jest and vitest are the standard JavaScript/TypeScript test runners.
+			// They mirror the pytest rule and should be auto-allowed.
+			ID:       "seed-allow-bash-jest",
+			Name:     "Allow jest and vitest test runners",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"jest", "vitest"},
+			},
+			Decision:  AutoAllow,
+			RiskLevel: RiskLow,
+			Reason:    "jest/vitest runs JavaScript/TypeScript project tests.",
+			Priority:  100,
+			Enabled:   true,
+			Source:    "seed",
+		},
+		{
+			// buf is the standard Protocol Buffer toolchain used for code generation,
+			// linting, and format checking. All operations are local build steps.
+			ID:       "seed-allow-bash-buf",
+			Name:     "Allow buf Protocol Buffer tooling",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs:    []string{"buf"},
+				Subcommands: []string{"generate", "lint", "format", "build", "dep", "check", "breaking", "config", "registry", "beta", "alpha", "push"},
+			},
+			Decision:  AutoAllow,
+			RiskLevel: RiskLow,
+			Reason:    "buf generates and validates Protocol Buffer definitions; a standard build step.",
+			Priority:  100,
+			Enabled:   true,
+			Source:    "seed",
+		},
+		{
+			// jfr (Java Flight Recorder) CLI reads JVM recording files for profiling.
+			// summary, print, view, metadata, and disassemble are all read-only operations.
+			ID:       "seed-allow-bash-jfr",
+			Name:     "Allow jfr (Java Flight Recorder) read-only commands",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs:    []string{"jfr"},
+				Subcommands: []string{"summary", "print", "view", "metadata", "assemble", "disassemble"},
+			},
+			Decision:  AutoAllow,
+			RiskLevel: RiskLow,
+			Reason:    "jfr reads JVM flight recording files; summary and print are read-only.",
+			Priority:  100,
+			Enabled:   true,
+			Source:    "seed",
+		},
+		{
+			// aapt/aapt2 is the Android Asset Packaging Tool used to inspect APKs.
+			// dump, list, and version are read-only operations on the archive.
+			ID:       "seed-allow-bash-aapt",
+			Name:     "Allow aapt/aapt2 APK inspection",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs:    []string{"aapt", "aapt2"},
+				Subcommands: []string{"dump", "list", "version", "v"},
+			},
+			Decision:  AutoAllow,
+			RiskLevel: RiskLow,
+			Reason:    "aapt dump reads APK metadata without modifying it.",
+			Priority:  100,
+			Enabled:   true,
+			Source:    "seed",
+		},
+		{
 			// pixi is a conda-compatible package manager that creates isolated project
 			// environments. Its standard operations mirror those of npm/pip.
 			ID:       "seed-allow-bash-pixi",
@@ -1546,6 +1704,86 @@ func SeedRules() []Rule {
 			Priority:  100,
 			Enabled:   true,
 			Source:    "seed",
+		},
+
+		{
+			// ip read-only: inspection commands (route, addr, link, neigh, rule) that
+			// show current network state without modifying it.
+			//
+			// Because ip is in deepSubcommandPrograms, extractSubcommand captures two
+			// tokens (e.g., "route show", "addr add"). BlockedSubcommands lists all
+			// known write verb pairs so that ip route add, ip addr add, ip link set, etc.
+			// do NOT match this rule and fall through to seed-escalate-ip-networking at 50.
+			//
+			// Bare invocations (ip route, ip addr) capture only one token ("route") which
+			// is not blocked, so they auto-allow (bare = show).
+			ID:       "seed-allow-bash-ip-read",
+			Name:     "Allow ip read-only network inspection",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"ip"},
+				BlockedSubcommands: []string{
+					// route write ops
+					"route add", "route del", "route delete", "route change",
+					"route replace", "route flush", "route append",
+					// addr write ops
+					"addr add", "addr del", "addr delete", "addr change",
+					"addr flush", "addr replace",
+					// link write ops
+					"link set", "link add", "link delete", "link change",
+					// neigh write ops
+					"neigh add", "neigh del", "neigh delete", "neigh change",
+					"neigh flush", "neigh replace",
+					// rule write ops
+					"rule add", "rule del", "rule delete",
+					// short-alias write ops (ip a, ip r, ip n, ip l)
+					"a add", "a del", "a delete", "a change", "a flush",
+					"r add", "r del", "r delete", "r change", "r replace", "r flush",
+					"n add", "n del", "n delete", "n change", "n flush",
+					"l set", "l add", "l delete", "l change",
+				},
+			},
+			Decision:  AutoAllow,
+			RiskLevel: RiskLow,
+			Reason:    "Read-only ip commands inspect network state without modifying it.",
+			Priority:  100,
+			Enabled:   true,
+			Source:    "seed",
+		},
+		{
+			// pacman read-only: -Q (query installed packages) and -F (file database query)
+			// are information-only operations. All other modes (-S install, -R remove,
+			// -U upgrade, -D database write) are caught by seed-escalate-pacman at 50.
+			//
+			// Matches any -Q variant (-Qs, -Qi, -Ql, -Qo, -Qe, -Qm, etc.) and -F variants.
+			ID:             "seed-allow-bash-pacman-query",
+			Name:           "Allow pacman read-only query operations",
+			ToolName:       "Bash",
+			CommandPattern: regexp.MustCompile(`^pacman\s+(-Q[a-zA-Z]*\b|--query\b|-F[a-zA-Z]*\b|--files\b|-[Vh]\b|--version\b|--help\b)`),
+			Decision:       AutoAllow,
+			RiskLevel:      RiskLow,
+			Reason:         "pacman -Q and -F operations query installed packages without modifying them.",
+			Priority:       100,
+			Enabled:        true,
+			Source:         "seed",
+		},
+		{
+			// sqlite3 read-only: allow a safe subset of dot commands that only inspect
+			// schema and metadata. SQL queries and DML (INSERT, UPDATE, DELETE) are not
+			// matched and fall through to seed-escalate-sqlite3 at priority 50.
+			//
+			// Matched: .tables, .schema [table], .indexes [table], .databases, .pragma <name>
+			// NOT matched: "SELECT ...", "INSERT INTO ...", bare invocations without dot cmds.
+			ID:             "seed-allow-bash-sqlite3-read",
+			Name:           "Allow sqlite3 read-only schema inspection",
+			ToolName:       "Bash",
+			CommandPattern: regexp.MustCompile(`\bsqlite3\b\s+\S+\s+["']?\.(tables|databases?|schema(\s+\w+)?|indexes?(\s+\w+)?|pragma\s+\w+)["']?\s*$`),
+			Decision:       AutoAllow,
+			RiskLevel:      RiskLow,
+			Reason:         "sqlite3 dot commands (.tables, .schema, .indexes, .pragma) are read-only metadata inspection.",
+			Priority:       100,
+			Enabled:        true,
+			Source:         "seed",
 		},
 
 		// ══════════════════════════════════════════════════════════════════════════
@@ -1694,6 +1932,77 @@ func SeedRules() []Rule {
 			RiskLevel:   RiskMedium,
 			Reason:      "Changing file permissions or ownership can affect system security.",
 			Alternative: "Confirm the intended permissions and target files before proceeding.",
+			Priority:    50,
+			Enabled:     true,
+			Source:      "seed",
+		},
+		{
+			// sqlite3 is an interactive/batch database CLI. Queries can be read-only
+			// (SELECT) or destructive (DROP, DELETE, INSERT). Escalate so the user can
+			// confirm the query before it runs against a production database.
+			ID:       "seed-escalate-sqlite3",
+			Name:     "Escalate sqlite3 database CLI",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"sqlite3"},
+			},
+			Decision:    Escalate,
+			RiskLevel:   RiskMedium,
+			Reason:      "sqlite3 can read or modify databases; review the query before proceeding.",
+			Alternative: "Add '.mode readonly' at the start of the script for safe inspection.",
+			Priority:    50,
+			Enabled:     true,
+			Source:      "seed",
+		},
+		{
+			// xvfb-run starts a virtual X server and then executes an arbitrary program
+			// inside it. Since the wrapped command can be anything, review is required.
+			ID:       "seed-escalate-xvfb-run",
+			Name:     "Escalate xvfb-run (virtual X server wrapper)",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"xvfb-run"},
+			},
+			Decision:    Escalate,
+			RiskLevel:   RiskMedium,
+			Reason:      "xvfb-run starts a virtual X server and runs a program inside it; review the wrapped command.",
+			Priority:    50,
+			Enabled:     true,
+			Source:      "seed",
+		},
+		{
+			// pacman is the Arch Linux system package manager. Installing or removing
+			// packages modifies system-wide state and should be reviewed.
+			ID:       "seed-escalate-pacman",
+			Name:     "Escalate pacman Arch package manager",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"pacman"},
+			},
+			Decision:    Escalate,
+			RiskLevel:   RiskMedium,
+			Reason:      "pacman installs or modifies system packages.",
+			Alternative: "Review the package name and its dependencies before installing.",
+			Priority:    50,
+			Enabled:     true,
+			Source:      "seed",
+		},
+		{
+			// ip is the Linux IP networking tool. While read-only invocations (ip route,
+			// ip neigh) are common, ip can also add/delete routes and addresses. Because
+			// the first positional argument (e.g., "route") does not distinguish show from
+			// add/del, we escalate all ip operations rather than allow potentially
+			// destructive network changes.
+			ID:       "seed-escalate-ip-networking",
+			Name:     "Escalate ip networking commands",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"ip"},
+			},
+			Decision:    Escalate,
+			RiskLevel:   RiskMedium,
+			Reason:      "ip can modify network routing, addresses, and interfaces; review before proceeding.",
+			Alternative: "Use 'ip route show' or 'ip addr show' to confirm current state first.",
 			Priority:    50,
 			Enabled:     true,
 			Source:      "seed",
