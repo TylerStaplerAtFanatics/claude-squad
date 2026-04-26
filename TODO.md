@@ -2,9 +2,17 @@
 
 ## Priority Summary
 
-**P1** - Backend Architecture Improvements (Story 1: InstanceStore abstraction leak) — P1 structural risk
-**P2** - Backend Architecture Story 5 (Task 5.1: InstanceStore abstraction leak)
-**P3** - Terminal Jank Story 3: Terminal Instance Pool (depends on Stories 1 & 2, which are complete)
+**P0** - Backend Architecture Story 6 (Task 6.1): ReviewQueuePoller maps keyed by Title not UUID — silent cache corruption on rename
+**P1** - BUG-013: xterm.js viewport jump on Claude repaints (High, 2-3h fix, confirmed root cause)
+**P1** - Backend Architecture Story 6 (Tasks 6.2, 6.3): InstanceReader interface injection + domain error types
+**P2** - Backend Architecture Stories 1-5 (InstanceStore abstraction leak, BuildRuntimeDeps, Repository split, GitHubPRStatus, mega-functions)
+**P2** - Backend Architecture Story 7: ReviewQueuePoller decomposition (TerminalContentCache, TmuxReconciler, LastActivity authority)
+**P2** - Backend Architecture Story 8: Transport-agnostic TerminalSession interface (replace SessionStreamer; EnsureConnectable; eliminate 42 tmux leakage points from server layer)
+**P3** - BUG-010: tmux prompt detection (High, needs investigation) / BUG-012: testutil failures (Medium)
+
+**Recent Completions (2026-04-22)**:
+- UUID persistence fix (session not found after restart — uuid field added to ent schema)
+- CreateSession clobbering live instances fix (LoadInstances hidden side effect isolated)
 
 **Recent Completions (2026-04-20)**:
 - Tmux Session Registry (T1-T6 all merged) — fork throttling eliminated

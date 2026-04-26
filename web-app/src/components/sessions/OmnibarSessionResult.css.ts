@@ -85,3 +85,21 @@ export const path = style({
   whiteSpace: "nowrap",
   marginTop: "1px",
 });
+
+export const cloneButton = style({
+  flexShrink: 0,
+  padding: "2px 6px",
+  fontSize: "12px",
+  background: "transparent",
+  border: "1px solid var(--border-color)",
+  borderRadius: "4px",
+  color: "var(--text-muted)",
+  cursor: "pointer",
+  opacity: 0,
+  transition: "opacity 0.1s ease, background 0.1s ease",
+  selectors: {
+    [`${row}:hover &`]: { opacity: 1 },
+    [`${rowHighlighted} &`]: { opacity: 1 },
+    "&:hover": { background: "var(--hover-background)", color: "var(--text-primary)" },
+  },
+});

@@ -250,8 +250,8 @@ func TestEntRepository_ClaudeSession(t *testing.T) {
 	// Create session with Claude session data
 	session := createTestSession("claude-session")
 	session.ClaudeSession = ClaudeSessionData{
-		SessionID:      "claude-123",
-		ConversationID: "conv-456",
+		ConversationUUID: "claude-123",
+		SquadSessionID:   "conv-456",
 		ProjectName:    "test-project",
 		LastAttached:   time.Now(),
 		Settings: ClaudeSettings{
@@ -273,8 +273,8 @@ func TestEntRepository_ClaudeSession(t *testing.T) {
 	// Retrieve and verify Claude session
 	retrieved, err := repo.Get(ctx, session.Title)
 	require.NoError(t, err)
-	assert.Equal(t, session.ClaudeSession.SessionID, retrieved.ClaudeSession.SessionID)
-	assert.Equal(t, session.ClaudeSession.ConversationID, retrieved.ClaudeSession.ConversationID)
+	assert.Equal(t, session.ClaudeSession.ConversationUUID, retrieved.ClaudeSession.ConversationUUID)
+	assert.Equal(t, session.ClaudeSession.SquadSessionID, retrieved.ClaudeSession.SquadSessionID)
 	assert.Equal(t, session.ClaudeSession.Settings.AutoReattach, retrieved.ClaudeSession.Settings.AutoReattach)
 	assert.Equal(t, session.ClaudeSession.Metadata["key1"], retrieved.ClaudeSession.Metadata["key1"])
 }
@@ -305,6 +305,110 @@ func TestEntRepository_UpdateTimestamps(t *testing.T) {
 	assert.WithinDuration(t, lastTerminal, retrieved.LastTerminalUpdate, time.Second)
 	assert.WithinDuration(t, lastMeaningful, retrieved.LastMeaningfulOutput, time.Second)
 	assert.Equal(t, signature, retrieved.LastOutputSignature)
+}
+
+// TestEntRepository_UUID_PersistAndLoad verifies that the UUID field is stored and
+// retrieved correctly. This is the regression test for the "session not found after
+// restart" bug: the Ent schema previously had no uuid column, so every restart
+// assigned a new random UUID, invalidating all client-stored session IDs.
+func TestEntRepository_UUID_PersistAndLoad(t *testing.T) {
+	repo, cleanup := createTestEntRepository(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	sess := createTestSession("uuid-persist-test")
+	sess.UUID = "fixed-uuid-1234"
+
+	require.NoError(t, repo.Create(ctx, sess))
+
+	retrieved, err := repo.Get(ctx, sess.Title)
+	require.NoError(t, err)
+	assert.Equal(t, "fixed-uuid-1234", retrieved.UUID)
+}
+
+// TestEntRepository_UUID_UpdatePreservesUUID verifies that updating a session
+// preserves (or overwrites) the UUID field correctly.
+func TestEntRepository_UUID_UpdatePreservesUUID(t *testing.T) {
+	repo, cleanup := createTestEntRepository(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	sess := createTestSession("uuid-update-test")
+	sess.UUID = "original-uuid"
+	require.NoError(t, repo.Create(ctx, sess))
+
+	sess.UUID = "updated-uuid"
+	sess.Branch = "new-branch"
+	require.NoError(t, repo.Update(ctx, sess))
+
+	retrieved, err := repo.Get(ctx, sess.Title)
+	require.NoError(t, err)
+	assert.Equal(t, "updated-uuid", retrieved.UUID)
+}
+
+// TestEntRepository_UUID_SurvivesDBReopen simulates a server restart by closing
+// and reopening the database. The UUID must be the same as before close.
+// This is the core regression test: previously the UUID was not stored in the DB,
+// so every open assigned a fresh random UUID via the migration path in
+// FromInstanceData, breaking all client session references.
+func TestEntRepository_UUID_SurvivesDBReopen(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test-restart.db")
+
+	// First "run": create a session with a known UUID.
+	const wantUUID = "stable-uuid-across-restarts"
+	func() {
+		repo, err := NewEntRepository(WithDatabasePath(dbPath))
+		require.NoError(t, err)
+		defer repo.Close()
+
+		sess := createTestSession("restart-test-session")
+		sess.UUID = wantUUID
+		require.NoError(t, repo.Create(context.Background(), sess))
+	}()
+
+	// Second "run": open the same DB and verify UUID is unchanged.
+	repo2, err := NewEntRepository(WithDatabasePath(dbPath))
+	require.NoError(t, err)
+	defer repo2.Close()
+
+	retrieved, err := repo2.Get(context.Background(), "restart-test-session")
+	require.NoError(t, err)
+	assert.Equal(t, wantUUID, retrieved.UUID,
+		"UUID must survive DB close/reopen (simulated server restart)")
+}
+
+// TestEntRepository_UUID_EmptyDefaultDoesNotBreakList verifies that sessions
+// created without a UUID (legacy rows that pre-date UUID assignment) are
+// listed correctly with an empty UUID rather than causing errors.
+func TestEntRepository_UUID_EmptyDefaultDoesNotBreakList(t *testing.T) {
+	repo, cleanup := createTestEntRepository(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create two sessions: one with UUID, one without.
+	withUUID := createTestSession("with-uuid")
+	withUUID.UUID = "has-uuid-value"
+
+	withoutUUID := createTestSession("without-uuid")
+	withoutUUID.UUID = "" // legacy session
+
+	require.NoError(t, repo.Create(ctx, withUUID))
+	require.NoError(t, repo.Create(ctx, withoutUUID))
+
+	all, err := repo.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, all, 2)
+
+	byTitle := make(map[string]InstanceData)
+	for _, d := range all {
+		byTitle[d.Title] = d
+	}
+	assert.Equal(t, "has-uuid-value", byTitle["with-uuid"].UUID)
+	assert.Equal(t, "", byTitle["without-uuid"].UUID)
 }
 
 // Helper function to create a test Ent repository

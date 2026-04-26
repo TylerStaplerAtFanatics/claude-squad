@@ -196,7 +196,6 @@ type Instance struct {
 	// first start and updated on restart. Empty for external (mux-discovered) sessions.
 	LaunchCommand string `json:"launch_command,omitempty"`
 
-
 	// historyDetector is used by tryExtractConversationUUID. When nil the
 	// production inspector is used. Set in tests to inject a fake home dir.
 	historyDetector *HistoryFileDetector
@@ -335,6 +334,9 @@ func (i *Instance) ToInstanceData() InstanceData {
 	if i.claudeSession != nil {
 		data.ClaudeSession = *i.claudeSession
 	}
+	// Always wire the squad session ID from Instance.UUID so the API response
+	// always carries both identifiers in the ClaudeSession sub-object.
+	data.ClaudeSession.SquadSessionID = i.UUID
 
 	return data
 }
@@ -467,7 +469,7 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 	})
 
 	// Restore Claude session data if it exists
-	if data.ClaudeSession.SessionID != "" || data.ClaudeSession.ConversationID != "" {
+	if data.ClaudeSession.ConversationUUID != "" {
 		claudeSessionCopy := data.ClaudeSession
 		instance.claudeSession = &claudeSessionCopy
 	}
@@ -689,7 +691,7 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 	// Handle ResumeId - set up claudeSession so the --resume flag gets added on Start()
 	if opts.ResumeId != "" {
 		instance.claudeSession = &ClaudeSessionData{
-			SessionID:    opts.ResumeId,
+			ConversationUUID: opts.ResumeId,
 			LastAttached: t,
 			Metadata: map[string]string{
 				"resumed_from_history": "true",
@@ -797,6 +799,13 @@ func (i *Instance) GetStableID() string {
 	return i.Title
 }
 
+// MatchesID reports whether id refers to this instance.
+// Accepts both the stable UUID and the legacy Title identifier so that all
+// service lookups work correctly regardless of which form the caller has.
+func (i *Instance) MatchesID(id string) bool {
+	return i.Title == id || i.GetStableID() == id
+}
+
 // GetTmuxSessionName returns the sanitized tmux session name for reconciliation.
 // Returns empty string for external or uninitialized sessions.
 func (i *Instance) GetTmuxSessionName() string {
@@ -879,6 +888,7 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	i.tmuxManager.ResetExitOnce()
 	i.tmuxManager.SetOnExitCallback(func(reason string) {
 		log.InfoLog.Printf("Instance '%s': unexpected exit detected via control mode (%s)", i.Title, reason)
+		log.ForSession(i.Title).Info("Session exited unexpectedly (reason: %s)", reason)
 		i.stateMutex.Lock()
 		if i.Status == Running || i.Status == Ready {
 			if err := i.transitionTo(Stopped); err != nil {
@@ -911,13 +921,13 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	if !firstTimeSetup {
 		if !i.tmuxManager.DoesSessionExist() {
 			// tmux session is dead (machine reboot, tmux kill-server, etc.)
-			startPath := i.resolveStartPath(i.Path)
+			startPath := i.resolveStartPath(i.GetEffectiveRootDir())
 			if i.HasClaudeSession() {
 				// Cold restore: we have a conversation UUID — relaunch with --resume.
 				// initTmuxSession() (called above) already built the program command
 				// with --resume via ClaudeCommandBuilder, so Start() uses it directly.
 				log.InfoLog.Printf("Cold restoring '%s' with --resume %s in %s",
-					i.Title, i.claudeSession.SessionID, startPath)
+					i.Title, i.claudeSession.ConversationUUID, startPath)
 			} else {
 				// Dead tmux, no UUID — start a fresh session without --resume.
 				log.WarningLog.Printf("Cold start '%s': tmux dead, no conversation UUID, starting fresh in %s",
@@ -931,6 +941,16 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 			_ = i.tmuxManager.RestoreWithWorkDir(startPath)
 			if _, ptyErr := i.tmuxManager.GetPTY(); ptyErr != nil {
 				log.ErrorLog.Printf("Cold-restored session '%s': PTY attach failed (%v) — controller and SendKeys will be unavailable", i.Title, ptyErr)
+			}
+			// Clear the stored session ID so HistoryLinker re-detects the actual
+			// UUID from the running process's open files. The --resume flag was
+			// already embedded in the program command by initTmuxSession() above;
+			// Claude may resume the same session or create a new one if the old
+			// UUID is no longer valid. Either way, proc inspection is the source
+			// of truth.
+			if i.claudeSession != nil {
+				i.claudeSession.ConversationUUID = ""
+				i.HistoryFilePath = ""
 			}
 		} else {
 			// Hot restore: tmux session is alive — attach to it.
@@ -990,6 +1010,7 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	i.stateMutex.Unlock()
 	i.started = true
 	i.fireLifecycleEvent(EventStarted, "")
+	log.ForSession(i.Title).Info("Session started (firstTimeSetup: %v)", firstTimeSetup)
 
 	// Start controller for new sessions only; loaded sessions are wired later by server.go.
 	if firstTimeSetup {
@@ -1074,6 +1095,8 @@ func (i *Instance) setupFirstTimeWorktree() error {
 
 // resolveStartPath returns the effective start directory, applying WorkingDir on top of basePath.
 // Falls back to basePath if the resolved directory does not exist.
+// For worktree sessions, absolute WorkingDir paths outside the worktree are ignored to prevent
+// stale CWD snapshots (from CaptureCurrentState) from overriding the worktree root.
 func (i *Instance) resolveStartPath(basePath string) string {
 	if i.WorkingDir == "" {
 		return basePath
@@ -1081,6 +1104,15 @@ func (i *Instance) resolveStartPath(basePath string) string {
 	startPath := i.WorkingDir
 	if !filepath.IsAbs(i.WorkingDir) {
 		startPath = filepath.Join(basePath, i.WorkingDir)
+	} else if i.gitManager.HasWorktree() {
+		// For worktree sessions, an absolute WorkingDir must be within the worktree.
+		// CaptureCurrentState() can persist the process CWD (e.g. the main repo path
+		// when Claude cd's there), which would otherwise bypass worktree isolation.
+		rel, err := filepath.Rel(basePath, startPath)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			log.WarningLog.Printf("WorkingDir '%s' is outside worktree '%s', using worktree path", startPath, basePath)
+			return basePath
+		}
 	}
 	if _, err := os.Stat(startPath); os.IsNotExist(err) {
 		log.WarningLog.Printf("Working directory '%s' doesn't exist, using '%s' instead", startPath, basePath)
@@ -1384,6 +1416,7 @@ func (i *Instance) Pause() error {
 		return fmt.Errorf("failed to transition to Paused: %w", err)
 	}
 	i.stateMutex.Unlock()
+	log.ForSession(i.Title).Info("Session paused")
 	_ = clipboard.WriteAll(i.gitManager.GetBranchName())
 	return nil
 }
@@ -1466,6 +1499,7 @@ func (i *Instance) Resume() error {
 		return fmt.Errorf("failed to transition to Running on resume: %w", err)
 	}
 	i.stateMutex.Unlock()
+	log.ForSession(i.Title).Info("Session resumed")
 
 	// Start ClaudeController for idle detection and automation
 	// This is non-critical - we log errors but don't fail the resume
@@ -1535,8 +1569,8 @@ func (i *Instance) Restart(preserveOutput bool) error {
 
 	// Capture Claude session ID if available for resuming
 	var claudeSessionID string
-	if i.claudeSession != nil && i.claudeSession.SessionID != "" {
-		claudeSessionID = i.claudeSession.SessionID
+	if i.claudeSession != nil && i.claudeSession.ConversationUUID != "" {
+		claudeSessionID = i.claudeSession.ConversationUUID
 	}
 
 	// Stop the controller
@@ -1936,18 +1970,18 @@ func (i *Instance) handleClaudeSessionReattachment() error {
 	sessionManager := NewClaudeSessionManager()
 
 	// Try to find and attach to the stored session
-	if i.claudeSession.SessionID != "" {
+	if i.claudeSession.ConversationUUID != "" {
 		log.InfoLog.Printf("Attempting to re-attach to Claude Code session '%s' for instance '%s'",
-			i.claudeSession.SessionID, i.Title)
+			i.claudeSession.ConversationUUID, i.Title)
 
 		// Verify the session still exists
-		session, err := sessionManager.GetSessionByID(i.claudeSession.SessionID)
+		session, err := sessionManager.GetSessionByID(i.claudeSession.ConversationUUID)
 		if err != nil {
 			if i.claudeSession.Settings.CreateNewOnMissing {
 				log.InfoLog.Printf("Stored Claude session not found, will create new session for '%s'", i.Title)
 				return i.createNewClaudeSession()
 			}
-			return fmt.Errorf("stored Claude session '%s' not found: %w", i.claudeSession.SessionID, err)
+			return fmt.Errorf("stored Claude session '%s' not found: %w", i.claudeSession.ConversationUUID, err)
 		}
 
 		// Attempt to attach to the existing session
@@ -1995,8 +2029,8 @@ func (i *Instance) createNewClaudeSession() error {
 
 	// Update the instance's Claude session data
 	i.claudeSession = &ClaudeSessionData{
-		SessionID:      newSession.ID,
-		ConversationID: newSession.ConversationID,
+		ConversationUUID: newSession.ID,
+		SquadSessionID: newSession.ConversationID,
 		ProjectName:    newSession.ProjectName,
 		LastAttached:   time.Now(),
 		Settings:       i.claudeSession.Settings, // Preserve existing settings
@@ -2050,8 +2084,8 @@ func (i *Instance) findAndAttachToProjectSession(sessionManager *ClaudeSessionMa
 	if i.claudeSession == nil {
 		i.claudeSession = &ClaudeSessionData{}
 	}
-	i.claudeSession.SessionID = selectedSession.ID
-	i.claudeSession.ConversationID = selectedSession.ConversationID
+	i.claudeSession.ConversationUUID = selectedSession.ID
+	i.claudeSession.SquadSessionID = selectedSession.ConversationID
 	i.claudeSession.ProjectName = selectedSession.ProjectName
 	i.claudeSession.LastAttached = time.Now()
 	if i.claudeSession.Metadata == nil {
@@ -2085,7 +2119,7 @@ func (i *Instance) SetClaudeSession(sessionData *ClaudeSessionData) {
 
 // HasClaudeSession returns true if this instance has Claude session data
 func (i *Instance) HasClaudeSession() bool {
-	return i.claudeSession != nil && i.claudeSession.SessionID != ""
+	return i.claudeSession != nil && i.claudeSession.ConversationUUID != ""
 }
 
 // tryExtractConversationUUID attempts to detect the Claude conversation UUID
@@ -2100,7 +2134,7 @@ func (i *Instance) HasClaudeSession() bool {
 // the foreground process's open file descriptors via proc_pidinfo.
 func (i *Instance) tryExtractConversationUUID() {
 	// Skip if we already have a conversation UUID.
-	if i.claudeSession != nil && i.claudeSession.SessionID != "" {
+	if i.claudeSession != nil && i.claudeSession.ConversationUUID != "" {
 		return
 	}
 
@@ -2144,7 +2178,7 @@ func (i *Instance) tryExtractConversationUUID() {
 	if i.claudeSession == nil {
 		i.claudeSession = &ClaudeSessionData{}
 	}
-	i.claudeSession.SessionID = info.ConversationUUID
+	i.claudeSession.ConversationUUID = info.ConversationUUID
 	i.HistoryFilePath = info.HistoryFilePath
 }
 
@@ -2153,7 +2187,7 @@ func (i *Instance) GetConversationUUID() string {
 	if i.claudeSession == nil {
 		return ""
 	}
-	return i.claudeSession.SessionID
+	return i.claudeSession.ConversationUUID
 }
 
 // GetPanePID returns the PID of the foreground process in the tmux pane.
@@ -2174,7 +2208,7 @@ func (i *Instance) SetHistoryInfo(conversationUUID, historyFilePath string) {
 
 	currentUUID := ""
 	if i.claudeSession != nil {
-		currentUUID = i.claudeSession.SessionID
+		currentUUID = i.claudeSession.ConversationUUID
 	}
 	if currentUUID == conversationUUID && i.HistoryFilePath == historyFilePath {
 		return
@@ -2183,7 +2217,7 @@ func (i *Instance) SetHistoryInfo(conversationUUID, historyFilePath string) {
 	if i.claudeSession == nil {
 		i.claudeSession = &ClaudeSessionData{}
 	}
-	i.claudeSession.SessionID = conversationUUID
+	i.claudeSession.ConversationUUID = conversationUUID
 	i.HistoryFilePath = historyFilePath
 }
 
@@ -2233,7 +2267,7 @@ func (i *Instance) CreateCheckpoint(label string, scrollbackSeq uint64) (*Checkp
 	// Conversation UUID — empty if not yet linked.
 	convUUID := ""
 	if i.claudeSession != nil {
-		convUUID = i.claudeSession.SessionID
+		convUUID = i.claudeSession.ConversationUUID
 	}
 
 	// Count lines in history file for accurate fork truncation later.

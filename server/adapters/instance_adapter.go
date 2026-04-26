@@ -16,7 +16,7 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 		Id:          inst.GetStableID(),
 		Title:       inst.Title,
 		Path:        inst.Workspace().EffectivePath,
-		WorkingDir:  inst.WorkingDir,
+		WorkingDir:  inst.GetWorkingDirectory(),
 		Branch:      inst.Branch,
 		Status:      statusToProto(inst.GetEffectiveStatus()),
 		Program:     inst.Program,
@@ -78,8 +78,8 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 	if inst.GetClaudeSession() != nil {
 		cs := inst.GetClaudeSession()
 		protoSession.ClaudeSession = &sessionv1.ClaudeSession{
-			SessionId:      cs.SessionID,
-			ConversationId: cs.ConversationID,
+			SessionId:      cs.ConversationUUID,
+			ConversationId: cs.SquadSessionID,
 			ProjectName:    cs.ProjectName,
 		}
 	}
@@ -103,6 +103,10 @@ func StatusToProto(status session.Status) sessionv1.SessionStatus {
 		return sessionv1.SessionStatus_SESSION_STATUS_PAUSED
 	case session.NeedsApproval:
 		return sessionv1.SessionStatus_SESSION_STATUS_NEEDS_APPROVAL
+	case session.Creating:
+		return sessionv1.SessionStatus_SESSION_STATUS_CREATING
+	case session.Stopped:
+		return sessionv1.SessionStatus_SESSION_STATUS_STOPPED
 	default:
 		return sessionv1.SessionStatus_SESSION_STATUS_UNSPECIFIED
 	}
@@ -127,6 +131,10 @@ func StatusStringToProto(status string) sessionv1.SessionStatus {
 		return sessionv1.SessionStatus_SESSION_STATUS_PAUSED
 	case "NeedsApproval":
 		return sessionv1.SessionStatus_SESSION_STATUS_NEEDS_APPROVAL
+	case "Creating":
+		return sessionv1.SessionStatus_SESSION_STATUS_CREATING
+	case "Stopped":
+		return sessionv1.SessionStatus_SESSION_STATUS_STOPPED
 	default:
 		return sessionv1.SessionStatus_SESSION_STATUS_UNSPECIFIED
 	}
@@ -159,6 +167,10 @@ func ProtoToStatus(status sessionv1.SessionStatus) session.Status {
 		return session.Paused
 	case sessionv1.SessionStatus_SESSION_STATUS_NEEDS_APPROVAL:
 		return session.NeedsApproval
+	case sessionv1.SessionStatus_SESSION_STATUS_CREATING:
+		return session.Creating
+	case sessionv1.SessionStatus_SESSION_STATUS_STOPPED:
+		return session.Stopped
 	default:
 		return session.Loading // Default to Loading for unknown statuses
 	}

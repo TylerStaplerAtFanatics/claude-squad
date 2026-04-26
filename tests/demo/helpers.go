@@ -137,6 +137,13 @@ func (s *DemoServer) Stop() {
 	_ = os.RemoveAll(s.testDir)
 }
 
+// SeedDirectory seeds count mock sessions into dir without requiring a running
+// server or a testing.T. Used by the e2e-video CI pipeline.
+func SeedDirectory(dir string, count int) error {
+	s := &DemoServer{testDir: dir}
+	return s.SeedMockSessions(count)
+}
+
 // mockSessions returns 6 realistic InstanceData records spanning Backend,
 // Frontend, and Infrastructure categories. No tmux processes required —
 // statuses are Paused, Ready, and NeedsApproval only (no Running) so the

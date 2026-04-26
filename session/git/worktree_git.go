@@ -5,6 +5,7 @@ import (
 	"github.com/tstapler/stapler-squad/log"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // runGitCommand executes a git command and returns any error.
@@ -51,6 +52,7 @@ func (g *GitWorktree) PushChanges(commitMessage string, open bool) error {
 			log.ErrorLog.Print(err)
 			return fmt.Errorf("failed to commit changes: %w", err)
 		}
+		g.InvalidateDirtyCache()
 	}
 
 	// First push the branch to remote to ensure it exists
@@ -105,18 +107,59 @@ func (g *GitWorktree) CommitChanges(commitMessage string) error {
 			log.ErrorLog.Print(err)
 			return fmt.Errorf("failed to commit changes: %w", err)
 		}
+		g.InvalidateDirtyCache()
 	}
 
 	return nil
 }
 
-// IsDirty checks if the worktree has uncommitted changes
+// InvalidateDirtyCache clears the IsDirty cache so the next call re-runs git status.
+// Call this whenever worktree state changes outside of Claude's control (e.g. after a
+// manual commit, after running git operations, or in tests after writing files directly).
+func (g *GitWorktree) InvalidateDirtyCache() {
+	g.isDirtyCacheMu.Lock()
+	g.isDirtyCacheTime = time.Time{}
+	g.isDirtyCacheMu.Unlock()
+}
+
+// IsDirty checks if the worktree has uncommitted changes.
+// Results are cached for isDirtyCacheTTL (15 s) to avoid spawning a subprocess on every call.
 func (g *GitWorktree) IsDirty() (bool, error) {
+	return g.IsDirtyWithHint(false)
+}
+
+// IsDirtyWithHint checks if the worktree has uncommitted changes.
+// When claudeActive is true the subprocess is skipped entirely and the cached value is returned
+// (or false if no cached value is available yet), because Claude never modifies worktree state
+// while it is actively generating output.
+func (g *GitWorktree) IsDirtyWithHint(claudeActive bool) (bool, error) {
+	// Fast path: hold read lock and check whether the cache is still fresh.
+	g.isDirtyCacheMu.RLock()
+	cacheValid := !g.isDirtyCacheTime.IsZero() && time.Since(g.isDirtyCacheTime) < isDirtyCacheTTL
+	if cacheValid || claudeActive {
+		cached := g.isDirtyCache
+		g.isDirtyCacheMu.RUnlock()
+		return cached, nil
+	}
+	g.isDirtyCacheMu.RUnlock()
+
+	// Slow path: acquire write lock, double-check, then run subprocess.
+	g.isDirtyCacheMu.Lock()
+	defer g.isDirtyCacheMu.Unlock()
+
+	// Re-check inside the write lock (another goroutine may have refreshed while we waited).
+	if !g.isDirtyCacheTime.IsZero() && time.Since(g.isDirtyCacheTime) < isDirtyCacheTTL {
+		return g.isDirtyCache, nil
+	}
+
 	output, err := g.runGitCommand(g.worktreePath, "status", "--porcelain")
 	if err != nil {
 		return false, fmt.Errorf("failed to check worktree status: %w", err)
 	}
-	return len(output) > 0, nil
+
+	g.isDirtyCache = len(output) > 0
+	g.isDirtyCacheTime = time.Now()
+	return g.isDirtyCache, nil
 }
 
 // IsBranchCheckedOut checks if the instance branch is currently checked out

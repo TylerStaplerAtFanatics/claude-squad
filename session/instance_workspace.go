@@ -78,7 +78,7 @@ func (i *Instance) SwitchWorkspace(req WorkspaceSwitchRequest) (*WorkspaceSwitch
 	// Convention: I/O must NOT be done while holding stateMutex (see git_worktree_manager.go:154).
 	// Unsynchronized read is intentional here - false negatives are safe because we
 	// double-check inside the lock below.
-	if i.claudeSession == nil || i.claudeSession.SessionID == "" {
+	if i.claudeSession == nil || i.claudeSession.ConversationUUID == "" {
 		i.tryExtractConversationUUID()
 	}
 
@@ -170,8 +170,8 @@ func (i *Instance) SwitchWorkspace(req WorkspaceSwitchRequest) (*WorkspaceSwitch
 	// ClaudeCommandBuilder will use it on restart.
 	// tryExtractConversationUUID() was called before acquiring stateMutex (double-checked
 	// locking pattern) to avoid I/O under the lock. Log the result here under the lock.
-	if i.claudeSession != nil && i.claudeSession.SessionID != "" {
-		log.InfoLog.Printf("[Workspace] Captured conversation ID '%s' for resume", i.claudeSession.SessionID)
+	if i.claudeSession != nil && i.claudeSession.ConversationUUID != "" {
+		log.InfoLog.Printf("[Workspace] Captured conversation ID '%s' for resume", i.claudeSession.ConversationUUID)
 	} else {
 		log.InfoLog.Printf("[Workspace] No conversation ID found -- restart will begin fresh conversation")
 	}

@@ -41,15 +41,16 @@ func NewWorkspaceService(storage *session.Storage, eventBus *events.EventBus) *W
 	return &WorkspaceService{storage: storage, eventBus: eventBus}
 }
 
-// findInstance loads instances from storage and returns the one with the given title.
-// Returns CodeNotFound if the session does not exist.
+// findInstance loads instances from storage and returns the one matching id.
+// id may be either the session UUID or the legacy Title; both are accepted.
+// Returns CodeNotFound if no matching session exists.
 func (ws *WorkspaceService) findInstance(id string) ([]*session.Instance, *session.Instance, error) {
 	instances, err := ws.storage.LoadInstances()
 	if err != nil {
 		return nil, nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
 	}
 	for _, inst := range instances {
-		if inst.Title == id {
+		if inst.MatchesID(id) {
 			return instances, inst, nil
 		}
 	}

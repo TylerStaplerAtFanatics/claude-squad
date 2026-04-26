@@ -1,4 +1,5 @@
 "use client";
+// +feature: terminal-pre-sizing terminal-dimension-cache
 
 import { useEffect, useRef, useCallback, useState } from "react";
 
@@ -42,8 +43,22 @@ interface TerminalOutputProps {
   isVisible?: boolean; // When provided, triggers fit+focus on visibility change
 }
 
+// Minimum dimensions considered "real" — anything smaller is a transient value
+// from xterm.js before the CSS container has finished laying out. The first
+// resize event often fires at e.g. 10x6 before layout is complete; caching or
+// connecting at those dimensions produces a garbled terminal on the next view.
+const MIN_COLS = 30;
+const MIN_ROWS = 10;
+
+// xterm.js initializes with these default dimensions before FitAddon.fit() runs.
+// Cache entries equal to these values are treated as potentially corrupt (see Bug 1)
+// and are not used for fast-connect. The actual container size arrives via onResize.
+const XTERM_DEFAULT_COLS = 80;
+const XTERM_DEFAULT_ROWS = 24;
+
 export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSessionName, isVisible }: TerminalOutputProps) {
   const xtermRef = useRef<XtermTerminalHandle | null>(null);
+  const terminalContainerRef = useRef<HTMLDivElement>(null);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
   const [showReconnectButton, setShowReconnectButton] = useState(false);
   const [isWaitingForStableSize, setIsWaitingForStableSize] = useState(true);
@@ -382,23 +397,50 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       lastResizeRef.current = { cols, rows };
       console.log(`[TerminalOutput] Saved resize dimensions: ${cols}x${rows}`);
 
-      saveDimensions(sessionId, cols, rows);
+      // Only persist dimensions that are plausibly real — transient tiny values
+      // (e.g. 10x6) fired before the CSS container finishes layout would otherwise
+      // corrupt the cache and cause the next session view to connect at the wrong size.
+      if (cols >= MIN_COLS && rows >= MIN_ROWS) {
+        // Also capture cell pixel dimensions so TerminalOutput can pre-calculate
+        // cols/rows from the container size on the next mount, enabling an immediate
+        // connection before xterm fires its first onResize event.
+        // Uses xterm.js private API for cell pixel metrics; gracefully falls back
+        // to dims-only cache entry if the API changes in a future xterm version.
+        // isFinite() guards against NaN/Infinity that a corrupted private API
+        // could theoretically return (e.g. during a render-service error state).
+        const cell = (xtermRef.current?.terminal as any)?._core?._renderService?.dimensions?.css?.cell;
+        if (cell?.width && cell?.height && isFinite(cell.width) && isFinite(cell.height)) {
+          saveDimensions(sessionId, cols, rows, cell.width, cell.height);
+        } else {
+          saveDimensions(sessionId, cols, rows);
+        }
+      } else {
+        console.log(`[TerminalOutput] Skipping cache write for tiny dimensions ${cols}x${rows} (below ${MIN_COLS}x${MIN_ROWS})`);
+      }
 
       if (metricsRef.current.firstResizeTime === null) {
         metricsRef.current.firstResizeTime = performance.now();
       }
       metricsRef.current.resizeCount++;
 
-      // Skip size stability wait if we have cached dimensions
+      // Skip size stability wait if we have cached dimensions, but only when
+      // the cached size (lastResize) is itself reasonable — a stale tiny cache
+      // entry would otherwise bypass the stability wait and connect at the wrong size.
       if (hasCachedDimensionsRef.current && !hasInitiatedConnectionRef.current && !isConnected && !error && isMountedRef.current) {
-        const initDims = lastResize ?? { cols, rows };
-        console.log(`[TerminalOutput] Using cached dimensions, skipping stability wait (${initDims.cols}x${initDims.rows})`);
-        metricsRef.current.sizeStableTime = performance.now();
-        metricsRef.current.connectionInitTime = performance.now();
-        hasInitiatedConnectionRef.current = true;
-        setIsWaitingForStableSize(false);
-        connect(initDims.cols, initDims.rows);
-        return;
+        const initDims = { cols, rows };
+        if (initDims.cols >= MIN_COLS && initDims.rows >= MIN_ROWS) {
+          console.log(`[TerminalOutput] Using cached dimensions, skipping stability wait (${initDims.cols}x${initDims.rows})`);
+          metricsRef.current.sizeStableTime = performance.now();
+          metricsRef.current.connectionInitTime = performance.now();
+          hasInitiatedConnectionRef.current = true;
+          setIsWaitingForStableSize(false);
+          connect(initDims.cols, initDims.rows);
+          return;
+        } else {
+          // Cached value is too small — treat as no cache and wait for stable size.
+          console.log(`[TerminalOutput] Cached dimensions ${initDims.cols}x${initDims.rows} too small, falling through to stability wait`);
+          hasCachedDimensionsRef.current = false; // prevents future onResize events from fast-connecting on stale cache
+        }
       }
 
       // Event-driven size stability detection for initial connection
@@ -517,13 +559,42 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     }
   }, [isConnected, error, connectionAttempts, connect]);
 
-  // Initialize with cached dimensions on mount
+  // Initialize with cached dimensions on mount.
+  // When cell pixel metrics are also cached, pre-calculate cols/rows from the
+  // container's current pixel size so the session-switch effect can connect
+  // immediately — before xterm.js fires its first onResize event.
+  //
+  // ORDERING INVARIANT: This effect MUST remain defined before the session-switch
+  // effect below (both share the [sessionId] dependency). React runs same-dependency
+  // effects in definition order, so this effect runs first and populates
+  // lastResizeRef before the session-switch effect reads it to trigger connect().
+  // Moving this effect below the session-switch effect will silently break pre-sizing.
   useEffect(() => {
     const cached = getCachedDimensions(sessionId);
-    if (cached) {
+    if (cached && cached.cols >= MIN_COLS && cached.rows >= MIN_ROWS) {
       hasCachedDimensionsRef.current = true;
-      lastResizeRef.current = cached;
       console.log(`[TerminalOutput] Initialized with cached dimensions: ${cached.cols}x${cached.rows}`);
+
+      if (cached.cellWidth && cached.cellHeight && terminalContainerRef.current) {
+        const rect = terminalContainerRef.current.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const preCols = Math.floor(rect.width / cached.cellWidth);
+          const preRows = Math.floor(rect.height / cached.cellHeight);
+          if (preCols >= MIN_COLS && preRows >= MIN_ROWS) {
+            console.log(
+              `[TerminalOutput] Pre-sizing: ${rect.width}×${rect.height}px / ` +
+              `${cached.cellWidth.toFixed(2)}×${cached.cellHeight.toFixed(2)}px/cell → ${preCols}×${preRows}`
+            );
+            lastResizeRef.current = { cols: preCols, rows: preRows };
+          } else {
+            console.log(`[TerminalOutput] Pre-sizing skipped: calculated ${preCols}x${preRows} below minimum`);
+          }
+        } else {
+          console.log(`[TerminalOutput] Pre-sizing skipped: container has zero size`);
+        }
+      }
+    } else if (cached) {
+      console.log(`[TerminalOutput] Ignoring stale cached dimensions ${cached.cols}x${cached.rows} (below ${MIN_COLS}x${MIN_ROWS})`);
     }
   }, [sessionId]);
 
@@ -577,19 +648,43 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     // Otherwise set the pending flag so we connect once the in-progress disconnect resolves
     if (!isConnected) {
       const dims = lastResizeRef.current;
-      if (dims && isMountedRef.current) {
+      // Guard: don't fast-connect with xterm default dims (80×24). Those are the
+      // terminal's initial values before fitAddon.fit() measures the container —
+      // if Bug 1 corrupted the cache to 80×24, using them here would cause a thin
+      // PTY. The resize handler will fire with the actual dims and connect normally.
+      const isXtermDefault = dims?.cols === XTERM_DEFAULT_COLS && dims?.rows === XTERM_DEFAULT_ROWS;
+      if (dims && isMountedRef.current && !isXtermDefault) {
         hasInitiatedConnectionRef.current = true;
         setIsWaitingForStableSize(false);
         connect(dims.cols, dims.rows);
       }
-      // If no dims yet, resize handler will fire and trigger connect normally
+      // If no dims yet (or dims are xterm defaults), resize handler will fire and trigger connect normally
     } else {
       // Was connected to previous session — disconnect() is in-flight (async).
       // Mark pending so the isConnected→false transition triggers connect below.
       pendingConnectAfterDisconnectRef.current = true;
     }
 
+    // Safety net: if the container is hidden at mount (display:none, 0×0), the
+    // ResizeObserver zero-size guard prevents fitAddon.fit(), so no resize event
+    // fires and the stability timer never starts. After 5s, attempt to connect
+    // with whatever valid cached dims are available, or skip silently.
+    const safetyTimeout = setTimeout(() => {
+      if (!hasInitiatedConnectionRef.current && isMountedRef.current) {
+        const dims = lastResizeRef.current;
+        if (dims && dims.cols >= MIN_COLS && dims.rows >= MIN_ROWS) {
+          console.log(`[TerminalOutput] Safety timeout: connecting with cached dims ${dims.cols}x${dims.rows} (container may have been hidden at mount)`);
+          hasInitiatedConnectionRef.current = true;
+          setIsWaitingForStableSize(false);
+          connect(dims.cols, dims.rows);
+        } else {
+          console.log(`[TerminalOutput] Safety timeout: no valid dims available, container still not visible`);
+        }
+      }
+    }, 5000);
+
     return () => {
+      clearTimeout(safetyTimeout);
       setIsLoadingInitialContent(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -902,7 +997,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
           </button>
         </div>
       </div>
-      <div className={styles.terminal}>
+      <div className={styles.terminal} ref={terminalContainerRef}>
         {isVisible !== false && isLoadingInitialContent && (
           <div className={styles.loadingOverlay}>
             <div className={styles.loadingSpinner} />
