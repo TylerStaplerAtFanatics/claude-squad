@@ -62,6 +62,7 @@ jobs:
         run: |
           go test \
             -bench='BenchmarkEventBus|BenchmarkDeltaGenerat|BenchmarkCircularBuffer|BenchmarkSessionService_List|BenchmarkSessionService_Get|BenchmarkSessionService_Stream' \
+            -run='^$' \
             -benchmem \
             -count=8 \
             -timeout=10m \
@@ -149,6 +150,7 @@ jobs:
         run: |
           go test \
             -bench=. \
+            -run='^$' \
             -benchmem \
             -count=8 \
             -timeout=30m \
