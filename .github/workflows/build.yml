@@ -15,6 +15,8 @@ on:
       - 'web-app/package-lock.json'
       - '.github/workflows/build.yml'
       - '.github/actions/prepare/**'
+      - '.gitmodules'
+      - 'third_party/tmux/**'
   pull_request:
     branches: [ main ]
     paths:
@@ -29,6 +31,8 @@ on:
       - 'web-app/package-lock.json'
       - '.github/workflows/build.yml'
       - '.github/actions/prepare/**'
+      - '.gitmodules'
+      - 'third_party/tmux/**'
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
@@ -76,8 +80,70 @@ jobs:
         with:
           name: generated-files
 
-      - name: Run tests
-        run: go test -race -v ./...
+      - name: Install tmux build dependencies
+        run: sudo apt-get install -y automake libevent-dev libncurses-dev pkg-config
+
+      - name: Cache pinned tmux binary
+        uses: actions/cache@v4
+        id: tmux-cache
+        with:
+          path: bin/tmux
+          key: tmux-3.4-${{ runner.os }}-v1
+
+      - name: Build pinned tmux 3.4
+        if: steps.tmux-cache.outputs.cache-hit != 'true'
+        run: ./scripts/build-tmux.sh
+
+      - name: Run tests (pinned tmux 3.4)
+        run: TMUX_BIN="$(pwd)/bin/tmux" go test -race -v ./...
+
+      - name: Set up Node.js (for coverage report)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate feature E2E coverage report
+        id: coverage
+        run: |
+          cd tools/coverage && npm install --silent
+          OUTPUT=$(npx ts-node feature-coverage.ts ../../docs/registry/backend-features.json '../../tests/e2e/**/*.spec.ts' 2>&1)
+          echo "$OUTPUT"
+          SUMMARY=$(echo "$OUTPUT" | grep 'Feature E2E coverage:' | head -1 || echo "Feature E2E coverage: N/A")
+          echo "summary=${SUMMARY}" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Post feature coverage PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          COVERAGE_SUMMARY: ${{ steps.coverage.outputs.summary }}
+        with:
+          script: |
+            const marker = '<!-- feature-coverage -->';
+            const summary = process.env.COVERAGE_SUMMARY || 'Feature coverage report unavailable';
+            const body = `${marker}\n## 📊 Feature E2E Coverage\n\n${summary}\n\n> Run \`make e2e-report\` locally to view the full Allure report.`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+        continue-on-error: true
 
   # ─────────────────────────────────────────────────────────────────────────────
   # build: cross-compiles for all supported platforms in parallel.

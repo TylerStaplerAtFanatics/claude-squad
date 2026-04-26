@@ -1,4 +1,5 @@
 "use client";
+// +feature: session-list session-search session-filter session-groupby
 
 import { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";

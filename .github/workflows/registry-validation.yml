@@ -1,0 +1,99 @@
+name: Registry Validation
+
+# NOTE: This workflow is NON-BLOCKING for the first 2 weeks after introduction.
+# After the validation period (2026-05-02), promote to blocking by changing
+# `continue-on-error: true` to `continue-on-error: false`.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.go'
+      - '**.proto'
+      - 'web-app/src/**'
+      - 'docs/registry/**'
+
+jobs:
+  registry-validation:
+    name: Registry Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate protos and build web UI
+        uses: ./.github/actions/prepare
+
+      - name: Download generated files
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-files
+        continue-on-error: true
+
+      - name: Install frontend scanner dependencies
+        run: cd tools/scanner/frontend && npm install --silent
+
+      - name: Run registry generation
+        run: make registry-generate
+        # NOTE: Non-blocking during validation period (see above)
+        continue-on-error: true
+
+      - name: Validate registry
+        id: validate
+        run: |
+          set +e
+          OUTPUT=$(./tools/scanner/validate-registry.sh 2>&1)
+          EXIT_CODE=$?
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          echo "$OUTPUT"
+          exit $EXIT_CODE
+        # NOTE: Non-blocking during validation period (see above)
+        continue-on-error: true
+
+      - name: Post PR comment on registry diff
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          VALIDATE_OUTPUT: ${{ steps.validate.outputs.output }}
+          VALIDATE_EXIT_CODE: ${{ steps.validate.outputs.exit_code }}
+        with:
+          script: |
+            const output = process.env.VALIDATE_OUTPUT || '';
+            const exitCode = process.env.VALIDATE_EXIT_CODE || '';
+
+            // Only post if there are changes detected
+            if (!output.includes('addedIds') && !output.includes('removedIds')) {
+              return;
+            }
+
+            const statusEmoji = exitCode === '0' ? '✅' : '⚠️';
+            const body = `## ${statusEmoji} Registry Validation
+
+            \`\`\`
+            ${output.substring(0, 3000)}
+            \`\`\`
+
+            > **Note**: Registry validation is in observation mode until 2026-05-02.
+            > After that date, divergence > 2% will block merges.
+            `;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.replace(/^            /gm, ''),
+            });

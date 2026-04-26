@@ -16,6 +16,12 @@ export const header = style({
   backdropFilter: "blur(8px)",
   backgroundColor: "rgba(26, 26, 26, 0.95)",
   isolation: "isolate",
+  // Header always uses a dark backdrop regardless of OS color scheme.
+  // Override text tokens so all children get sufficient contrast.
+  vars: {
+    [vars.color.textPrimary]: "#ededed",
+    [vars.color.textSecondary]: "#b4b4b4",
+  },
 
   "@media": {
     // Hide below 900px — BottomNav takes over for mobile + foldable range
