@@ -829,24 +829,20 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance) {
 			inst.Title, detection.FormatDuration(timeSinceOutput), detection.FormatDuration(rqp.config.StalenessThreshold))
 	}
 
-	// Acknowledgment snooze and grace-period checks.
-	// For sessions with an active controller, high/medium-priority states (approval, error,
-	// input required) bypass snooze so live Claude processes always surface to the user.
-	// For sessions WITHOUT an active controller (orphaned/external/no-tty sessions), there is
-	// no live process that can generate new approvals — detections come from static terminal
-	// content. In that case, respect acknowledgment at any priority level so the user can
-	// permanently dismiss stale entries.
-	if !shouldAdd || priority == PriorityLow || !statusInfo.IsControllerActive {
-		// Check if user dismissed this session.
-		// Sessions are snoozed when LastAcknowledged is newer than LastMeaningfulOutput.
-		if inst.IsAcknowledgedAfterOutput() {
-			log.DebugLog.Printf("[ReviewQueue] Session '%s': User acknowledged (snoozed until new output), removing from queue", inst.Title)
-			rqp.queue.Remove(inst.Title)
-			return
-		}
+	// Acknowledgment snooze: applies to ALL sessions regardless of priority or controller state.
+	// Sessions are snoozed when LastAcknowledged is newer than LastMeaningfulOutput.
+	// When a live process generates a new prompt, LastMeaningfulOutput is updated, so
+	// IsAcknowledgedAfterOutput() returns false and the session correctly resurfaces.
+	if inst.IsAcknowledgedAfterOutput() {
+		log.DebugLog.Printf("[ReviewQueue] Session '%s': User acknowledged (snoozed until new output), removing from queue", inst.Title)
+		rqp.queue.Remove(inst.Title)
+		return
+	}
 
-		// Grace period: Don't re-add for 5 minutes after acknowledgment, even with new output.
-		// This prevents immediate re-notification after user dismisses a session.
+	// Grace period: Don't re-add for 5 minutes after acknowledgment, even with new output.
+	// Scoped to low-priority or inactive-controller sessions only — high/medium priority sessions
+	// with an active controller should resurface promptly when new output arrives.
+	if !shouldAdd || priority == PriorityLow || !statusInfo.IsControllerActive {
 		if !inst.LastAcknowledged.IsZero() {
 			gracePeriod := 5 * time.Minute
 			timeSinceAck := time.Since(inst.LastAcknowledged)
