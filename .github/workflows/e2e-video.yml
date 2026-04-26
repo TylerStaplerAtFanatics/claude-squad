@@ -11,6 +11,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  pull-requests: write
+
 # Feature specs recorded — excludes:
 #   terminal-flickering.spec.ts  (benchmarks/stress tests)
 #   accessibility.spec.ts        (handled by ux-analysis workflow)
