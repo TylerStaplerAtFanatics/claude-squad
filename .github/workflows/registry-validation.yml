@@ -72,29 +72,7 @@ jobs:
       - name: Report coverage gaps (untested features)
         id: coverage
         run: |
-          python3 - <<'PYEOF'
-          import json, glob, sys
-
-          untested = []
-          for path in sorted(glob.glob('docs/registry/features/backend/**/*.json', recursive=True)):
-              d = json.load(open(path))
-              if not d.get('testIds'):
-                  untested.append(d['id'])
-
-          total = len(list(glob.glob('docs/registry/features/backend/**/*.json', recursive=True)))
-          covered = total - len(untested)
-          pct = round(covered / total * 100, 1) if total else 0
-
-          print(f"Coverage: {covered}/{total} features have testIds ({pct}%)")
-          if untested:
-              print(f"\nUntested features ({len(untested)}):")
-              for fid in untested:
-                  print(f"  - {fid}")
-
-          with open('/tmp/coverage_summary.txt', 'w') as f:
-              f.write(f"covered={covered}\ntotal={total}\npct={pct}\nuntested_count={len(untested)}\n")
-          PYEOF
-
+          python3 tools/scanner/report-coverage.py
           COVERED=$(grep covered= /tmp/coverage_summary.txt | cut -d= -f2)
           TOTAL=$(grep total= /tmp/coverage_summary.txt | cut -d= -f2)
           PCT=$(grep pct= /tmp/coverage_summary.txt | cut -d= -f2)
@@ -127,18 +105,20 @@ jobs:
             }
 
             const statusEmoji = exitCode === '0' ? '✅' : '⚠️';
-            const body = `## ${statusEmoji} Registry Validation
-
-\`\`\`
-${output.substring(0, 3000)}
-\`\`\`
-
-**Test Coverage**: ${covered}/${total} features have \`testIds\` (${pct}%)
-
-> Registry validation is in observation mode until 2026-05-02.
-> After that date, divergence > 2% will block merges.
-> Coverage reporting is advisory only.
-`;
+            const fence = '```';
+            const body = [
+              `## ${statusEmoji} Registry Validation`,
+              '',
+              fence,
+              output.substring(0, 3000),
+              fence,
+              '',
+              `**Test Coverage**: ${covered}/${total} features have \`testIds\` (${pct}%)`,
+              '',
+              '> Registry validation is in observation mode until 2026-05-02.',
+              '> After that date, divergence > 2% will block merges.',
+              '> Coverage reporting is advisory only.',
+            ].join('\n');
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
