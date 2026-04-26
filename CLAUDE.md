@@ -960,28 +960,47 @@ make clean-tools  # Remove installed tools (caution)
 
 ## Feature Registry
 
-The project maintains a static feature registry in `docs/registry/` that maps backend RPCs and frontend components to feature IDs. This registry is committed to the repo and validated in CI.
+The project maintains a per-feature registry under `docs/registry/features/` that maps backend RPCs and frontend components to feature IDs. Each feature is **one file** — this prevents merge conflicts when multiple branches add features simultaneously.
 
-### Registry files
-- `docs/registry/backend-features.json` — all proto RPCs with handler file locations and marker status
-- `docs/registry/frontend-features.json` — all React pages/components with `// +feature:` markers
-- `docs/registry/coverage-gaps.json` — advisory cross-registry coverage report (best-effort)
-- `docs/registry/schema.json` — JSON schema for validation
+### Registry layout
+```
+docs/registry/features/
+  backend/<domain>/<action>.json   ← one file per RPC  (committed, source of truth)
+  frontend/<type>/<id>.json        ← one file per UI component (committed, source of truth)
+docs/registry/schema.json          ← JSON schema for validation
+```
+
+The monolithic `backend-features.json` / `frontend-features.json` are **gitignored generated aggregates**.
+Rebuild them locally with `make registry-aggregate` (needed by some tooling).
 
 ### Keeping the registry current
 ```bash
-make registry-generate          # Regenerate both registries from source
+make registry-generate          # Scan source → update per-feature files + aggregate monolithic
 make registry-generate-backend  # Backend only
 make registry-generate-frontend # Frontend only
-make registry-diff              # Show what would change (dry run, no writes)
+make registry-aggregate         # Assemble monolithic JSON from per-feature files (local use only)
+make registry-diff              # Show what would change vs committed files (dry run)
 ```
 
-**Run `make registry-generate` and commit the updated JSON files whenever you:**
+**Run `make registry-generate` and commit the changed per-feature files whenever you:**
 - Add or rename a proto RPC in `proto/session/v1/session.proto`
 - Add a new React page or component
 - Add or move a `// +api:` or `// +feature:` marker
 
-CI will warn (non-blocking until 2026-05-02, then blocking) if the committed registry diverges >2% from what the scanner would generate.
+CI warns (non-blocking until 2026-05-02, then blocking) if committed per-feature files diverge >2%
+from what the scanner would generate. CI also reports features with no `testIds` as coverage gaps.
+
+### Adding test coverage to a feature
+Edit the feature's JSON file directly to add test IDs — the scanner preserves these on regeneration:
+```json
+// docs/registry/features/backend/session/create.json
+{
+  "id": "session:create",
+  ...
+  "tested": true,
+  "testIds": ["TestCreateSession_Success", "TestCreateSession_InvalidInput"]
+}
+```
 
 ### Backend markers (`// +api:`)
 Add to the handler method in `server/services/` to confirm the RPC is intentionally implemented:
@@ -1000,10 +1019,6 @@ import ...
 
 The ID convention is `ui:noun-noun` for frontend (e.g. `ui:session-list`, `ui:review-queue`).
 The backend convention is `domain:verb` (e.g. `session:create`, `review-queue:get`).
-
-> **Known limitation**: the gap reporter in `docs/registry/coverage-gaps.json` uses domain-prefix
-> matching between the two namespaces. It is advisory only — false negatives are expected for
-> multi-word domains (e.g. `review-queue:get` ↔ `ui:review-queue`).
 
 ---
 
