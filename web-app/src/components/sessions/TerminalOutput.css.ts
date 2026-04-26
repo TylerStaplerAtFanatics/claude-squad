@@ -188,9 +188,14 @@ export const terminal = style({
   color: "#d4d4d4",
   overflow: "hidden",
   position: "relative",
+  // Safe-area padding for landscape notch (horizontal insets only)
+  paddingLeft: "var(--safe-area-left, 0px)",
+  paddingRight: "var(--safe-area-right, 0px)",
   "@media": {
     "screen and (max-width: 768px)": {
       padding: "0.75rem",
+      paddingLeft: "max(0.75rem, var(--safe-area-left, 0px))",
+      paddingRight: "max(0.75rem, var(--safe-area-right, 0px))",
       fontSize: "13px",
     },
   },

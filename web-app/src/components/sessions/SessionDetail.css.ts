@@ -9,13 +9,14 @@ const tabFadeIn = keyframes({
 export const container = style({
   display: "flex",
   flexDirection: "column",
-  height: "100%",
+  height: "calc(var(--viewport-height, 100dvh) - var(--header-height))",
   minHeight: 0,
+  overflow: "hidden",
   background: vars.color.terminalBackground,
 });
 
 export const fullscreen = style({
-  height: "100%",
+  height: "var(--viewport-height, 100dvh)",
 });
 
 export const header = style({
