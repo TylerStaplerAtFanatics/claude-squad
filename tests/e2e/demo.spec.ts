@@ -30,6 +30,7 @@ import * as fs from 'fs';
  *   06 - Rules page            built-in auto-approval rules
  *   07 - Add custom rule       creating a new "Allow git log" rule
  *   08 - Final hero            back to sessions dashboard
+ *   09 - Unfinished Work       surface pending changes across worktrees
  */
 
 const BASE_URL = process.env.TEST_SERVER_URL || 'http://localhost:8544';
@@ -393,4 +394,47 @@ test('Demo Flow', async ({ page }) => {
   await showSceneLabel(page, '✨ Stapler Squad — every agent tracked, every approval handled', 3000);
   await snap(page, '08-final.png');
   await page.waitForTimeout(2500); // Clean ending frame for the video loop.
+
+  // ── Scene 9: Unfinished Work — surface pending changes across worktrees ───
+  await page.goto(`${BASE_URL}/unfinished`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1200);
+
+  // If no real worktrees are present in the test server, inject representative
+  // placeholder items so the screenshot communicates the feature clearly.
+  const hasUnfinishedItems = await page.locator('[class*="nfinished"]').first().isVisible({ timeout: 2000 }).catch(() => false);
+  if (!hasUnfinishedItems) {
+    await page.evaluate(() => {
+      const main = document.querySelector('main, [class*="tab"], [class*="content"]');
+      if (!main) return;
+      const demo = document.createElement('div');
+      demo.style.cssText = 'padding: 24px; display: flex; flex-direction: column; gap: 12px; max-width: 800px;';
+      demo.innerHTML = `
+        <div style="background: var(--card-background, #1e1e1e); border: 1px solid var(--border-color, #333); border-radius: 8px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-weight: 600; color: var(--text-primary, #f8fafc); margin-bottom: 4px;">feat/payment-retry-logic</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary, #94a3b8);">~/projects/payments · 3 uncommitted files · 2 commits ahead</div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span style="font-size: 0.7rem; background: #1e3a5f; color: #60a5fa; border-radius: 4px; padding: 2px 8px; font-weight: 600;">+47 −12</span>
+            <span style="font-size: 0.7rem; background: #1a3a2a; color: #4ade80; border-radius: 4px; padding: 2px 8px; font-weight: 600;">2 ahead</span>
+          </div>
+        </div>
+        <div style="background: var(--card-background, #1e1e1e); border: 1px solid var(--border-color, #333); border-radius: 8px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-weight: 600; color: var(--text-primary, #f8fafc); margin-bottom: 4px;">fix/auth-token-refresh</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary, #94a3b8);">~/projects/auth-service · 1 uncommitted file</div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span style="font-size: 0.7rem; background: #1e3a5f; color: #60a5fa; border-radius: 4px; padding: 2px 8px; font-weight: 600;">+8 −3</span>
+          </div>
+        </div>
+      `;
+      main.prepend(demo);
+    });
+    await page.waitForTimeout(300);
+  }
+
+  await showSceneLabel(page, '🔍 Unfinished Work — surface pending changes across all worktrees', 2500);
+  await snap(page, '09-unfinished.png');
+  await page.waitForTimeout(1500);
 });
