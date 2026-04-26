@@ -74,9 +74,9 @@ func TestExtractPRURL_NotFound(t *testing.T) {
 	cases := []string{
 		"",
 		"no URLs here",
-		"https://github.com/org/repo/issues/5",          // issue, not pull
-		"https://github.com/org/repo/pull",              // no number
-		"http://example.com/pull/5",                     // not github.com
+		"https://github.com/org/repo/issues/5", // issue, not pull
+		"https://github.com/org/repo/pull",     // no number
+		"http://example.com/pull/5",            // not github.com
 	}
 	for _, output := range cases {
 		got := extractPRURL(output)

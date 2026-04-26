@@ -118,11 +118,10 @@ func TestRenameSession_DuplicateTitle(t *testing.T) {
 	fix := setupForkTestFixture(t)
 	t.Cleanup(fix.cleanup)
 
-	// Register two sessions in the poller.
-	alpha, _ := makeInstanceWithCheckpoint("session-alpha")
-	beta, _ := makeInstanceWithCheckpoint("session-beta")
-	addInstanceToPoller(fix.poller, alpha)
-	addInstanceToPoller(fix.poller, beta)
+	// RenameSession uses loadInstancesWithWiring (storage), not the poller.
+	// Use addPausedSession so LoadInstances can reconstruct without tmux.
+	addPausedSession(t, fix, "session-alpha")
+	addPausedSession(t, fix, "session-beta")
 
 	_, err := fix.svc.RenameSession(context.Background(), connect.NewRequest(&sessionv1.RenameSessionRequest{
 		Id:       "session-alpha",

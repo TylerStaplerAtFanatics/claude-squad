@@ -832,7 +832,7 @@ func (r *EntRepository) sessionToInstanceData(sess *ent.Session) *InstanceData {
 		data.ClaudeSession = ClaudeSessionData{
 			ConversationUUID: cs.ClaudeSessionID,
 			SquadSessionID:   cs.ConversationID,
-			ProjectName:    cs.ProjectName,
+			ProjectName:      cs.ProjectName,
 			Settings: ClaudeSettings{
 				AutoReattach:          cs.AutoReattach,
 				PreferredSessionName:  cs.PreferredSessionName,

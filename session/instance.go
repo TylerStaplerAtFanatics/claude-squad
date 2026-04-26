@@ -716,7 +716,7 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 	if opts.ResumeId != "" {
 		instance.claudeSession = &ClaudeSessionData{
 			ConversationUUID: opts.ResumeId,
-			LastAttached: t,
+			LastAttached:     t,
 			Metadata: map[string]string{
 				"resumed_from_history": "true",
 			},
@@ -2054,10 +2054,10 @@ func (i *Instance) createNewClaudeSession() error {
 	// Update the instance's Claude session data
 	i.claudeSession = &ClaudeSessionData{
 		ConversationUUID: newSession.ID,
-		SquadSessionID: newSession.ConversationID,
-		ProjectName:    newSession.ProjectName,
-		LastAttached:   time.Now(),
-		Settings:       i.claudeSession.Settings, // Preserve existing settings
+		SquadSessionID:   newSession.ConversationID,
+		ProjectName:      newSession.ProjectName,
+		LastAttached:     time.Now(),
+		Settings:         i.claudeSession.Settings, // Preserve existing settings
 		Metadata: map[string]string{
 			"working_dir": newSession.WorkingDir,
 			"created_at":  time.Now().Format(time.RFC3339),

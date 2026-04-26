@@ -130,12 +130,12 @@ type DiffStatsData struct {
 
 // ClaudeSessionData represents Claude Code session information
 type ClaudeSessionData struct {
-	ConversationUUID string            `json:"session_id,omitempty"`      // Claude Code conversation UUID (used for --resume)
+	ConversationUUID string            `json:"session_id,omitempty"`       // Claude Code conversation UUID (used for --resume)
 	SquadSessionID   string            `json:"squad_session_id,omitempty"` // claude-squad's own session identifier (= Instance.UUID)
-	ProjectName    string            `json:"project_name,omitempty"`    // Project name in Claude Code
-	LastAttached   time.Time         `json:"last_attached,omitempty"`   // When this session was last used
-	Settings       ClaudeSettings    `json:"settings,omitempty"`        // User preferences for Claude Code
-	Metadata       map[string]string `json:"metadata,omitempty"`        // Additional session metadata
+	ProjectName      string            `json:"project_name,omitempty"`     // Project name in Claude Code
+	LastAttached     time.Time         `json:"last_attached,omitempty"`    // When this session was last used
+	Settings         ClaudeSettings    `json:"settings,omitempty"`         // User preferences for Claude Code
+	Metadata         map[string]string `json:"metadata,omitempty"`         // Additional session metadata
 }
 
 // ClaudeSettings contains user preferences for Claude Code integration
