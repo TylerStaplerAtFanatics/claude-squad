@@ -105,7 +105,7 @@ type TmuxSession struct {
 	controlModeCmd         *exec.Cmd              // tmux -C attach process
 	controlModeStdout      io.ReadCloser          // stdout pipe for control mode notifications
 	controlModeStdin       io.WriteCloser         // stdin pipe for control mode commands
-	controlModeDone        chan struct{}          // Signal channel for control mode termination
+	controlModeDone        chan struct{}           // Signal channel for control mode termination
 	controlModeSubscribers map[string]chan []byte // WebSocket clients subscribed to control mode updates
 	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers, controlModeExited, and pendingCmds
 	controlModeExited      bool                   // True after readControlModeOutput exits; new subscribers get pre-closed channel
@@ -118,6 +118,7 @@ type TmuxSession struct {
 	cmdBodyBuf  strings.Builder  // body accumulator between %begin and %end; reader goroutine only
 	curCmdCh    chan cmdResult   // current in-flight response channel; reader goroutine only
 	inCmdResp   bool             // true while inside a %begin/%end block; reader goroutine only
+
 
 	// Exit detection: fired when the session exits unexpectedly (not via StopControlMode).
 	// onExit is called at most once per TmuxSession lifetime (guarded by onExitOnce).
@@ -538,13 +539,10 @@ func (t *TmuxSession) buildTmuxCommand(args ...string) *exec.Cmd {
 }
 
 // buildAttachCommand creates a tmux attach-session command for PTY operations.
-// -x/-y pre-declare the client's terminal size to tmux (tmux 3.2+), so the
-// session starts at the correct dimensions rather than the 80×24 default.
+// Note: -x/-y are NOT passed here; for attach-session -x means read-only mode
+// (not width), and tmux infers dimensions from the PTY itself.
 func (t *TmuxSession) buildAttachCommand() *exec.Cmd {
-	cols := t.lastKnownCols.Load()
-	rows := t.lastKnownRows.Load()
-	return t.buildTmuxCommand("attach-session", "-t", t.sanitizedName,
-		"-x", fmt.Sprintf("%d", cols), "-y", fmt.Sprintf("%d", rows))
+	return t.buildTmuxCommand("attach-session", "-t", t.sanitizedName)
 }
 
 // Start creates and starts a new tmux session, then attaches to it. Program is the command to run in

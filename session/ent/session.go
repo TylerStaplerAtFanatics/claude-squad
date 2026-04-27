@@ -69,6 +69,8 @@ type Session struct {
 	LastViewed *time.Time `json:"last_viewed,omitempty"`
 	// LastAcknowledged holds the value of the "last_acknowledged" field.
 	LastAcknowledged *time.Time `json:"last_acknowledged,omitempty"`
+	// McpServerURL holds the value of the "mcp_server_url" field.
+	McpServerURL string `json:"mcp_server_url,omitempty"`
 	// Prompt injected via CLAUDE.md at first-time session creation.
 	InitialPrompt string `json:"initial_prompt,omitempty"`
 	// When true, runs claude in -p mode; session exits after task completes.
@@ -159,7 +161,7 @@ func (*Session) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case session.FieldID, session.FieldStatus, session.FieldHeight, session.FieldWidth:
 			values[i] = new(sql.NullInt64)
-		case session.FieldTitle, session.FieldUUID, session.FieldPath, session.FieldWorkingDir, session.FieldBranch, session.FieldPrompt, session.FieldProgram, session.FieldExistingWorktree, session.FieldCategory, session.FieldSessionType, session.FieldTmuxPrefix, session.FieldLastOutputSignature, session.FieldInitialPrompt:
+		case session.FieldTitle, session.FieldUUID, session.FieldPath, session.FieldWorkingDir, session.FieldBranch, session.FieldPrompt, session.FieldProgram, session.FieldExistingWorktree, session.FieldCategory, session.FieldSessionType, session.FieldTmuxPrefix, session.FieldLastOutputSignature, session.FieldMcpServerURL, session.FieldInitialPrompt:
 			values[i] = new(sql.NullString)
 		case session.FieldCreatedAt, session.FieldUpdatedAt, session.FieldLastTerminalUpdate, session.FieldLastMeaningfulOutput, session.FieldLastAddedToQueue, session.FieldLastViewed, session.FieldLastAcknowledged:
 			values[i] = new(sql.NullTime)
@@ -335,6 +337,12 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 				_m.LastAcknowledged = new(time.Time)
 				*_m.LastAcknowledged = value.Time
 			}
+		case session.FieldMcpServerURL:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field mcp_server_url", values[i])
+			} else if value.Valid {
+				_m.McpServerURL = value.String
+			}
 		case session.FieldInitialPrompt:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field initial_prompt", values[i])
@@ -496,6 +504,9 @@ func (_m *Session) String() string {
 		builder.WriteString("last_acknowledged=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("mcp_server_url=")
+	builder.WriteString(_m.McpServerURL)
 	builder.WriteString(", ")
 	builder.WriteString("initial_prompt=")
 	builder.WriteString(_m.InitialPrompt)

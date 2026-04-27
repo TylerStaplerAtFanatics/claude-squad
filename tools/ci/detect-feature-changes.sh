@@ -53,6 +53,13 @@ while IFS= read -r file; do
       FEATURE_CHANGE_DETECTED=1
       break
     fi
+
+    # Check 4: E2E spec file contains // @feature annotation
+    if grep -q '// @feature' "${file}" 2>/dev/null; then
+      echo "Feature change detected: ${file} contains // @feature annotation"
+      FEATURE_CHANGE_DETECTED=1
+      break
+    fi
   fi
 done <<< "${CHANGED_FILES}"
 

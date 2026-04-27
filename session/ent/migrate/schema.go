@@ -225,6 +225,7 @@ var (
 		{Name: "last_added_to_queue", Type: field.TypeTime, Nullable: true},
 		{Name: "last_viewed", Type: field.TypeTime, Nullable: true},
 		{Name: "last_acknowledged", Type: field.TypeTime, Nullable: true},
+		{Name: "mcp_server_url", Type: field.TypeString, Nullable: true},
 		{Name: "initial_prompt", Type: field.TypeString, Nullable: true},
 		{Name: "one_shot", Type: field.TypeBool, Default: false},
 		{Name: "project_sessions", Type: field.TypeInt, Nullable: true},
@@ -237,7 +238,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "sessions_projects_sessions",
-				Columns:    []*schema.Column{SessionsColumns[27]},
+				Columns:    []*schema.Column{SessionsColumns[28]},
 				RefColumns: []*schema.Column{ProjectsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},

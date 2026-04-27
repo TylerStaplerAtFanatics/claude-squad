@@ -175,6 +175,11 @@ func LastAcknowledged(v time.Time) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldLastAcknowledged, v))
 }
 
+// McpServerURL applies equality check predicate on the "mcp_server_url" field. It's identical to McpServerURLEQ.
+func McpServerURL(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldMcpServerURL, v))
+}
+
 // InitialPrompt applies equality check predicate on the "initial_prompt" field. It's identical to InitialPromptEQ.
 func InitialPrompt(v string) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldInitialPrompt, v))
@@ -1543,6 +1548,81 @@ func LastAcknowledgedIsNil() predicate.Session {
 // LastAcknowledgedNotNil applies the NotNil predicate on the "last_acknowledged" field.
 func LastAcknowledgedNotNil() predicate.Session {
 	return predicate.Session(sql.FieldNotNull(FieldLastAcknowledged))
+}
+
+// McpServerURLEQ applies the EQ predicate on the "mcp_server_url" field.
+func McpServerURLEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldMcpServerURL, v))
+}
+
+// McpServerURLNEQ applies the NEQ predicate on the "mcp_server_url" field.
+func McpServerURLNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldMcpServerURL, v))
+}
+
+// McpServerURLIn applies the In predicate on the "mcp_server_url" field.
+func McpServerURLIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldMcpServerURL, vs...))
+}
+
+// McpServerURLNotIn applies the NotIn predicate on the "mcp_server_url" field.
+func McpServerURLNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldMcpServerURL, vs...))
+}
+
+// McpServerURLGT applies the GT predicate on the "mcp_server_url" field.
+func McpServerURLGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldMcpServerURL, v))
+}
+
+// McpServerURLGTE applies the GTE predicate on the "mcp_server_url" field.
+func McpServerURLGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldMcpServerURL, v))
+}
+
+// McpServerURLLT applies the LT predicate on the "mcp_server_url" field.
+func McpServerURLLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldMcpServerURL, v))
+}
+
+// McpServerURLLTE applies the LTE predicate on the "mcp_server_url" field.
+func McpServerURLLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldMcpServerURL, v))
+}
+
+// McpServerURLContains applies the Contains predicate on the "mcp_server_url" field.
+func McpServerURLContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldMcpServerURL, v))
+}
+
+// McpServerURLHasPrefix applies the HasPrefix predicate on the "mcp_server_url" field.
+func McpServerURLHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldMcpServerURL, v))
+}
+
+// McpServerURLHasSuffix applies the HasSuffix predicate on the "mcp_server_url" field.
+func McpServerURLHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldMcpServerURL, v))
+}
+
+// McpServerURLIsNil applies the IsNil predicate on the "mcp_server_url" field.
+func McpServerURLIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldMcpServerURL))
+}
+
+// McpServerURLNotNil applies the NotNil predicate on the "mcp_server_url" field.
+func McpServerURLNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldMcpServerURL))
+}
+
+// McpServerURLEqualFold applies the EqualFold predicate on the "mcp_server_url" field.
+func McpServerURLEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldMcpServerURL, v))
+}
+
+// McpServerURLContainsFold applies the ContainsFold predicate on the "mcp_server_url" field.
+func McpServerURLContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldMcpServerURL, v))
 }
 
 // InitialPromptEQ applies the EQ predicate on the "initial_prompt" field.

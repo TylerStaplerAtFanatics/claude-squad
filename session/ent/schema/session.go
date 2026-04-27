@@ -76,6 +76,8 @@ func (Session) Fields() []ent.Field {
 		field.Time("last_acknowledged").
 			Optional().
 			Nillable(),
+		field.String("mcp_server_url").
+			Optional(),
 		field.String("initial_prompt").
 			Optional().
 			Comment("Prompt injected via CLAUDE.md at first-time session creation."),

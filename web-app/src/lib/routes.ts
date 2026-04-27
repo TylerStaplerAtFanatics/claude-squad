@@ -15,6 +15,7 @@ export const routes = {
   settingsDefaults: "/settings/defaults",
   settingsUnfinished: "/settings/unfinished",
   login: "/login",
+  account: "/account",
   sessionDetail: (id: string) => `/sessions/${id}`,
 } as const;
 

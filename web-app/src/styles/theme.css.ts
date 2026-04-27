@@ -1,7 +1,7 @@
 import { createTheme } from "@vanilla-extract/css";
 import { vars } from "./theme-contract.css";
 
-export { vars } from "./theme-contract.css";
+export { vars, breakpoints, zIndex } from "./theme-contract.css";
 
 const sharedTokens = {
   font: {
@@ -31,6 +31,12 @@ const sharedTokens = {
     base: "14px",
     lg: "16px",
     xl: "20px",
+  },
+  fontWeight: {
+    normal: "400",
+    medium: "500",
+    semibold: "600",
+    bold: "700",
   },
 };
 
@@ -96,6 +102,12 @@ export const lightTheme = createTheme(vars, {
     placeholderColor: "#9ca3af",
 
     ...terminalTokens,
+  },
+  shadow: {
+    none: "none",
+    sm: "0 1px 2px 0 rgba(0,0,0,0.05)",
+    md: "0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05)",
+    lg: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.05)",
   },
   statusBadge: {
     approvalBg: "#fecaca",
@@ -172,6 +184,12 @@ export const darkTheme = createTheme(vars, {
     placeholderColor: "#6b7280",
 
     ...terminalTokens,
+  },
+  shadow: {
+    none: "none",
+    sm: "0 1px 2px 0 rgba(0,0,0,0.3)",
+    md: "0 4px 6px -1px rgba(0,0,0,0.4), 0 2px 4px -2px rgba(0,0,0,0.3)",
+    lg: "0 10px 15px -3px rgba(0,0,0,0.5), 0 4px 6px -4px rgba(0,0,0,0.4)",
   },
   statusBadge: {
     approvalBg: "#450a0a",

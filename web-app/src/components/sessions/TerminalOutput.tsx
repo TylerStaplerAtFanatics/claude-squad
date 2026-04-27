@@ -33,6 +33,7 @@ import { XtermTerminal, type XtermTerminalHandle } from "./XtermTerminal";
 import { TerminalStreamManager } from "@/lib/terminal/TerminalStreamManager";
 import { getCachedDimensions, saveDimensions } from "@/lib/terminal/TerminalDimensionCache";
 import { track } from "@/lib/telemetry";
+import { useViewport } from "@/components/providers/ViewportProvider";
 import * as styles from "./TerminalOutput.css";
 
 interface TerminalOutputProps {
@@ -68,6 +69,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
   const lastResizeRef = useRef<{ cols: number; rows: number } | null>(null);
   const refreshCountRef = useRef(0);
   const isMountedRef = useRef(true);
+  const isFittingRef = useRef(false);
   const sizeStabilityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasInitiatedConnectionRef = useRef(false);
   const hasCachedDimensionsRef = useRef(false);
@@ -176,19 +178,27 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     });
   }, []);
 
-  // Mobile detection — used to default mouse tracking mode
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(max-width: 768px)').matches || 'ontouchstart' in window;
+  // Mobile detection — use shared ViewportProvider hook for consistency
+  const { isMobile } = useViewport();
+
+  // Toolbar collapsed/expanded state — persisted in localStorage
+  const [toolbarExpanded, setToolbarExpanded] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const s = localStorage.getItem('stapler-squad-toolbar-expanded');
+      return s === null ? true : s === 'true';
+    } catch {
+      return true;
+    }
   });
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 768px)');
-    const handle = () => setIsMobile(mq.matches || 'ontouchstart' in window);
-    mq.addEventListener('change', handle);
-    return () => mq.removeEventListener('change', handle);
-  }, []);
+    try {
+      localStorage.setItem('stapler-squad-toolbar-expanded', String(toolbarExpanded));
+    } catch {
+      // localStorage unavailable — continue without persistence
+    }
+  }, [toolbarExpanded]);
 
   // Mouse tracking mode: "none" on mobile (enables xterm selection + touch scroll),
   // "any" on desktop (forwards mouse events to terminal app for vim/tmux mouse support).
@@ -609,18 +619,25 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
   }, [isVisible]);
 
   // visualViewport resize listener — re-fits terminal when the on-screen keyboard
-  // appears/disappears on mobile (visualViewport changes don't fire window resize)
+  // appears/disappears on mobile (visualViewport changes don't fire window resize).
+  // isFittingRef guard prevents resize loops on iOS where fit() triggers another resize event.
   useEffect(() => {
     const vp = window.visualViewport;
     if (!vp) return;
 
     const onVpResize = () => {
-      setTimeout(() => xtermRef.current?.fit(), 300);
+      if (isFittingRef.current) return;
+      isFittingRef.current = true;
+      // Increase debounce on mobile (400ms) to wait for keyboard animation to finish
+      setTimeout(() => {
+        xtermRef.current?.fit();
+        requestAnimationFrame(() => { isFittingRef.current = false; });
+      }, isMobile ? 400 : 300);
     };
 
     vp.addEventListener('resize', onVpResize);
     return () => vp.removeEventListener('resize', onVpResize);
-  }, []);
+  }, [isMobile]);
 
   // Reset loading state when switching sessions and trigger reconnect
   useEffect(() => {
@@ -888,6 +905,17 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
           )}
         </div>
         <div className={styles.actions}>
+          {/* Toolbar toggle — always visible on mobile; hidden on desktop via CSS */}
+          <button
+            className={styles.toolbarToggle}
+            onClick={() => setToolbarExpanded(v => !v)}
+            aria-label={toolbarExpanded ? 'Collapse toolbar' : 'Expand toolbar'}
+            aria-expanded={toolbarExpanded}
+            data-testid="toolbar-toggle"
+          >
+            {toolbarExpanded ? '▲' : '▼'}
+          </button>
+          {/* Reconnect always visible when needed, regardless of toolbar state */}
           {showReconnectButton && (
             <button
               className={styles.toolbarButton}
@@ -898,103 +926,107 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
               🔄 Reconnect
             </button>
           )}
-          <button
-            className={`${styles.toolbarButton} ${styles.devOnly} ${debugMode ? styles.debugActive : ''}`}
-            onClick={handleToggleDebug}
-            title={debugMode ? "Disable debug logging" : "Enable debug logging"}
-            aria-label={debugMode ? "Disable debug mode" : "Enable debug mode"}
-            style={debugMode ? { backgroundColor: '#2a4', color: 'white', fontWeight: 'bold' } : {}}
-          >
-            🛠️ {debugMode ? 'Debug ON' : 'Debug'}
-          </button>
-          <button
-            className={`${styles.toolbarButton} ${styles.devOnly}`}
-            onClick={() => {
-              if (isRecording) {
-                stopRecording();
-                setIsRecording(false);
-              } else {
-                startRecording();
-                setIsRecording(true);
-              }
-            }}
-            title={isRecording ? "Stop recording" : "Start recording terminal output"}
-            style={isRecording ? { backgroundColor: '#ff4444', color: 'white' } : {}}
-          >
-            {isRecording ? '⏹️ Stop Rec' : '⏺️ Record'}
-          </button>
-          <select
-            value={streamingMode}
-            onChange={(e) => setStreamingMode(e.target.value as "raw" | "raw-compressed" | "state" | "hybrid")}
-            className={`${styles.toolbarButton} ${styles.devOnly}`}
-            title="Terminal streaming mode - choose how terminal output is delivered"
-            aria-label="Select terminal streaming mode"
-            disabled={!isConnected}
-            style={{ minWidth: '140px' }}
-          >
-            <option value="raw">🚀 Raw</option>
-            <option value="raw-compressed">📦 Raw+LZMA</option>
-            <option value="state">🔄 State Sync</option>
-            <option value="hybrid">🔬 Hybrid</option>
-          </select>
-          <button
-            className={styles.toolbarButton}
-            onClick={handleManualResize}
-            title="Resize terminal to fit container"
-            aria-label="Resize terminal"
-          >
-            ↔️ Resize
-          </button>
-          {/* Mobile-primary buttons first so they're always visible at 375px */}
-          <button
-            className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle}`}
-            onClick={toggleMobileKeyboard}
-            aria-label={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
-            aria-expanded={isKeyboardVisible}
-            title={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
-          >
-            ⌨️ {isKeyboardVisible ? 'Hide Keys' : 'Show Keys'}
-          </button>
-          <button
-            className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle} ${mouseMode === 'any' ? styles.mouseModeActive : ''}`}
-            onClick={toggleMouseMode}
-            aria-label={mouseMode === 'none' ? 'Enable mouse mode for terminal apps (vim, tmux)' : 'Disable mouse mode — enables text selection'}
-            title={mouseMode === 'none' ? 'Mouse OFF — tap to enable for vim/tmux' : 'Mouse ON — tap to disable, enables selection'}
-          >
-            🖱️ {mouseMode === 'none' ? 'Mouse' : 'Mouse ON'}
-          </button>
-          <button
-            className={styles.toolbarButton}
-            onClick={handlePaste}
-            title="Paste from clipboard — text is sent directly, images are saved to a temp file and the path is inserted"
-            aria-label="Paste from clipboard"
-          >
-            {pasteError ? `⚠️ ${pasteError}` : '📎 Paste'}
-          </button>
-          <button
-            className={styles.toolbarButton}
-            onClick={handleCopyOutput}
-            title="Copy selected terminal text to clipboard"
-            aria-label="Copy terminal output to clipboard"
-          >
-            📋 Copy
-          </button>
-          <button
-            className={styles.toolbarButton}
-            onClick={handleScrollToBottom}
-            title="Scroll to bottom"
-            aria-label="Scroll to bottom"
-          >
-            ↓ Bottom
-          </button>
-          <button
-            className={styles.toolbarButton}
-            onClick={handleClear}
-            title="Clear terminal"
-            aria-label="Clear terminal"
-          >
-            🗑️ Clear
-          </button>
+          {toolbarExpanded && (
+            <div className={styles.toolbarActions} data-testid="toolbar-actions">
+              <button
+                className={`${styles.toolbarButton} ${styles.devOnly} ${debugMode ? styles.debugActive : ''}`}
+                onClick={handleToggleDebug}
+                title={debugMode ? "Disable debug logging" : "Enable debug logging"}
+                aria-label={debugMode ? "Disable debug mode" : "Enable debug mode"}
+                style={debugMode ? { backgroundColor: '#2a4', color: 'white', fontWeight: 'bold' } : {}}
+              >
+                🛠️ {debugMode ? 'Debug ON' : 'Debug'}
+              </button>
+              <button
+                className={`${styles.toolbarButton} ${styles.devOnly}`}
+                onClick={() => {
+                  if (isRecording) {
+                    stopRecording();
+                    setIsRecording(false);
+                  } else {
+                    startRecording();
+                    setIsRecording(true);
+                  }
+                }}
+                title={isRecording ? "Stop recording" : "Start recording terminal output"}
+                style={isRecording ? { backgroundColor: '#ff4444', color: 'white' } : {}}
+              >
+                {isRecording ? '⏹️ Stop Rec' : '⏺️ Record'}
+              </button>
+              <select
+                value={streamingMode}
+                onChange={(e) => setStreamingMode(e.target.value as "raw" | "raw-compressed" | "state" | "hybrid")}
+                className={`${styles.toolbarButton} ${styles.devOnly}`}
+                title="Terminal streaming mode - choose how terminal output is delivered"
+                aria-label="Select terminal streaming mode"
+                disabled={!isConnected}
+                style={{ minWidth: '140px' }}
+              >
+                <option value="raw">🚀 Raw</option>
+                <option value="raw-compressed">📦 Raw+LZMA</option>
+                <option value="state">🔄 State Sync</option>
+                <option value="hybrid">🔬 Hybrid</option>
+              </select>
+              <button
+                className={styles.toolbarButton}
+                onClick={handleManualResize}
+                title="Resize terminal to fit container"
+                aria-label="Resize terminal"
+              >
+                ↔️ Resize
+              </button>
+              {/* Mobile-primary buttons first so they're always visible at 375px */}
+              <button
+                className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle}`}
+                onClick={toggleMobileKeyboard}
+                aria-label={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
+                aria-expanded={isKeyboardVisible}
+                title={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
+              >
+                ⌨️ {isKeyboardVisible ? 'Hide Keys' : 'Show Keys'}
+              </button>
+              <button
+                className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle} ${mouseMode === 'any' ? styles.mouseModeActive : ''}`}
+                onClick={toggleMouseMode}
+                aria-label={mouseMode === 'none' ? 'Enable mouse mode for terminal apps (vim, tmux)' : 'Disable mouse mode — enables text selection'}
+                title={mouseMode === 'none' ? 'Mouse OFF — tap to enable for vim/tmux' : 'Mouse ON — tap to disable, enables selection'}
+              >
+                🖱️ {mouseMode === 'none' ? 'Mouse' : 'Mouse ON'}
+              </button>
+              <button
+                className={styles.toolbarButton}
+                onClick={handlePaste}
+                title="Paste from clipboard — text is sent directly, images are saved to a temp file and the path is inserted"
+                aria-label="Paste from clipboard"
+              >
+                {pasteError ? `⚠️ ${pasteError}` : '📎 Paste'}
+              </button>
+              <button
+                className={styles.toolbarButton}
+                onClick={handleCopyOutput}
+                title="Copy selected terminal text to clipboard"
+                aria-label="Copy terminal output to clipboard"
+              >
+                📋 Copy
+              </button>
+              <button
+                className={styles.toolbarButton}
+                onClick={handleScrollToBottom}
+                title="Scroll to bottom"
+                aria-label="Scroll to bottom"
+              >
+                ↓ Bottom
+              </button>
+              <button
+                className={styles.toolbarButton}
+                onClick={handleClear}
+                title="Clear terminal"
+                aria-label="Clear terminal"
+              >
+                🗑️ Clear
+              </button>
+            </div>
+          )}
         </div>
       </div>
       <div className={styles.terminal} ref={terminalContainerRef}>
@@ -1030,21 +1062,22 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       {isKeyboardVisible && (
         <div className={styles.mobileKeyboard}>
           <div className={styles.mobileKeyRow}>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b'); }} aria-label="Escape">Esc</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('/'); }} aria-label="Forward slash">/</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('-'); }} aria-label="Hyphen">-</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[H'); }} aria-label="Home">Home</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[A'); }} aria-label="Up arrow">↑</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[F'); }} aria-label="End">End</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[5~'); }} aria-label="Page up">PgUp</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b'); }} aria-label="Escape" data-testid="mobile-key">Esc</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('/'); }} aria-label="Forward slash" data-testid="mobile-key">/</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('-'); }} aria-label="Hyphen" data-testid="mobile-key">-</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[H'); }} aria-label="Home" data-testid="mobile-key">Home</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[A'); }} aria-label="Up arrow" data-testid="mobile-key">↑</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[F'); }} aria-label="End" data-testid="mobile-key">End</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[5~'); }} aria-label="Page up" data-testid="mobile-key">PgUp</button>
           </div>
           <div className={styles.mobileKeyRow}>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\t'); }} aria-label="Tab">Tab</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\t'); }} aria-label="Tab" data-testid="mobile-key">Tab</button>
             <button
               className={`${styles.mobileKey} ${ctrlActive ? styles.mobileKeyActive : ''}`}
               onPointerDown={(e) => { e.preventDefault(); setCtrlActive(p => !p); setAltActive(false); }}
               aria-label={ctrlActive ? 'Ctrl active — press next key' : 'Control modifier'}
               aria-pressed={ctrlActive}
+              data-testid="mobile-key"
             >
               Ctrl
             </button>
@@ -1053,13 +1086,14 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
               onPointerDown={(e) => { e.preventDefault(); setAltActive(p => !p); setCtrlActive(false); }}
               aria-label={altActive ? 'Alt active — press next key' : 'Alt modifier'}
               aria-pressed={altActive}
+              data-testid="mobile-key"
             >
               Alt
             </button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[D'); }} aria-label="Left arrow">←</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[B'); }} aria-label="Down arrow">↓</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[C'); }} aria-label="Right arrow">→</button>
-            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[6~'); }} aria-label="Page down">PgDn</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[D'); }} aria-label="Left arrow" data-testid="mobile-key">←</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[B'); }} aria-label="Down arrow" data-testid="mobile-key">↓</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[C'); }} aria-label="Right arrow" data-testid="mobile-key">→</button>
+            <button className={styles.mobileKey} onPointerDown={(e) => { e.preventDefault(); sendKey('\x1b[6~'); }} aria-label="Page down" data-testid="mobile-key">PgDn</button>
           </div>
         </div>
       )}

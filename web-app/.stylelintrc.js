@@ -81,6 +81,28 @@ module.exports = {
     // is no real-world cascade bug. Disable to keep a clean baseline.
     'no-descending-specificity': null,
 
+    // ── MOBILE UX REGRESSION PREVENTION ────────────────────────────────────
+    // These rules prevent regressions of bugs fixed in the UX overhaul.
+    // See project_plans/ux-overhaul/ for context.
+
+    // Ban bare 100vh in height properties — iOS virtual keyboard does not
+    // shrink 100vh, causing content to be hidden behind the keyboard.
+    // Use var(--viewport-height) which ViewportProvider updates via the
+    // visualViewport API. Also bans 100vh in calc() via substring match.
+    //
+    // Ban bare env(safe-area-inset-*) in component CSS — use the
+    // var(--safe-area-top/bottom/left/right) tokens defined in globals.css
+    // :root instead. Exception: globals.css itself defines the tokens
+    // (see overrides section at the bottom of this file).
+    'declaration-property-value-disallowed-list': {
+      '/^(?:height|min-height|max-height|block-size|min-block-size)$/': [
+        '/100vh/',
+      ],
+      '/.+/': [
+        '/env\\(safe-area-inset-/',
+      ],
+    },
+
     // ── NOTE ───────────────────────────────────────────────────────────────
     // Cross-file undefined variable detection is handled by
     // scripts/check-css-vars.mjs (npm run lint:css-vars).
@@ -92,5 +114,22 @@ module.exports = {
     '.next/**',
     'out/**',
     'src/generated/**',
+  ],
+
+  // globals.css is allowed to use env(safe-area-inset-*) directly because it
+  // is the file that DEFINES the --safe-area-* custom properties. All other
+  // files must consume those variables instead of calling env() directly.
+  overrides: [
+    {
+      files: ['src/app/globals.css'],
+      rules: {
+        'declaration-property-value-disallowed-list': {
+          '/^(?:height|min-height|max-height|block-size|min-block-size)$/': [
+            '/100vh/',
+          ],
+          // No safe-area restriction — this file defines the tokens
+        },
+      },
+    },
   ],
 };

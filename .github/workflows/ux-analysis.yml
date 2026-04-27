@@ -12,6 +12,9 @@ on:
     paths:
       - 'web-app/src/**'
 
+permissions:
+  pull-requests: write
+
 jobs:
   ux-analysis:
     name: UX Analysis (Axe + Lighthouse + Claude)
