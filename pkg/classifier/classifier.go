@@ -58,6 +58,12 @@ type ClassificationContext struct {
 	IsGitRepo  bool
 	RepoRoot   string
 	IsWorktree bool
+	// Env is an optional map of environment variable names to values used to expand
+	// $VAR and ${VAR} references in Bash commands before classification. This is
+	// primarily useful in tests and CI to evaluate commands that contain dynamic
+	// variables (e.g. BRANCH=main "git checkout $BRANCH" → "git checkout main").
+	// Variables not present in the map are left unexpanded.
+	Env map[string]string
 }
 
 // Classifier classifies a PermissionRequestPayload to determine the action to take.
@@ -384,18 +390,37 @@ func (c *RuleBasedClassifier) Rules() []Rule {
 	return out
 }
 
-// Classify evaluates rules in priority order and returns the first match.
-// For Bash commands, compound commands (with &&, |, ;, $(), etc.) are evaluated
-// using classifyCompound to ensure every sub-command is covered.
+// maxRecursionDepth limits how deeply recursive-eval wrappers (xargs, sudo, rtk, …)
+// can be nested. Prevents infinite loops from pathological input like `xargs xargs xargs`.
+const maxRecursionDepth = 5
+
+// Classify acquires the read lock and evaluates payload against all rules.
+// For Bash commands, compound commands (&&, |, ;, $(), etc.) are split and each
+// sub-command evaluated independently. Recursive-eval programs (xargs, sudo, rtk, …)
+// have their inner command extracted and classified through the full rule engine.
 // If no rule matches, returns Escalate for human review.
 func (c *RuleBasedClassifier) Classify(payload PermissionRequestPayload, ctx ClassificationContext) ClassificationResult {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	return c.classifyInternal(payload, ctx, 0)
+}
 
+// classifyInternal is the lock-free recursive implementation. depth tracks the current
+// recursion level to prevent infinite loops from chained recursive-eval programs.
+// Must be called with c.mu at least RLocked.
+func (c *RuleBasedClassifier) classifyInternal(payload PermissionRequestPayload, ctx ClassificationContext, depth int) ClassificationResult {
 	if strings.EqualFold(payload.ToolName, "Bash") {
 		cmd, _ := payload.ToolInput["command"].(string)
 		if cmd != "" {
-			// Perform deep security audit via AST analysis
+			// Expand $VAR / ${VAR} references, mirroring Python os.path.expandvars:
+			// ctx.Env overrides take precedence, then the real OS environment is used
+			// as a fallback. Only applied when ctx.Env is non-nil (opt-in).
+			if ctx.Env != nil {
+				cmd = ExpandEnvVars(cmd, ctx.Env)
+				payload = payloadWithCommand(payload, cmd)
+			}
+
+			// Deep security audit via AST analysis — runs on every level.
 			findings := AuditCommand(cmd, ctx.Cwd)
 			for _, f := range findings {
 				if f.RiskLevel == RiskCritical {
@@ -412,7 +437,30 @@ func (c *RuleBasedClassifier) Classify(payload PermissionRequestPayload, ctx Cla
 
 			cmds := ExtractAllCommands(cmd)
 			if len(cmds) > 1 {
-				return c.classifyCompound(payload, cmds)
+				return c.classifyCompound(payload, cmds, ctx, depth)
+			}
+
+			// Single command: if it is a recursive-eval wrapper (xargs, sudo, rtk, …),
+			// extract the inner command and classify it through the full rule engine.
+			if len(cmds) == 1 && depth < maxRecursionDepth {
+				pc := cmds[0]
+
+				// Shell expansion as program: $VAR or $(cmd) after path-stripping means
+				// the actual executable cannot be determined statically. Escalate with a
+				// specific, actionable reason instead of the generic "no matching rule".
+				if pc.HasShellExpansionProgram {
+					return ClassificationResult{
+						Decision:    Escalate,
+						RiskLevel:   RiskMedium,
+						Reason:      fmt.Sprintf("Command program is a shell expansion (%q); cannot determine the actual executable without evaluating the shell. Review the command before approving.", pc.Program),
+						Alternative: "Use the concrete program name directly, or expand the variable in a separate step.",
+						RuleID:      "shell-expansion-program",
+					}
+				}
+
+				if innerCmd := ExtractInnerCommand(pc.Program, pc.Args); innerCmd != "" {
+					return c.classifyInternal(payloadWithCommand(payload, innerCmd), ctx, depth+1)
+				}
 			}
 		}
 	}
@@ -444,69 +492,86 @@ func (c *RuleBasedClassifier) classifySingle(payload PermissionRequestPayload) C
 	}
 }
 
+// classifyOneSubCmd classifies a single parsed sub-command from a compound expression.
+// If the sub-command is a recursive-eval wrapper (xargs, sudo, rtk, …), the inner
+// command is extracted and classified recursively. Otherwise, static rule matching is used.
+func (c *RuleBasedClassifier) classifyOneSubCmd(sub ParsedCommand, payload PermissionRequestPayload, ctx ClassificationContext, depth int) ClassificationResult {
+	// Shell expansion as program: always escalate with a specific reason regardless
+	// of whether this sub-command came from the top level or a compound expression.
+	if sub.HasShellExpansionProgram {
+		return ClassificationResult{
+			Decision:    Escalate,
+			RiskLevel:   RiskMedium,
+			Reason:      fmt.Sprintf("Command program is a shell expansion (%q); cannot determine the actual executable without evaluating the shell. Review the command before approving.", sub.Program),
+			Alternative: "Use the concrete program name directly, or expand the variable in a separate step.",
+			RuleID:      "shell-expansion-program",
+		}
+	}
+	if depth < maxRecursionDepth {
+		if innerCmd := ExtractInnerCommand(sub.Program, sub.Args); innerCmd != "" {
+			return c.classifyInternal(payloadWithCommand(payload, innerCmd), ctx, depth+1)
+		}
+	}
+	return c.classifySingle(payloadWithCommand(payload, sub.Raw))
+}
+
 // classifyCompound evaluates each sub-command extracted from a compound Bash command.
-// Pass 1: any deny/escalate decision on any sub-command wins immediately.
-// Pass 2: every sub-command must be matched by an allow rule; otherwise escalate.
-func (c *RuleBasedClassifier) classifyCompound(payload PermissionRequestPayload, cmds []ParsedCommand) ClassificationResult {
+// Recursive-eval wrappers (xargs, sudo, rtk, …) have their inner command extracted and
+// classified through the full rule engine.
+//
+// Commands extracted from inside $(...) substitutions (FromCmdSubst=true) are treated
+// differently: they produce argument values for the outer command rather than executing
+// independently. The rules are:
+//   - Pass 1 (deny/escalate): CmdSubst inner commands skip catch-all escalations (RuleID=="")
+//     but still block on explicit deny/escalate rules — e.g. make $(git push) still escalates.
+//   - Pass 2 (require AutoAllow): CmdSubst inner commands are exempt; only top-level
+//     commands must have an explicit AutoAllow rule.
+func (c *RuleBasedClassifier) classifyCompound(payload PermissionRequestPayload, cmds []ParsedCommand, ctx ClassificationContext, depth int) ClassificationResult {
 	// Pass 1: deny/escalate takes priority.
 	for _, sub := range cmds {
-		subPayload := payloadWithCommand(payload, sub.Raw)
-		for _, rule := range c.rules {
-			if !rule.Enabled {
+		result := c.classifyOneSubCmd(sub, payload, ctx, depth)
+		if result.Decision == AutoDeny || result.Decision == Escalate {
+			// CmdSubst inner commands: only block on explicit rules, not catch-all escalations.
+			// Catch-all escalations (RuleID=="" and reason="No matching rule…") mean the inner
+			// command is simply unknown — not dangerous. E.g. make $(TARGET) should not escalate
+			// because TARGET has no seed rule; it's just a value producer.
+			if sub.FromCmdSubst && result.RuleID == "" && result.Decision == Escalate {
 				continue
 			}
-			if c.matchesRule(rule, subPayload) {
-				if rule.Decision == AutoDeny || rule.Decision == Escalate {
-					return ClassificationResult{
-						Decision:    rule.Decision,
-						RiskLevel:   rule.RiskLevel,
-						Reason:      fmt.Sprintf("Sub-command %q matched: %s", sub.Raw, rule.Reason),
-						Alternative: rule.Alternative,
-						RuleID:      rule.ID,
-						RuleName:    rule.Name,
-					}
-				}
-				// Allow found — stop checking rules for this sub-command.
-				break
+			return ClassificationResult{
+				Decision:    result.Decision,
+				RiskLevel:   result.RiskLevel,
+				Reason:      fmt.Sprintf("Sub-command %q: %s", sub.Raw, result.Reason),
+				Alternative: result.Alternative,
+				RuleID:      result.RuleID,
+				RuleName:    result.RuleName,
 			}
 		}
 	}
 
-	// Pass 2: every sub-command must be covered by an allow rule.
-	var firstAllowRule *Rule
+	// Pass 2: every top-level sub-command must produce AutoAllow.
+	// CmdSubst inner commands are exempt — they are argument producers, not independent commands.
+	var firstResult *ClassificationResult
 	for _, sub := range cmds {
-		subPayload := payloadWithCommand(payload, sub.Raw)
-		covered := false
-		for i, rule := range c.rules {
-			if !rule.Enabled {
-				continue
-			}
-			if rule.Decision == AutoAllow && c.matchesRule(rule, subPayload) {
-				covered = true
-				if firstAllowRule == nil {
-					firstAllowRule = &c.rules[i]
-				}
-				break
-			}
+		if sub.FromCmdSubst {
+			continue // exempt from AutoAllow requirement
 		}
-		if !covered {
+		result := c.classifyOneSubCmd(sub, payload, ctx, depth)
+		if result.Decision != AutoAllow {
 			return ClassificationResult{
 				Decision:  Escalate,
 				RiskLevel: RiskMedium,
 				Reason:    fmt.Sprintf("Sub-command %q has no matching allow rule; escalated for manual review.", sub.Raw),
 			}
 		}
+		if firstResult == nil {
+			r := result
+			firstResult = &r
+		}
 	}
 
-	if firstAllowRule != nil {
-		return ClassificationResult{
-			Decision:    AutoAllow,
-			RiskLevel:   firstAllowRule.RiskLevel,
-			Reason:      firstAllowRule.Reason,
-			Alternative: firstAllowRule.Alternative,
-			RuleID:      firstAllowRule.ID,
-			RuleName:    firstAllowRule.Name,
-		}
+	if firstResult != nil {
+		return *firstResult
 	}
 	return ClassificationResult{
 		Decision:  AutoAllow,
@@ -1534,28 +1599,6 @@ func SeedRules() []Rule {
 			Source:    "seed",
 		},
 		{
-			// xargs pipes stdin lines to a command. Only allow it when the wrapped
-			// command is from the known-safe read-only set; dangerous programs (rm, bash,
-			// sh, chmod, etc.) are not listed and will escalate via the default path.
-			//
-			// Subcommand extraction for xargs: extractSubcommand skips leading flags
-			// (e.g., -n1, -I{}) and returns the first non-flag token, which is the
-			// command being invoked (e.g., "grep" from "xargs -n1 grep -l pattern").
-			ID:       "seed-allow-bash-xargs-safe",
-			Name:     "Allow xargs with read-only commands",
-			ToolName: "Bash",
-			Criteria: &CommandCriteria{
-				Programs:    []string{"xargs"},
-				Subcommands: []string{"grep", "rg", "ag", "ls", "cat", "head", "tail", "wc", "file", "stat", "echo", "sort", "diff", "md5sum", "sha256sum", "find", "javap", "jar"},
-			},
-			Decision:  AutoAllow,
-			RiskLevel: RiskLow,
-			Reason:    "xargs with read-only commands is safe; write programs (rm, bash, chmod, etc.) escalate.",
-			Priority:  100,
-			Enabled:   true,
-			Source:    "seed",
-		},
-		{
 			// jest and vitest are the standard JavaScript/TypeScript test runners.
 			// They mirror the pytest rule and should be auto-allowed.
 			ID:       "seed-allow-bash-jest",
@@ -1955,22 +1998,8 @@ func SeedRules() []Rule {
 			Source:      "seed",
 		},
 		{
-			// xvfb-run starts a virtual X server and then executes an arbitrary program
-			// inside it. Since the wrapped command can be anything, review is required.
-			ID:       "seed-escalate-xvfb-run",
-			Name:     "Escalate xvfb-run (virtual X server wrapper)",
-			ToolName: "Bash",
-			Criteria: &CommandCriteria{
-				Programs: []string{"xvfb-run"},
-			},
-			Decision:    Escalate,
-			RiskLevel:   RiskMedium,
-			Reason:      "xvfb-run starts a virtual X server and runs a program inside it; review the wrapped command.",
-			Priority:    50,
-			Enabled:     true,
-			Source:      "seed",
-		},
-		{
+			// seed-escalate-xvfb-run removed: xvfb-run is now in recursiveEvalPrograms.
+			// Its inner command is extracted and classified through the full rule engine.
 			// pacman is the Arch Linux system package manager. Installing or removing
 			// packages modifies system-wide state and should be reviewed.
 			ID:       "seed-escalate-pacman",
