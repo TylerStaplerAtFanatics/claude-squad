@@ -151,8 +151,8 @@ export const navLink = style({
 });
 
 export const active = style({
-  color: vars.color.textPrimary,
-  background: vars.color.primaryActive,
+  color: vars.color.primary,
+  fontWeight: 700,
 
   selectors: {
     "&::after": {

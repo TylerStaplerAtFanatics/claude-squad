@@ -595,11 +595,12 @@ export const fullscreenMobileHeaderActions = style({
   },
 });
 
-// Hides tabs in fullscreen mode on mobile to reclaim ~45px of vertical space.
+// Shrinks tabs in fullscreen mode on mobile to reclaim vertical space without hiding them entirely.
 export const fullscreenMobileTabs = style({
   "@media": {
     "screen and (max-width: 768px)": {
-      display: "none",
+      padding: "0 0.25rem",
+      borderBottom: `1px solid ${vars.color.terminalBorder}`,
     },
   },
 });

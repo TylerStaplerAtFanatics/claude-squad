@@ -69,7 +69,6 @@ import {
   dialogContent,
   warningText,
   renameInput,
-  renameLabel,
   errorMessage,
   dialogActions,
   submitButton,
@@ -126,34 +125,42 @@ export function SessionCard({
   detectedContext,
 }: SessionCardProps) {
   const [isTagEditorOpen, setIsTagEditorOpen] = useState(false);
-  const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [showActions, setShowActions] = useState(false);
-  const [newTitle, setNewTitle] = useState(session.title);
+  const [showOverflow, setShowOverflow] = useState(false);
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isCheckpointOpen, setIsCheckpointOpen] = useState(false);
   const [checkpointLabel, setCheckpointLabel] = useState("");
   const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
-  const [isRenaming, setIsRenaming] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [renameError, setRenameError] = useState("");
   const [isInlineEditing, setIsInlineEditing] = useState(false);
   const [inlineEditValue, setInlineEditValue] = useState("");
+  const [inlineEditError, setInlineEditError] = useState<string | null>(null);
   const inlineSavingRef = useRef(false);
   const [checkpointError, setCheckpointError] = useState("");
   const [isSnapshotOpen, setIsSnapshotOpen] = useState(false);
 
   // Refs for focus trap: dialog containers and the buttons that trigger them
-  const renameDialogRef = useRef<HTMLDivElement>(null);
   const restartDialogRef = useRef<HTMLDivElement>(null);
+  const deleteDialogRef = useRef<HTMLDivElement>(null);
   const checkpointDialogRef = useRef<HTMLDivElement>(null);
-  const renameTriggerRef = useRef<HTMLButtonElement>(null);
+  const overflowContainerRef = useRef<HTMLDivElement>(null);
+  const overflowMenuRef = useRef<HTMLDivElement>(null);
   const restartTriggerRef = useRef<HTMLButtonElement>(null);
   const checkpointTriggerRef = useRef<HTMLButtonElement>(null);
 
-  useFocusTrap(renameDialogRef, isRenameOpen, renameTriggerRef);
   useFocusTrap(restartDialogRef, isRestartConfirmOpen, restartTriggerRef);
+  useFocusTrap(deleteDialogRef, isDeleteConfirmOpen);
   useFocusTrap(checkpointDialogRef, isCheckpointOpen, checkpointTriggerRef);
+  useFocusTrap(overflowMenuRef, showOverflow);
+
+  useEffect(() => {
+    if (showOverflow && overflowMenuRef.current) {
+      const first = overflowMenuRef.current.querySelector<HTMLElement>('[role="menuitem"]');
+      first?.focus();
+    }
+  }, [showOverflow]);
 
   // Only fetch snapshot for running sessions (paused/loading sessions have stale output)
   const isSnapshotEnabled = session.status === SessionStatus.RUNNING && isSnapshotOpen;
@@ -259,10 +266,6 @@ export function SessionCard({
   const isReady = session.status === SessionStatus.READY;
   const isExternal = session.instanceType === InstanceType.EXTERNAL;
 
-  // Desktop overflow menu state
-  const [showOverflow, setShowOverflow] = useState(false);
-  const overflowContainerRef = useRef<HTMLDivElement>(null);
-
   // Close overflow menu when clicking outside
   useEffect(() => {
     if (!showOverflow) return;
@@ -322,55 +325,11 @@ export function SessionCard({
     setIsTagEditorOpen(false);
   };
 
-  const handleRenameClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setNewTitle(session.title);
-    setRenameError("");
-    setIsRenameOpen(true);
-  };
-
-  const handleRenameSubmit = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    // Validation
-    if (!newTitle.trim()) {
-      setRenameError("Title cannot be empty");
-      return;
-    }
-
-    if (newTitle === session.title) {
-      setIsRenameOpen(false);
-      return;
-    }
-
-    setIsRenaming(true);
-    setRenameError("");
-
-    try {
-      const success = await onRename?.(session.id, newTitle.trim());
-      if (success) {
-        setIsRenameOpen(false);
-      } else {
-        setRenameError("Failed to rename session");
-      }
-    } catch (error) {
-      setRenameError(error instanceof Error ? error.message : "Failed to rename session");
-    } finally {
-      setIsRenaming(false);
-    }
-  };
-
-  const handleRenameCancel = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsRenameOpen(false);
-    setNewTitle(session.title);
-    setRenameError("");
-  };
-
   const handleTitleClick = (e: React.MouseEvent) => {
     if (selectMode) return;
     e.stopPropagation();
     setInlineEditValue(session.title);
+    setInlineEditError(null);
     setIsInlineEditing(true);
   };
 
@@ -379,6 +338,7 @@ export function SessionCard({
     const trimmed = inlineEditValue.trim();
     if (!trimmed || trimmed === session.title) {
       setIsInlineEditing(false);
+      setInlineEditError(null);
       return;
     }
     inlineSavingRef.current = true;
@@ -388,10 +348,14 @@ export function SessionCard({
       if (!success) {
         // Re-open inline edit on failure so the user can correct
         setInlineEditValue(trimmed);
+        setInlineEditError("Failed to save — try again");
         setIsInlineEditing(true);
+      } else {
+        setInlineEditError(null);
       }
     } catch {
       setInlineEditValue(trimmed);
+      setInlineEditError("Failed to save — try again");
       setIsInlineEditing(true);
     } finally {
       inlineSavingRef.current = false;
@@ -471,50 +435,6 @@ export function SessionCard({
           sessionTitle={session.title}
         />
       )}
-      {isRenameOpen && createPortal(
-        <div className={renameDialog} onClick={handleRenameCancel as unknown as React.MouseEventHandler}>
-          <div
-            ref={renameDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="renameDialogTitle"
-            className={dialogContent}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 id="renameDialogTitle">Rename Session</h3>
-            <input
-              type="text"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleRenameSubmit(e as any);
-                if (e.key === "Escape") handleRenameCancel(e as any);
-              }}
-              placeholder="Enter new title"
-              autoFocus
-              className={renameInput}
-            />
-            {renameError && <span className={errorMessage}>{renameError}</span>}
-            <div className={dialogActions}>
-              <button
-                onClick={handleRenameSubmit}
-                disabled={isRenaming || !newTitle.trim()}
-                className={submitButton}
-              >
-                {isRenaming ? "Renaming..." : "Rename"}
-              </button>
-              <button
-                onClick={handleRenameCancel}
-                disabled={isRenaming}
-                className={cancelButton}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
       {isRestartConfirmOpen && createPortal(
         <div className={confirmDialog} onClick={handleRestartCancel as unknown as React.MouseEventHandler}>
           <div
@@ -540,6 +460,45 @@ export function SessionCard({
               <button
                 onClick={handleRestartCancel}
                 disabled={isRestarting}
+                className={cancelButton}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      {isDeleteConfirmOpen && createPortal(
+        <div className={confirmDialog} onClick={() => setIsDeleteConfirmOpen(false)}>
+          <div
+            ref={deleteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="deleteDialogTitle"
+            className={dialogContent}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => { if (e.key === "Escape") setIsDeleteConfirmOpen(false); }}
+          >
+            <h3 id="deleteDialogTitle">Delete Session</h3>
+            <p>Are you sure you want to delete &quot;{session.title}&quot;?</p>
+            <p className={warningText}>This action cannot be undone.</p>
+            <div className={dialogActions}>
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  setIsDeleteConfirmOpen(false);
+                  setIsDeleting(true);
+                  try { await onDelete?.(); } catch { setIsDeleting(false); }
+                }}
+                disabled={isDeleting}
+                className={dangerButton}
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsDeleteConfirmOpen(false); }}
+                disabled={isDeleting}
                 className={cancelButton}
               >
                 Cancel
@@ -613,23 +572,31 @@ export function SessionCard({
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={() => {}} // Controlled by onClick
+          onChange={(e) => { e.stopPropagation(); onToggleSelect?.(); }}
           aria-label={`Select ${session.title}`}
         />
       </div>
       <div className={header}>
         <div className={titleRow}>
           {isInlineEditing ? (
-            <input
-              className={inlineTitleInput}
-              value={inlineEditValue}
-              autoFocus
-              onChange={(e) => setInlineEditValue(e.target.value)}
-              onBlur={handleInlineSave}
-              onKeyDown={handleInlineKeyDown}
-              onClick={(e) => e.stopPropagation()}
-              aria-label="Edit session title"
-            />
+            <span style={{ position: 'relative', display: 'inline-block' }}>
+              <input
+                className={inlineTitleInput}
+                value={inlineEditValue}
+                autoFocus
+                onChange={(e) => setInlineEditValue(e.target.value)}
+                onBlur={handleInlineSave}
+                onKeyDown={handleInlineKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Edit session title"
+                aria-describedby={inlineEditError ? `inline-error-${session.id}` : undefined}
+              />
+              {inlineEditError && (
+                <span id={`inline-error-${session.id}`} style={{ color: 'var(--error)', fontSize: '0.75rem', position: 'absolute', top: '100%', left: 0, whiteSpace: 'nowrap' }}>
+                  {inlineEditError}
+                </span>
+              )}
+            </span>
           ) : (
             <h3
               className={title}
@@ -905,24 +872,28 @@ export function SessionCard({
           )}
           <div ref={overflowContainerRef} className={overflowContainer}>
             <button
+              id={`overflow-btn-${session.id}`}
               className={overflowButton}
               onClick={(e) => { e.stopPropagation(); setShowOverflow((o) => !o); }}
               aria-label="More session actions"
               aria-expanded={showOverflow}
               aria-haspopup="menu"
+              aria-controls={`overflow-menu-${session.id}`}
             >
               ···
             </button>
             {showOverflow && (
               <div
+                ref={overflowMenuRef}
+                id={`overflow-menu-${session.id}`}
                 className={overflowMenu}
                 role="menu"
+                aria-labelledby={`overflow-btn-${session.id}`}
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => { if (e.key === "Escape") setShowOverflow(false); }}
               >
                 {!(isPaused || isReady) && (
                   <button
-                    ref={null}
                     role="menuitem"
                     className={overflowMenuItem}
                     onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onResume?.(); }}
@@ -941,15 +912,6 @@ export function SessionCard({
                     <span aria-hidden="true">⏸️</span> Pause
                   </button>
                 )}
-                <button
-                  ref={renameTriggerRef}
-                  role="menuitem"
-                  className={overflowMenuItem}
-                  onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleRenameClick(e); }}
-                  aria-label={`Rename session ${session.title}`}
-                >
-                  <span aria-hidden="true">✏️</span> Rename
-                </button>
                 <button
                   ref={restartTriggerRef}
                   role="menuitem"
@@ -999,12 +961,7 @@ export function SessionCard({
                 <button
                   role="menuitem"
                   className={`${overflowMenuItem} ${overflowMenuItemDanger}`}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    setShowOverflow(false);
-                    setIsDeleting(true);
-                    try { await onDelete?.(); } catch { setIsDeleting(false); }
-                  }}
+                  onClick={(e) => { e.stopPropagation(); setShowOverflow(false); setIsDeleteConfirmOpen(true); }}
                   disabled={isDeleting}
                   aria-label={`Delete session ${session.title}`}
                 >
@@ -1020,11 +977,12 @@ export function SessionCard({
           className={actionsToggle}
           onClick={(e) => { e.stopPropagation(); setShowActions(!showActions); }}
           aria-expanded={showActions}
+          aria-controls={`session-actions-${session.id}`}
           aria-label="Toggle session actions"
         >
           Actions {showActions ? "▲" : "▼"}
         </button>
-        <div className={`${actions} ${showActions ? actionsOpen : ""}`}>
+        <div id={`session-actions-${session.id}`} className={`${actions} ${showActions ? actionsOpen : ""}`}>
           {isPaused ? (
             <button
               className={actionButton}
@@ -1050,14 +1008,6 @@ export function SessionCard({
               <span aria-hidden="true">⏸️</span> Pause
             </button>
           )}
-          <button
-            className={actionButton}
-            onClick={handleRenameClick}
-            title="Rename this session"
-            aria-label={`Rename session ${session.title}`}
-          >
-            <span aria-hidden="true">✏️</span> Rename
-          </button>
           <button
             className={`${actionButton} ${restartButton}`}
             onClick={handleRestartClick}
@@ -1107,15 +1057,7 @@ export function SessionCard({
           </button>
           <button
             className={`${actionButton} ${deleteButton}`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              setIsDeleting(true);
-              try {
-                await onDelete?.();
-              } catch {
-                setIsDeleting(false);
-              }
-            }}
+            onClick={(e) => { e.stopPropagation(); setIsDeleteConfirmOpen(true); }}
             disabled={isDeleting}
             aria-label={`Delete session ${session.title}`}
             title="Delete this session"

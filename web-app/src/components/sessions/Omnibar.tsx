@@ -641,6 +641,14 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
 
   if (!isOpen) return null;
 
+  const isMac = (() => {
+    try {
+      return typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+    } catch {
+      return false;
+    }
+  })();
+
   return (
     <div
       className={overlay}
@@ -806,7 +814,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
           </span>
           {!isDiscoveryMode && (
             <span className={shortcut}>
-              <span className={shortcutKey}>⌘↵</span> Create
+              <span className={shortcutKey}>{isMac ? '⌘↵' : 'Ctrl+↵'}</span> Create
             </span>
           )}
           {isDiscoveryMode && (

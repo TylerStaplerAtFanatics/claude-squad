@@ -88,7 +88,8 @@ export function SessionDetail({
   queueTotal,
 }: SessionDetailProps) {
   const [activeTab, setActiveTab] = useState<SessionDetailTab>(initialTab);
-  const [isFullscreen, setIsFullscreen] = useState(initialTab === "terminal" || initialTab === "diff" || initialTab === "vcs");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [filesSelectedPath, setFilesSelectedPath] = useState<string | null>(null);
   const [showWorkspaceSwitchModal, setShowWorkspaceSwitchModal] = useState(false);
   const [isEditingProgram, setIsEditingProgram] = useState(false);
@@ -169,12 +170,12 @@ export function SessionDetail({
   const handleTabChange = (tabId: SessionDetailTab) => {
     setActiveTab(tabId);
     onTabChange?.(tabId);
-    // Automatically enter fullscreen for terminal, diff, and vcs tabs
-    if (tabId === "terminal" || tabId === "diff" || tabId === "vcs") {
-      setIsFullscreen(true);
-    } else {
-      setIsFullscreen(false);
-    }
+  };
+
+  const handleCopy = (field: string, value: string) => {
+    navigator.clipboard.writeText(value).catch(() => {});
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 1500);
   };
 
   // Keyboard shortcuts: Escape to exit fullscreen, Shift+Arrow for navigation
@@ -358,10 +359,30 @@ export function SessionDetail({
         </ActionBar>
       </div>
 
-      <div className={`${styles.tabs} ${isFullscreen ? styles.fullscreenMobileTabs : ""}`}>
+      <div
+        className={`${styles.tabs} ${isFullscreen ? styles.fullscreenMobileTabs : ""}`}
+        role="tablist"
+        onKeyDown={(e) => {
+          const currentIndex = tabs.findIndex((t) => t.id === activeTab);
+          if (e.key === "ArrowRight") {
+            e.preventDefault();
+            const nextIndex = (currentIndex + 1) % tabs.length;
+            handleTabChange(tabs[nextIndex].id);
+            (e.currentTarget.querySelectorAll('[role="tab"]')[nextIndex] as HTMLElement)?.focus();
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+            handleTabChange(tabs[prevIndex].id);
+            (e.currentTarget.querySelectorAll('[role="tab"]')[prevIndex] as HTMLElement)?.focus();
+          }
+        }}
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            id={`tab-${tab.id}`}
+            role="tab"
+            aria-selected={activeTab === tab.id}
             className={`${styles.tab} ${activeTab === tab.id ? styles.active : ""}`}
             onClick={() => handleTabChange(tab.id)}
           >
@@ -376,6 +397,9 @@ export function SessionDetail({
         {/* Terminal tab: kept mounted but hidden via display:none to preserve xterm.js instances */}
         <div
           className={styles.tabContent}
+          role="tabpanel"
+          aria-labelledby="tab-terminal"
+          aria-hidden={activeTab !== "terminal"}
           style={{ display: activeTab === "terminal" ? undefined : 'none' }}
         >
           {/* ApprovalPanel removed — approvals now handled in the global ApprovalDrawer in Header */}
@@ -432,12 +456,12 @@ export function SessionDetail({
           )}
         </div>
         {activeTab === "diff" && (
-          <div className={styles.tabContent}>
+          <div className={styles.tabContent} role="tabpanel" aria-labelledby="tab-diff">
             <DiffViewer />
           </div>
         )}
         {activeTab === "vcs" && (
-          <div className={styles.tabContent}>
+          <div className={styles.tabContent} role="tabpanel" aria-labelledby="tab-vcs">
             <VcsPanel
               onNavigateToFile={(path) => {
                 setFilesSelectedPath(path);
@@ -447,7 +471,7 @@ export function SessionDetail({
           </div>
         )}
         {activeTab === "files" && (
-          <div className={styles.tabContent}>
+          <div className={styles.tabContent} role="tabpanel" aria-labelledby="tab-files">
             <FilesTab
               sessionId={session.id}
               baseUrl={getApiBaseUrl()}
@@ -457,17 +481,20 @@ export function SessionDetail({
           </div>
         )}
         {activeTab === "logs" && (
-          <div className={styles.tabContent}>
+          <div className={styles.tabContent} role="tabpanel" aria-labelledby="tab-logs">
             <SessionLogsTab sessionId={session.id} baseUrl={getApiBaseUrl()} />
           </div>
         )}
         {activeTab === "info" && (
-          <div className={styles.tabContent}>
+          <div className={styles.tabContent} role="tabpanel" aria-labelledby="tab-info">
             <div className={styles.infoGrid}>
               {/* Identity */}
               <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Instance ID:</span>
-                <span className={styles.infoValue} style={{ fontFamily: 'monospace', fontSize: '0.9em' }}>{session.id}</span>
+                <span className={styles.infoValue} style={{ fontFamily: 'monospace', fontSize: '0.9em' }}>
+                  {session.id}
+                  <button onClick={() => handleCopy('instanceId', session.id)} className={styles.editButton} title="Copy to clipboard">{copiedField === 'instanceId' ? '✓' : '📋'}</button>
+                </span>
               </div>
               <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Status:</span>
@@ -616,7 +643,10 @@ export function SessionDetail({
               {session.claudeSession?.sessionId && (
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Claude Conversation UUID:</span>
-                  <span className={styles.infoValue} style={{ fontFamily: 'monospace', fontSize: '0.9em' }}>{session.claudeSession.sessionId}</span>
+                  <span className={styles.infoValue} style={{ fontFamily: 'monospace', fontSize: '0.9em' }}>
+                    {session.claudeSession.sessionId}
+                    <button onClick={() => handleCopy('claudeUuid', session.claudeSession!.sessionId)} className={styles.editButton} title="Copy to clipboard">{copiedField === 'claudeUuid' ? '✓' : '📋'}</button>
+                  </span>
                 </div>
               )}
               {session.claudeSession?.projectName && (
@@ -655,7 +685,10 @@ export function SessionDetail({
                   {session.gitWorktree.baseCommitSha && (
                     <div className={styles.infoItem}>
                       <span className={styles.infoLabel}>Base Commit:</span>
-                      <span className={styles.infoValue} style={{ fontFamily: 'monospace', fontSize: '0.85em' }}>{session.gitWorktree.baseCommitSha}</span>
+                      <span className={styles.infoValue} style={{ fontFamily: 'monospace', fontSize: '0.85em' }}>
+                        {session.gitWorktree.baseCommitSha}
+                        <button onClick={() => handleCopy('baseCommit', session.gitWorktree!.baseCommitSha)} className={styles.editButton} title="Copy to clipboard">{copiedField === 'baseCommit' ? '✓' : '📋'}</button>
+                      </span>
                     </div>
                   )}
                 </>
@@ -873,7 +906,7 @@ export function SessionDetail({
               else if (e.key === 'Escape') setShowRenameModal(false);
             }}
             autoFocus
-            style={{ fontSize: '16px', width: '100%', padding: '0.5rem', marginTop: '0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--input-background)', color: 'var(--input-text)' }}
+            className={styles.editInput}
             data-testid="rename-input"
           />
           {renameError && (
@@ -930,7 +963,7 @@ export function SessionDetail({
             }}
             placeholder="Optional label..."
             autoFocus
-            style={{ fontSize: '16px', width: '100%', padding: '0.5rem', marginTop: '0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--input-background)', color: 'var(--input-text)' }}
+            className={styles.editInput}
             data-testid="checkpoint-input"
           />
           <ModalFooter>

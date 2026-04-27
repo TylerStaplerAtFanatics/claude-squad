@@ -36,7 +36,8 @@ export const card = style({
   animationTimingFunction: "ease",
   animationFillMode: "both",
   // Runtime: animation-delay set via --card-index inline style
-  animationDelay: "calc(var(--card-index, 0) * 60ms)",
+  // Cap stagger at 5 cards (300ms max) to prevent long lists from having excessive delays
+  animationDelay: "calc(min(var(--card-index, 0), 5) * 60ms)",
   selectors: {
     "&:hover": {
       borderColor: vars.color.borderHover,
@@ -48,7 +49,7 @@ export const card = style({
 export const cardDeleting = style({
   opacity: 0.4,
   transform: "scale(0.97)",
-  borderColor: "#ef4444",
+  borderColor: vars.color.error,
   boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.25)",
   pointerEvents: "none",
 });
@@ -59,11 +60,11 @@ export const cardSelectMode = style({
 
 export const cardSelected = style({
   borderColor: vars.color.primary,
-  background: "rgba(0, 112, 243, 0.05)",
+  background: "rgba(0, 112, 243, 0.05)", // design-token: pending (no alpha-variant token)
 });
 
 export const cardExternal = style({
-  borderLeft: "4px solid #6366f1",
+  borderLeft: "4px solid #6366f1", // TODO: add vars.color.externalIndicator token
   backgroundImage: `linear-gradient(to right, rgba(99, 102, 241, 0.05), ${vars.color.cardBackground})`,
 });
 
@@ -124,12 +125,12 @@ export const externalBadge = style({
   alignItems: "center",
   gap: vars.space["1"],
   padding: `${vars.space["1"]} 10px`,
-  background: "#6366f1",
+  background: "#6366f1", // TODO: add vars.color.externalIndicator token
   color: "white",
   borderRadius: vars.radii.full,
   fontSize: vars.fontSize.sm,
   fontWeight: 600,
-  border: "1px solid #4f46e5",
+  border: "1px solid #4f46e5", // TODO: add vars.color.externalIndicator token
 });
 
 export const muxIndicator = style({
@@ -167,7 +168,7 @@ export const status = style({
 
 export const statusRunning = style({
   background: "#dcfce7",
-  color: "#166534",
+  color: "#14532d", // bumped from #166534 (~4.6:1) for better contrast safety margin
   "@media": {
     "(prefers-color-scheme: dark)": {
       background: "#166534",
@@ -189,7 +190,7 @@ export const statusReady = style({
 
 export const statusPaused = style({
   background: "#fef3c7",
-  color: "#92400e",
+  color: "#78350f", // bumped from #92400e (~4.5:1) for better contrast safety margin
   "@media": {
     "(prefers-color-scheme: dark)": {
       background: "#92400e",
@@ -220,6 +221,9 @@ export const statusNeedsApproval = style({
     "(prefers-color-scheme: dark)": {
       background: "#991b1b",
       color: "#fecaca",
+    },
+    "(prefers-reduced-motion: reduce)": {
+      animationName: "none",
     },
   },
 });
@@ -349,12 +353,12 @@ export const diffStats = style({
 });
 
 export const diffAdded = style({
-  color: "#16a34a",
+  color: vars.color.success, // was #16a34a
   fontWeight: 600,
 });
 
 export const diffRemoved = style({
-  color: "#dc2626",
+  color: vars.color.error, // was #dc2626
   fontWeight: 600,
 });
 
@@ -474,9 +478,9 @@ export const overflowMenuItem = style({
 });
 
 export const overflowMenuItemDanger = style({
-  color: "#991b1b",
+  color: vars.color.errorText, // was #991b1b
   selectors: {
-    "&:hover": { background: "#fee2e2" },
+    "&:hover": { background: vars.color.errorBg }, // was #fee2e2
   },
 });
 
@@ -554,15 +558,15 @@ export const actionButton = style({
 });
 
 export const deleteButton = style({
-  background: "#fee2e2",
-  color: "#991b1b",
-  borderColor: "#fca5a5",
+  background: vars.color.errorBg, // was #fee2e2
+  color: vars.color.errorText, // was #991b1b
+  borderColor: "#fca5a5", // design-token: pending (no light-error-border token)
   selectors: {
     "&:hover:not(:disabled)": { background: "#fecaca", borderColor: "#f87171" },
     "&:disabled": {
       background: "#fca5a5",
       color: "#7f1d1d",
-      borderColor: "#ef4444",
+      borderColor: vars.color.error, // was #ef4444
       opacity: 0.8,
       cursor: "not-allowed",
     },

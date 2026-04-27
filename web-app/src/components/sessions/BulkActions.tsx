@@ -33,7 +33,7 @@ export function BulkActions({
 
   return (
     <div className={container}>
-      {feedback && <div className={feedbackClass}>{feedback}</div>}
+      {feedback && <div className={feedbackClass} role="status" aria-live="polite" aria-atomic="true">{feedback}</div>}
       <div className={selection}>
         <span className={count}>
           {selectedCount} of {totalCount} selected
