@@ -1574,9 +1574,7 @@ func (i *Instance) Restart(preserveOutput bool) error {
 		return ErrCannotRestart
 	}
 
-	if i.Status == Paused {
-		return fmt.Errorf("%w: session is paused, resume it first", ErrCannotRestart)
-	}
+	waspaused := i.Status == Paused
 
 	// Capture terminal output if requested
 	var savedOutput string
@@ -1606,6 +1604,24 @@ func (i *Instance) Restart(preserveOutput bool) error {
 	// Determine the working directory
 	var worktreePath string
 	if i.gitManager.HasWorktree() {
+		// Paused sessions have their worktree directory removed by Pause().
+		// Recreate it now so the new tmux session starts in the right place.
+		if waspaused {
+			if err := i.gitManager.Setup(); err != nil {
+				return fmt.Errorf("failed to recreate worktree for paused session: %w", err)
+			}
+			// Claude stores conversation history keyed by the project directory path.
+			// After worktree recreation the encoded path matches the worktree, not the
+			// main repo, so --resume with a UUID that was captured in the main repo
+			// (or a previous worktree incarnation) will fail with "no conversation found"
+			// and cause Claude to exit immediately.  Clear the UUID so Claude starts
+			// fresh instead.
+			claudeSessionID = ""
+			if i.claudeSession != nil {
+				i.claudeSession.ConversationUUID = ""
+				i.HistoryFilePath = ""
+			}
+		}
 		worktreePath = i.gitManager.GetWorktreePath()
 	} else if i.SessionType == SessionTypeExistingWorktree && i.ExistingWorktree != "" {
 		worktreePath = i.ExistingWorktree
@@ -1623,7 +1639,7 @@ func (i *Instance) Restart(preserveOutput bool) error {
 	// Inject MCP server URL via CLI flag so no settings-file write is needed.
 	// Only for claude commands; other programs (aider, etc.) don't support this flag.
 	if i.MCPServerURL != "" && strings.Contains(program, "claude") {
-		mcpFlag := fmt.Sprintf(`--mcp-config '{"stapler-squad":{"type":"http","url":%q}}'`, i.MCPServerURL)
+		mcpFlag := fmt.Sprintf(`--mcp-config '{"mcpServers":{"stapler-squad":{"type":"http","url":%q}}}'`, i.MCPServerURL)
 		program = program + " " + mcpFlag
 	}
 
@@ -1679,9 +1695,16 @@ func (i *Instance) Restart(preserveOutput bool) error {
 		// Continue - controller is optional functionality
 	}
 
-	// Restart preserves the existing status (already Running or NeedsApproval).
-	// No state transition is needed since the session stays in its current operational state.
+	// For paused sessions, transition to Running now that the new tmux session is live.
+	// For already-running sessions, preserve the existing status.
 	i.stateMutex.Lock()
+	if waspaused {
+		if err := i.transitionTo(Running); err != nil {
+			log.WarningLog.Printf("Restart: failed to transition '%s' from Paused to Running: %v", i.Title, err)
+			i.setStatus(Running)
+		}
+		i.started = true
+	}
 	i.UpdatedAt = time.Now()
 	i.stateMutex.Unlock()
 

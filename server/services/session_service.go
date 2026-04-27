@@ -59,6 +59,11 @@ type SessionService struct {
 	// External session discovery (for mux-enabled sessions from external terminals)
 	externalDiscovery *session.ExternalSessionDiscovery
 
+	// historyLinker tracks JSONL conversation files per session.
+	// Must be kept in sync with deletions so the shutdown hook does not
+	// re-persist sessions the user has deleted.
+	historyLinker *session.HistoryLinker
+
 	// approvalStore holds pending Claude Code hook approval requests.
 	approvalStore *ApprovalStore
 
@@ -347,6 +352,12 @@ func (s *SessionService) SetReactiveQueueManager(mgr ReactiveQueueManager) {
 // Call this during server startup after the listen address is known.
 func (s *SessionService) SetMCPServerURL(url string) {
 	s.mcpServerURL = url
+}
+
+// SetHistoryLinker wires the HistoryLinker so deleted sessions are also removed
+// from it and cannot be re-persisted by the shutdown hook.
+func (s *SessionService) SetHistoryLinker(hl *session.HistoryLinker) {
+	s.historyLinker = hl
 }
 
 // SetReviewQueuePoller wires the ReviewQueuePoller so new/deleted sessions are
@@ -885,6 +896,11 @@ func (s *SessionService) removeFromAllPollers(id string) {
 	}
 	if s.reviewQueuePoller != nil {
 		s.reviewQueuePoller.RemoveInstance(id)
+	}
+	// Remove from HistoryLinker so the shutdown hook cannot re-persist a
+	// deleted session via historyLinker.Instances() → SaveInstances().
+	if s.historyLinker != nil {
+		s.historyLinker.RemoveInstance(id)
 	}
 }
 
@@ -1554,19 +1570,20 @@ func (s *SessionService) RestartSession(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("session id is required"))
 	}
 
-	instances, err := s.loadInstancesWithWiring()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
-	}
-
-	// Find the instance to restart
-	var instance *session.Instance
-	var instanceIndex int
-	for i, inst := range instances {
-		if inst.MatchesID(req.Msg.Id) {
-			instance = inst
-			instanceIndex = i
-			break
+	// Prefer the live in-memory instance so Restart() sees the real started/status
+	// state and avoids the LoadInstances side-effect of hot-restoring every session.
+	instance := s.FindLiveInstance(req.Msg.Id)
+	if instance == nil {
+		// Fallback: session not yet tracked by the poller (e.g. brand-new or test).
+		instances, err := s.loadInstancesWithWiring()
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
+		}
+		for _, inst := range instances {
+			if inst.MatchesID(req.Msg.Id) {
+				instance = inst
+				break
+			}
 		}
 	}
 
@@ -1581,16 +1598,9 @@ func (s *SessionService) RestartSession(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart session: %w", err))
 	}
 
-	// Update the instance in the list and save
-	instances[instanceIndex] = instance
-	if err := s.storage.SaveInstances(instances); err != nil {
+	// Persist the updated instance state.
+	if err := s.storage.SaveInstances([]*session.Instance{instance}); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save restarted instance: %w", err))
-	}
-
-	// Update the ReviewQueuePoller's instance references after restart
-	if s.reviewQueuePoller != nil {
-		s.reviewQueuePoller.SetInstances(instances)
-		log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after RestartSession for '%s'", instance.Title)
 	}
 
 	// Publish SessionUpdated event

@@ -538,13 +538,10 @@ func (t *TmuxSession) buildTmuxCommand(args ...string) *exec.Cmd {
 }
 
 // buildAttachCommand creates a tmux attach-session command for PTY operations.
-// -x/-y pre-declare the client's terminal size to tmux (tmux 3.2+), so the
-// session starts at the correct dimensions rather than the 80×24 default.
+// Note: -x/-y are NOT passed here; for attach-session -x means read-only mode
+// (not width), and tmux infers dimensions from the PTY itself.
 func (t *TmuxSession) buildAttachCommand() *exec.Cmd {
-	cols := t.lastKnownCols.Load()
-	rows := t.lastKnownRows.Load()
-	return t.buildTmuxCommand("attach-session", "-t", t.sanitizedName,
-		"-x", fmt.Sprintf("%d", cols), "-y", fmt.Sprintf("%d", rows))
+	return t.buildTmuxCommand("attach-session", "-t", t.sanitizedName)
 }
 
 // Start creates and starts a new tmux session, then attaches to it. Program is the command to run in

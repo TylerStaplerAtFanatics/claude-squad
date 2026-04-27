@@ -470,6 +470,7 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 	// UUIDs to sessions so cold restore can use --resume on restart.
 	historyLinker := session.NewHistoryLinkerFromRealInspector()
 	historyLinker.SetInstances(instances)
+	sessionService.SetHistoryLinker(historyLinker)
 	log.InfoLog.Printf("HistoryLinker initialized with %d instances", len(instances))
 
 	// Step 9: ScrollbackManager (independent of above)
