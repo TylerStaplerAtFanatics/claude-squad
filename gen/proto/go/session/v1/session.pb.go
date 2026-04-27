@@ -7086,6 +7086,7 @@ type SessionDefaultsConfig struct {
 	CliFlags       string                           `protobuf:"bytes,5,opt,name=cli_flags,json=cliFlags,proto3" json:"cli_flags,omitempty"`
 	Profiles       map[string]*ProfileDefaultsProto `protobuf:"bytes,6,rep,name=profiles,proto3" json:"profiles,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	DirectoryRules []*DirectoryRuleProto            `protobuf:"bytes,7,rep,name=directory_rules,json=directoryRules,proto3" json:"directory_rules,omitempty"`
+	OneOffBaseDir  string                           `protobuf:"bytes,8,opt,name=one_off_base_dir,json=oneOffBaseDir,proto3" json:"one_off_base_dir,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -7167,6 +7168,13 @@ func (x *SessionDefaultsConfig) GetDirectoryRules() []*DirectoryRuleProto {
 		return x.DirectoryRules
 	}
 	return nil
+}
+
+func (x *SessionDefaultsConfig) GetOneOffBaseDir() string {
+	if x != nil {
+		return x.OneOffBaseDir
+	}
+	return ""
 }
 
 type GetSessionDefaultsRequest struct {
@@ -7417,6 +7425,7 @@ type UpdateGlobalDefaultsRequest struct {
 	Tags          []string               `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty"`
 	EnvVars       map[string]string      `protobuf:"bytes,4,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	CliFlags      string                 `protobuf:"bytes,5,opt,name=cli_flags,json=cliFlags,proto3" json:"cli_flags,omitempty"`
+	OneOffBaseDir string                 `protobuf:"bytes,6,opt,name=one_off_base_dir,json=oneOffBaseDir,proto3" json:"one_off_base_dir,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7482,6 +7491,13 @@ func (x *UpdateGlobalDefaultsRequest) GetEnvVars() map[string]string {
 func (x *UpdateGlobalDefaultsRequest) GetCliFlags() string {
 	if x != nil {
 		return x.CliFlags
+	}
+	return ""
+}
+
+func (x *UpdateGlobalDefaultsRequest) GetOneOffBaseDir() string {
+	if x != nil {
+		return x.OneOffBaseDir
 	}
 	return ""
 }
@@ -10088,7 +10104,7 @@ const file_session_v1_session_proto_rawDesc = "" +
 	"\x12DirectoryRuleProto\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
 	"\aprofile\x18\x02 \x01(\tR\aprofile\x12>\n" +
-	"\toverrides\x18\x03 \x01(\v2 .session.v1.ProfileDefaultsProtoR\toverrides\"\xf9\x03\n" +
+	"\toverrides\x18\x03 \x01(\v2 .session.v1.ProfileDefaultsProtoR\toverrides\"\xa2\x04\n" +
 	"\x15SessionDefaultsConfig\x12\x18\n" +
 	"\aprogram\x18\x01 \x01(\tR\aprogram\x12\x19\n" +
 	"\bauto_yes\x18\x02 \x01(\bR\aautoYes\x12\x12\n" +
@@ -10096,7 +10112,8 @@ const file_session_v1_session_proto_rawDesc = "" +
 	"\benv_vars\x18\x04 \x03(\v2..session.v1.SessionDefaultsConfig.EnvVarsEntryR\aenvVars\x12\x1b\n" +
 	"\tcli_flags\x18\x05 \x01(\tR\bcliFlags\x12K\n" +
 	"\bprofiles\x18\x06 \x03(\v2/.session.v1.SessionDefaultsConfig.ProfilesEntryR\bprofiles\x12G\n" +
-	"\x0fdirectory_rules\x18\a \x03(\v2\x1e.session.v1.DirectoryRuleProtoR\x0edirectoryRules\x1a:\n" +
+	"\x0fdirectory_rules\x18\a \x03(\v2\x1e.session.v1.DirectoryRuleProtoR\x0edirectoryRules\x12'\n" +
+	"\x10one_off_base_dir\x18\b \x01(\tR\roneOffBaseDir\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a]\n" +
@@ -10123,13 +10140,14 @@ const file_session_v1_session_proto_rawDesc = "" +
 	"\x11matched_directory\x18\t \x01(\tR\x10matchedDirectory\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x90\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb9\x02\n" +
 	"\x1bUpdateGlobalDefaultsRequest\x12\x18\n" +
 	"\aprogram\x18\x01 \x01(\tR\aprogram\x12\x19\n" +
 	"\bauto_yes\x18\x02 \x01(\bR\aautoYes\x12\x12\n" +
 	"\x04tags\x18\x03 \x03(\tR\x04tags\x12O\n" +
 	"\benv_vars\x18\x04 \x03(\v24.session.v1.UpdateGlobalDefaultsRequest.EnvVarsEntryR\aenvVars\x12\x1b\n" +
-	"\tcli_flags\x18\x05 \x01(\tR\bcliFlags\x1a:\n" +
+	"\tcli_flags\x18\x05 \x01(\tR\bcliFlags\x12'\n" +
+	"\x10one_off_base_dir\x18\x06 \x01(\tR\roneOffBaseDir\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"]\n" +

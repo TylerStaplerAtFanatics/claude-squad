@@ -1421,6 +1421,7 @@ message SessionDefaultsConfig {
   string cli_flags = 5;
   map<string, ProfileDefaultsProto> profiles = 6;
   repeated DirectoryRuleProto directory_rules = 7;
+  string one_off_base_dir = 8;
 }
 
 // GetSessionDefaults
@@ -1459,6 +1460,7 @@ message UpdateGlobalDefaultsRequest {
   repeated string tags = 3;
   map<string, string> env_vars = 4;
   string cli_flags = 5;
+  string one_off_base_dir = 6;
 }
 
 message UpdateGlobalDefaultsResponse {
