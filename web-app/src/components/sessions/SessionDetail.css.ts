@@ -9,13 +9,14 @@ const tabFadeIn = keyframes({
 export const container = style({
   display: "flex",
   flexDirection: "column",
-  height: "100%",
+  height: "calc(var(--viewport-height, 100dvh) - var(--header-height))",
   minHeight: 0,
+  overflow: "hidden",
   background: vars.color.terminalBackground,
 });
 
 export const fullscreen = style({
-  height: "100%",
+  height: "var(--viewport-height, 100dvh)",
 });
 
 export const header = style({
@@ -25,6 +26,10 @@ export const header = style({
   padding: "1.5rem",
   borderBottom: `1px solid ${vars.color.terminalBorder}`,
   background: vars.color.terminalHeaderBg,
+  position: "sticky",
+  top: 0,
+  zIndex: 10,
+  flexShrink: 0,
   selectors: {
     [`.${fullscreen} &`]: {
       padding: "0.5rem 1rem",
@@ -44,6 +49,9 @@ export const title = style({
   fontSize: "1.5rem",
   fontWeight: 600,
   color: vars.color.terminalHeaderFg,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
   selectors: {
     [`.${fullscreen} &`]: {
       fontSize: "1rem",
@@ -53,8 +61,23 @@ export const title = style({
     "screen and (max-width: 768px)": {
       fontSize: "1.125rem",
       flex: "1 1 100%",
+      maxWidth: "calc(100vw - 120px)",
     },
   },
+});
+
+export const statusBadge = style({
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "0.125rem 0.5rem",
+  borderRadius: "9999px",
+  fontSize: "0.75rem",
+  fontWeight: 600,
+  flexShrink: 0,
+  marginLeft: "0.5rem",
+  background: vars.color.terminalHoverBg,
+  color: vars.color.terminalTextMuted,
+  border: `1px solid ${vars.color.terminalBorder}`,
 });
 
 export const headerActions = style({
@@ -78,6 +101,11 @@ export const fullscreenButton = style({
   lineHeight: 1,
   transition: "color 0.2s, background 0.2s",
   borderRadius: "4px",
+  minWidth: "var(--min-touch-target, 44px)",
+  minHeight: "var(--min-touch-target, 44px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   selectors: {
     "&:hover": {
       color: vars.color.terminalHeaderFg,
@@ -132,6 +160,11 @@ export const navButton = style({
   transition: "color 0.2s, background 0.2s",
   borderRadius: "4px",
   fontWeight: "bold",
+  minWidth: "var(--min-touch-target, 44px)",
+  minHeight: "var(--min-touch-target, 44px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   selectors: {
     "&:hover": {
       color: vars.color.terminalHeaderFg,
@@ -153,6 +186,11 @@ export const closeButton = style({
   padding: "0.5rem",
   lineHeight: 1,
   transition: "color 0.2s",
+  minWidth: "var(--min-touch-target, 44px)",
+  minHeight: "var(--min-touch-target, 44px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   selectors: {
     "&:hover": {
       color: vars.color.terminalHeaderFg,
@@ -415,6 +453,110 @@ export const noTerminalSubtext = style({
   color: vars.color.terminalTextMuted,
   maxWidth: "400px",
   lineHeight: 1.5,
+});
+
+// ⋯ More actions button in header
+export const moreActionsButton = style({
+  background: "transparent",
+  border: "none",
+  fontSize: "1.5rem",
+  cursor: "pointer",
+  color: vars.color.terminalTextMuted,
+  padding: "0.5rem",
+  lineHeight: 1,
+  transition: "color 0.2s, background 0.2s",
+  borderRadius: "4px",
+  minWidth: "var(--min-touch-target, 44px)",
+  minHeight: "var(--min-touch-target, 44px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  selectors: {
+    "&:hover": {
+      color: vars.color.terminalHeaderFg,
+      background: vars.color.terminalHoverBg,
+    },
+  },
+});
+
+// Action sheet list
+export const actionSheet = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  marginTop: "0.5rem",
+});
+
+export const actionSheetItem = style({
+  minHeight: "52px",
+  padding: "0 16px",
+  textAlign: "left",
+  fontSize: "16px",
+  borderRadius: "8px",
+  background: "transparent",
+  border: "none",
+  cursor: "pointer",
+  color: vars.color.textPrimary,
+  display: "flex",
+  alignItems: "center",
+  transition: "background 0.12s",
+  selectors: {
+    "&:hover": {
+      background: vars.color.hoverBackground,
+    },
+    "&:active": {
+      background: vars.color.hoverBackground,
+    },
+  },
+});
+
+export const actionSheetItemDestructive = style({
+  color: vars.color.error,
+});
+
+export const actionDivider = style({
+  border: "none",
+  borderTop: `1px solid ${vars.color.borderColor}`,
+  margin: "8px 0",
+});
+
+// Generic action buttons for confirm dialogs
+export const actionButton = style({
+  padding: "0.5rem 1rem",
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: "6px",
+  background: vars.color.cardBackground,
+  color: vars.color.textPrimary,
+  cursor: "pointer",
+  fontSize: "0.875rem",
+  transition: "background 0.15s",
+  selectors: {
+    "&:hover": {
+      background: vars.color.hoverBackground,
+    },
+  },
+});
+
+export const actionButtonDanger = style({
+  background: vars.color.error,
+  color: "white",
+  border: "none",
+  selectors: {
+    "&:hover": {
+      opacity: 0.9,
+    },
+  },
+});
+
+export const actionButtonSave = style({
+  background: vars.color.primary,
+  color: "white",
+  border: "none",
+  selectors: {
+    "&:hover": {
+      background: vars.color.primaryDark,
+    },
+  },
 });
 
 // Mobile-fullscreen overrides — applied when isFullscreen is true.

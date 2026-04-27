@@ -80,10 +80,10 @@ var methodToID = map[string]string{
 	"ListWorktrees":            "worktree:list",
 }
 
-// rpcPattern matches lines like:   rpc MethodName(
-var rpcPattern = regexp.MustCompile(`^\s+rpc\s+(\w+)\s*\(`)
+// rpcPattern matches lines like:   rpc MethodName(  (indented or not)
+var rpcPattern = regexp.MustCompile(`^\s*rpc\s+(\w+)\s*\(`)
 
-// servicePattern matches lines like:   service ServiceName {
+// servicePattern matches lines like:  service ServiceName {
 var servicePattern = regexp.MustCompile(`^\s*service\s+(\w+)\s*\{`)
 
 // ScanProto reads a proto file and returns BackendFeature entries for each RPC method found.

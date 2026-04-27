@@ -71,6 +71,31 @@ jobs:
           skip-cache: false
           only-new-issues: false
 
+      - name: ESLint (no-100vh, mobile regression rules)
+        working-directory: web-app
+        run: |
+          # Only lint files changed in this PR to avoid surfacing pre-existing issues
+          # in unmodified files. Falls back to full scan on push-to-main (no PR context).
+          # The no-100vh rule is "error" severity so it always fails without --max-warnings.
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            CHANGED=$(git diff --name-only "${{ github.event.pull_request.base.sha }}"...HEAD \
+              -- 'web-app/**.ts' 'web-app/**.tsx' 2>/dev/null \
+              | grep -E '\.(ts|tsx)$' | sed 's|^web-app/||' || true)
+            if [ -z "$CHANGED" ]; then
+              echo "No TS/TSX files changed — skipping ESLint"
+              exit 0
+            fi
+            # Build --file args (one per changed file)
+            FILE_FLAGS=""
+            while IFS= read -r f; do
+              [ -n "$f" ] && FILE_FLAGS="$FILE_FLAGS --file $f"
+            done <<< "$CHANGED"
+            # shellcheck disable=SC2086
+            npx next lint $FILE_FLAGS
+          else
+            npx next lint --max-warnings 0
+          fi
+
       - name: CSS lint (stylelint + undefined variable check)
         working-directory: web-app
         run: npm run lint:css

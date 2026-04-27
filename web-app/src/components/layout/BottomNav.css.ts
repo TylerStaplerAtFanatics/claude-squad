@@ -10,7 +10,7 @@ export const nav = style({
   background: vars.color.background,
   borderTop: `1px solid ${vars.color.borderColor}`,
   zIndex: 1050,
-  paddingBottom: "var(--safe-area-bottom, 0px)",
+  paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)",
 
   // Only show below 900px (mobile + foldable range)
   "@media": {
