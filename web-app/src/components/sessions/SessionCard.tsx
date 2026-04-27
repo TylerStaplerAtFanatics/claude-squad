@@ -172,6 +172,10 @@ export function SessionCard({
         return statusLoading;
       case SessionStatus.NEEDS_APPROVAL:
         return statusNeedsApproval;
+      case SessionStatus.CREATING:
+        return statusLoading;
+      case SessionStatus.STOPPED:
+        return statusPaused;
       default:
         return statusUnknown;
     }
@@ -189,6 +193,10 @@ export function SessionCard({
         return "Loading";
       case SessionStatus.NEEDS_APPROVAL:
         return "Needs Approval";
+      case SessionStatus.CREATING:
+        return "Creating";
+      case SessionStatus.STOPPED:
+        return "Stopped";
       default:
         return "Unknown";
     }

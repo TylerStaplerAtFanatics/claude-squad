@@ -105,6 +105,35 @@ export const newSessionButtonInner = style({
   fontWeight: "300",
 });
 
+export const notificationButton = style({});
+
+export const notificationIconWrap = style({
+  position: "relative",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: vars.fontSize.lg,
+  lineHeight: "1",
+});
+
+export const notificationBadge = style({
+  position: "absolute",
+  top: "-4px",
+  right: "-6px",
+  background: vars.color.error,
+  color: "#fff",
+  fontSize: "10px",
+  fontWeight: "700",
+  lineHeight: "1",
+  minWidth: "16px",
+  height: "16px",
+  borderRadius: "8px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "0 3px",
+});
+
 // More menu sheet — slides up from just above the bottom nav
 export const moreBackdrop = style({
   position: "fixed",
