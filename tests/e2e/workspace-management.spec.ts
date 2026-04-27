@@ -18,7 +18,7 @@ test.describe('Workspace Management', () => {
     // Verify some session cards are rendered (pre-seeded sessions in test mode)
     const sessionCards = sessionsPage.getSessionCards();
     const count = await sessionCards.count();
-    expect(count).toBeGreaterThanOrEqual(0);
+    expect(count).toBeGreaterThan(0);
   });
 
   test('e2e:workspace-switch - Review queue page loads', async ({ page }) => {

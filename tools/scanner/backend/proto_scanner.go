@@ -83,6 +83,9 @@ var methodToID = map[string]string{
 // rpcPattern matches lines like:   rpc MethodName(
 var rpcPattern = regexp.MustCompile(`^\s+rpc\s+(\w+)\s*\(`)
 
+// servicePattern matches lines like:   service ServiceName {
+var servicePattern = regexp.MustCompile(`^\s*service\s+(\w+)\s*\{`)
+
 // ScanProto reads a proto file and returns BackendFeature entries for each RPC method found.
 func ScanProto(protoFile string) ([]BackendFeature, error) {
 	info, err := os.Stat(protoFile)
@@ -98,9 +101,14 @@ func ScanProto(protoFile string) ([]BackendFeature, error) {
 	defer f.Close()
 
 	var features []BackendFeature
+	currentService := "SessionService"
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
+		if svcMatches := servicePattern.FindStringSubmatch(line); svcMatches != nil {
+			currentService = svcMatches[1]
+			continue
+		}
 		matches := rpcPattern.FindStringSubmatch(line)
 		if matches == nil {
 			continue
@@ -114,7 +122,7 @@ func ScanProto(protoFile string) ([]BackendFeature, error) {
 		features = append(features, BackendFeature{
 			ID:           id,
 			Type:         "backend",
-			Service:      "SessionService",
+			Service:      currentService,
 			Method:       method,
 			ProtoFile:    protoFile,
 			MarkerFound:  false,

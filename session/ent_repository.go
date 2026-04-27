@@ -102,15 +102,14 @@ func (r *EntRepository) Create(ctx context.Context, data InstanceData) error {
 	// Create main session
 	sessionCreate := tx.Session.Create().
 		SetTitle(data.Title).
-		SetUUID(data.UUID).
+		SetNillableUUID(nilIfEmpty(data.UUID)).
 		SetPath(data.Path).
 		SetStatus(int(data.Status)).
 		SetCreatedAt(data.CreatedAt).
 		SetUpdatedAt(data.UpdatedAt).
 		SetAutoYes(data.AutoYes).
 		SetProgram(data.Program).
-		SetIsExpanded(data.IsExpanded).
-		SetNillableUUID(nilIfEmpty(data.UUID))
+		SetIsExpanded(data.IsExpanded)
 
 	// Set optional fields
 	if data.WorkingDir != "" {
@@ -284,14 +283,13 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 
 	// Update main session fields
 	sessionUpdate := tx.Session.UpdateOne(sess).
-		SetUUID(data.UUID).
+		SetNillableUUID(nilIfEmpty(data.UUID)).
 		SetPath(data.Path).
 		SetStatus(int(data.Status)).
 		SetUpdatedAt(data.UpdatedAt).
 		SetAutoYes(data.AutoYes).
 		SetProgram(data.Program).
-		SetIsExpanded(data.IsExpanded).
-		SetNillableUUID(nilIfEmpty(data.UUID))
+		SetIsExpanded(data.IsExpanded)
 
 	// Update optional fields
 	if data.WorkingDir != "" {
