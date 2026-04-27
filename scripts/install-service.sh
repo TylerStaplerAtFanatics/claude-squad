@@ -7,11 +7,14 @@
 #   macOS  — LaunchAgent (~/Library/LaunchAgents/)
 #
 # Usage:
-#   ./scripts/install-service.sh              # install
+#   ./scripts/install-service.sh              # install (profiling enabled on :6060 by default)
+#   ./scripts/install-service.sh --no-profile # install without profiling
+#   ./scripts/install-service.sh --profile-port 6061  # install with custom profiling port
 #   ./scripts/install-service.sh --uninstall  # remove
 #
 # Environment:
 #   STAPLER_SQUAD_BIN   Override binary path (default: auto-detected)
+#   PROFILE_PORT        Override profiling port (default: 6060)
 #
 
 set -e
@@ -96,7 +99,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$bin_path --remote-access
+ExecStart=$bin_path --remote-access$extra_flags
 WorkingDirectory=$HOME
 Restart=on-failure
 RestartSec=5s
@@ -165,7 +168,7 @@ install_macos() {
     <array>
         <string>/bin/zsh</string>
         <string>-c</string>
-        <string>[ -f "$HOME/.zshrc" ] &amp;&amp; source "$HOME/.zshrc" 2&gt;/dev/null; exec "$bin_path" --remote-access</string>
+        <string>[ -f "$HOME/.zshrc" ] &amp;&amp; source "$HOME/.zshrc" 2&gt;/dev/null; exec "$bin_path" --remote-access$extra_flags</string>
     </array>
 
     <key>RunAtLoad</key>
@@ -275,10 +278,17 @@ uninstall_service() {
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 UNINSTALL=0
-for arg in "$@"; do
-    case "$arg" in
-        --uninstall) UNINSTALL=1 ;;
+ENABLE_PROFILE=1
+PROFILE_PORT="${PROFILE_PORT:-6060}"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --uninstall)      UNINSTALL=1 ;;
+        --no-profile)     ENABLE_PROFILE=0 ;;
+        --profile-port)   shift; PROFILE_PORT="$1" ;;
+        --profile-port=*) PROFILE_PORT="${1#*=}" ;;
     esac
+    shift
 done
 
 main() {
@@ -293,6 +303,13 @@ main() {
     if [ "$UNINSTALL" = "1" ]; then
         uninstall_service "$os"
         exit 0
+    fi
+
+    # Build extra flags to append to the binary invocation
+    extra_flags=""
+    if [ "$ENABLE_PROFILE" = "1" ]; then
+        extra_flags=" --profile --profile-port $PROFILE_PORT"
+        log_info "Profiling enabled on port $PROFILE_PORT (pass --no-profile to disable)"
     fi
 
     bin_path=$(resolve_binary)

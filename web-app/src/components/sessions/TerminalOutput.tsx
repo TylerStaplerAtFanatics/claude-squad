@@ -1,4 +1,5 @@
 "use client";
+// +feature: terminal-pre-sizing terminal-dimension-cache
 
 import { useEffect, useRef, useCallback, useState } from "react";
 
@@ -58,6 +59,7 @@ const XTERM_DEFAULT_ROWS = 24;
 
 export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSessionName, isVisible }: TerminalOutputProps) {
   const xtermRef = useRef<XtermTerminalHandle | null>(null);
+  const terminalContainerRef = useRef<HTMLDivElement>(null);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
   const [showReconnectButton, setShowReconnectButton] = useState(false);
   const [isWaitingForStableSize, setIsWaitingForStableSize] = useState(true);
@@ -409,7 +411,19 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       // (e.g. 10x6) fired before the CSS container finishes layout would otherwise
       // corrupt the cache and cause the next session view to connect at the wrong size.
       if (cols >= MIN_COLS && rows >= MIN_ROWS) {
-        saveDimensions(sessionId, cols, rows);
+        // Also capture cell pixel dimensions so TerminalOutput can pre-calculate
+        // cols/rows from the container size on the next mount, enabling an immediate
+        // connection before xterm fires its first onResize event.
+        // Uses xterm.js private API for cell pixel metrics; gracefully falls back
+        // to dims-only cache entry if the API changes in a future xterm version.
+        // isFinite() guards against NaN/Infinity that a corrupted private API
+        // could theoretically return (e.g. during a render-service error state).
+        const cell = (xtermRef.current?.terminal as any)?._core?._renderService?.dimensions?.css?.cell;
+        if (cell?.width && cell?.height && isFinite(cell.width) && isFinite(cell.height)) {
+          saveDimensions(sessionId, cols, rows, cell.width, cell.height);
+        } else {
+          saveDimensions(sessionId, cols, rows);
+        }
       } else {
         console.log(`[TerminalOutput] Skipping cache write for tiny dimensions ${cols}x${rows} (below ${MIN_COLS}x${MIN_ROWS})`);
       }
@@ -555,15 +569,40 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     }
   }, [isConnected, error, connectionAttempts, connect]);
 
-  // Initialize with cached dimensions on mount
+  // Initialize with cached dimensions on mount.
+  // When cell pixel metrics are also cached, pre-calculate cols/rows from the
+  // container's current pixel size so the session-switch effect can connect
+  // immediately — before xterm.js fires its first onResize event.
+  //
+  // ORDERING INVARIANT: This effect MUST remain defined before the session-switch
+  // effect below (both share the [sessionId] dependency). React runs same-dependency
+  // effects in definition order, so this effect runs first and populates
+  // lastResizeRef before the session-switch effect reads it to trigger connect().
+  // Moving this effect below the session-switch effect will silently break pre-sizing.
   useEffect(() => {
     const cached = getCachedDimensions(sessionId);
     if (cached && cached.cols >= MIN_COLS && cached.rows >= MIN_ROWS) {
       hasCachedDimensionsRef.current = true;
-      // Set lastResizeRef so the initial onResize from xterm mount (if any) matches
-      // the cached value and sizeChanged=false, preventing a spurious fast-connect.
-      lastResizeRef.current = cached;
       console.log(`[TerminalOutput] Initialized with cached dimensions: ${cached.cols}x${cached.rows}`);
+
+      if (cached.cellWidth && cached.cellHeight && terminalContainerRef.current) {
+        const rect = terminalContainerRef.current.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const preCols = Math.floor(rect.width / cached.cellWidth);
+          const preRows = Math.floor(rect.height / cached.cellHeight);
+          if (preCols >= MIN_COLS && preRows >= MIN_ROWS) {
+            console.log(
+              `[TerminalOutput] Pre-sizing: ${rect.width}×${rect.height}px / ` +
+              `${cached.cellWidth.toFixed(2)}×${cached.cellHeight.toFixed(2)}px/cell → ${preCols}×${preRows}`
+            );
+            lastResizeRef.current = { cols: preCols, rows: preRows };
+          } else {
+            console.log(`[TerminalOutput] Pre-sizing skipped: calculated ${preCols}x${preRows} below minimum`);
+          }
+        } else {
+          console.log(`[TerminalOutput] Pre-sizing skipped: container has zero size`);
+        }
+      }
     } else if (cached) {
       console.log(`[TerminalOutput] Ignoring stale cached dimensions ${cached.cols}x${cached.rows} (below ${MIN_COLS}x${MIN_ROWS})`);
     }
@@ -990,7 +1029,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
           )}
         </div>
       </div>
-      <div className={styles.terminal}>
+      <div className={styles.terminal} ref={terminalContainerRef}>
         {isVisible !== false && isLoadingInitialContent && (
           <div className={styles.loadingOverlay}>
             <div className={styles.loadingSpinner} />

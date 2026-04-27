@@ -7,6 +7,19 @@ import (
 	"github.com/tstapler/stapler-squad/session/detection"
 )
 
+// makeAcknowledgedInstance creates a session instance with LastAcknowledged set after LastMeaningfulOutput,
+// simulating a session the user has already dismissed from the review queue.
+func makeAcknowledgedInstance(title string) *Instance {
+	inst := &Instance{
+		Title:  title,
+		Status: Running,
+	}
+	inst.started = true
+	inst.LastMeaningfulOutput = time.Now().Add(-10 * time.Minute)
+	inst.LastAcknowledged = time.Now().Add(-5 * time.Minute) // acked AFTER output
+	return inst
+}
+
 // TestReviewQueuePoller_PreservesTimestampWhenStatusUnchanged verifies that
 // the DetectedAt timestamp is only updated when the session's meaningful status changes,
 // not on every poll cycle.
@@ -272,4 +285,107 @@ func TestReviewQueue_SortsByLastActivity(t *testing.T) {
 	t.Logf("  1. %s - Last activity: %s ago", items[0].SessionID, detection.FormatDuration(time.Since(items[0].LastActivity)))
 	t.Logf("  2. %s - Last activity: %s ago", items[1].SessionID, detection.FormatDuration(time.Since(items[1].LastActivity)))
 	t.Logf("  3. %s - Last activity: %s ago", items[2].SessionID, detection.FormatDuration(time.Since(items[2].LastActivity)))
+}
+
+// TestReviewQueuePoller_AcknowledgedSession_RemovedOnNextPoll verifies that a session
+// acknowledged after its last meaningful output is removed from the queue on the next poll.
+// This is the regression test for the "skip button wipes list but doesn't remove status" bug.
+func TestReviewQueuePoller_AcknowledgedSession_RemovedOnNextPoll(t *testing.T) {
+	queue := NewReviewQueue()
+	statusManager := NewInstanceStatusManager()
+	poller := NewReviewQueuePollerWithConfig(queue, statusManager, nil, ReviewQueuePollerConfig{
+		StalenessThreshold: 5 * time.Minute,
+		IdleThreshold:      5 * time.Second,
+	})
+
+	inst := makeAcknowledgedInstance("acked-session")
+
+	// Pre-populate queue to simulate session being visible before user clicked Skip.
+	queue.Add(&ReviewItem{
+		SessionID:   "acked-session",
+		SessionName: "acked-session",
+		Reason:      ReasonInputRequired,
+		Priority:    PriorityMedium,
+		DetectedAt:  time.Now().Add(-1 * time.Minute),
+	})
+	poller.AddInstance(inst)
+
+	if _, exists := queue.Get("acked-session"); !exists {
+		t.Fatal("precondition: session must be in queue before checkSession")
+	}
+
+	poller.checkSession(inst)
+
+	if _, exists := queue.Get("acked-session"); exists {
+		t.Error("session should have been removed from queue after acknowledgment snooze")
+	}
+}
+
+// TestReviewQueuePoller_AcknowledgedSession_ResurfacesAfterNewOutput verifies that
+// a snoozed session re-enters the queue once new meaningful output arrives.
+func TestReviewQueuePoller_AcknowledgedSession_ResurfacesAfterNewOutput(t *testing.T) {
+	inst := makeAcknowledgedInstance("resurface-session")
+
+	// Simulate new output arriving AFTER the acknowledgment.
+	inst.LastMeaningfulOutput = time.Now().Add(-1 * time.Second) // newer than LastAcknowledged
+
+	// IsAcknowledgedAfterOutput should now return false — new output supersedes ack.
+	if inst.IsAcknowledgedAfterOutput() {
+		t.Error("session with new output after acknowledgment should NOT be considered snoozed")
+	}
+}
+
+// TestReviewQueuePoller_AcknowledgmentSnooze_ConditionLogic documents the bypass that
+// caused the bug and asserts the corrected condition applies universally.
+func TestReviewQueuePoller_AcknowledgmentSnooze_ConditionLogic(t *testing.T) {
+	cases := []struct {
+		name              string
+		shouldAdd         bool
+		priority          Priority
+		isControllerActive bool
+		wantOldBypassSkip bool // true = old code SKIPPED the snooze (the bug)
+	}{
+		{
+			name:               "input-required medium-priority active-controller (the bug scenario)",
+			shouldAdd:          true,
+			priority:           PriorityMedium,
+			isControllerActive: true,
+			wantOldBypassSkip:  true, // old code bypassed snooze → bug
+		},
+		{
+			name:               "error-state urgent active-controller",
+			shouldAdd:          true,
+			priority:           PriorityUrgent,
+			isControllerActive: true,
+			wantOldBypassSkip:  true, // old code bypassed snooze → bug
+		},
+		{
+			name:               "stale low-priority no-controller",
+			shouldAdd:          true,
+			priority:           PriorityLow,
+			isControllerActive: false,
+			wantOldBypassSkip:  false, // old code entered snooze block — worked correctly
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Reproduce the old condition that caused the bypass.
+			// oldCondition=true  → snooze block is entered (not bypassed)
+			// oldCondition=false → snooze block is skipped (bypassed = the bug)
+			oldCondition := !tc.shouldAdd || tc.priority == PriorityLow || !tc.isControllerActive
+			oldBypassed := !oldCondition
+			if oldBypassed != tc.wantOldBypassSkip {
+				t.Errorf("expected old-code bypass=%v for scenario %q, got bypass=%v (oldCondition=%v)",
+					tc.wantOldBypassSkip, tc.name, oldBypassed, oldCondition)
+			}
+
+			// After the fix, IsAcknowledgedAfterOutput is checked unconditionally.
+			// Verify the session state correctly reports "snoozed" after ack.
+			inst := makeAcknowledgedInstance("test")
+			if !inst.IsAcknowledgedAfterOutput() {
+				t.Error("acknowledged session should report IsAcknowledgedAfterOutput=true")
+			}
+		})
+	}
 }

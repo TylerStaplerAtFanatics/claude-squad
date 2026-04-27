@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,9 @@ func getWorktreeDirectory() (string, error) {
 
 	return filepath.Join(configDir, "worktrees"), nil
 }
+
+// isDirtyCacheTTL is the duration for which a cached IsDirty result is considered fresh.
+const isDirtyCacheTTL = 15 * time.Second
 
 // GitWorktree manages git worktree operations for a session
 type GitWorktree struct {
@@ -34,6 +38,11 @@ type GitWorktree struct {
 	baseCommitSHA string
 	// cmdExec is used to execute commands for this worktree.
 	cmdExec executor.Executor
+
+	// isDirty cache fields — protected by isDirtyCacheMu.
+	isDirtyCacheMu   sync.RWMutex
+	isDirtyCache     bool
+	isDirtyCacheTime time.Time
 }
 
 // NewGitWorktreeFromCommitSHA creates a new GitWorktree that will branch from the given
