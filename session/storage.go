@@ -100,11 +100,11 @@ type InstanceData struct {
 	HistoryFilePath string `json:"history_file_path,omitempty"`
 
 	// LaunchCommand is the full command passed to tmux on session start, including
-	// any injected flags (--resume, --mcp-server, -y, initial prompt).
+	// any injected flags (--resume, --mcp-config, -y, initial prompt).
 	LaunchCommand string `json:"launch_command,omitempty"`
 
 	// MCPServerURL is the stapler-squad HTTP MCP endpoint passed to claude via
-	// --mcp-server on session start. Persisted so restarts re-inject the flag.
+	// --mcp-config on session start. Persisted so restarts re-inject the flag.
 	MCPServerURL string `json:"mcp_server_url,omitempty"`
 }
 

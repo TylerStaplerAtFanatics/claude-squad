@@ -412,6 +412,23 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 			}
 		}
 
+		// Step 6b: reconcile Stopped sessions that have a live tmux session.
+		// This handles the case where the server crashed or restarted while a session
+		// was running — the DB recorded Stopped but the tmux session survived.
+		// RecoverFromStopped resets the status to Ready (bypassing the terminal-state
+		// guard) so Start(false) can hot-attach to the existing tmux session.
+		for _, inst := range instances {
+			if inst.Status == session.Stopped && inst.TmuxSessionExists() {
+				log.InfoLog.Printf("Reconcile: session '%s' is Stopped in DB but tmux is alive — restoring", inst.Title)
+				inst.RecoverFromStopped()
+				if err := inst.Start(false); err != nil {
+					log.WarningLog.Printf("Reconcile: hot-restore of '%s' failed: %v", inst.Title, err)
+				} else {
+					log.InfoLog.Printf("Reconcile: restored '%s' (was Stopped, now Running)", inst.Title)
+				}
+			}
+		}
+
 		// Step 6.5: Persist any auto-detected worktree info (must happen after Step 6)
 		if len(instances) > 0 {
 			if err := storage.SaveInstances(instances); err != nil {

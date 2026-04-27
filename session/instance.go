@@ -187,12 +187,12 @@ type Instance struct {
 	HistoryFilePath string
 
 	// MCPServerURL is the URL of the stapler-squad HTTP MCP endpoint.
-	// When set, passed as --mcp-server to claude on session start so no
+	// When set, passed as --mcp-config to claude on session start so no
 	// settings-file injection is needed.
 	MCPServerURL string `json:"mcp_server_url,omitempty"`
 
 	// LaunchCommand is the full command passed to tmux on session start, including
-	// any injected flags (--resume, --mcp-server, -y, initial prompt). Set once on
+	// any injected flags (--resume, --mcp-config, -y, initial prompt). Set once on
 	// first start and updated on restart. Empty for external (mux-discovered) sessions.
 	LaunchCommand string `json:"launch_command,omitempty"`
 
@@ -597,7 +597,7 @@ type InstanceOptions struct {
 	// When set, the session will start with --resume <id> flag.
 	ResumeId string
 	// MCPServerURL, when non-empty and the program is claude, passes
-	// --mcp-server '{"stapler-squad":{"url":"<MCPServerURL>"}}' so the
+	// --mcp-config '{"stapler-squad":{"type":"http","url":"<MCPServerURL>"}}' so the
 	// session can call back into stapler-squad without any file injection.
 	MCPServerURL string
 }
@@ -1334,6 +1334,24 @@ func (i *Instance) Started() bool {
 	return i.started
 }
 
+// TmuxSessionExists reports whether the underlying tmux session is currently alive.
+// Used at startup to reconcile stale Stopped status against live tmux sessions.
+func (i *Instance) TmuxSessionExists() bool {
+	return i.tmuxManager.DoesSessionExist()
+}
+
+// RecoverFromStopped resets a stale Stopped status to Ready so the instance can be
+// hot-restored via Start(false). Only call this during startup reconciliation when
+// the tmux session is confirmed alive; it bypasses the state machine intentionally.
+func (i *Instance) RecoverFromStopped() {
+	i.stateMutex.Lock()
+	defer i.stateMutex.Unlock()
+	if i.Status == Stopped {
+		i.setStatus(Ready)
+		i.started = false
+	}
+}
+
 // SetTitle sets the title of the instance. Returns an error if the instance has started.
 // We cant change the title once it's been used for a tmux session etc.
 func (i *Instance) SetTitle(title string) error {
@@ -1605,7 +1623,7 @@ func (i *Instance) Restart(preserveOutput bool) error {
 	// Inject MCP server URL via CLI flag so no settings-file write is needed.
 	// Only for claude commands; other programs (aider, etc.) don't support this flag.
 	if i.MCPServerURL != "" && strings.Contains(program, "claude") {
-		mcpFlag := fmt.Sprintf(`--mcp-server '{"stapler-squad":{"type":"http","url":%q}}'`, i.MCPServerURL)
+		mcpFlag := fmt.Sprintf(`--mcp-config '{"stapler-squad":{"type":"http","url":%q}}'`, i.MCPServerURL)
 		program = program + " " + mcpFlag
 	}
 
