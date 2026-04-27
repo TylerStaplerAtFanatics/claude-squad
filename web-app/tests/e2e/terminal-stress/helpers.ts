@@ -4,22 +4,6 @@
 
 import { Page, expect } from '@playwright/test';
 
-/**
- * Navigate to the stress test page (alias for setupStressTestPage).
- */
-export async function navigateToStressTest(page: Page): Promise<void> {
-  return setupStressTestPage(page);
-}
-
-/**
- * Select a stress test preset and start it, returning the preset name.
- */
-export async function launchSession(page: Page, preset: string): Promise<string> {
-  await selectPreset(page, preset);
-  await startTest(page);
-  return preset;
-}
-
 export interface StressTestMetrics {
   framesRendered: number;
   avgFrameTime: number;

@@ -845,11 +845,15 @@ func (s *SessionService) DeleteSession(
 	// re-add the session between storage deletion and the old LoadInstances() reload.
 	s.removeFromAllPollers(req.Msg.Id)
 
-	// Destroy tmux/git resources using the live in-memory instance if available.
+	// Destroy tmux/git resources asynchronously so the RPC returns immediately
+	// after storage deletion. Cleanup errors are non-fatal — they are logged and
+	// do not affect the success response the caller receives.
 	if inst := s.FindLiveInstance(req.Msg.Id); inst != nil {
-		if err := inst.Destroy(); err != nil {
-			log.WarningLog.Printf("Failed to cleanup session resources for '%s': %v", req.Msg.Id, err)
-		}
+		go func() {
+			if err := inst.Destroy(); err != nil {
+				log.WarningLog.Printf("Failed to cleanup session resources for '%s': %v", req.Msg.Id, err)
+			}
+		}()
 	}
 
 	// Delete from storage using Title (the storage key), not the client-supplied ID which may be a UUID.

@@ -102,6 +102,10 @@ type InstanceData struct {
 	// LaunchCommand is the full command passed to tmux on session start, including
 	// any injected flags (--resume, --mcp-server, -y, initial prompt).
 	LaunchCommand string `json:"launch_command,omitempty"`
+
+	// MCPServerURL is the stapler-squad HTTP MCP endpoint passed to claude via
+	// --mcp-server on session start. Persisted so restarts re-inject the flag.
+	MCPServerURL string `json:"mcp_server_url,omitempty"`
 }
 
 // GitWorktreeData represents the serializable data of a GitWorktree

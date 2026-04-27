@@ -101,12 +101,12 @@ func ScanProto(protoFile string) ([]BackendFeature, error) {
 	defer f.Close()
 
 	var features []BackendFeature
-	currentService := "UnknownService"
+	currentService := "SessionService"
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if sm := servicePattern.FindStringSubmatch(line); sm != nil {
-			currentService = sm[1]
+		if svcMatches := servicePattern.FindStringSubmatch(line); svcMatches != nil {
+			currentService = svcMatches[1]
 			continue
 		}
 		matches := rpcPattern.FindStringSubmatch(line)
