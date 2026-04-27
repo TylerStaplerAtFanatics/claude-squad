@@ -102,14 +102,14 @@ func (r *EntRepository) Create(ctx context.Context, data InstanceData) error {
 	// Create main session
 	sessionCreate := tx.Session.Create().
 		SetTitle(data.Title).
+		SetNillableUUID(nilIfEmpty(data.UUID)).
 		SetPath(data.Path).
 		SetStatus(int(data.Status)).
 		SetCreatedAt(data.CreatedAt).
 		SetUpdatedAt(data.UpdatedAt).
 		SetAutoYes(data.AutoYes).
 		SetProgram(data.Program).
-		SetIsExpanded(data.IsExpanded).
-		SetNillableUUID(nilIfEmpty(data.UUID))
+		SetIsExpanded(data.IsExpanded)
 
 	// Set optional fields
 	if data.WorkingDir != "" {
@@ -156,6 +156,9 @@ func (r *EntRepository) Create(ctx context.Context, data InstanceData) error {
 	}
 	if !data.LastAcknowledged.IsZero() {
 		sessionCreate.SetLastAcknowledged(data.LastAcknowledged)
+	}
+	if data.MCPServerURL != "" {
+		sessionCreate.SetMcpServerURL(data.MCPServerURL)
 	}
 
 	sess, err := sessionCreate.Save(ctx)
@@ -280,13 +283,13 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 
 	// Update main session fields
 	sessionUpdate := tx.Session.UpdateOne(sess).
+		SetNillableUUID(nilIfEmpty(data.UUID)).
 		SetPath(data.Path).
 		SetStatus(int(data.Status)).
 		SetUpdatedAt(data.UpdatedAt).
 		SetAutoYes(data.AutoYes).
 		SetProgram(data.Program).
-		SetIsExpanded(data.IsExpanded).
-		SetNillableUUID(nilIfEmpty(data.UUID))
+		SetIsExpanded(data.IsExpanded)
 
 	// Update optional fields
 	if data.WorkingDir != "" {
@@ -333,6 +336,9 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 	}
 	if !data.LastAcknowledged.IsZero() {
 		sessionUpdate.SetLastAcknowledged(data.LastAcknowledged)
+	}
+	if data.MCPServerURL != "" {
+		sessionUpdate.SetMcpServerURL(data.MCPServerURL)
 	}
 
 	if err := sessionUpdate.Exec(ctx); err != nil {
@@ -738,6 +744,7 @@ func (r *EntRepository) sessionToInstanceData(sess *ent.Session) *InstanceData {
 		IsExpanded:          sess.IsExpanded,
 		TmuxPrefix:          sess.TmuxPrefix,
 		LastOutputSignature: sess.LastOutputSignature,
+		MCPServerURL:        sess.McpServerURL,
 	}
 
 	// Set optional time fields

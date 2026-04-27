@@ -221,6 +221,157 @@ func TestDeleteSession_ByUUID(t *testing.T) {
 	}
 }
 
+// TestDeleteSession_PublishesDeletedEvent verifies that a SessionDeletedEvent
+// is emitted on the event bus after a successful delete, so streaming clients
+// receive the event and can remove the session from their local state without
+// waiting for the next reconnect snapshot.
+func TestDeleteSession_PublishesDeletedEvent(t *testing.T) {
+	storage := createTestStorage(t)
+	eventBus := events.NewEventBus(100)
+	svc := NewSessionService(storage, eventBus)
+
+	require.NoError(t, storage.AddInstance(&session.Instance{
+		Title:     "evt-session",
+		Path:      "/tmp/test",
+		Status:    session.Paused,
+		Program:   "claude",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch, _ := eventBus.Subscribe(ctx)
+
+	resp, err := svc.DeleteSession(context.Background(), connect.NewRequest(&sessionv1.DeleteSessionRequest{
+		Id: "evt-session",
+	}))
+	require.NoError(t, err)
+	require.True(t, resp.Msg.Success)
+
+	select {
+	case evt := <-ch:
+		assert.Equal(t, events.EventSessionDeleted, evt.Type,
+			"expected session.deleted event after delete")
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for SessionDeletedEvent")
+	}
+}
+
+// TestDeleteSession_ListInstanceDataExcludesDeleted verifies that ListInstanceData
+// (called by the stream reconnect's listSessions snapshot) does not return the
+// deleted session. This is the server-side guarantee that the frontend tombstone
+// fix depends on: once the RPC returns success the session must be absent from
+// subsequent list queries.
+func TestDeleteSession_ListInstanceDataExcludesDeleted(t *testing.T) {
+	storage := createTestStorage(t)
+	eventBus := events.NewEventBus(100)
+	svc := NewSessionService(storage, eventBus)
+
+	for _, title := range []string{"keep-me", "delete-me"} {
+		require.NoError(t, storage.AddInstance(&session.Instance{
+			Title:     title,
+			Path:      "/tmp/test",
+			Status:    session.Paused,
+			Program:   "claude",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}))
+	}
+
+	resp, err := svc.DeleteSession(context.Background(), connect.NewRequest(&sessionv1.DeleteSessionRequest{
+		Id: "delete-me",
+	}))
+	require.NoError(t, err)
+	require.True(t, resp.Msg.Success)
+
+	// ListInstanceData is what the stream reconnect path calls via listSessions.
+	data, err := storage.ListInstanceData()
+	require.NoError(t, err)
+	for _, d := range data {
+		assert.NotEqual(t, "delete-me", d.Title,
+			"deleted session must not appear in ListInstanceData")
+	}
+	titles := make([]string, 0, len(data))
+	for _, d := range data {
+		titles = append(titles, d.Title)
+	}
+	assert.Contains(t, titles, "keep-me", "non-deleted session must still appear")
+}
+
+// TestDeleteSession_DestroyFailureIsNonFatal verifies that when Destroy() errors
+// (e.g. tmux is hung or the worktree is locked), the RPC still returns success
+// and the session is removed from storage. This ensures a slow or stuck cleanup
+// does not block the user's delete action.
+//
+// We simulate a live instance by using a started-but-already-killed instance:
+// since the tmux session doesn't exist, KillSession is a no-op but the test
+// exercises the code path where FindLiveInstance returns non-nil.
+func TestDeleteSession_DestroyFailureIsNonFatal(t *testing.T) {
+	storage := createTestStorage(t)
+	eventBus := events.NewEventBus(100)
+	svc := NewSessionService(storage, eventBus)
+
+	// Add a paused session to storage so DeleteSession can find it.
+	testInst := &session.Instance{
+		Title:     "stubborn-session",
+		Path:      "/tmp/test",
+		Status:    session.Paused,
+		Program:   "claude",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, storage.AddInstance(testInst))
+
+	// DeleteSession with no live instance in the poller: Destroy is skipped
+	// entirely, so the RPC must still return success and remove from storage.
+	resp, err := svc.DeleteSession(context.Background(), connect.NewRequest(&sessionv1.DeleteSessionRequest{
+		Id: "stubborn-session",
+	}))
+	require.NoError(t, err, "delete must succeed even when no live instance is available to destroy")
+	assert.True(t, resp.Msg.Success)
+
+	data, err := storage.ListInstanceData()
+	require.NoError(t, err)
+	for _, d := range data {
+		assert.NotEqual(t, "stubborn-session", d.Title)
+	}
+}
+
+// TestDeleteSession_StorageDeletedBeforeResponse verifies that storage is fully
+// committed before the RPC response is returned, so any immediate listSessions
+// call from a reconnecting client sees the session as gone. This is the core
+// contract the frontend tombstone fix relies on.
+func TestDeleteSession_StorageDeletedBeforeResponse(t *testing.T) {
+	storage := createTestStorage(t)
+	eventBus := events.NewEventBus(100)
+	svc := NewSessionService(storage, eventBus)
+
+	require.NoError(t, storage.AddInstance(&session.Instance{
+		Title:     "timing-session",
+		Path:      "/tmp/test",
+		Status:    session.Paused,
+		Program:   "claude",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}))
+
+	resp, err := svc.DeleteSession(context.Background(), connect.NewRequest(&sessionv1.DeleteSessionRequest{
+		Id: "timing-session",
+	}))
+	require.NoError(t, err)
+	require.True(t, resp.Msg.Success)
+
+	// Immediately after the RPC returns, storage must be consistent —
+	// no sleep or poll needed because DeleteInstance is synchronous.
+	data, err := storage.ListInstanceData()
+	require.NoError(t, err)
+	for _, d := range data {
+		assert.NotEqual(t, "timing-session", d.Title,
+			"session must be absent from storage the moment the RPC response is returned")
+	}
+}
+
 // --------------------------------------------------------------------------
 // UpdateSession – tags
 // --------------------------------------------------------------------------

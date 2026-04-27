@@ -330,6 +330,20 @@ func (_c *SessionCreate) SetNillableLastAcknowledged(v *time.Time) *SessionCreat
 	return _c
 }
 
+// SetMcpServerURL sets the "mcp_server_url" field.
+func (_c *SessionCreate) SetMcpServerURL(v string) *SessionCreate {
+	_c.mutation.SetMcpServerURL(v)
+	return _c
+}
+
+// SetNillableMcpServerURL sets the "mcp_server_url" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableMcpServerURL(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetMcpServerURL(*v)
+	}
+	return _c
+}
+
 // SetWorktreeID sets the "worktree" edge to the Worktree entity by ID.
 func (_c *SessionCreate) SetWorktreeID(id int) *SessionCreate {
 	_c.mutation.SetWorktreeID(id)
@@ -622,6 +636,10 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.LastAcknowledged(); ok {
 		_spec.SetField(session.FieldLastAcknowledged, field.TypeTime, value)
 		_node.LastAcknowledged = &value
+	}
+	if value, ok := _c.mutation.McpServerURL(); ok {
+		_spec.SetField(session.FieldMcpServerURL, field.TypeString, value)
+		_node.McpServerURL = value
 	}
 	if nodes := _c.mutation.WorktreeIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1129,6 +1147,24 @@ func (u *SessionUpsert) ClearLastAcknowledged() *SessionUpsert {
 	return u
 }
 
+// SetMcpServerURL sets the "mcp_server_url" field.
+func (u *SessionUpsert) SetMcpServerURL(v string) *SessionUpsert {
+	u.Set(session.FieldMcpServerURL, v)
+	return u
+}
+
+// UpdateMcpServerURL sets the "mcp_server_url" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateMcpServerURL() *SessionUpsert {
+	u.SetExcluded(session.FieldMcpServerURL)
+	return u
+}
+
+// ClearMcpServerURL clears the value of the "mcp_server_url" field.
+func (u *SessionUpsert) ClearMcpServerURL() *SessionUpsert {
+	u.SetNull(session.FieldMcpServerURL)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -1626,6 +1662,27 @@ func (u *SessionUpsertOne) UpdateLastAcknowledged() *SessionUpsertOne {
 func (u *SessionUpsertOne) ClearLastAcknowledged() *SessionUpsertOne {
 	return u.Update(func(s *SessionUpsert) {
 		s.ClearLastAcknowledged()
+	})
+}
+
+// SetMcpServerURL sets the "mcp_server_url" field.
+func (u *SessionUpsertOne) SetMcpServerURL(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetMcpServerURL(v)
+	})
+}
+
+// UpdateMcpServerURL sets the "mcp_server_url" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateMcpServerURL() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateMcpServerURL()
+	})
+}
+
+// ClearMcpServerURL clears the value of the "mcp_server_url" field.
+func (u *SessionUpsertOne) ClearMcpServerURL() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearMcpServerURL()
 	})
 }
 
@@ -2292,6 +2349,27 @@ func (u *SessionUpsertBulk) UpdateLastAcknowledged() *SessionUpsertBulk {
 func (u *SessionUpsertBulk) ClearLastAcknowledged() *SessionUpsertBulk {
 	return u.Update(func(s *SessionUpsert) {
 		s.ClearLastAcknowledged()
+	})
+}
+
+// SetMcpServerURL sets the "mcp_server_url" field.
+func (u *SessionUpsertBulk) SetMcpServerURL(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetMcpServerURL(v)
+	})
+}
+
+// UpdateMcpServerURL sets the "mcp_server_url" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateMcpServerURL() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateMcpServerURL()
+	})
+}
+
+// ClearMcpServerURL clears the value of the "mcp_server_url" field.
+func (u *SessionUpsertBulk) ClearMcpServerURL() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearMcpServerURL()
 	})
 }
 

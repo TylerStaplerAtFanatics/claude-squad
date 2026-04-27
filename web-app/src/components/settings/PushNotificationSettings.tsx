@@ -2,7 +2,7 @@
 
 import { usePushNotifications } from "@/lib/hooks/usePushNotifications";
 import { getApiBaseUrl } from "@/lib/config";
-import styles from "./PushNotificationSettings.module.css";
+import * as styles from "./PushNotificationSettings.css";
 
 export function PushNotificationSettings() {
   const { isSupported, subscription, isLoading, error, permission, subscribe, unsubscribe } =

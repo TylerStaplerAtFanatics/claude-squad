@@ -8,7 +8,8 @@ const pulse = keyframes({
 export const container = style({
   display: "flex",
   flexDirection: "column",
-  height: "100vh",
+  height: "var(--viewport-height, 100dvh)",
+  overflow: "hidden",
   background: "#1e1e1e",
   color: "#d4d4d4",
   fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
