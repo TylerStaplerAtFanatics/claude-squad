@@ -5,6 +5,7 @@ export interface ProgramOption {
 }
 
 export const PROGRAMS: ProgramOption[] = [
+  { value: "", label: "System default", description: "Use default_program from config (default: claude)" },
   { value: "claude", label: "Claude Code", description: "Anthropic's CLI assistant" },
   { value: "env -u CLAUDE_CODE_USE_BEDROCK ANTHROPIC_BASE_URL=http://localhost:47000 claude", label: "Claude Code (Proxy via localhost:47000)", description: "Via local proxy" },
   { value: "aider", label: "Aider", description: "AI pair programming with git" },
