@@ -281,7 +281,6 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 
 	// Update main session fields
 	sessionUpdate := tx.Session.UpdateOne(sess).
-		SetUUID(data.UUID).
 		SetPath(data.Path).
 		SetStatus(int(data.Status)).
 		SetUpdatedAt(data.UpdatedAt).
