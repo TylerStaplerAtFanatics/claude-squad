@@ -830,9 +830,13 @@ func (s *SessionService) DeleteSession(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list instances: %w", err))
 	}
 	sessionTitle := ""
+	sessionUUID := req.Msg.Id // fallback: use the supplied ID if UUID not found
 	for _, d := range dataSlice {
 		if d.Title == req.Msg.Id || d.UUID == req.Msg.Id {
 			sessionTitle = d.Title
+			if d.UUID != "" {
+				sessionUUID = d.UUID
+			}
 			break
 		}
 	}
@@ -843,12 +847,13 @@ func (s *SessionService) DeleteSession(
 	// Remove from all pollers BEFORE deleting from storage. This is atomic from the
 	// poller's perspective and closes the race window where external discovery could
 	// re-add the session between storage deletion and the old LoadInstances() reload.
-	s.removeFromAllPollers(req.Msg.Id)
+	// Use sessionTitle (not req.Msg.Id) — pollers index by title, and req.Msg.Id may be a UUID.
+	s.removeFromAllPollers(sessionTitle)
 
 	// Destroy tmux/git resources asynchronously so the RPC returns immediately
 	// after storage deletion. Cleanup errors are non-fatal — they are logged and
 	// do not affect the success response the caller receives.
-	if inst := s.FindLiveInstance(req.Msg.Id); inst != nil {
+	if inst := s.FindLiveInstance(sessionTitle); inst != nil {
 		go func() {
 			if err := inst.Destroy(); err != nil {
 				log.WarningLog.Printf("Failed to cleanup session resources for '%s': %v", req.Msg.Id, err)
@@ -861,8 +866,9 @@ func (s *SessionService) DeleteSession(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete instance from storage: %w", err))
 	}
 
-	// Publish SessionDeleted event to all watchers.
-	s.eventBus.Publish(events.NewSessionDeletedEvent(req.Msg.Id))
+	// Publish SessionDeleted event to all watchers. Use UUID so the frontend
+	// entity adapter (keyed by UUID) matches and tombstones the correct entry.
+	s.eventBus.Publish(events.NewSessionDeletedEvent(sessionUUID))
 
 	return connect.NewResponse(&sessionv1.DeleteSessionResponse{
 		Success: true,

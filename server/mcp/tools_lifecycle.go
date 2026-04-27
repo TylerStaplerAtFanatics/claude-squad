@@ -345,11 +345,18 @@ func (lh *lifecycleHandlers) stopSession(ctx context.Context, req mcpgo.CallTool
 		}
 	}
 
+	// Resolve sessionID (which may be a UUID) to the canonical title required by
+	// pollers and storage, which are keyed by title.
+	sessionTitle := sessionID
+	if inst != nil {
+		sessionTitle = inst.Title
+	}
+
 	// Remove from all pollers BEFORE storage deletion to close the race window
 	// where external discovery could re-add the session between delete and poller update.
-	lh.svc.RemoveFromAllPollers(sessionID)
+	lh.svc.RemoveFromAllPollers(sessionTitle)
 
-	if err := lh.store.DeleteInstance(sessionID); err != nil {
+	if err := lh.store.DeleteInstance(sessionTitle); err != nil {
 		return errResult(ErrInternalError, fmt.Sprintf("delete from storage: %v", err), ""), nil
 	}
 

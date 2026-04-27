@@ -131,18 +131,25 @@ func (rqp *ReviewQueuePoller) RemoveInstance(instanceTitle string) {
 	defer rqp.mu.Unlock()
 
 	filtered := make([]*Instance, 0, len(rqp.instances))
+	var removedTitle string
 	for _, inst := range rqp.instances {
-		if inst.Title != instanceTitle {
+		if inst.MatchesID(instanceTitle) {
+			removedTitle = inst.Title
+		} else {
 			filtered = append(filtered, inst)
 		}
 	}
 	rqp.instances = filtered
 
-	// Evict content cache for this session.
+	// Evict content cache using the resolved title (MatchesID may have matched by UUID).
+	evictKey := instanceTitle
+	if removedTitle != "" {
+		evictKey = removedTitle
+	}
 	rqp.cacheMu.Lock()
-	delete(rqp.lastSeenActivity, instanceTitle)
-	delete(rqp.cachedContent, instanceTitle)
-	delete(rqp.lastPreviewTime, instanceTitle)
+	delete(rqp.lastSeenActivity, evictKey)
+	delete(rqp.cachedContent, evictKey)
+	delete(rqp.lastPreviewTime, evictKey)
 	rqp.cacheMu.Unlock()
 }
 
