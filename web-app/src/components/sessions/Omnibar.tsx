@@ -47,7 +47,7 @@ export interface OmnibarFormState {
 const INITIAL_FORM_STATE: OmnibarFormState = {
   sessionName: "",
   branch: "",
-  program: "claude",
+  program: "",
   category: "",
   autoYes: false,
   useTitleAsBranch: true,

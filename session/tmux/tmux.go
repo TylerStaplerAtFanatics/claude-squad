@@ -105,7 +105,7 @@ type TmuxSession struct {
 	controlModeCmd         *exec.Cmd              // tmux -C attach process
 	controlModeStdout      io.ReadCloser          // stdout pipe for control mode notifications
 	controlModeStdin       io.WriteCloser         // stdin pipe for control mode commands
-	controlModeDone        chan struct{}           // Signal channel for control mode termination
+	controlModeDone        chan struct{}          // Signal channel for control mode termination
 	controlModeSubscribers map[string]chan []byte // WebSocket clients subscribed to control mode updates
 	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers, controlModeExited, and pendingCmds
 	controlModeExited      bool                   // True after readControlModeOutput exits; new subscribers get pre-closed channel
@@ -113,11 +113,11 @@ type TmuxSession struct {
 	// Control mode command dispatch (Phase 2)
 	// cmdSendMu serializes (enqueue + write-to-stdin) pairs so tmux receives commands
 	// in the same order as channels are added to pendingCmds.
-	cmdSendMu   sync.Mutex        // serializes enqueue+write in sendCMCommand and stdin close in StopControlMode
-	pendingCmds []chan cmdResult   // FIFO of pending response channels; protected by controlModeSubMu
-	cmdBodyBuf  strings.Builder   // body accumulator between %begin and %end; reader goroutine only
-	curCmdCh    chan cmdResult     // current in-flight response channel; reader goroutine only
-	inCmdResp   bool              // true while inside a %begin/%end block; reader goroutine only
+	cmdSendMu   sync.Mutex       // serializes enqueue+write in sendCMCommand and stdin close in StopControlMode
+	pendingCmds []chan cmdResult // FIFO of pending response channels; protected by controlModeSubMu
+	cmdBodyBuf  strings.Builder  // body accumulator between %begin and %end; reader goroutine only
+	curCmdCh    chan cmdResult   // current in-flight response channel; reader goroutine only
+	inCmdResp   bool             // true while inside a %begin/%end block; reader goroutine only
 
 	// Exit detection: fired when the session exits unexpectedly (not via StopControlMode).
 	// onExit is called at most once per TmuxSession lifetime (guarded by onExitOnce).

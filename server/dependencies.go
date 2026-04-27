@@ -35,9 +35,9 @@ type ServerDependencies struct {
 	HistoryLinker           *session.HistoryLinker
 
 	// Unfinished work scanning.
-	UnfinishedScanner      *unfinished.Scanner
-	UnfinishedStateStore   *unfinished.StateStore
-	UnfinishedWorkService  *services.UnfinishedWorkService
+	UnfinishedScanner     *unfinished.Scanner
+	UnfinishedStateStore  *unfinished.StateStore
+	UnfinishedWorkService *services.UnfinishedWorkService
 }
 
 // BuildDependencies constructs and wires all server dependencies in the correct order.

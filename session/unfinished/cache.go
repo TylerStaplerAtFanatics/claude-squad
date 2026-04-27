@@ -7,11 +7,11 @@ import (
 
 // worktreeCache is a single-entry TTL cache for a ScanResult.
 type worktreeCache struct {
-	mu        sync.RWMutex
-	result    ScanResult
-	scanTime  time.Time
-	ttl       time.Duration
-	hasValue  bool
+	mu       sync.RWMutex
+	result   ScanResult
+	scanTime time.Time
+	ttl      time.Duration
+	hasValue bool
 }
 
 // Get returns the cached result and true if the entry is still fresh.

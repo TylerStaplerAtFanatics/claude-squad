@@ -121,8 +121,8 @@ func TestCreateSession_EmptyPath_NonOneOff_ReturnsInvalidArgument(t *testing.T) 
 	svc := newCreateTestService(t, storage)
 
 	_, err := svc.CreateSession(context.Background(), connect.NewRequest(&sessionv1.CreateSessionRequest{
-		Title: "my-session",
-		Path:  "",
+		Title:  "my-session",
+		Path:   "",
 		OneOff: false,
 	}))
 

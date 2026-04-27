@@ -13,8 +13,8 @@ func newTestPoller(t *testing.T, fastInterval, slowInterval time.Duration) (*Rev
 	t.Helper()
 	queue := NewReviewQueue()
 	config := ReviewQueuePollerConfig{
-		PollInterval:     fastInterval,
-		SlowPollInterval: slowInterval,
+		PollInterval:      fastInterval,
+		SlowPollInterval:  slowInterval,
 		ReconcileInterval: 0, // disable reconciliation
 	}
 	poller := NewReviewQueuePollerWithConfig(queue, nil, nil, config)
@@ -48,19 +48,19 @@ func TestAdaptivePoller_BackoffToIdleInterval(t *testing.T) {
 	// Wait for the first tick to actually land, with a generous timeout.
 	// A fixed sleep risks failing if goroutine scheduling delays the first timer fire.
 	firstTickDeadline := time.Now().Add(500 * time.Millisecond)
-	for poller.tickCount == 0 && time.Now().Before(firstTickDeadline) {
+	for poller.tickCount.Load() == 0 && time.Now().Before(firstTickDeadline) {
 		time.Sleep(5 * time.Millisecond)
 	}
-	if poller.tickCount == 0 {
+	if poller.tickCount.Load() == 0 {
 		t.Fatal("timed out waiting for the first poll tick to fire")
 	}
-	firstTickCount := poller.tickCount
+	firstTickCount := poller.tickCount.Load()
 
 	// The queue is empty and the activity channel is wired, so the loop should have
 	// backed off to slowInterval. After another fastInterval + margin, the tick count
 	// must NOT have increased (the next tick won't fire for ~slowInterval more).
 	time.Sleep(fastInterval + 20*time.Millisecond)
-	tickAfterFast := poller.tickCount
+	tickAfterFast := poller.tickCount.Load()
 
 	if tickAfterFast != firstTickCount {
 		t.Errorf("expected tick count to stay at %d during slow interval backoff, got %d (poller fired again at fast rate)",
@@ -92,7 +92,7 @@ func TestAdaptivePoller_SnapOnApprovalResponse(t *testing.T) {
 
 	// Wait for the first tick (fast interval) and the backoff to kick in.
 	time.Sleep(fastInterval*2 + 20*time.Millisecond)
-	tickBeforeSignal := poller.tickCount
+	tickBeforeSignal := poller.tickCount.Load()
 
 	// The loop is now on slowInterval; record the time and send the activity signal.
 	signalTime := time.Now()
@@ -100,7 +100,7 @@ func TestAdaptivePoller_SnapOnApprovalResponse(t *testing.T) {
 
 	// Wait fastInterval + generous margin for the snap-to-fast to fire another tick.
 	time.Sleep(fastInterval*3 + 50*time.Millisecond)
-	tickAfterSignal := poller.tickCount
+	tickAfterSignal := poller.tickCount.Load()
 	elapsed := time.Since(signalTime)
 
 	if tickAfterSignal <= tickBeforeSignal {
