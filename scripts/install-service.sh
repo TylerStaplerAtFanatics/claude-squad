@@ -155,6 +155,14 @@ install_macos() {
     # and claude are found even if not already on the shell PATH.
     plist_path="$PATH:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin"
 
+    # Build XML <string> entries for any extra flags (e.g. --profile --profile-port 6060).
+    # We rely on the EnvironmentVariables PATH key above, so no shell wrapper is needed.
+    extra_args_xml=""
+    for arg in $extra_flags; do
+        extra_args_xml="$extra_args_xml
+        <string>$arg</string>"
+    done
+
     cat > "$plist_file" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -164,11 +172,13 @@ install_macos() {
     <key>Label</key>
     <string>com.stapler-squad</string>
 
+    <key>Program</key>
+    <string>$bin_path</string>
+
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/zsh</string>
-        <string>-c</string>
-        <string>[ -f "$HOME/.zshrc" ] &amp;&amp; source "$HOME/.zshrc" 2&gt;/dev/null; exec $bin_path --remote-access$extra_flags</string>
+        <string>$bin_path</string>
+        <string>--remote-access</string>$extra_args_xml
     </array>
 
     <key>RunAtLoad</key>
