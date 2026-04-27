@@ -104,3 +104,74 @@ export const newSessionButtonInner = style({
   lineHeight: "1",
   fontWeight: "300",
 });
+
+// More menu sheet — slides up from just above the bottom nav
+export const moreBackdrop = style({
+  position: "fixed",
+  inset: 0,
+  zIndex: 1040,
+  background: "transparent",
+
+  "@media": {
+    "(min-width: 900px)": {
+      display: "none",
+    },
+  },
+});
+
+export const moreSheet = style({
+  position: "fixed",
+  left: 0,
+  right: 0,
+  bottom: "64px", // sits directly above the nav bar
+  zIndex: 1045,
+  background: vars.color.background,
+  borderTop: `1px solid ${vars.color.borderColor}`,
+  borderRadius: `${vars.radii.lg} ${vars.radii.lg} 0 0`,
+  transform: "translateY(100%)",
+  transition: "transform 0.22s ease",
+  paddingBottom: "var(--safe-area-bottom, 0px)",
+
+  "@media": {
+    "(min-width: 900px)": {
+      display: "none",
+    },
+  },
+});
+
+export const moreSheetOpen = style({
+  transform: "translateY(0)",
+});
+
+export const moreSheetItem = style({
+  display: "flex",
+  alignItems: "center",
+  gap: vars.space["3"],
+  padding: `${vars.space["4"]} ${vars.space["6"]}`,
+  color: vars.color.textPrimary,
+  textDecoration: "none",
+  fontSize: vars.fontSize.base,
+  borderBottom: `1px solid ${vars.color.borderColor}`,
+  transition: "background 0.12s",
+
+  selectors: {
+    "&:last-child": {
+      borderBottom: "none",
+    },
+    "&:hover": {
+      background: vars.color.hoverBackground,
+    },
+  },
+});
+
+export const moreSheetItemActive = style({
+  color: vars.color.primary,
+  fontWeight: "600",
+});
+
+export const moreSheetItemIcon = style({
+  fontSize: vars.fontSize.lg,
+  width: "24px",
+  textAlign: "center",
+  flexShrink: 0,
+});
