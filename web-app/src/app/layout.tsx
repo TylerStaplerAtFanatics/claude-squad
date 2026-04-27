@@ -6,6 +6,7 @@ import { Providers } from "./Providers";
 import { NotificationPanel } from "@/components/ui/NotificationPanel";
 import { ViewportProvider } from "@/components/providers/ViewportProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { WebVitalsReporter } from "@/components/telemetry/WebVitalsReporter";
 import { lightTheme } from "@/styles/theme.css";
 import "./globals.css";
 
@@ -30,6 +31,7 @@ export default function RootLayout({
     <html lang="en" className={lightTheme} suppressHydrationWarning>
       <body>
         <ThemeProvider />
+        <WebVitalsReporter />
         <ViewportProvider>
           <ErrorBoundary>
             <AuthProvider>

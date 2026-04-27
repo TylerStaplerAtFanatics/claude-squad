@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { vars } from "@/styles/theme.css";
 
 export const row = style({
   display: "flex",
@@ -14,12 +15,12 @@ export const row = style({
 });
 
 export const rowHighlighted = style({
-  background: "var(--accent-bg)",
+  background: vars.color.accentBg,
 });
 
 export const folderIcon = style({
   flexShrink: 0,
-  color: "var(--text-muted)",
+  color: vars.color.textMuted,
   display: "flex",
   alignItems: "center",
 });
@@ -42,7 +43,7 @@ export const pathLine = style({
 
 export const parentPath = style({
   fontSize: "13px",
-  color: "var(--text-muted)",
+  color: vars.color.textMuted,
   overflow: "hidden",
   textOverflow: "ellipsis",
   flexShrink: 1,
@@ -51,14 +52,14 @@ export const parentPath = style({
 
 export const separator = style({
   fontSize: "13px",
-  color: "var(--text-muted)",
+  color: vars.color.textMuted,
   flexShrink: 0,
 });
 
 export const repoName = style({
   fontSize: "13px",
   fontWeight: 600,
-  color: "var(--text-primary)",
+  color: vars.color.textPrimary,
   overflow: "hidden",
   textOverflow: "ellipsis",
   flexShrink: 0,
@@ -66,12 +67,12 @@ export const repoName = style({
 
 export const sessionCount = style({
   fontSize: "11px",
-  color: "var(--text-muted)",
+  color: vars.color.textMuted,
 });
 
 export const relativeTime = style({
   fontSize: "11px",
-  color: "var(--text-muted)",
+  color: vars.color.textMuted,
   flexShrink: 0,
   marginLeft: "auto",
   whiteSpace: "nowrap",

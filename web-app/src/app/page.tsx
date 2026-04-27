@@ -406,6 +406,9 @@ function HomeContent() {
   // Handle session selection with URL update
   const handleSessionClick = (session: Session) => {
     sessionTriggerRef.current = document.activeElement as HTMLElement;
+    if (typeof performance !== "undefined") {
+      performance.mark("session:click");
+    }
     setSelectedSession(session);
     setActiveTab("info");
     updateUrl(session.id, "info");

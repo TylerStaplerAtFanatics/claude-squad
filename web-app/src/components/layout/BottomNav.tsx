@@ -5,6 +5,7 @@ import { AppLink } from "@/components/ui/AppLink";
 import { usePathname } from "next/navigation";
 import { ReviewQueueNavBadge } from "@/components/sessions/ReviewQueueNavBadge";
 import { useOmnibar } from "@/lib/contexts/OmnibarContext";
+import { useAuth } from "@/lib/contexts/AuthContext";
 import { routes } from "@/lib/routes";
 import * as styles from "./BottomNav.css";
 
@@ -27,6 +28,7 @@ type MoreItem = (typeof moreItems)[number];
 export function BottomNav() {
   const pathname = usePathname();
   const { open: openOmnibar } = useOmnibar();
+  const { authenticated, authEnabled } = useAuth();
   const [moreOpen, setMoreOpen] = useState(false);
 
   // Close the more menu on route change
@@ -105,6 +107,16 @@ export function BottomNav() {
             </AppLink>
           );
         })}
+        {authEnabled && authenticated && (
+          <AppLink
+            href={routes.account}
+            className={`${styles.moreSheetItem} ${pathname === routes.account ? styles.moreSheetItemActive : ""}`}
+            aria-current={pathname === routes.account ? "page" : undefined}
+          >
+            <span className={styles.moreSheetItemIcon} aria-hidden="true">👤</span>
+            <span>Account</span>
+          </AppLink>
+        )}
       </div>
 
       {/* Bottom nav bar */}

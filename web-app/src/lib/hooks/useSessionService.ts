@@ -11,6 +11,7 @@ import {
 } from "@/gen/session/v1/session_pb";
 import { SessionEvent, NotificationEvent } from "@/gen/session/v1/events_pb";
 import { getApiBaseUrl, createAuthInterceptor } from "@/lib/config";
+import { createRpcTimingInterceptor } from "@/lib/telemetry/rpcTiming";
 import { useAppDispatch, useAppSelector } from "@/lib/store";
 import {
   setSessions,
@@ -91,7 +92,7 @@ export function useSessionService(
   useEffect(() => {
     const transport = createConnectTransport({
       baseUrl,
-      interceptors: [createAuthInterceptor()],
+      interceptors: [createAuthInterceptor(), createRpcTimingInterceptor()],
     });
 
     clientRef.current = createClient(SessionService, transport);

@@ -511,7 +511,7 @@ export const actionSheetItem = style({
 });
 
 export const actionSheetItemDestructive = style({
-  color: "var(--error)",
+  color: vars.color.error,
 });
 
 export const actionDivider = style({
@@ -538,7 +538,7 @@ export const actionButton = style({
 });
 
 export const actionButtonDanger = style({
-  background: "var(--error)",
+  background: vars.color.error,
   color: "white",
   border: "none",
   selectors: {

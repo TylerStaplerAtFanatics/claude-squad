@@ -10,7 +10,7 @@ import { WorkspaceSwitchModal } from "./WorkspaceSwitchModal";
 import { SessionLogsTab } from "./SessionLogsTab";
 import { FilesTab } from "./FilesTab";
 import { ActionBar } from "@/components/ui/ActionBar";
-import { useSessionService } from "@/lib/hooks/useSessionService";
+import { useSessionActions } from "@/lib/hooks/useSessionActions";
 import { SessionVcsProvider } from "@/lib/contexts/SessionVcsContext";
 import { getApiBaseUrl } from "@/lib/config";
 import { getProgramDisplay, isKnownProgram, PROGRAMS } from "@/lib/constants/programs";
@@ -105,8 +105,22 @@ export function SessionDetail({
   const [renameError, setRenameError] = useState<string | null>(null);
   // Tag editor state
   const [showTagEditor, setShowTagEditor] = useState(false);
-  const { updateSession, deleteSession, pauseSession, renameSession } = useSessionService();
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false);
+  const [showCheckpointModal, setShowCheckpointModal] = useState(false);
+  const [checkpointLabel, setCheckpointLabel] = useState("");
+  const actions = useSessionActions(session.id);
   const allSessions = useAppSelector(selectAllSessions);
+
+  // Measure click-to-render latency when the detail panel first mounts for a session
+  useEffect(() => {
+    if (typeof performance === "undefined") return;
+    try {
+      performance.measure("session:click-to-render", "session:click");
+    } catch {
+      // mark may be absent (e.g. deep-link navigation with no prior click)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id]);
 
   // Terminal instance pool: keeps up to 8 session terminals alive (LRU, oldest first)
   const [pooledSessionIds, setPooledSessionIds] = useState<string[]>([]);
@@ -189,7 +203,7 @@ export function SessionDetail({
   // Handler for saving program change
   const handleSaveProgram = async () => {
     if (programValue !== session.program) {
-      await updateSession(session.id, { program: programValue });
+      await actions.update({ program: programValue });
     }
     setIsEditingProgram(false);
   };
@@ -203,7 +217,7 @@ export function SessionDetail({
   // Handler for saving working directory change
   const handleSaveWorkingDir = async () => {
     if (workingDirValue !== (session.workingDir || "")) {
-      await updateSession(session.id, { workingDir: workingDirValue });
+      await actions.update({ workingDir: workingDirValue });
     }
     setIsEditingWorkingDir(false);
   };
@@ -220,7 +234,7 @@ export function SessionDetail({
       setActionSheetOpen(false);
       setShowResumeModal(true);
     } else {
-      await pauseSession(session.id);
+      await actions.pause();
       setActionSheetOpen(false);
     }
   };
@@ -236,7 +250,7 @@ export function SessionDetail({
   const handleConfirmDelete = async () => {
     setShowDeleteConfirm(false);
     setActionSheetOpen(false);
-    await deleteSession(session.id);
+    await actions.delete();
     onClose();
   };
 
@@ -247,7 +261,7 @@ export function SessionDetail({
       return;
     }
     setRenameError(null);
-    await renameSession(session.id, trimmed);
+    await actions.rename(trimmed);
     setShowRenameModal(false);
   };
 
@@ -782,6 +796,15 @@ export function SessionDetail({
             >
               🏷 Edit Tags
             </button>
+            {session.instanceType !== InstanceType.EXTERNAL && (
+              <button
+                className={styles.actionSheetItem}
+                onClick={() => { setActionSheetOpen(false); setCheckpointLabel(""); setShowCheckpointModal(true); }}
+                data-testid="action-checkpoint"
+              >
+                📸 Create Checkpoint
+              </button>
+            )}
             {/* Switch workspace */}
             {session.instanceType !== InstanceType.EXTERNAL && (
               <button
@@ -789,6 +812,15 @@ export function SessionDetail({
                 onClick={() => { setActionSheetOpen(false); setShowWorkspaceSwitchModal(true); }}
               >
                 ⎇ Switch Workspace
+              </button>
+            )}
+            {session.instanceType !== InstanceType.EXTERNAL && (
+              <button
+                className={styles.actionSheetItem}
+                onClick={() => { setActionSheetOpen(false); setShowRestartConfirm(true); }}
+                data-testid="action-restart"
+              >
+                🔄 Restart
               </button>
             )}
             <hr className={styles.actionDivider} />
@@ -862,12 +894,66 @@ export function SessionDetail({
         </ModalContent>
       </Modal>
 
+      {/* Restart confirmation */}
+      <Modal open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>
+        <ModalContent fallbackTitle="Restart session">
+          <ModalTitle>Restart session?</ModalTitle>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+            This will stop and restart the session process.
+          </p>
+          <ModalFooter>
+            <button className={styles.actionButton} onClick={() => setShowRestartConfirm(false)}>
+              Cancel
+            </button>
+            <button
+              className={`${styles.actionButton} ${styles.actionButtonDanger}`}
+              onClick={async () => { setShowRestartConfirm(false); await actions.restart(); }}
+              data-testid="restart-confirm"
+            >
+              Restart
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Create checkpoint */}
+      <Modal open={showCheckpointModal} onOpenChange={setShowCheckpointModal}>
+        <ModalContent fallbackTitle="Create checkpoint">
+          <ModalTitle>Create checkpoint</ModalTitle>
+          <input
+            type="text"
+            value={checkpointLabel}
+            onChange={(e) => setCheckpointLabel(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { setShowCheckpointModal(false); actions.createCheckpoint(checkpointLabel.trim()); }
+              else if (e.key === 'Escape') setShowCheckpointModal(false);
+            }}
+            placeholder="Optional label..."
+            autoFocus
+            style={{ fontSize: '16px', width: '100%', padding: '0.5rem', marginTop: '0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--input-background)', color: 'var(--input-text)' }}
+            data-testid="checkpoint-input"
+          />
+          <ModalFooter>
+            <button className={styles.actionButton} onClick={() => setShowCheckpointModal(false)}>
+              Cancel
+            </button>
+            <button
+              className={`${styles.actionButton} ${styles.actionButtonSave}`}
+              onClick={() => { setShowCheckpointModal(false); actions.createCheckpoint(checkpointLabel.trim()); }}
+              data-testid="checkpoint-save"
+            >
+              Save
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
       {/* Tag editor */}
       {showTagEditor && (
         <TagEditor
           tags={session.tags || []}
           sessionTitle={session.title}
-          onSave={(tags) => { updateSession(session.id, { tags }); setShowTagEditor(false); }}
+          onSave={(tags) => { actions.updateTags(tags); setShowTagEditor(false); }}
           onCancel={() => setShowTagEditor(false)}
         />
       )}
@@ -878,7 +964,7 @@ export function SessionDetail({
           session={session}
           sessions={allSessions}
           onConfirm={async (updates) => {
-            await updateSession(session.id, { title: updates.title, tags: updates.tags });
+            await actions.resume({ title: updates.title, tags: updates.tags });
             setShowResumeModal(false);
           }}
           onCancel={() => setShowResumeModal(false)}
