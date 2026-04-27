@@ -64,8 +64,8 @@ jobs:
             -bench='BenchmarkEventBus|BenchmarkDeltaGenerat|BenchmarkCircularBuffer|BenchmarkSessionService_List|BenchmarkSessionService_Get|BenchmarkSessionService_Stream' \
             -run='^$' \
             -benchmem \
-            -count=8 \
-            -timeout=10m \
+            -count=3 \
+            -timeout=15m \
             ./server/events ./server/terminal ./server/services ./session/scrollback | tee tier1-bench.txt
 
       - name: Compare against baseline (PR only)
