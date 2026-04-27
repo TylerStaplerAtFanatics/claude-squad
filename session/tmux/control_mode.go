@@ -3,15 +3,42 @@ package tmux
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"github.com/tstapler/stapler-squad/log"
 	"io"
+	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// cmdResult carries the response body and error for a control mode command.
+type cmdResult struct {
+	body string
+	err  error
+}
+
+var (
+	// ErrControlModeNotRunning is returned when sendCMCommand is called but control mode is not active.
+	ErrControlModeNotRunning = errors.New("control mode not running")
+	// ErrControlModeStopped is sent to all in-flight commands when the control mode process exits.
+	ErrControlModeStopped = errors.New("control mode stopped")
+)
+
+// cmCommandsEnabled gates the CM command dispatch path.
+// Set STAPLER_SQUAD_CM_COMMANDS=true to enable.
+var cmCommandsEnabled atomic.Bool
+
+func init() {
+	if os.Getenv("STAPLER_SQUAD_CM_COMMANDS") == "true" {
+		cmCommandsEnabled.Store(true)
+	}
+}
 
 // StartControlMode begins streaming terminal output via tmux control mode (-C flag).
 // This is the proper way to get real-time terminal output from tmux, replacing pipe-pane + FIFO.
@@ -95,11 +122,14 @@ func (t *TmuxSession) StopControlMode() error {
 		t.controlModeDone = nil
 	}
 
-	// Close stdin to signal tmux to exit
+	// Close stdin to signal tmux to exit. cmdSendMu prevents a concurrent
+	// sendCMCommand from writing to the pipe after we nil it.
+	t.cmdSendMu.Lock()
 	if t.controlModeStdin != nil {
 		t.controlModeStdin.Close()
 		t.controlModeStdin = nil
 	}
+	t.cmdSendMu.Unlock()
 
 	// Wait for process to exit (with timeout)
 	done := make(chan error, 1)
@@ -168,12 +198,28 @@ func (t *TmuxSession) readControlModeOutput() {
 		}
 	}
 
-	// Control mode process has exited. Close all subscriber channels so that waiting
-	// goroutines (e.g. streamViaControlMode) detect the end-of-stream and unblock.
-	// Using controlModeSubMu (write lock) ensures this is serialized with StopControlMode
-	// and SubscribeToControlModeUpdates, preventing double-close panics.
+	// Drain any in-flight command response (reader-goroutine-only fields; no lock needed).
+	if t.curCmdCh != nil {
+		select {
+		case t.curCmdCh <- cmdResult{err: ErrControlModeStopped}:
+		default:
+		}
+		t.curCmdCh = nil
+	}
+	t.inCmdResp = false
+	t.cmdBodyBuf.Reset()
+
+	// Control mode process has exited. Close all subscriber channels and drain pending
+	// commands so that waiting goroutines detect end-of-stream and unblock.
 	t.controlModeSubMu.Lock()
 	t.controlModeExited = true
+	for _, ch := range t.pendingCmds {
+		select {
+		case ch <- cmdResult{err: ErrControlModeStopped}:
+		default:
+		}
+	}
+	t.pendingCmds = nil
 	for id, ch := range t.controlModeSubscribers {
 		close(ch)
 		delete(t.controlModeSubscribers, id)
@@ -214,47 +260,45 @@ func (t *TmuxSession) monitorControlModeErrors(stderr io.ReadCloser) {
 // processControlModeLine parses and handles a single control mode notification line.
 // Control mode lines start with % and follow specific formats:
 //
-//	%output %PANE_ID DATA     - Terminal output from pane
-//	%begin TIME MSGID FLAGS   - Begin command response
-//	%end TIME MSGID FLAGS     - End command response
-//	%error ERROR_MESSAGE      - Error notification
+//	%output %PANE_ID DATA     - Terminal output from pane (always broadcast, even inside response)
+//	%begin TIME CMDNUM FLAGS  - Begin command response; pops head of pendingCmds
+//	%end TIME CMDNUM FLAGS    - End command response; delivers body to curCmdCh
+//	%error TIME CMDNUM FLAGS  - Command failed; delivers error to curCmdCh
 //	%exit                     - Session closed
+//
+// This method is called exclusively from the reader goroutine; inCmdResp, cmdBodyBuf,
+// and curCmdCh are reader-goroutine-only fields and require no locking.
 func (t *TmuxSession) processControlModeLine(line string) {
-	// Skip empty lines
 	if line == "" {
 		return
 	}
 
-	// All control mode lines start with %
+	// Non-% lines between %begin and %end are body content for the current command.
+	if t.inCmdResp && !strings.HasPrefix(line, "%") {
+		t.cmdBodyBuf.WriteString(line)
+		t.cmdBodyBuf.WriteByte('\n')
+		return
+	}
+
 	if !strings.HasPrefix(line, "%") {
-		// Regular output (shouldn't happen in control mode, but log if it does)
-		log.DebugLog.Printf("Unexpected non-control line from tmux: %s", line)
+		if log.DebugLog != nil {
+			log.DebugLog.Printf("Unexpected non-control line from tmux: %s", line)
+		}
 		return
 	}
 
-	// Parse control mode notification type
 	fields := strings.SplitN(line, " ", 3)
-	if len(fields) < 1 {
-		return
-	}
-
 	notificationType := fields[0]
 
 	switch notificationType {
 	case "%output":
-		// %output %PANE_ID DATA
-		// DATA is octal-encoded for non-printable characters
+		// %output %PANE_ID DATA — broadcast even inside a command response block.
 		if len(fields) >= 3 {
 			paneID := fields[1]
 			encodedData := fields[2]
-
-			// Decode octal-encoded output
 			data := t.decodeControlModeOutput(encodedData)
-
 			if len(data) > 0 {
-				// Broadcast to all subscribers
 				t.broadcastControlModeUpdate(data)
-
 				if log.DebugLog != nil {
 					log.DebugLog.Printf("Control mode output for session '%s' pane %s: %d bytes",
 						t.sanitizedName, paneID, len(data))
@@ -262,8 +306,63 @@ func (t *TmuxSession) processControlModeLine(line string) {
 			}
 		}
 
+	case "%begin":
+		// Start of a command response. If we're already in a response (unexpected
+		// double-%begin), fail the previous pending command before resetting state.
+		if t.inCmdResp && t.curCmdCh != nil {
+			select {
+			case t.curCmdCh <- cmdResult{err: errors.New("tmux: unexpected %begin before %end")}:
+			default:
+			}
+			t.curCmdCh = nil
+		}
+		// Pop the head of the FIFO queue.
+		t.controlModeSubMu.Lock()
+		if len(t.pendingCmds) > 0 {
+			t.curCmdCh = t.pendingCmds[0]
+			t.pendingCmds = t.pendingCmds[1:]
+		}
+		t.controlModeSubMu.Unlock()
+		t.inCmdResp = true
+		t.cmdBodyBuf.Reset()
+
+	case "%end":
+		if t.inCmdResp {
+			body := strings.TrimRight(t.cmdBodyBuf.String(), "\n")
+			if t.curCmdCh != nil {
+				select {
+				case t.curCmdCh <- cmdResult{body: body}:
+				default:
+				}
+				t.curCmdCh = nil
+			}
+			t.inCmdResp = false
+			t.cmdBodyBuf.Reset()
+		}
+
+	case "%error":
+		if t.inCmdResp {
+			// Error description lines appear between %begin and %error in the body buffer.
+			errMsg := strings.TrimSpace(t.cmdBodyBuf.String())
+			if errMsg == "" && len(fields) >= 2 {
+				errMsg = strings.Join(fields[1:], " ")
+			}
+			if t.curCmdCh != nil {
+				select {
+				case t.curCmdCh <- cmdResult{err: fmt.Errorf("tmux: %s", errMsg)}:
+				default:
+				}
+				t.curCmdCh = nil
+			}
+			t.inCmdResp = false
+			t.cmdBodyBuf.Reset()
+		} else {
+			if len(fields) >= 2 {
+				log.ErrorLog.Printf("Control mode error for session '%s': %s", t.sanitizedName, strings.Join(fields[1:], " "))
+			}
+		}
+
 	case "%exit":
-		// tmux server exited or detached from the session
 		log.InfoLog.Printf("Control mode received %%exit for session '%s'", t.sanitizedName)
 		if !t.intentionalStop.Load() {
 			t.onExitOnce.Do(func() {
@@ -274,7 +373,6 @@ func (t *TmuxSession) processControlModeLine(line string) {
 		}
 
 	case "%session-closed":
-		// A specific tmux session was closed (the session we are watching exited)
 		if len(fields) >= 2 {
 			log.InfoLog.Printf("Control mode session-closed for '%s': %s", t.sanitizedName, strings.Join(fields[1:], " "))
 		}
@@ -287,27 +385,50 @@ func (t *TmuxSession) processControlModeLine(line string) {
 		}
 
 	case "%session-changed":
-		// %session-changed $SESSION_ID NAME
 		if len(fields) >= 3 {
 			log.InfoLog.Printf("Control mode session-changed for '%s': %s", t.sanitizedName, fields[2])
 		}
 
-	case "%begin", "%end":
-		// Command response markers - we don't send commands, so ignore
-		return
-
-	case "%error":
-		// %error ERROR_MESSAGE
-		if len(fields) >= 2 {
-			errorMsg := strings.Join(fields[1:], " ")
-			log.ErrorLog.Printf("Control mode error for session '%s': %s", t.sanitizedName, errorMsg)
-		}
-
 	default:
-		// Unknown notification type - log for debugging
 		if log.DebugLog != nil {
 			log.DebugLog.Printf("Unknown control mode notification for session '%s': %s", t.sanitizedName, line)
 		}
+	}
+}
+
+// sendCMCommand writes a tmux command over the control mode stdin pipe and waits
+// for the corresponding %begin/%end response. Returns the response body or an error.
+//
+// args are joined with spaces and terminated with a newline. Format strings containing
+// spaces must be pre-quoted (e.g. "'#{pane_width} #{pane_height}'").
+//
+// Concurrent calls are safe: a dedicated mutex serializes the (enqueue + write) pair so
+// that tmux receives commands in the same order as response channels enter the FIFO queue.
+// If ctx is cancelled before the response arrives, sendCMCommand returns immediately;
+// the stale response channel remains in the queue until tmux delivers its response.
+func (t *TmuxSession) sendCMCommand(ctx context.Context, args ...string) (string, error) {
+	resultCh := make(chan cmdResult, 1)
+
+	t.cmdSendMu.Lock()
+	if t.controlModeStdin == nil {
+		t.cmdSendMu.Unlock()
+		return "", ErrControlModeNotRunning
+	}
+	t.controlModeSubMu.Lock()
+	t.pendingCmds = append(t.pendingCmds, resultCh)
+	t.controlModeSubMu.Unlock()
+	_, writeErr := fmt.Fprintf(t.controlModeStdin, "%s\n", strings.Join(args, " "))
+	t.cmdSendMu.Unlock()
+
+	if writeErr != nil {
+		return "", fmt.Errorf("write to control mode stdin: %w", writeErr)
+	}
+
+	select {
+	case result := <-resultCh:
+		return result.body, result.err
+	case <-ctx.Done():
+		return "", ctx.Err()
 	}
 }
 

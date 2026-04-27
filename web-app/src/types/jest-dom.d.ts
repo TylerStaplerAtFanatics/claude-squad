@@ -1,3 +1,1 @@
-// Augment jest matchers with @testing-library/jest-dom matchers
-// (toBeInTheDocument, toHaveAttribute, toHaveTextContent, etc.)
-import '@testing-library/jest-dom';
+/// <reference types="@testing-library/jest-dom" />
