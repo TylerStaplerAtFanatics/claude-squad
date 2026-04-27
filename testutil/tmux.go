@@ -246,17 +246,19 @@ func (s *TmuxTestServer) ListSessions() ([]string, error) {
 	s.t.Helper()
 
 	cmd := exec.Command("tmux", "-L", s.socketName, "list-sessions", "-F", "#{session_name}")
-	output, err := s.executor.Output(cmd)
+	// Use CombinedOutput so the tmux stderr message is available for error classification.
+	// executor.Output only captures stdout; "no server running" appears on stderr.
+	output, err := s.executor.CombinedOutput(cmd)
 	if err != nil {
-		// No sessions or no server running is not an error - return empty list
-		// tmux returns exit status 1 when no sessions exist
-		errStr := err.Error()
-		if strings.Contains(errStr, "no server running") ||
-			strings.Contains(errStr, "no sessions") ||
-			(strings.Contains(errStr, "exit status 1") && len(output) == 0) {
+		combined := err.Error() + " " + string(output)
+		// These all mean "no sessions available" — not an error for our purposes.
+		if strings.Contains(combined, "no server running") ||
+			strings.Contains(combined, "no sessions") ||
+			strings.Contains(combined, "error connecting") ||
+			strings.Contains(combined, "server exited unexpectedly") {
 			return []string{}, nil
 		}
-		return nil, fmt.Errorf("failed to list sessions: %w", err)
+		return nil, fmt.Errorf("failed to list sessions: %w (output: %s)", err, string(output))
 	}
 
 	// Parse session names (one per line), filtering the registry keepalive session
@@ -333,15 +335,20 @@ func (s *TmuxTestServer) KillServer() error {
 	s.t.Helper()
 
 	cmd := exec.Command("tmux", "-L", s.socketName, "kill-server")
-	err := s.executor.Run(cmd)
+	// Use CombinedOutput so we can inspect the actual tmux error message on stderr.
+	// executor.Run only returns the exit code; "no server running" lives on stderr.
+	output, err := s.executor.CombinedOutput(cmd)
 	if err != nil {
-		// Server already gone is not an error
-		if strings.Contains(err.Error(), "no server running") {
-			// Still attempt socket file removal even if server was already gone
+		combined := err.Error() + " " + string(output)
+		// Any of these messages mean the server was never running (or already gone) —
+		// not a real error; the socket file may still need removal.
+		if strings.Contains(combined, "no server running") ||
+			strings.Contains(combined, "error connecting") ||
+			strings.Contains(combined, "server exited unexpectedly") {
 			_ = os.Remove(tmuxSocketPath(s.socketName))
 			return nil
 		}
-		return fmt.Errorf("failed to kill server: %w", err)
+		return fmt.Errorf("failed to kill server: %w (output: %s)", err, string(output))
 	}
 
 	// Remove the socket file to prevent stale accumulation across test runs
@@ -353,11 +360,8 @@ func (s *TmuxTestServer) KillServer() error {
 }
 
 // tmuxSocketPath returns the filesystem path for a named tmux socket.
-// Tmux uses XDG_RUNTIME_DIR/<name> on systemd systems, /tmp/tmux-<uid>/<name> otherwise.
+// Tmux always uses /tmp/tmux-<uid>/<name> for -L named sockets, regardless of XDG_RUNTIME_DIR.
 func tmuxSocketPath(socketName string) string {
-	if dir := os.Getenv("XDG_RUNTIME_DIR"); dir != "" {
-		return filepath.Join(dir, socketName)
-	}
 	return filepath.Join(fmt.Sprintf("/tmp/tmux-%d", os.Getuid()), socketName)
 }
 
