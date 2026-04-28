@@ -89,6 +89,8 @@ func TestStartTmuxSession(t *testing.T) {
 	}
 
 	workdir := t.TempDir()
+	// WithRegistry(nil) prevents DoesSessionExist() from using the global real-tmux
+	// registry fast path — ensures the mock executor is used for session polling.
 	session := newTmuxSessionWithSocket("test-session", "echo", ptyFactory, cmdExec, TmuxPrefix, "", WithRegistry(nil))
 
 	err := session.Start(workdir)

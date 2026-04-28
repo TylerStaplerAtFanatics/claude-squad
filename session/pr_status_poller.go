@@ -94,7 +94,7 @@ func (p *PRStatusPoller) RemoveInstance(title string) {
 	defer p.mu.Unlock()
 	filtered := make([]*Instance, 0, len(p.instances))
 	for _, inst := range p.instances {
-		if inst.Title != title {
+		if !inst.MatchesID(title) {
 			filtered = append(filtered, inst)
 		}
 	}

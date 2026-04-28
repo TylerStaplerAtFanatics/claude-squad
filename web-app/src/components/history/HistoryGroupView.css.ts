@@ -61,7 +61,7 @@ export const entryCards = style({
   display: "flex",
   flexDirection: "column",
   gap: "16px",
-  maxHeight: "calc(100vh - 320px)",
+  maxHeight: "calc(var(--viewport-height, 100dvh) - 320px)",
   overflowY: "auto",
   paddingRight: "8px",
 

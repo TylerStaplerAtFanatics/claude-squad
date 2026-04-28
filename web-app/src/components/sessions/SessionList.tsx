@@ -15,6 +15,7 @@ import { useReviewQueueContext } from "@/lib/contexts/ReviewQueueContext";
 import { useAppSelector } from "@/lib/store";
 import { selectDetectedStatusMap } from "@/lib/store/sessionsSlice";
 import { ActionBar } from "@/components/ui/ActionBar";
+import { Modal, ModalContent, ModalTitle, ModalFooter } from "@/components/ui/Modal";
 import {
   container,
   header,
@@ -164,6 +165,7 @@ export function SessionList({
   const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
   const [bulkFeedback, setBulkFeedback] = useState<string | null>(null);
   const [isBulkTagEditing, setIsBulkTagEditing] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   // Mobile filter panel toggle
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -441,9 +443,13 @@ export function SessionList({
     setSelectMode(false);
   };
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (!onDeleteSession) return;
-    if (!window.confirm(`Are you sure you want to delete ${selectedSessions.size} session(s)?`)) return;
+    setShowBulkDeleteConfirm(true);
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (!onDeleteSession) return;
     const ids = Array.from(selectedSessions);
     const results = await Promise.allSettled(
       ids.map(id => Promise.resolve(onDeleteSession(id)))
@@ -835,6 +841,29 @@ export function SessionList({
           })}
         </div>
       )}
+
+      <Modal open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <ModalContent fallbackTitle="Confirm delete">
+          <ModalTitle>Delete {selectedSessions.size} session{selectedSessions.size !== 1 ? 's' : ''}?</ModalTitle>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+            This will permanently delete {selectedSessions.size} selected session{selectedSessions.size !== 1 ? 's' : ''}. This cannot be undone.
+          </p>
+          <ModalFooter>
+            <button
+              style={{ padding: '0.5rem 1rem', border: '1px solid var(--border-color)', borderRadius: '6px', background: 'var(--card-background)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.875rem' }}
+              onClick={() => setShowBulkDeleteConfirm(false)}
+            >
+              Cancel
+            </button>
+            <button
+              style={{ padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', background: 'var(--error)', color: 'white', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}
+              onClick={() => { setShowBulkDeleteConfirm(false); handleConfirmBulkDelete(); }}
+            >
+              Delete {selectedSessions.size} session{selectedSessions.size !== 1 ? 's' : ''}
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

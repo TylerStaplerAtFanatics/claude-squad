@@ -62,6 +62,8 @@ const (
 	FieldLastViewed = "last_viewed"
 	// FieldLastAcknowledged holds the string denoting the last_acknowledged field in the database.
 	FieldLastAcknowledged = "last_acknowledged"
+	// FieldMcpServerURL holds the string denoting the mcp_server_url field in the database.
+	FieldMcpServerURL = "mcp_server_url"
 	// FieldInitialPrompt holds the string denoting the initial_prompt field in the database.
 	FieldInitialPrompt = "initial_prompt"
 	// FieldOneShot holds the string denoting the one_shot field in the database.
@@ -140,6 +142,7 @@ var Columns = []string{
 	FieldLastAddedToQueue,
 	FieldLastViewed,
 	FieldLastAcknowledged,
+	FieldMcpServerURL,
 	FieldInitialPrompt,
 	FieldOneShot,
 }
@@ -320,6 +323,11 @@ func ByLastViewed(opts ...sql.OrderTermOption) OrderOption {
 // ByLastAcknowledged orders the results by the last_acknowledged field.
 func ByLastAcknowledged(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLastAcknowledged, opts...).ToFunc()
+}
+
+// ByMcpServerURL orders the results by the mcp_server_url field.
+func ByMcpServerURL(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMcpServerURL, opts...).ToFunc()
 }
 
 // ByInitialPrompt orders the results by the initial_prompt field.

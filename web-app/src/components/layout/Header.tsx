@@ -12,6 +12,7 @@ import { useNotifications } from "@/lib/contexts/NotificationContext";
 import { useOmnibar } from "@/lib/contexts/OmnibarContext";
 import { routes } from "@/lib/routes";
 import { NAV_PAGES } from "@/lib/nav-pages";
+import { useAuth } from "@/lib/contexts/AuthContext";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ConnectionIndicator } from "@/components/layout/ConnectionIndicator";
@@ -20,6 +21,7 @@ import * as styles from "./Header.css";
 
 export function Header() {
   const pathname = usePathname();
+  const { authenticated, authEnabled } = useAuth();
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isApprovalDrawerOpen, setIsApprovalDrawerOpen] = useState(false);
@@ -101,6 +103,16 @@ export function Header() {
                 </AppLink>
               );
             })}
+            {authEnabled && authenticated && (
+              <AppLink
+                href={routes.account}
+                className={`${styles.navLink} ${pathname === routes.account ? styles.active : ""}`}
+                onClick={handleNavLinkClick}
+                aria-current={pathname === routes.account ? "page" : undefined}
+              >
+                Account
+              </AppLink>
+            )}
           </nav>
 
           <div className={styles.actions}>

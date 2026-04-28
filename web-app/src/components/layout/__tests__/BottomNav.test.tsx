@@ -29,11 +29,21 @@ jest.mock("@/components/sessions/ReviewQueueNavBadge", () => ({
   ReviewQueueNavBadge: () => null,
 }));
 
-
 // Mock OmnibarContext
 const mockOpenOmnibar = jest.fn();
 jest.mock("@/lib/contexts/OmnibarContext", () => ({
   useOmnibar: () => ({ open: mockOpenOmnibar }),
+}));
+
+// Mock AuthContext
+jest.mock("@/lib/contexts/AuthContext", () => ({
+  useAuth: () => ({ authenticated: false, authEnabled: false }),
+}));
+
+// Mock NotificationContext
+const mockTogglePanel = jest.fn();
+jest.mock("@/lib/contexts/NotificationContext", () => ({
+  useNotifications: () => ({ togglePanel: mockTogglePanel, getUnreadCount: () => 0 }),
 }));
 
 // Mock the CSS module
@@ -43,39 +53,51 @@ jest.mock("../BottomNav.css", () => ({
   navItemActive: "navItemActive",
   navItemIcon: "navItemIcon",
   navItemLabel: "navItemLabel",
-  newButton: "newButton",
-  newButtonIcon: "newButtonIcon",
+  newSessionButton: "newSessionButton",
+  newSessionButtonInner: "newSessionButtonInner",
+  notificationButton: "notificationButton",
+  notificationIconWrap: "notificationIconWrap",
+  notificationBadge: "notificationBadge",
+  moreBackdrop: "moreBackdrop",
+  moreSheet: "moreSheet",
+  moreSheetOpen: "moreSheetOpen",
+  moreSheetItem: "moreSheetItem",
+  moreSheetItemActive: "moreSheetItemActive",
+  moreSheetItemIcon: "moreSheetItemIcon",
 }));
 
 import { usePathname } from "next/navigation";
-import { MOBILE_NAV_PAGES } from "@/lib/nav-pages";
+
+const PRIMARY_ITEMS = [
+  { href: "/", label: "Sessions" },
+  { href: "/unfinished", label: "Unfinished" },
+  { href: "/review-queue", label: "Review" },
+] as const;
 
 describe("BottomNav", () => {
   beforeEach(() => {
     mockOpenOmnibar.mockClear();
+    mockTogglePanel.mockClear();
   });
 
-  it("renders every MOBILE_NAV_PAGE and the New session button", () => {
+  it("renders all primary nav items and the New session button", () => {
     (usePathname as jest.Mock).mockReturnValue("/");
     render(<BottomNav />);
 
-    const remaining = new Set(MOBILE_NAV_PAGES.map((p) => p.href));
-
-    for (const page of MOBILE_NAV_PAGES) {
-      const label = page.shortLabel ?? page.label;
-      expect(screen.getByText(label)).toBeInTheDocument();
-      remaining.delete(page.href);
+    const remaining = new Set(PRIMARY_ITEMS.map((p) => p.href));
+    for (const item of PRIMARY_ITEMS) {
+      expect(screen.getByText(item.label)).toBeInTheDocument();
+      remaining.delete(item.href);
     }
-
     expect(remaining.size).toBe(0);
-    expect(screen.getByRole("button", { name: "New session" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create new session" })).toBeInTheDocument();
   });
 
   it("opens omnibar when New session button is clicked", () => {
     (usePathname as jest.Mock).mockReturnValue("/");
     render(<BottomNav />);
 
-    fireEvent.click(screen.getByRole("button", { name: "New session" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create new session" }));
     expect(mockOpenOmnibar).toHaveBeenCalledTimes(1);
   });
 
@@ -87,12 +109,11 @@ describe("BottomNav", () => {
     expect(sessionsLink).toHaveAttribute("aria-current", "page");
   });
 
-  it("does not mark other items as active on home route", () => {
+  it("does not mark Review as active on home route", () => {
     (usePathname as jest.Mock).mockReturnValue("/");
     render(<BottomNav />);
 
-    const reviewPage = MOBILE_NAV_PAGES.find((p) => p.href === "/review-queue")!;
-    const reviewLink = screen.getByText(reviewPage.shortLabel ?? reviewPage.label).closest("a");
+    const reviewLink = screen.getByText("Review").closest("a");
     expect(reviewLink).not.toHaveAttribute("aria-current", "page");
   });
 
@@ -100,8 +121,7 @@ describe("BottomNav", () => {
     (usePathname as jest.Mock).mockReturnValue("/review-queue");
     render(<BottomNav />);
 
-    const reviewPage = MOBILE_NAV_PAGES.find((p) => p.href === "/review-queue")!;
-    const reviewLink = screen.getByText(reviewPage.shortLabel ?? reviewPage.label).closest("a");
+    const reviewLink = screen.getByText("Review").closest("a");
     expect(reviewLink).toHaveAttribute("aria-current", "page");
   });
 
@@ -111,5 +131,12 @@ describe("BottomNav", () => {
 
     const sessionsLink = screen.getByText("Sessions").closest("a");
     expect(sessionsLink).not.toHaveAttribute("aria-current", "page");
+  });
+
+  it("renders the More button", () => {
+    (usePathname as jest.Mock).mockReturnValue("/");
+    render(<BottomNav />);
+
+    expect(screen.getByRole("button", { name: "More navigation options" })).toBeInTheDocument();
   });
 });

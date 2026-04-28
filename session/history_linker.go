@@ -96,7 +96,7 @@ func (hl *HistoryLinker) RemoveInstance(title string) {
 	defer hl.mu.Unlock()
 	filtered := make([]*Instance, 0, len(hl.instances))
 	for _, inst := range hl.instances {
-		if inst.Title != title {
+		if !inst.MatchesID(title) {
 			filtered = append(filtered, inst)
 		}
 	}

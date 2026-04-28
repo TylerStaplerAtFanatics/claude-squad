@@ -1066,13 +1066,18 @@ func (s *SessionService) CreateSession(...) {
 ### Frontend markers (`// +feature:`)
 Add within the **first 10 lines** of a React page/component file. Placement beyond line 10 is silently ignored — always put the marker at the top:
 ```tsx
-// +feature: ui:session-list
+// +feature: session-list
 'use client';
 import ...
 ```
 
-The ID convention is `ui:noun-noun` for frontend (e.g. `ui:session-list`, `ui:review-queue`).
+The ID convention is `noun-noun` for frontend (e.g. `session-list`, `review-queue`).
 The backend convention is `domain:verb` (e.g. `session:create`, `review-queue:get`).
+
+> **Known limitation**: the gap reporter in `docs/registry/coverage-gaps.json` uses domain-prefix
+> matching between the two namespaces. It is advisory only — false negatives are expected for
+> multi-word domains (e.g. `review-queue:get` ↔ `review-queue`).
+
 
 ---
 

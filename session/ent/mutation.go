@@ -5645,6 +5645,7 @@ type SessionMutation struct {
 	last_added_to_queue    *time.Time
 	last_viewed            *time.Time
 	last_acknowledged      *time.Time
+	mcp_server_url         *string
 	initial_prompt         *string
 	one_shot               *bool
 	clearedFields          map[string]struct{}
@@ -6896,6 +6897,55 @@ func (m *SessionMutation) ResetLastAcknowledged() {
 	delete(m.clearedFields, session.FieldLastAcknowledged)
 }
 
+// SetMcpServerURL sets the "mcp_server_url" field.
+func (m *SessionMutation) SetMcpServerURL(s string) {
+	m.mcp_server_url = &s
+}
+
+// McpServerURL returns the value of the "mcp_server_url" field in the mutation.
+func (m *SessionMutation) McpServerURL() (r string, exists bool) {
+	v := m.mcp_server_url
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMcpServerURL returns the old "mcp_server_url" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldMcpServerURL(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMcpServerURL is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMcpServerURL requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMcpServerURL: %w", err)
+	}
+	return oldValue.McpServerURL, nil
+}
+
+// ClearMcpServerURL clears the value of the "mcp_server_url" field.
+func (m *SessionMutation) ClearMcpServerURL() {
+	m.mcp_server_url = nil
+	m.clearedFields[session.FieldMcpServerURL] = struct{}{}
+}
+
+// McpServerURLCleared returns if the "mcp_server_url" field was cleared in this mutation.
+func (m *SessionMutation) McpServerURLCleared() bool {
+	_, ok := m.clearedFields[session.FieldMcpServerURL]
+	return ok
+}
+
+// ResetMcpServerURL resets all changes to the "mcp_server_url" field.
+func (m *SessionMutation) ResetMcpServerURL() {
+	m.mcp_server_url = nil
+	delete(m.clearedFields, session.FieldMcpServerURL)
+}
+
 // SetInitialPrompt sets the "initial_prompt" field.
 func (m *SessionMutation) SetInitialPrompt(s string) {
 	m.initial_prompt = &s
@@ -7225,7 +7275,7 @@ func (m *SessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SessionMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 27)
 	if m.title != nil {
 		fields = append(fields, session.FieldTitle)
 	}
@@ -7298,6 +7348,9 @@ func (m *SessionMutation) Fields() []string {
 	if m.last_acknowledged != nil {
 		fields = append(fields, session.FieldLastAcknowledged)
 	}
+	if m.mcp_server_url != nil {
+		fields = append(fields, session.FieldMcpServerURL)
+	}
 	if m.initial_prompt != nil {
 		fields = append(fields, session.FieldInitialPrompt)
 	}
@@ -7360,6 +7413,8 @@ func (m *SessionMutation) Field(name string) (ent.Value, bool) {
 		return m.LastViewed()
 	case session.FieldLastAcknowledged:
 		return m.LastAcknowledged()
+	case session.FieldMcpServerURL:
+		return m.McpServerURL()
 	case session.FieldInitialPrompt:
 		return m.InitialPrompt()
 	case session.FieldOneShot:
@@ -7421,6 +7476,8 @@ func (m *SessionMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldLastViewed(ctx)
 	case session.FieldLastAcknowledged:
 		return m.OldLastAcknowledged(ctx)
+	case session.FieldMcpServerURL:
+		return m.OldMcpServerURL(ctx)
 	case session.FieldInitialPrompt:
 		return m.OldInitialPrompt(ctx)
 	case session.FieldOneShot:
@@ -7602,6 +7659,13 @@ func (m *SessionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetLastAcknowledged(v)
 		return nil
+	case session.FieldMcpServerURL:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMcpServerURL(v)
+		return nil
 	case session.FieldInitialPrompt:
 		v, ok := value.(string)
 		if !ok {
@@ -7733,6 +7797,9 @@ func (m *SessionMutation) ClearedFields() []string {
 	if m.FieldCleared(session.FieldLastAcknowledged) {
 		fields = append(fields, session.FieldLastAcknowledged)
 	}
+	if m.FieldCleared(session.FieldMcpServerURL) {
+		fields = append(fields, session.FieldMcpServerURL)
+	}
 	if m.FieldCleared(session.FieldInitialPrompt) {
 		fields = append(fields, session.FieldInitialPrompt)
 	}
@@ -7797,6 +7864,9 @@ func (m *SessionMutation) ClearField(name string) error {
 		return nil
 	case session.FieldLastAcknowledged:
 		m.ClearLastAcknowledged()
+		return nil
+	case session.FieldMcpServerURL:
+		m.ClearMcpServerURL()
 		return nil
 	case session.FieldInitialPrompt:
 		m.ClearInitialPrompt()
@@ -7880,6 +7950,9 @@ func (m *SessionMutation) ResetField(name string) error {
 		return nil
 	case session.FieldLastAcknowledged:
 		m.ResetLastAcknowledged()
+		return nil
+	case session.FieldMcpServerURL:
+		m.ResetMcpServerURL()
 		return nil
 	case session.FieldInitialPrompt:
 		m.ResetInitialPrompt()

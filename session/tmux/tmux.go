@@ -83,6 +83,10 @@ type TmuxSession struct {
 	// control-mode event stream. When healthy, DoesSessionExist queries it directly
 	// instead of forking a tmux subprocess. Nil means use the exec fallback.
 	registry SessionExistenceChecker
+	// registryExplicit is set to true by WithRegistry so that newTmuxSessionWithSocket
+	// knows to skip the GetServerRegistry call.  Without this flag, GetServerRegistry
+	// would always start a reconnect loop even when the caller intends to use nil.
+	registryExplicit bool
 
 	// registryKey is the key used to register this session's circuit breaker executor
 	// in the global registry. Stored here so Close() can unregister it on teardown.
@@ -105,7 +109,7 @@ type TmuxSession struct {
 	controlModeCmd         *exec.Cmd              // tmux -C attach process
 	controlModeStdout      io.ReadCloser          // stdout pipe for control mode notifications
 	controlModeStdin       io.WriteCloser         // stdin pipe for control mode commands
-	controlModeDone        chan struct{}          // Signal channel for control mode termination
+	controlModeDone        chan struct{}           // Signal channel for control mode termination
 	controlModeSubscribers map[string]chan []byte // WebSocket clients subscribed to control mode updates
 	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers, controlModeExited, and pendingCmds
 	controlModeExited      bool                   // True after readControlModeOutput exits; new subscribers get pre-closed channel
@@ -118,6 +122,7 @@ type TmuxSession struct {
 	cmdBodyBuf  strings.Builder  // body accumulator between %begin and %end; reader goroutine only
 	curCmdCh    chan cmdResult   // current in-flight response channel; reader goroutine only
 	inCmdResp   bool             // true while inside a %begin/%end block; reader goroutine only
+
 
 	// Exit detection: fired when the session exits unexpectedly (not via StopControlMode).
 	// onExit is called at most once per TmuxSession lifetime (guarded by onExitOnce).
@@ -406,12 +411,12 @@ func NewTmuxSessionWithPrefixAndCleanup(name string, program string, prefix stri
 //
 // serverSocket: unique socket name (e.g., "test", "teatest_123", "isolated")
 // prefix: session name prefix (e.g., "staplersquad_test_")
-func NewTmuxSessionWithServerSocket(name string, program string, prefix string, serverSocket string) *TmuxSession {
+func NewTmuxSessionWithServerSocket(name string, program string, prefix string, serverSocket string, opts ...TmuxSessionOption) *TmuxSession {
 	baseExec := executor.MakeExecutor()
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
 	key := "tmux-" + name
 	executor.GetGlobalRegistry().Register(key, cbExec)
-	s := newTmuxSessionWithSocket(name, program, MakePtyFactory(), cbExec, prefix, serverSocket)
+	s := newTmuxSessionWithSocket(name, program, MakePtyFactory(), cbExec, prefix, serverSocket, opts...)
 	s.registryKey = key
 	return s
 }
@@ -441,9 +446,13 @@ func newTmuxSession(name string, program string, ptyFactory PtyFactory, cmdExec 
 type TmuxSessionOption func(*TmuxSession)
 
 // WithRegistry injects a SessionExistenceChecker; used in tests to avoid
-// the global GetServerRegistry accessor.
+// the global GetServerRegistry accessor. Passing nil suppresses the
+// automatic GetServerRegistry call so no reconnect loop is started.
 func WithRegistry(r SessionExistenceChecker) TmuxSessionOption {
-	return func(t *TmuxSession) { t.registry = r }
+	return func(t *TmuxSession) {
+		t.registry = r
+		t.registryExplicit = true
+	}
 }
 
 // newTmuxSessionWithSocket creates a TmuxSession with both prefix and server socket isolation
@@ -460,11 +469,16 @@ func newTmuxSessionWithSocket(name string, program string, ptyFactory PtyFactory
 	}
 	s.lastKnownCols.Store(defaultAttachCols)
 	s.lastKnownRows.Store(defaultAttachRows)
-	// Inject the server-level registry for fork-free session existence checks.
-	// Tests may override this via WithRegistry.
-	s.registry = GetServerRegistry(serverSocket)
+	// Apply opts first so WithRegistry can set registryExplicit before we
+	// call GetServerRegistry (which starts a background reconnect loop).
 	for _, opt := range opts {
 		opt(s)
+	}
+	// Inject the server-level registry only when no explicit registry was provided.
+	// This prevents an unwanted reconnect loop when WithRegistry(nil) is passed for
+	// isolated sockets that have no keepalive session.
+	if !s.registryExplicit {
+		s.registry = GetServerRegistry(serverSocket)
 	}
 	return s
 }
@@ -538,13 +552,10 @@ func (t *TmuxSession) buildTmuxCommand(args ...string) *exec.Cmd {
 }
 
 // buildAttachCommand creates a tmux attach-session command for PTY operations.
-// -x/-y pre-declare the client's terminal size to tmux (tmux 3.2+), so the
-// session starts at the correct dimensions rather than the 80×24 default.
+// Note: -x/-y are NOT passed here; for attach-session -x means read-only mode
+// (not width), and tmux infers dimensions from the PTY itself.
 func (t *TmuxSession) buildAttachCommand() *exec.Cmd {
-	cols := t.lastKnownCols.Load()
-	rows := t.lastKnownRows.Load()
-	return t.buildTmuxCommand("attach-session", "-t", t.sanitizedName,
-		"-x", fmt.Sprintf("%d", cols), "-y", fmt.Sprintf("%d", rows))
+	return t.buildTmuxCommand("attach-session", "-t", t.sanitizedName)
 }
 
 // Start creates and starts a new tmux session, then attaches to it. Program is the command to run in

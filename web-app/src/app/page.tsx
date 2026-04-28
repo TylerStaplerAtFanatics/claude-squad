@@ -414,6 +414,9 @@ function HomeContent() {
   // Handle session selection with URL update
   const handleSessionClick = (session: Session) => {
     sessionTriggerRef.current = document.activeElement as HTMLElement;
+    if (typeof performance !== "undefined") {
+      performance.mark("session:click");
+    }
     setSelectedSession(session);
     setActiveTab("info");
     updateUrl(session.id, "info");
@@ -481,12 +484,16 @@ function HomeContent() {
       {/* Session detail modal - kept alive across close/reopen to preserve xterm.js terminals */}
       <div
         className={styles.modal}
+        aria-hidden={!selectedSession}
         style={{ display: selectedSession ? undefined : 'none' }}
         onClick={closeSession}
       >
         <div
           ref={sessionModalContentRef}
           tabIndex={-1}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Session detail"
           className={`${styles.modalContent} ${isSessionFullscreen ? styles.modalContentFullscreen : ""}`}
           onClick={(e) => e.stopPropagation()}
         >

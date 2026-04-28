@@ -2,14 +2,17 @@ package testutil
 
 import (
 	"fmt"
-	"github.com/tstapler/stapler-squad/executor"
-	"github.com/tstapler/stapler-squad/session/tmux"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/executor"
+	"github.com/tstapler/stapler-squad/session/tmux"
 )
 
 // TmuxWaiter provides utilities for waiting on tmux operations
@@ -181,6 +184,14 @@ func CreateIsolatedTmuxServer(t *testing.T) *TmuxTestServer {
 	counter := atomic.AddUint64(&serverCounter, 1)
 	socketName := fmt.Sprintf("test_%s_%d", sanitizeTestName(t.Name()), counter)
 
+	// Remove any stale socket from a previous crashed run before starting.
+	// A stale socket file causes tmux to report "server exited unexpectedly"
+	// instead of creating a new server, which would silently fail the test.
+	staleSocket := tmuxSocketPath(socketName)
+	if err := os.Remove(staleSocket); err != nil && !os.IsNotExist(err) {
+		t.Logf("Warning: could not remove stale socket %s: %v", staleSocket, err)
+	}
+
 	server := &TmuxTestServer{
 		socketName: socketName,
 		executor:   executor.MakeExecutor(),
@@ -210,9 +221,12 @@ func (s *TmuxTestServer) CreateSession(sessionName string, command string) (*tmu
 	defer s.mu.Unlock()
 
 	// Use tmux dependency injection to create session on isolated server
-	// Use a test-specific prefix to avoid conflicts with production sessions
+	// Use a test-specific prefix to avoid conflicts with production sessions.
+	// WithRegistry(nil) prevents a background reconnect loop from running against
+	// the isolated socket — the loop tries attach-session on a keepalive that
+	// doesn't exist here, causing flaky new-session failures under CI load.
 	prefix := "test_"
-	session := tmux.NewTmuxSessionWithServerSocket(sessionName, command, prefix, s.socketName)
+	session := tmux.NewTmuxSessionWithServerSocket(sessionName, command, prefix, s.socketName, tmux.WithRegistry(nil))
 
 	// Start the session with current directory
 	workDir := "."
@@ -227,7 +241,7 @@ func (s *TmuxTestServer) CreateSession(sessionName string, command string) (*tmu
 // This is useful for testing timeout and hang scenarios.
 func (s *TmuxTestServer) CreateSessionWithoutStarting(sessionName string, command string, prefix string) *tmux.TmuxSession {
 	s.t.Helper()
-	return tmux.NewTmuxSessionWithServerSocket(sessionName, command, prefix, s.socketName)
+	return tmux.NewTmuxSessionWithServerSocket(sessionName, command, prefix, s.socketName, tmux.WithRegistry(nil))
 }
 
 // ListSessions returns all session names on this isolated server
@@ -235,17 +249,19 @@ func (s *TmuxTestServer) ListSessions() ([]string, error) {
 	s.t.Helper()
 
 	cmd := exec.Command(tmux.Binary(), "-L", s.socketName, "list-sessions", "-F", "#{session_name}")
-	output, err := s.executor.Output(cmd)
+	// Use CombinedOutput so the tmux stderr message is available for error classification.
+	// executor.Output only captures stdout; "no server running" appears on stderr.
+	output, err := s.executor.CombinedOutput(cmd)
 	if err != nil {
-		// No sessions or no server running is not an error - return empty list
-		// tmux returns exit status 1 when no sessions exist
-		errStr := err.Error()
-		if strings.Contains(errStr, "no server running") ||
-			strings.Contains(errStr, "no sessions") ||
-			(strings.Contains(errStr, "exit status 1") && len(output) == 0) {
+		combined := err.Error() + " " + string(output)
+		// These all mean "no sessions available" — not an error for our purposes.
+		if strings.Contains(combined, "no server running") ||
+			strings.Contains(combined, "no sessions") ||
+			strings.Contains(combined, "error connecting") ||
+			strings.Contains(combined, "server exited unexpectedly") {
 			return []string{}, nil
 		}
-		return nil, fmt.Errorf("failed to list sessions: %w", err)
+		return nil, fmt.Errorf("failed to list sessions: %w (output: %s)", err, string(output))
 	}
 
 	// Parse session names (one per line), filtering the registry keepalive session
@@ -322,15 +338,34 @@ func (s *TmuxTestServer) KillServer() error {
 	s.t.Helper()
 
 	cmd := exec.Command(tmux.Binary(), "-L", s.socketName, "kill-server")
-	err := s.executor.Run(cmd)
+	// Use CombinedOutput so we can inspect the actual tmux error message on stderr.
+	// executor.Run only returns the exit code; "no server running" lives on stderr.
+	output, err := s.executor.CombinedOutput(cmd)
 	if err != nil {
-		// Server already gone is not an error
-		if strings.Contains(err.Error(), "no server running") {
+		combined := err.Error() + " " + string(output)
+		// Any of these messages mean the server was never running (or already gone) —
+		// not a real error; the socket file may still need removal.
+		if strings.Contains(combined, "no server running") ||
+			strings.Contains(combined, "error connecting") ||
+			strings.Contains(combined, "server exited unexpectedly") {
+			_ = os.Remove(tmuxSocketPath(s.socketName))
 			return nil
 		}
-		return fmt.Errorf("failed to kill server: %w", err)
+		return fmt.Errorf("failed to kill server: %w (output: %s)", err, string(output))
+	}
+
+	// Remove the socket file to prevent stale accumulation across test runs
+	socketPath := tmuxSocketPath(s.socketName)
+	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
+		s.t.Logf("Warning: could not remove socket file %s: %v", socketPath, err)
 	}
 	return nil
+}
+
+// tmuxSocketPath returns the filesystem path for a named tmux socket.
+// Tmux always uses /tmp/tmux-<uid>/<name> for -L named sockets, regardless of XDG_RUNTIME_DIR.
+func tmuxSocketPath(socketName string) string {
+	return filepath.Join(fmt.Sprintf("/tmp/tmux-%d", os.Getuid()), socketName)
 }
 
 // Cleanup performs cleanup of the isolated tmux server.
@@ -358,9 +393,9 @@ func (s *TmuxTestServer) Cleanup() {
 	}
 }
 
-// sanitizeTestName converts test name to filesystem-safe socket name
+// sanitizeTestName converts test name to filesystem-safe socket name.
+// Truncates to 60 chars to stay well under OS Unix socket path limits.
 func sanitizeTestName(testName string) string {
-	// Replace problematic characters with underscores
 	replacer := strings.NewReplacer(
 		"/", "_",
 		" ", "_",
@@ -369,7 +404,11 @@ func sanitizeTestName(testName string) string {
 		"(", "_",
 		")", "_",
 	)
-	return replacer.Replace(testName)
+	name := replacer.Replace(testName)
+	if len(name) > 60 {
+		name = name[:60]
+	}
+	return name
 }
 
 // TempSessionName generates a temporary session name with an ID
