@@ -4,7 +4,7 @@ import { vars } from "@/styles/theme.css";
 export const page = style({
   display: "flex",
   flexDirection: "column",
-  height: "calc(100vh - var(--header-height))",
+  height: "calc(var(--viewport-height, 100dvh) - var(--header-height))",
   overflow: "hidden",
   background: vars.color.background,
 });

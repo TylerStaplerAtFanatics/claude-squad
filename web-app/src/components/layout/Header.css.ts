@@ -28,6 +28,10 @@ export const header = style({
     "(max-width: 899px)": {
       display: "none",
     },
+    // Collapse to dark surface between 900–1099px (nav items overflow at narrow desktop)
+    "(min-width: 900px) and (max-width: 1099px)": {
+      backdropFilter: "blur(8px)",
+    },
   },
 });
 
@@ -87,7 +91,8 @@ export const nav = style({
   justifyContent: "center",
 
   "@media": {
-    "(max-width: 768px)": {
+    // At narrow desktop (900–1099px) and below, collapse to dropdown opened by hamburger
+    "(max-width: 1099px)": {
       display: "none",
       position: "absolute",
       top: "100%",
@@ -107,7 +112,7 @@ export const nav = style({
 
 export const navOpen = style({
   "@media": {
-    "(max-width: 768px)": {
+    "(max-width: 1099px)": {
       display: "flex",
     },
   },
@@ -134,7 +139,8 @@ export const navLink = style({
   },
 
   "@media": {
-    "(max-width: 768px)": {
+    // Full-width row style inside collapsed dropdown (900–1099px)
+    "(max-width: 1099px)": {
       padding: `${vars.space["3"]} ${vars.space["4"]}`,
       borderRadius: "0",
       fontSize: vars.fontSize.base,
@@ -145,8 +151,11 @@ export const navLink = style({
 });
 
 export const active = style({
+  // Use textPrimary (overridden to #ededed inside the dark header) instead of
+  // vars.color.primary (#0070f3) which fails WCAG AA on the dark header backdrop.
+  // The blue underline still signals the active state visually.
   color: vars.color.textPrimary,
-  background: vars.color.primaryActive,
+  fontWeight: 700,
 
   selectors: {
     "&::after": {
@@ -314,7 +323,8 @@ export const hamburger = style({
   flexShrink: 0,
 
   "@media": {
-    "(max-width: 768px)": {
+    // Show hamburger at narrow desktop (900–1099px) where nav overflows
+    "(max-width: 1099px)": {
       display: "flex",
     },
   },

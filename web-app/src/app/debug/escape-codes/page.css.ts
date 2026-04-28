@@ -5,7 +5,7 @@ export const page = style({
   padding: "2rem",
   maxWidth: "1400px",
   margin: "0 auto",
-  minHeight: "100vh",
+  minHeight: "var(--viewport-height, 100dvh)",
   background: vars.color.background,
   color: vars.color.textPrimary,
   "@media": {

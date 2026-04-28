@@ -1,0 +1,24 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "rules": {
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "Literal[value='100vh']",
+        "message": "Use var(--viewport-height) instead of '100vh'. iOS virtual keyboard shrinks the visual viewport but not 100vh, hiding content behind the keyboard. ViewportProvider updates --viewport-height via the visualViewport API. See project_plans/ux-overhaul/."
+      },
+      {
+        "selector": "TemplateElement[value.raw=/\\b100vh\\b/]",
+        "message": "Use var(--viewport-height) instead of '100vh' in template literals. See project_plans/ux-overhaul/."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/app/test/**/*.tsx", "src/app/test/**/*.ts"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    }
+  ]
+}

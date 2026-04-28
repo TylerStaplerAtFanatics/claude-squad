@@ -36,6 +36,8 @@ export function SessionWizard({ onComplete, onCancel, initialData, existingTitle
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [creationPhase, setCreationPhase] = useState(0);
+  const creationPhases = ["Creating session...", "Setting up repository...", "Starting agent...", "Almost ready..."];
 
   // Profile selector state
   const [selectedProfile, setSelectedProfile] = useState<string>("");
@@ -92,6 +94,17 @@ export function SessionWizard({ onComplete, onCancel, initialData, existingTitle
   // Watch useTitleAsBranch to auto-populate branch
   const useTitleAsBranch = watch("useTitleAsBranch");
   const sessionTitle = watch("title");
+
+  useEffect(() => {
+    if (!isSubmitting) {
+      setCreationPhase(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setCreationPhase(p => (p + 1) % creationPhases.length);
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [isSubmitting, creationPhases.length]);
 
   // Get autocomplete suggestions
   const { suggestions: repositorySuggestions, isLoading: isLoadingRepos } = useRepositorySuggestions();
@@ -678,6 +691,11 @@ export function SessionWizard({ onComplete, onCancel, initialData, existingTitle
                 <span className={styles.hint}>
                   Automatically approve all AI suggestions without confirmation
                 </span>
+                {formValues.autoYes && (
+                  <span style={{ color: 'var(--warning, #d97706)', fontSize: '0.8125rem', marginTop: '0.25rem', display: 'block' }} role="alert">
+                    Warning: Claude will execute file changes and run commands without asking for your approval.
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -817,7 +835,7 @@ export function SessionWizard({ onComplete, onCancel, initialData, existingTitle
               className={styles.buttonPrimary}
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Creating..." : "Create Session"}
+              {isSubmitting ? creationPhases[creationPhase] : "Create Session"}
             </button>
           )}
         </WizardActions>
