@@ -116,4 +116,39 @@ export const vars = createThemeContract({
     lg: null,
     xl: null,
   },
+  fontWeight: {
+    normal: null,
+    medium: null,
+    semibold: null,
+    bold: null,
+  },
+  shadow: {
+    none: null,
+    sm: null,
+    md: null,
+    lg: null,
+  },
 });
+
+// Plain constants — CSS custom properties cannot be used inside @media queries,
+// so breakpoints and z-index values are exported as typed literals, not theme tokens.
+
+export const breakpoints = {
+  sm: "640px",
+  md: "768px",
+  lg: "1024px",
+  xl: "1280px",
+  outer: "390px",
+  fold: "600px",
+  inner: "900px",
+} as const;
+
+export const zIndex = {
+  base: 0,
+  raised: 10,
+  header: 100,
+  bottomNav: 200,
+  dropdown: 500,
+  modal: 1000,
+  tooltip: 1100,
+} as const;

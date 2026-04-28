@@ -22,19 +22,19 @@ import type { PlainApproval } from "@/lib/api/approvalsApi";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeApproval(overrides: Partial<Record<string, unknown>> = {}): PlainApproval {
+function makeApproval(overrides: Partial<PlainApproval> = {}): PlainApproval {
   return {
     id: "approval-1",
     sessionId: "session-abc",
     toolName: "Bash",
     toolInput: {},
     cwd: "/home/user",
-    permissionMode: "",
+    permissionMode: "default",
     createdAt: undefined,
     expiresAt: undefined,
     secondsRemaining: 60,
     ...overrides,
-  } as unknown as PlainApproval;
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 import { style, styleVariants } from "@vanilla-extract/css";
+import { vars } from "@/styles/theme.css";
 
 export const row = style({
   display: "flex",
@@ -15,7 +16,7 @@ export const row = style({
 });
 
 export const rowHighlighted = style({
-  background: "var(--hover-background)",
+  background: vars.color.hoverBackground,
 });
 
 export const dotWrapper = style({
@@ -34,10 +35,10 @@ export const dot = style({
 });
 
 export const dotVariants = styleVariants({
-  running: { background: "var(--success)" },
-  paused: { background: "var(--warning)" },
-  active: { background: "var(--primary)" },
-  default: { background: "var(--text-muted)" },
+  running: { background: vars.color.success },
+  paused: { background: vars.color.warning },
+  active: { background: vars.color.primary },
+  default: { background: vars.color.textMuted },
 });
 
 export const content = style({
@@ -58,7 +59,7 @@ export const titleRow = style({
 
 export const title = style({
   fontWeight: 600,
-  color: "var(--text-primary)",
+  color: vars.color.textPrimary,
   fontSize: "14px",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -68,7 +69,7 @@ export const title = style({
 });
 
 export const branch = style({
-  color: "var(--text-muted)",
+  color: vars.color.textMuted,
   fontSize: "12px",
   flexShrink: 0,
   overflow: "hidden",
@@ -78,7 +79,7 @@ export const branch = style({
 });
 
 export const path = style({
-  color: "var(--text-tertiary)",
+  color: vars.color.textTertiary,
   fontSize: "11px",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -91,15 +92,15 @@ export const cloneButton = style({
   padding: "2px 6px",
   fontSize: "12px",
   background: "transparent",
-  border: "1px solid var(--border-color)",
+  border: `1px solid ${vars.color.borderColor}`,
   borderRadius: "4px",
-  color: "var(--text-muted)",
+  color: vars.color.textMuted,
   cursor: "pointer",
   opacity: 0,
   transition: "opacity 0.1s ease, background 0.1s ease",
   selectors: {
     [`${row}:hover &`]: { opacity: 1 },
     [`${rowHighlighted} &`]: { opacity: 1 },
-    "&:hover": { background: "var(--hover-background)", color: "var(--text-primary)" },
+    "&:hover": { background: vars.color.hoverBackground, color: vars.color.textPrimary },
   },
 });

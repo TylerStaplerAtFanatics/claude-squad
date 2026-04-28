@@ -111,6 +111,8 @@ function HomeContent() {
     restartSession,
     createCheckpoint,
     listCheckpoints,
+    forkSession,
+    runOneShot,
     listSessions,
     updateSession,
     getSession,
@@ -346,6 +348,7 @@ function HomeContent() {
       program: data.program,
       category: data.category || "",
       prompt: data.prompt || "",
+      initialPrompt: data.initialPrompt || "",
       autoYes: data.autoYes,
       existingWorktree: data.existingWorktree || "",
     });
@@ -375,6 +378,11 @@ function HomeContent() {
       await updateSession(sessionId, { tags });
     }
   };
+
+  // Handle one-shot PR creation (S3-3)
+  const handleRunOneShot = useCallback(async (sessionId: string): Promise<void> => {
+    await runOneShot(sessionId, "Create a pull request for the changes in this session.", 0);
+  }, [runOneShot]);
 
   // Handle resume request - show modal for user to edit title/tags before resuming
   const handleResumeRequest = useCallback((session: Session) => {
@@ -406,6 +414,9 @@ function HomeContent() {
   // Handle session selection with URL update
   const handleSessionClick = (session: Session) => {
     sessionTriggerRef.current = document.activeElement as HTMLElement;
+    if (typeof performance !== "undefined") {
+      performance.mark("session:click");
+    }
     setSelectedSession(session);
     setActiveTab("info");
     updateUrl(session.id, "info");
@@ -464,6 +475,8 @@ function HomeContent() {
             onNewSession={handleNewSession}
             onCreateCheckpoint={createCheckpoint}
             onListCheckpoints={listCheckpoints}
+            onForkFromCheckpoint={forkSession}
+            onRunOneShot={handleRunOneShot}
           />
         )}
       </main>
@@ -471,12 +484,16 @@ function HomeContent() {
       {/* Session detail modal - kept alive across close/reopen to preserve xterm.js terminals */}
       <div
         className={styles.modal}
+        aria-hidden={!selectedSession}
         style={{ display: selectedSession ? undefined : 'none' }}
         onClick={closeSession}
       >
         <div
           ref={sessionModalContentRef}
           tabIndex={-1}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Session detail"
           className={`${styles.modalContent} ${isSessionFullscreen ? styles.modalContentFullscreen : ""}`}
           onClick={(e) => e.stopPropagation()}
         >
@@ -511,6 +528,7 @@ function HomeContent() {
                 onComplete={handleWizardComplete}
                 onCancel={handleWizardCancel}
                 initialData={wizardInitialData}
+                existingTitles={sessions.map((s) => s.title)}
               />
             </div>
           </div>

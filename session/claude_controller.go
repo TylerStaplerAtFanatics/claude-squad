@@ -3,12 +3,15 @@ package session
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/detection"
 	"github.com/tstapler/stapler-squad/session/detection/ratelimit"
-	"os"
-	"sync"
-	"time"
 )
 
 // InstanceContext is the narrow interface ClaudeController needs from its owning Instance.
@@ -24,6 +27,27 @@ type InstanceContext interface {
 	WriteToPTY(data []byte) (int, error)
 }
 
+// statusCacheEntry holds the result of the last successful status detection
+// along with the FNV hash of the tail content that produced it.
+type statusCacheEntry struct {
+	tailHash uint64
+	status   detection.DetectedStatus
+	desc     string
+}
+
+// idleCacheEntry holds the result of the last successful idle state detection
+// along with the FNV hash of the tail content that produced it.
+type idleCacheEntry struct {
+	tailHash uint64
+	state    detection.IdleState
+}
+
+// statusDetectionTailBytes is the number of bytes from the end of the terminal
+// content passed to the status/idle detectors. Status indicators (◇ Ready,
+// esc to interrupt, Thinking…) always appear near the current cursor position,
+// so scanning the full scrollback buffer is wasteful.
+const statusDetectionTailBytes = 4096
+
 // ClaudeController provides a high-level API for controlling Claude instances.
 // It orchestrates all the underlying components (queue, executor, history, streams).
 type ClaudeController struct {
@@ -38,6 +62,8 @@ type ClaudeController struct {
 	executor         *CommandExecutor
 	history          *CommandHistory
 	onEOFCallback    func() // Fired when the ResponseStream PTY exits unexpectedly
+	statusCache      statusCacheEntry
+	idleCache        idleCacheEntry
 	mu               sync.RWMutex
 	ctx              context.Context
 	cancel           context.CancelFunc
@@ -429,13 +455,19 @@ func (cc *ClaudeController) Unsubscribe(subscriberID string) error {
 }
 
 // GetCurrentStatus detects the current status of the Claude instance.
+//
+// Two optimisations are applied on every call:
+//  1. Tail slicing — only the last statusDetectionTailBytes bytes of the
+//     terminal content are examined. Status indicators (◇ Ready, Thinking…,
+//     esc to interrupt) always appear near the current cursor position, so
+//     scanning the full scrollback is unnecessary.
+//  2. Content hash cache — a FNV-64a hash of the tail is compared against the
+//     previous call. If the tail is unchanged the cached result is returned
+//     immediately with zero allocations.
 func (cc *ClaudeController) GetCurrentStatus() (detection.DetectedStatus, string) {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
 
-	// Use instance.Preview() to get actual terminal content instead of PTY buffer.
-	// The PTY buffer may contain incomplete data or just status bar updates,
-	// while Preview() captures the current visible terminal pane content.
 	if cc.instance == nil {
 		return detection.StatusUnknown, "Instance not initialized"
 	}
@@ -450,83 +482,80 @@ func (cc *ClaudeController) GetCurrentStatus() (detection.DetectedStatus, string
 		return detection.StatusUnknown, "No terminal content"
 	}
 
-	// Filter tmux status bars before pattern matching to prevent false positives
-	// from session names containing keywords like "error", "fail", etc.
-	filtered, _ := filterTmuxMetadata(content)
+	tail := tailContent(content, statusDetectionTailBytes)
+	h := hashString(tail)
 
-	return cc.statusDetector.DetectWithContext([]byte(filtered))
+	if h == cc.statusCache.tailHash {
+		return cc.statusCache.status, cc.statusCache.desc
+	}
+
+	filtered, _ := filterTmuxMetadata(tail)
+	status, desc := cc.statusDetector.DetectWithContext([]byte(filtered))
+
+	cc.statusCache = statusCacheEntry{tailHash: h, status: status, desc: desc}
+	return status, desc
 }
 
 // filterTmuxMetadata removes common tmux UI elements from terminal output.
 // This prevents false positive status detections from metadata like session names
 // appearing in window titles, status bars, or shell prompts.
 func filterTmuxMetadata(content string) (string, int) {
-	lines := []string{}
+	var sb strings.Builder
+	sb.Grow(len(content))
 	removedCount := 0
+	first := true
+	remaining := content
 
-	for _, line := range splitLines(content) {
-		// Skip lines that look like tmux status bars
-		// Common patterns:
+	for len(remaining) > 0 {
+		// Slice off one line at a time without allocating a []string.
+		var line string
+		if idx := strings.IndexByte(remaining, '\n'); idx >= 0 {
+			line = remaining[:idx+1] // includes the trailing \n
+			remaining = remaining[idx+1:]
+		} else {
+			line = remaining
+			remaining = ""
+		}
+
+		// Skip lines that look like tmux status bars:
 		// - "[staplersquad_session-name]" window title format
-		// - Lines with only whitespace and status indicators
 		// - Lines starting with "[" followed by timestamp or session info
-		trimmed := []byte(line)
-		// Trim leading/trailing whitespace
-		start := 0
-		end := len(trimmed)
-		for start < end && (trimmed[start] == ' ' || trimmed[start] == '\t') {
-			start++
-		}
-		for end > start && (trimmed[end-1] == ' ' || trimmed[end-1] == '\t' || trimmed[end-1] == '\r' || trimmed[end-1] == '\n') {
-			end--
-		}
-		trimmed = trimmed[start:end]
-
-		// Check if this looks like a tmux status bar
-		isStatusBar := false
+		trimmed := strings.TrimRight(strings.TrimLeft(line, " \t"), " \t\r\n")
 		if len(trimmed) > 0 && trimmed[0] == '[' {
-			// Likely a tmux window title or status indicator
-			isStatusBar = true
-		}
-
-		if isStatusBar {
 			removedCount++
 			continue
 		}
 
-		lines = append(lines, line)
-	}
-
-	result := ""
-	for i, line := range lines {
-		result += line
-		if i < len(lines)-1 {
-			result += "\n"
+		if !first {
+			sb.WriteByte('\n')
 		}
+		first = false
+		sb.WriteString(line)
 	}
 
-	return result, removedCount
+	return sb.String(), removedCount
 }
 
-// splitLines splits content into lines while preserving line endings.
-func splitLines(content string) []string {
-	lines := []string{}
-	currentLine := ""
-
-	for _, ch := range content {
-		currentLine += string(ch)
-		if ch == '\n' {
-			lines = append(lines, currentLine)
-			currentLine = ""
-		}
+// tailContent returns the last n bytes of s, snapped forward to the next
+// newline boundary so we never split a line mid-way through.
+// If s is shorter than n bytes, s itself is returned unchanged.
+func tailContent(s string, n int) string {
+	if len(s) <= n {
+		return s
 	}
-
-	// Add remaining content if any
-	if len(currentLine) > 0 {
-		lines = append(lines, currentLine)
+	tail := s[len(s)-n:]
+	// Advance to the next newline so we start on a clean line boundary.
+	if nl := strings.IndexByte(tail, '\n'); nl >= 0 {
+		tail = tail[nl+1:]
 	}
+	return tail
+}
 
-	return lines
+// hashString returns a fast FNV-64a hash of s.
+func hashString(s string) uint64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(s))
+	return h.Sum64()
 }
 
 // GetRecentOutput returns recent output from the PTY buffer.
@@ -630,6 +659,9 @@ func (cc *ClaudeController) IsActive() bool {
 
 // GetIdleState returns the current idle state with timing information.
 // Returns the state and the timestamp of last activity.
+//
+// Applies the same tail-slice + hash-cache optimisations as GetCurrentStatus
+// so that polling the idle state on an unchanged terminal is essentially free.
 func (cc *ClaudeController) GetIdleState() (detection.IdleState, time.Time) {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
@@ -638,31 +670,31 @@ func (cc *ClaudeController) GetIdleState() (detection.IdleState, time.Time) {
 		return detection.IdleStateUnknown, time.Time{}
 	}
 
-	// Use instance.Preview() to get actual terminal content instead of PTY buffer.
-	// The PTY buffer may contain incomplete data or just status bar updates,
-	// while Preview() captures the current visible terminal pane content.
 	var state detection.IdleState
 	if cc.instance != nil {
 		content, err := cc.instance.Preview()
 		if err != nil {
 			log.DebugLog.Printf("[GetIdleState] Session '%s': Preview() error: %v, using fallback", cc.sessionName, err)
-			// Fallback to old method if Preview() fails
 			state = cc.idleDetector.DetectState()
 		} else if content != "" {
-			// Filter tmux status bars before pattern matching
-			filtered, _ := filterTmuxMetadata(content)
-			state = cc.idleDetector.DetectStateFromContent(filtered)
+			tail := tailContent(content, statusDetectionTailBytes)
+			h := hashString(tail)
+
+			if h == cc.idleCache.tailHash {
+				state = cc.idleCache.state
+			} else {
+				filtered, _ := filterTmuxMetadata(tail)
+				state = cc.idleDetector.DetectStateFromContent(filtered)
+				cc.idleCache = idleCacheEntry{tailHash: h, state: state}
+			}
 		} else {
-			// Empty content - keep current state
 			state = cc.idleDetector.GetState()
 		}
 	} else {
-		// No instance - fallback to old method
 		state = cc.idleDetector.DetectState()
 	}
 
 	lastActivity := cc.idleDetector.GetLastActivity()
-
 	return state, lastActivity
 }
 

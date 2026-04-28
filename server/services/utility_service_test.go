@@ -79,7 +79,7 @@ func TestGetLogs_WithUUID_NilPoller(t *testing.T) {
 	assert.Empty(t, resp.Msg.Entries)
 }
 
-// TestGetLogs_WithUUID_MatchingInstance verifies that GetLogs exercices the
+// TestGetLogs_WithUUID_MatchingInstance verifies that GetLogs exercises the
 // UUID→Title resolution path when the poller has a matching instance.
 // The session's log file does not exist on disk, so the response is empty —
 // but the call must succeed (no crash, no error from the resolution logic).

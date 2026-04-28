@@ -38,6 +38,7 @@ func init() {
 	cmCommandsEnabled.Store(os.Getenv("STAPLER_SQUAD_CM_COMMANDS") != "false")
 }
 
+
 // StartControlMode begins streaming terminal output via tmux control mode (-C flag).
 // This is the proper way to get real-time terminal output from tmux, replacing pipe-pane + FIFO.
 // Control mode provides structured notifications (%output, %session-changed, etc.) via stdout.

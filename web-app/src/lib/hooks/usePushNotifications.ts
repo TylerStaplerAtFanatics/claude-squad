@@ -96,7 +96,7 @@ export function usePushNotifications({ onNotification }: UsePushNotificationsOpt
         return existingSubscription;
       }
 
-const vapidPublicKey = await fetch(`${baseUrl}/api/push/vapid-key`).then(r => r.text());
+const vapidPublicKey = await fetch(`${baseUrl}/push/vapid-key`).then(r => r.text());
 
 const newSubscription = await registration.pushManager.subscribe({
   userVisibleOnly: true,
@@ -104,7 +104,7 @@ const newSubscription = await registration.pushManager.subscribe({
   applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as unknown as ArrayBufferView,
 });
 
-      await fetch(`${baseUrl}/api/push/subscribe`, {
+      await fetch(`${baseUrl}/push/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newSubscription.toJSON()),
@@ -125,7 +125,7 @@ const newSubscription = await registration.pushManager.subscribe({
     try {
       await subscription.unsubscribe();
       
-      await fetch(`${baseUrl}/api/push/unsubscribe`, {
+      await fetch(`${baseUrl}/push/unsubscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ endpoint: subscription.endpoint }),

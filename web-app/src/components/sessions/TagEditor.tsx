@@ -81,7 +81,7 @@ export function TagEditor({ tags, onSave, onCancel, sessionTitle }: TagEditorPro
                 className={styles.input}
                 autoFocus
               />
-              <button onClick={handleAddTag} className={styles.addButton}>
+              <button type="button" onClick={handleAddTag} className={styles.addButton}>
                 Add
               </button>
             </div>
@@ -113,10 +113,10 @@ export function TagEditor({ tags, onSave, onCancel, sessionTitle }: TagEditorPro
         </div>
 
         <div className={styles.footer}>
-          <button onClick={onCancel} className={styles.cancelButton}>
+          <button type="button" onClick={onCancel} className={styles.cancelButton}>
             Cancel
           </button>
-          <button onClick={handleSave} className={styles.saveButton}>
+          <button type="button" onClick={handleSave} className={styles.saveButton}>
             Save Tags
           </button>
         </div>

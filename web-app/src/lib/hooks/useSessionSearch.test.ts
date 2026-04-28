@@ -18,7 +18,6 @@ import { configureStore } from "@reduxjs/toolkit";
 import { create } from "@bufbuild/protobuf";
 import { SessionSchema, SessionStatus } from "@/gen/session/v1/types_pb";
 import type { Session } from "@/gen/session/v1/types_pb";
-import approvalsReducer from "@/lib/store/approvalsSlice";
 import reviewQueueReducer from "@/lib/store/reviewQueueSlice";
 import sessionsReducer, { setSessions } from "@/lib/store/sessionsSlice";
 import { useSessionSearch } from "./useSessionSearch";
@@ -30,7 +29,6 @@ import { useSessionSearch } from "./useSessionSearch";
 function makeStore(sessions: Session[] = []) {
   const store = configureStore({
     reducer: {
-      approvals: approvalsReducer,
       reviewQueue: reviewQueueReducer,
       sessions: sessionsReducer,
     },

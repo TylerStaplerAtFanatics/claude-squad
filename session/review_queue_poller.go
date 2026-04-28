@@ -3,12 +3,14 @@ package session
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/detection"
 	"github.com/tstapler/stapler-squad/session/tmux"
-	"strings"
-	"sync"
-	"time"
 )
 
 // ReviewQueuePollerConfig contains configuration for the review queue poller.
@@ -85,7 +87,8 @@ type ReviewQueuePoller struct {
 	// Backoff state: tracks consecutive poll errors to apply exponential delay.
 	consecutiveErrors int
 	// tickCount tracks poll loop iterations for reconciliation scheduling.
-	tickCount int
+	// Accessed concurrently (pollLoop writes, tests read), so must be atomic.
+	tickCount atomic.Int64
 }
 
 // NewReviewQueuePoller creates a new poller for automatically managing the review queue.
@@ -130,18 +133,25 @@ func (rqp *ReviewQueuePoller) RemoveInstance(instanceTitle string) {
 	defer rqp.mu.Unlock()
 
 	filtered := make([]*Instance, 0, len(rqp.instances))
+	var removedTitle string
 	for _, inst := range rqp.instances {
-		if inst.Title != instanceTitle {
+		if inst.MatchesID(instanceTitle) {
+			removedTitle = inst.Title
+		} else {
 			filtered = append(filtered, inst)
 		}
 	}
 	rqp.instances = filtered
 
-	// Evict content cache for this session.
+	// Evict content cache using the resolved title (MatchesID may have matched by UUID).
+	evictKey := instanceTitle
+	if removedTitle != "" {
+		evictKey = removedTitle
+	}
 	rqp.cacheMu.Lock()
-	delete(rqp.lastSeenActivity, instanceTitle)
-	delete(rqp.cachedContent, instanceTitle)
-	delete(rqp.lastPreviewTime, instanceTitle)
+	delete(rqp.lastSeenActivity, evictKey)
+	delete(rqp.cachedContent, evictKey)
+	delete(rqp.lastPreviewTime, evictKey)
 	rqp.cacheMu.Unlock()
 }
 
@@ -272,7 +282,7 @@ func (rqp *ReviewQueuePoller) pollLoop() {
 			}
 
 		case <-timer.C:
-			rqp.tickCount++
+			rqp.tickCount.Add(1)
 
 			if err := rqp.checkSessionsSafe(); err != nil {
 				rqp.consecutiveErrors++
@@ -307,7 +317,7 @@ func (rqp *ReviewQueuePoller) pollLoop() {
 				if ticksPerReconcile < 1 {
 					ticksPerReconcile = 1
 				}
-				if rqp.tickCount%ticksPerReconcile == 0 {
+				if rqp.tickCount.Load()%int64(ticksPerReconcile) == 0 {
 					rqp.reconcileSessions()
 				}
 			}
@@ -931,24 +941,20 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance) {
 			inst.Title, detection.FormatDuration(timeSinceOutput), detection.FormatDuration(rqp.config.StalenessThreshold))
 	}
 
-	// Acknowledgment snooze and grace-period checks.
-	// For sessions with an active controller, high/medium-priority states (approval, error,
-	// input required) bypass snooze so live Claude processes always surface to the user.
-	// For sessions WITHOUT an active controller (orphaned/external/no-tty sessions), there is
-	// no live process that can generate new approvals — detections come from static terminal
-	// content. In that case, respect acknowledgment at any priority level so the user can
-	// permanently dismiss stale entries.
-	if !shouldAdd || priority == PriorityLow || !statusInfo.IsControllerActive {
-		// Check if user dismissed this session.
-		// Sessions are snoozed when LastAcknowledged is newer than LastMeaningfulOutput.
-		if inst.IsAcknowledgedAfterOutput() {
-			log.DebugLog.Printf("[ReviewQueue] Session '%s': User acknowledged (snoozed until new output), removing from queue", inst.Title)
-			rqp.queue.Remove(inst.Title)
-			return
-		}
+	// Acknowledgment snooze: applies to ALL sessions regardless of priority or controller state.
+	// Sessions are snoozed when LastAcknowledged is newer than LastMeaningfulOutput.
+	// When a live process generates a new prompt, LastMeaningfulOutput is updated, so
+	// IsAcknowledgedAfterOutput() returns false and the session correctly resurfaces.
+	if inst.IsAcknowledgedAfterOutput() {
+		log.DebugLog.Printf("[ReviewQueue] Session '%s': User acknowledged (snoozed until new output), removing from queue", inst.Title)
+		rqp.queue.Remove(inst.Title)
+		return
+	}
 
-		// Grace period: Don't re-add for 5 minutes after acknowledgment, even with new output.
-		// This prevents immediate re-notification after user dismisses a session.
+	// Grace period: Don't re-add for 5 minutes after acknowledgment, even with new output.
+	// Scoped to low-priority or inactive-controller sessions only — high/medium priority sessions
+	// with an active controller should resurface promptly when new output arrives.
+	if !shouldAdd || priority == PriorityLow || !statusInfo.IsControllerActive {
 		if !inst.LastAcknowledged.IsZero() {
 			gracePeriod := 5 * time.Minute
 			timeSinceAck := time.Since(inst.LastAcknowledged)

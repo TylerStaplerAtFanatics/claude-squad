@@ -78,10 +78,36 @@ var methodToID = map[string]string{
 	"SearchFiles":              "file:search",
 	"ListPathCompletions":      "path:list-completions",
 	"ListWorktrees":            "worktree:list",
+	// Project management RPCs
+	"CreateProject":           "project:create",
+	"ListProjects":            "project:list",
+	"UpdateProject":           "project:update",
+	"DeleteProject":           "project:delete",
+	"AssignSessionsToProject": "project:assign-sessions",
+	// Prompt history RPCs
+	"ListPromptHistory":   "session:list-prompt-history",
+	"DeletePromptHistory": "session:delete-prompt-history",
+	// Session execution RPCs
+	"RunOneShot":          "session:run-one-shot",
+	"BatchCreateSessions": "session:batch-create",
+	"GetTerminalSnapshot": "session:get-terminal-snapshot",
+	"ListBranches":        "session:list-branches",
+	// Profile and defaults RPCs
+	"UpsertProfile":        "profile:upsert",
+	"DeleteProfile":        "profile:delete",
+	"GetSessionDefaults":   "defaults:get",
+	"UpdateGlobalDefaults": "defaults:update-global",
+	"ResolveDefaults":      "defaults:resolve",
+	// Directory rules RPCs
+	"UpsertDirectoryRule": "directory-rule:upsert",
+	"DeleteDirectoryRule": "directory-rule:delete",
 }
 
-// rpcPattern matches lines like:   rpc MethodName(
-var rpcPattern = regexp.MustCompile(`^\s+rpc\s+(\w+)\s*\(`)
+// rpcPattern matches lines like:   rpc MethodName(  (indented or not)
+var rpcPattern = regexp.MustCompile(`^\s*rpc\s+(\w+)\s*\(`)
+
+// servicePattern matches lines like:  service ServiceName {
+var servicePattern = regexp.MustCompile(`^\s*service\s+(\w+)\s*\{`)
 
 // ScanProto reads a proto file and returns BackendFeature entries for each RPC method found.
 func ScanProto(protoFile string) ([]BackendFeature, error) {
@@ -98,9 +124,14 @@ func ScanProto(protoFile string) ([]BackendFeature, error) {
 	defer f.Close()
 
 	var features []BackendFeature
+	currentService := "SessionService"
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
+		if svcMatches := servicePattern.FindStringSubmatch(line); svcMatches != nil {
+			currentService = svcMatches[1]
+			continue
+		}
 		matches := rpcPattern.FindStringSubmatch(line)
 		if matches == nil {
 			continue
@@ -114,7 +145,7 @@ func ScanProto(protoFile string) ([]BackendFeature, error) {
 		features = append(features, BackendFeature{
 			ID:           id,
 			Type:         "backend",
-			Service:      "SessionService",
+			Service:      currentService,
 			Method:       method,
 			ProtoFile:    protoFile,
 			MarkerFound:  false,

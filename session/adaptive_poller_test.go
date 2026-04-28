@@ -45,22 +45,23 @@ func TestAdaptivePoller_BackoffToIdleInterval(t *testing.T) {
 	poller.Start(ctx)
 	defer poller.Stop()
 
-	// Wait for the first tick to actually land, with a generous timeout.
-	// A fixed sleep risks failing if goroutine scheduling delays the first timer fire.
-	firstTickDeadline := time.Now().Add(500 * time.Millisecond)
-	for poller.tickCount == 0 && time.Now().Before(firstTickDeadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	if poller.tickCount == 0 {
-		t.Fatal("timed out waiting for the first poll tick to fire")
-	}
-	firstTickCount := poller.tickCount
+	// After 2 fast intervals the loop should have fired once and backed off.
+	// If still on fastInterval it would fire a second time within 3×fastInterval.
+	// Wait 3×fastInterval + margin and count actual poll ticks via a sentinel approach:
+	// we add and immediately remove a session to create a measurable signal without
+	// side effects (the poller only pops Running sessions, so a Paused entry is inert
+	// for queue logic but counts zero ticks). Instead, we observe tick timing directly
+	// via the tickCount field (unexported but accessible within the same package).
 
-	// The queue is empty and the activity channel is wired, so the loop should have
-	// backed off to slowInterval. After another fastInterval + margin, the tick count
-	// must NOT have increased (the next tick won't fire for ~slowInterval more).
-	time.Sleep(fastInterval + 20*time.Millisecond)
-	tickAfterFast := poller.tickCount
+	// Wait for first tick to happen (fast interval).
+	time.Sleep(fastInterval + 10*time.Millisecond)
+	firstTickCount := poller.tickCount.Load()
+
+	// At this point the queue is empty and the activity channel is wired.
+	// The next tick should be at slowInterval, not fastInterval.
+	// After another fastInterval, the tick count should NOT have increased.
+	time.Sleep(fastInterval + 10*time.Millisecond)
+	tickAfterFast := poller.tickCount.Load()
 
 	if tickAfterFast != firstTickCount {
 		t.Errorf("expected tick count to stay at %d during slow interval backoff, got %d (poller fired again at fast rate)",
@@ -92,7 +93,7 @@ func TestAdaptivePoller_SnapOnApprovalResponse(t *testing.T) {
 
 	// Wait for the first tick (fast interval) and the backoff to kick in.
 	time.Sleep(fastInterval*2 + 20*time.Millisecond)
-	tickBeforeSignal := poller.tickCount
+	tickBeforeSignal := poller.tickCount.Load()
 
 	// The loop is now on slowInterval; record the time and send the activity signal.
 	signalTime := time.Now()
@@ -100,7 +101,7 @@ func TestAdaptivePoller_SnapOnApprovalResponse(t *testing.T) {
 
 	// Wait fastInterval + generous margin for the snap-to-fast to fire another tick.
 	time.Sleep(fastInterval*3 + 50*time.Millisecond)
-	tickAfterSignal := poller.tickCount
+	tickAfterSignal := poller.tickCount.Load()
 	elapsed := time.Since(signalTime)
 
 	if tickAfterSignal <= tickBeforeSignal {

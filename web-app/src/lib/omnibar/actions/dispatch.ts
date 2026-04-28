@@ -26,7 +26,7 @@ export function dispatchOmnibarAction(
         path: action.path,
         sessionType: isOneOff ? undefined : action.sessionType as "directory" | "new_worktree" | "existing_worktree",
         branch: action.branch,
-        program: action.program ?? "claude",
+        program: action.program ?? "",
         autoYes: false,
         oneOff: isOneOff,
       });

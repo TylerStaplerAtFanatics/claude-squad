@@ -19,8 +19,8 @@ const (
 // It reuses the existing events.Event type by embedding the ScanResult in Context.
 type UnfinishedEvent struct {
 	events.Event
-	ScanResult    ScanResult
-	CompletedAt   time.Time
+	ScanResult  ScanResult
+	CompletedAt time.Time
 }
 
 func newUnfinishedWorkUpdatedEvent(r ScanResult) *events.Event {

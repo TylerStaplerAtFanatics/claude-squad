@@ -17,6 +17,7 @@ on:
       - '.github/actions/prepare/**'
       - '.gitmodules'
       - 'third_party/tmux/**'
+  workflow_dispatch:
   pull_request:
     branches: [ main ]
     paths:
