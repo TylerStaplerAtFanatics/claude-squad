@@ -196,6 +196,7 @@ export function useSessionService(
           title: updates.title,
           program: updates.program,
           tags: updates.tags ?? [],
+          workingDir: updates.workingDir,
         });
 
         // Update in store

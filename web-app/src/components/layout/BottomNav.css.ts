@@ -64,3 +64,34 @@ export const navItemLabel = style({
   fontSize: vars.fontSize.xs,
   fontWeight: "500",
 });
+
+export const newButton = style({
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: "64px",
+  fontSize: vars.fontSize.xs,
+  color: "white",
+  background: vars.color.primary,
+  border: "none",
+  cursor: "pointer",
+  padding: `${vars.space["2"]} ${vars.space["1"]}`,
+  gap: vars.space["1"],
+
+  selectors: {
+    "&:hover": {
+      background: vars.color.primaryHover,
+    },
+    "&:active": {
+      background: vars.color.primaryActive,
+    },
+  },
+});
+
+export const newButtonIcon = style({
+  fontSize: "1.75rem",
+  fontWeight: "300",
+  lineHeight: "1",
+});

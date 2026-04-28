@@ -1,4 +1,5 @@
 "use client";
+// +feature: ui:header-nav
 
 import { useState, useEffect } from "react";
 import { AppLink } from "@/components/ui/AppLink";
@@ -10,6 +11,7 @@ import { DebugMenu } from "@/components/ui/DebugMenu";
 import { useNotifications } from "@/lib/contexts/NotificationContext";
 import { useOmnibar } from "@/lib/contexts/OmnibarContext";
 import { routes } from "@/lib/routes";
+import { NAV_PAGES } from "@/lib/nav-pages";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ConnectionIndicator } from "@/components/layout/ConnectionIndicator";
@@ -77,63 +79,28 @@ export function Header() {
             aria-label="Main navigation"
             className={`${styles.nav} ${isMobileMenuOpen ? styles.navOpen : ""}`}
           >
-            <AppLink
-              href={routes.home}
-              className={`${styles.navLink} ${pathname === routes.home ? styles.active : ""}`}
-              onClick={handleNavLinkClick}
-            >
-              Sessions
-            </AppLink>
-            <AppLink
-              href={routes.unfinished}
-              className={`${styles.navLink} ${pathname === routes.unfinished ? styles.active : ""}`}
-              onClick={handleNavLinkClick}
-            >
-              <span>Unfinished</span>
-              <UnfinishedNavBadge inline={true} />
-            </AppLink>
-            <AppLink
-              href={routes.reviewQueue}
-              className={`${styles.navLink} ${pathname === routes.reviewQueue ? styles.active : ""}`}
-              onClick={handleNavLinkClick}
-            >
-              <span>Review Queue</span>
-              <ReviewQueueNavBadge inline={true} />
-            </AppLink>
-            <AppLink
-              href={routes.rules}
-              className={`${styles.navLink} ${pathname === routes.rules ? styles.active : ""}`}
-              onClick={handleNavLinkClick}
-            >
-              Rules
-            </AppLink>
-            <AppLink
-              href={routes.logs}
-              className={`${styles.navLink} ${pathname === routes.logs ? styles.active : ""}`}
-              onClick={handleNavLinkClick}
-            >
-              Logs
-            </AppLink>
-            <AppLink
-              href={routes.history}
-              className={`${styles.navLink} ${pathname === routes.history ? styles.active : ""}`}
-              onClick={handleNavLinkClick}
-            >
-              History
-            </AppLink>
-            <AppLink
-              href={routes.config}
-              className={`${styles.navLink} ${pathname === routes.config ? styles.active : ""}`}
-              onClick={handleNavLinkClick}
-            >
-              Config
-            </AppLink>
-            <AppLink
-              href={routes.settings}
-              className={`${styles.navLink} ${pathname?.startsWith(routes.settings) ? styles.active : ""}`}
-            >
-              Settings
-            </AppLink>
+            {NAV_PAGES.map((page) => {
+              const isActive = page.href === routes.home
+                ? pathname === routes.home
+                : pathname?.startsWith(page.href);
+              return (
+                <AppLink
+                  key={page.href}
+                  href={page.href}
+                  className={`${styles.navLink} ${isActive ? styles.active : ""}`}
+                  onClick={handleNavLinkClick}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  {page.href === routes.unfinished ? (
+                    <><span>{page.label}</span><UnfinishedNavBadge inline={true} /></>
+                  ) : page.href === routes.reviewQueue ? (
+                    <><span>{page.label}</span><ReviewQueueNavBadge inline={true} /></>
+                  ) : (
+                    page.label
+                  )}
+                </AppLink>
+              );
+            })}
           </nav>
 
           <div className={styles.actions}>

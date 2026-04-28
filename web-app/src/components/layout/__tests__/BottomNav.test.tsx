@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { BottomNav } from "../BottomNav";
 
 // Mock next/navigation
@@ -29,6 +29,13 @@ jest.mock("@/components/sessions/ReviewQueueNavBadge", () => ({
   ReviewQueueNavBadge: () => null,
 }));
 
+
+// Mock OmnibarContext
+const mockOpenOmnibar = jest.fn();
+jest.mock("@/lib/contexts/OmnibarContext", () => ({
+  useOmnibar: () => ({ open: mockOpenOmnibar }),
+}));
+
 // Mock the CSS module
 jest.mock("../BottomNav.css", () => ({
   nav: "nav",
@@ -36,27 +43,46 @@ jest.mock("../BottomNav.css", () => ({
   navItemActive: "navItemActive",
   navItemIcon: "navItemIcon",
   navItemLabel: "navItemLabel",
+  newButton: "newButton",
+  newButtonIcon: "newButtonIcon",
 }));
 
 import { usePathname } from "next/navigation";
+import { MOBILE_NAV_PAGES } from "@/lib/nav-pages";
 
 describe("BottomNav", () => {
-  it("renders all 5 nav items", () => {
+  beforeEach(() => {
+    mockOpenOmnibar.mockClear();
+  });
+
+  it("renders every MOBILE_NAV_PAGE and the New session button", () => {
     (usePathname as jest.Mock).mockReturnValue("/");
     render(<BottomNav />);
 
-    expect(screen.getByText("Sessions")).toBeInTheDocument();
-    expect(screen.getByText("Review")).toBeInTheDocument();
-    expect(screen.getByText("Rules")).toBeInTheDocument();
-    expect(screen.getByText("History")).toBeInTheDocument();
-    expect(screen.getByText("Config")).toBeInTheDocument();
+    const remaining = new Set(MOBILE_NAV_PAGES.map((p) => p.href));
+
+    for (const page of MOBILE_NAV_PAGES) {
+      const label = page.shortLabel ?? page.label;
+      expect(screen.getByText(label)).toBeInTheDocument();
+      remaining.delete(page.href);
+    }
+
+    expect(remaining.size).toBe(0);
+    expect(screen.getByRole("button", { name: "New session" })).toBeInTheDocument();
+  });
+
+  it("opens omnibar when New session button is clicked", () => {
+    (usePathname as jest.Mock).mockReturnValue("/");
+    render(<BottomNav />);
+
+    fireEvent.click(screen.getByRole("button", { name: "New session" }));
+    expect(mockOpenOmnibar).toHaveBeenCalledTimes(1);
   });
 
   it("marks Sessions as active on home route", () => {
     (usePathname as jest.Mock).mockReturnValue("/");
     render(<BottomNav />);
 
-    // The Sessions link should have aria-current="page"
     const sessionsLink = screen.getByText("Sessions").closest("a");
     expect(sessionsLink).toHaveAttribute("aria-current", "page");
   });
@@ -65,7 +91,8 @@ describe("BottomNav", () => {
     (usePathname as jest.Mock).mockReturnValue("/");
     render(<BottomNav />);
 
-    const reviewLink = screen.getByText("Review").closest("a");
+    const reviewPage = MOBILE_NAV_PAGES.find((p) => p.href === "/review-queue")!;
+    const reviewLink = screen.getByText(reviewPage.shortLabel ?? reviewPage.label).closest("a");
     expect(reviewLink).not.toHaveAttribute("aria-current", "page");
   });
 
@@ -73,7 +100,8 @@ describe("BottomNav", () => {
     (usePathname as jest.Mock).mockReturnValue("/review-queue");
     render(<BottomNav />);
 
-    const reviewLink = screen.getByText("Review").closest("a");
+    const reviewPage = MOBILE_NAV_PAGES.find((p) => p.href === "/review-queue")!;
+    const reviewLink = screen.getByText(reviewPage.shortLabel ?? reviewPage.label).closest("a");
     expect(reviewLink).toHaveAttribute("aria-current", "page");
   });
 

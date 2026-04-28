@@ -519,19 +519,40 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		}
 	}
 
-	if instance.Paused() || instance.Status == Stopped {
+	if instance.Paused() {
 		instance.started = true
-		// Use configurable prefix or default
 		tmuxPrefix := instance.TmuxPrefix
 		if tmuxPrefix == "" {
-			tmuxPrefix = "staplersquad_" // Default fallback
+			tmuxPrefix = "staplersquad_"
 		}
-
-		// Use server socket isolation if specified, otherwise use prefix-only isolation
 		if instance.TmuxServerSocket != "" {
 			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithServerSocket(instance.Title, instance.Program, tmuxPrefix, instance.TmuxServerSocket))
 		} else {
 			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithPrefix(instance.Title, instance.Program, tmuxPrefix))
+		}
+	} else if instance.Status == Stopped {
+		// Wire the tmux session object so DoesSessionExist() can be called.
+		tmuxPrefix := instance.TmuxPrefix
+		if tmuxPrefix == "" {
+			tmuxPrefix = "staplersquad_"
+		}
+		if instance.TmuxServerSocket != "" {
+			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithServerSocket(instance.Title, instance.Program, tmuxPrefix, instance.TmuxServerSocket))
+		} else {
+			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithPrefix(instance.Title, instance.Program, tmuxPrefix))
+		}
+		// If the underlying tmux session is still alive (e.g. server crashed mid-write
+		// or exit callback fired falsely), recover it rather than leave it stuck as Stopped.
+		if instance.tmuxManager.DoesSessionExist() {
+			log.WarningLog.Printf("[FromInstanceData] Session '%s' stored as Stopped but tmux is alive — recovering to Running", instance.Title)
+			instance.setStatus(Running)
+			if err := instance.Start(false); err != nil {
+				log.WarningLog.Printf("[FromInstanceData] Recovery Start failed for '%s': %v — keeping Stopped", instance.Title, err)
+				instance.setStatus(Stopped)
+				instance.started = true
+			}
+		} else {
+			instance.started = true
 		}
 	} else {
 		if err := instance.Start(false); err != nil {
@@ -1058,14 +1079,37 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	return nil
 }
 
+// buildLaunchCommand constructs the full launch command applying all enrichments:
+// --resume (Claude sessions), MCP server injection, AutoYes, and initial prompt.
+func (i *Instance) buildLaunchCommand(claudeSessionID string) string {
+	program := i.Program
+	if claudeSessionID != "" && strings.Contains(program, "claude") {
+		program = fmt.Sprintf("%s --resume %s", program, claudeSessionID)
+	}
+	if i.MCPServerURL != "" && strings.Contains(program, "claude") {
+		mcpFlag := fmt.Sprintf(`--mcp-server '{"stapler-squad":{"type":"http","url":%q}}'`, i.MCPServerURL)
+		program = program + " " + mcpFlag
+	}
+	if i.AutoYes {
+		program = program + " -y"
+	}
+	if i.Prompt != "" && claudeSessionID == "" {
+		program = fmt.Sprintf("%s %q", program, i.Prompt)
+	}
+	return program
+}
+
 // initTmuxSession creates (or reuses) the tmux.TmuxSession object without starting it.
 func (i *Instance) initTmuxSession() {
 	if i.tmuxManager.HasSession() {
 		log.InfoLog.Printf("Reusing existing tmux session for instance '%s'", i.Title)
 		return
 	}
-	commandBuilder := NewClaudeCommandBuilder(i.Program, i.claudeSession)
-	enrichedProgram := commandBuilder.Build()
+	var claudeSessionID string
+	if i.claudeSession != nil {
+		claudeSessionID = i.claudeSession.ConversationUUID
+	}
+	enrichedProgram := i.buildLaunchCommand(claudeSessionID)
 	i.LaunchCommand = enrichedProgram
 	log.InfoLog.Printf("Creating tmux session for instance '%s' with program '%s'", i.Title, enrichedProgram)
 
@@ -1612,29 +1656,7 @@ func (i *Instance) Restart(preserveOutput bool) error {
 		worktreePath = i.Path
 	}
 
-	// Build the program command with Claude resume flag if applicable
-	program := i.Program
-	if claudeSessionID != "" && strings.Contains(program, "claude") {
-		// Add --resume flag for Claude sessions
-		program = fmt.Sprintf("%s --resume %s", program, claudeSessionID)
-	}
-
-	// Inject MCP server URL via CLI flag so no settings-file write is needed.
-	// Only for claude commands; other programs (aider, etc.) don't support this flag.
-	if i.MCPServerURL != "" && strings.Contains(program, "claude") {
-		mcpFlag := fmt.Sprintf(`--mcp-server '{"stapler-squad":{"type":"http","url":%q}}'`, i.MCPServerURL)
-		program = program + " " + mcpFlag
-	}
-
-	// Add AutoYes flag if needed
-	if i.AutoYes {
-		program = program + " -y"
-	}
-
-	// Add initial prompt if provided and not already restarting with resume
-	if i.Prompt != "" && claudeSessionID == "" {
-		program = fmt.Sprintf("%s %q", program, i.Prompt)
-	}
+	program := i.buildLaunchCommand(claudeSessionID)
 
 	// Create a new tmux session
 	// Use configurable prefix or default
