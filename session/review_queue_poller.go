@@ -86,8 +86,7 @@ type ReviewQueuePoller struct {
 
 	// Backoff state: tracks consecutive poll errors to apply exponential delay.
 	consecutiveErrors int
-	// tickCount tracks poll loop iterations for reconciliation scheduling.
-	// Must be accessed via atomic operations: written by pollLoop, read by tests.
+	// tickCount counts poll loop iterations; atomic because pollLoop writes and tests read concurrently.
 	tickCount atomic.Int64
 }
 
