@@ -39,7 +39,7 @@ func TestColdRestore_WithUUID(t *testing.T) {
 		Path:             t.TempDir(),
 		Program:          "sleep 300",
 		SessionType:      SessionTypeDirectory,
-		AutoYes:          true,
+		AutoYes:          false,
 		TmuxPrefix:       fmt.Sprintf("test_coldrestore_%d_", time.Now().UnixNano()),
 		TmuxServerSocket: coldRestoreSocket(t),
 	})
@@ -94,7 +94,7 @@ func TestColdRestore_WithoutUUID(t *testing.T) {
 		Path:             t.TempDir(),
 		Program:          "sleep 300",
 		SessionType:      SessionTypeDirectory,
-		AutoYes:          true,
+		AutoYes:          false,
 		TmuxPrefix:       fmt.Sprintf("test_coldrestore_%d_", time.Now().UnixNano()),
 		TmuxServerSocket: coldRestoreSocket(t),
 	})
@@ -139,7 +139,7 @@ func TestHotRestore_ExistingSession(t *testing.T) {
 		Path:             tmpDir,
 		Program:          "sleep 300",
 		SessionType:      SessionTypeDirectory,
-		AutoYes:          true,
+		AutoYes:          false,
 		TmuxPrefix:       prefix,
 		TmuxServerSocket: socket,
 	})
@@ -169,7 +169,7 @@ func TestHotRestore_ExistingSession(t *testing.T) {
 		Path:             tmpDir,
 		Program:          "sleep 300",
 		SessionType:      SessionTypeDirectory,
-		AutoYes:          true,
+		AutoYes:          false,
 		TmuxPrefix:       prefix,
 		TmuxServerSocket: socket,
 	})
