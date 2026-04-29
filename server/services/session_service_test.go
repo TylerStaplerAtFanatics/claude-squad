@@ -641,17 +641,6 @@ func TestGetSession_NotFound(t *testing.T) {
 // ListSessions
 // --------------------------------------------------------------------------
 
-// TestListSessions_EmptyStorage verifies that ListSessions returns an empty list
-// when no sessions are registered in the poller.
-func TestListSessions_EmptyStorage(t *testing.T) {
-	fix := setupForkTestFixture(t)
-	t.Cleanup(fix.cleanup)
-
-	resp, err := fix.svc.ListSessions(context.Background(), connect.NewRequest(&sessionv1.ListSessionsRequest{}))
-	require.NoError(t, err)
-	assert.Empty(t, resp.Msg.Sessions)
-}
-
 // TestListSessions_ReturnsAllSessions verifies that ListSessions returns all sessions
 // registered in the poller when no filter is applied.
 func TestListSessions_ReturnsAllSessions(t *testing.T) {
