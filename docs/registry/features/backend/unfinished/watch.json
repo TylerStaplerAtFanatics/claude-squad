@@ -1,0 +1,14 @@
+{
+  "id": "unfinished:watch",
+  "type": "backend",
+  "service": "UnfinishedWorkService",
+  "method": "WatchUnfinishedWork",
+  "protoFile": "proto/session/v1/unfinished.proto",
+  "markerFound": true,
+  "tested": true,
+  "testIds": [
+    "unfinished-work > scan completed event updates last-scanned timestamp",
+    "unfinished-work > filter chips toggle between All Uncommitted Ahead Behind"
+  ],
+  "lastModified": "2026-04-28T00:00:00Z"
+}

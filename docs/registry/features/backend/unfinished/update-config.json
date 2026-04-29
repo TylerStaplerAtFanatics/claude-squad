@@ -1,0 +1,11 @@
+{
+  "id": "unfinished:update-config",
+  "type": "backend",
+  "service": "UnfinishedWorkService",
+  "method": "UpdateUnfinishedWorkConfig",
+  "protoFile": "proto/session/v1/unfinished.proto",
+  "markerFound": true,
+  "tested": false,
+  "testIds": [],
+  "lastModified": "2026-04-28T00:00:00Z"
+}

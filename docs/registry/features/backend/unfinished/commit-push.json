@@ -1,0 +1,11 @@
+{
+  "id": "unfinished:commit-push",
+  "type": "backend",
+  "service": "UnfinishedWorkService",
+  "method": "QuickCommitPush",
+  "protoFile": "proto/session/v1/unfinished.proto",
+  "markerFound": true,
+  "tested": false,
+  "testIds": [],
+  "lastModified": "2026-04-28T00:00:00Z"
+}

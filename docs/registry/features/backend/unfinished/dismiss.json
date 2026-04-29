@@ -1,0 +1,15 @@
+{
+  "id": "unfinished:dismiss",
+  "type": "backend",
+  "service": "UnfinishedWorkService",
+  "method": "DismissWorktree",
+  "protoFile": "proto/session/v1/unfinished.proto",
+  "markerFound": true,
+  "tested": true,
+  "testIds": [
+    "TestStateStore_DismissWorktree",
+    "TestStateStore_IsDismissed",
+    "unfinished-work > Dismiss button calls DismissWorktree RPC"
+  ],
+  "lastModified": "2026-04-28T00:00:00Z"
+}

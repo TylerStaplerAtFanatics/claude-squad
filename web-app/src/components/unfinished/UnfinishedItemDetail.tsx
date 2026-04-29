@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
@@ -29,6 +29,20 @@ export function UnfinishedItemDetail({ worktree }: UnfinishedItemDetailProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(false);
   const [showCommitModal, setShowCommitModal] = useState(false);
+  const [showSessionPicker, setShowSessionPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  // Close picker on outside click
+  useEffect(() => {
+    if (!showSessionPicker) return;
+    function handleClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowSessionPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showSessionPicker]);
 
   const transport = createConnectTransport({
     baseUrl: getApiBaseUrl(),
@@ -40,10 +54,12 @@ export function UnfinishedItemDetail({ worktree }: UnfinishedItemDetailProps) {
   const noChanges = !worktree.hasUncommitted && worktree.commitsAhead === 0;
 
   const handleOpenSession = useCallback(() => {
-    if (worktree.sessionId) {
-      router.push(routes.sessionDetail(worktree.sessionId));
+    if (worktree.sessionIds.length > 1) {
+      setShowSessionPicker((v) => !v);
+    } else if (worktree.sessionIds.length === 1) {
+      router.push(routes.sessionDetail(worktree.sessionIds[0]));
     } else {
-      router.push(routes.sessionCreate);
+      router.push(routes.newSessionFromWorktree(worktree.worktreePath, worktree.branch, worktree.branch));
     }
   }, [router, worktree]);
 
@@ -106,9 +122,33 @@ export function UnfinishedItemDetail({ worktree }: UnfinishedItemDetailProps) {
 
       {/* Action buttons */}
       <div className={styles.actionRow}>
-        <button className={styles.btnPrimary} onClick={handleOpenSession}>
-          {worktree.sessionId ? "Reattach Session" : "Open Session"}
-        </button>
+        <div className={styles.sessionBtnWrapper} ref={pickerRef}>
+          <button className={styles.btnPrimary} onClick={handleOpenSession} aria-expanded={showSessionPicker}>
+            {worktree.sessionIds.length > 1
+              ? `Reattach Session (${worktree.sessionIds.length})`
+              : worktree.sessionIds.length === 1
+              ? "Reattach Session"
+              : "Open Session"}
+          </button>
+          {showSessionPicker && (
+            <div className={styles.sessionPicker} role="listbox" aria-label="Select session">
+              {worktree.sessionIds.map((id, i) => (
+                <button
+                  key={id}
+                  className={styles.sessionPickerItem}
+                  role="option"
+                  onClick={() => {
+                    setShowSessionPicker(false);
+                    router.push(routes.sessionDetail(id));
+                  }}
+                >
+                  Session {i + 1}
+                  <span className={styles.sessionPickerIdHint}>{id.slice(0, 8)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button className={styles.btn} onClick={() => setShowCommitModal(true)}>
           Commit &amp; Push
         </button>

@@ -1,0 +1,14 @@
+{
+  "id": "unfinished:snooze",
+  "type": "backend",
+  "service": "UnfinishedWorkService",
+  "method": "SnoozeWorktree",
+  "protoFile": "proto/session/v1/unfinished.proto",
+  "markerFound": true,
+  "tested": true,
+  "testIds": [
+    "TestStateStore_SnoozeWorktree",
+    "TestStateStore_IsSnoozeActive"
+  ],
+  "lastModified": "2026-04-28T00:00:00Z"
+}

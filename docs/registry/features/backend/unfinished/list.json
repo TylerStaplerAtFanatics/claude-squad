@@ -1,0 +1,17 @@
+{
+  "id": "unfinished:list",
+  "type": "backend",
+  "service": "UnfinishedWorkService",
+  "method": "ListUnfinishedWork",
+  "protoFile": "proto/session/v1/unfinished.proto",
+  "markerFound": true,
+  "tested": true,
+  "testIds": [
+    "TestScanner_ScanWorktrees",
+    "TestScanner_CircuitBreaker",
+    "TestScanner_FilterDismissed",
+    "unfinished-work > page loads with title and filter controls",
+    "unfinished-work > shows empty state when no worktrees found"
+  ],
+  "lastModified": "2026-04-28T00:00:00Z"
+}

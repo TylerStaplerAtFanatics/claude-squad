@@ -54,8 +54,9 @@ type ScanResult struct {
 	Status   ScanResultStatus
 	ErrorMsg string
 
-	// SessionID is non-empty if an active stapler-squad session tracks this branch.
-	SessionID string
+	// SessionIDs holds the UUIDs of all active stapler-squad sessions whose Path
+	// matches this worktree. Multiple sessions can target the same worktree.
+	SessionIDs []string
 }
 
 // IsUnfinished returns true when at least one unfinished-work criterion is met.
