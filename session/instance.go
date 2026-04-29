@@ -1099,10 +1099,10 @@ func (i *Instance) buildLaunchCommand(claudeSessionID string) string {
 		mcpFlag := fmt.Sprintf(`--mcp-config '{"mcpServers":{"stapler-squad":{"type":"http","url":%q}}}'`, i.MCPServerURL)
 		program = program + " " + mcpFlag
 	}
-	if i.AutoYes {
+	if i.AutoYes && strings.Contains(program, "claude") {
 		program = program + " -y"
 	}
-	if i.Prompt != "" && claudeSessionID == "" {
+	if i.Prompt != "" && claudeSessionID == "" && strings.Contains(program, "claude") {
 		program = fmt.Sprintf("%s %q", program, i.Prompt)
 	}
 	return program
@@ -1697,6 +1697,10 @@ func (i *Instance) Restart(preserveOutput bool) error {
 		worktreePath = i.ExistingWorktree
 	} else {
 		worktreePath = i.Path
+	}
+
+	if worktreePath == "" {
+		return fmt.Errorf("cannot restart session '%s': no working directory configured", i.Title)
 	}
 
 	program := i.buildLaunchCommand(claudeSessionID)
