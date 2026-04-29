@@ -2,13 +2,14 @@ package server
 
 import (
 	"context"
-	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
-	"github.com/tstapler/stapler-squad/server/events"
-	"github.com/tstapler/stapler-squad/session"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
+	"github.com/tstapler/stapler-squad/server/events"
+	"github.com/tstapler/stapler-squad/session"
 )
 
 // TestReactiveQueueManagerIntegration tests the full reactive queue workflow
@@ -555,4 +556,119 @@ func BenchmarkReactiveQueueManagerThroughput(b *testing.B) {
 	}
 
 	reactiveQueueMgr.Stop()
+}
+
+// --------------------------------------------------------------------------
+// Session ID resolution in review-queue notification events
+// --------------------------------------------------------------------------
+
+// newReactiveQueueTestSetup creates a ReactiveQueueManager with a real ReviewQueuePoller
+// and event bus, returning both for use in tests.
+func newReactiveQueueTestSetup(t *testing.T) (*ReactiveQueueManager, *session.ReviewQueuePoller, *events.EventBus) {
+	t.Helper()
+	testDir := t.TempDir()
+	repo, err := session.NewEntRepository(session.WithDatabasePath(filepath.Join(testDir, "sessions.db")))
+	if err != nil {
+		t.Fatalf("newReactiveQueueTestSetup: create repo: %v", err)
+	}
+	t.Cleanup(func() { repo.Close() })
+	storage, err := session.NewStorageWithRepository(repo)
+	if err != nil {
+		t.Fatalf("newReactiveQueueTestSetup: create storage: %v", err)
+	}
+
+	queue := session.NewReviewQueue()
+	statusMgr := session.NewInstanceStatusManager()
+	poller := session.NewReviewQueuePoller(queue, statusMgr, nil)
+	bus := events.NewEventBus(32)
+	t.Cleanup(bus.Close)
+
+	mgr := NewReactiveQueueManager(queue, poller, bus, statusMgr, storage)
+	return mgr, poller, bus
+}
+
+// TestOnItemAdded_NotificationUsesStableID verifies that when ReactiveQueueManager
+// fires a notification for a newly-queued item, the event.SessionID is the session's
+// UUID — not the title (which is what ReviewItem.SessionID holds as the queue key).
+func TestOnItemAdded_NotificationUsesStableID(t *testing.T) {
+	mgr, poller, bus := newReactiveQueueTestSetup(t)
+
+	const sessionTitle = "stelekit"
+	const sessionUUID = "aaaabbbb-1111-2222-3333-ffffffffffff"
+	inst := &session.Instance{
+		Title: sessionTitle,
+		UUID:  sessionUUID,
+	}
+	poller.SetInstances([]*session.Instance{inst})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	eventCh, _ := bus.Subscribe(ctx)
+
+	// OnItemAdded is the callback fired by the queue when the poller adds an item.
+	// ReviewItem.SessionID == inst.Title (the queue's key), as expected.
+	item := &session.ReviewItem{
+		SessionID:   sessionTitle,
+		SessionName: sessionTitle,
+		Reason:      session.ReasonInputRequired,
+		Priority:    session.PriorityMedium,
+		DetectedAt:  time.Now(),
+	}
+	mgr.OnItemAdded(item)
+
+	// Collect events until we find the notification or time out.
+	var gotID string
+	deadline := time.After(2 * time.Second)
+	for gotID == "" {
+		select {
+		case e := <-eventCh:
+			if e.Type == events.EventNotification {
+				gotID = e.SessionID
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for notification event from OnItemAdded")
+		}
+	}
+
+	if gotID != sessionUUID {
+		t.Errorf("notification event.SessionID = %q, want UUID %q (title was %q)",
+			gotID, sessionUUID, sessionTitle)
+	}
+}
+
+// TestOnItemAdded_NotificationFallsBackToTitleWhenNoMatch verifies that when
+// the poller has no matching instance, the raw title is used gracefully.
+func TestOnItemAdded_NotificationFallsBackToTitleWhenNoMatch(t *testing.T) {
+	mgr, _, bus := newReactiveQueueTestSetup(t)
+	// No instances in poller — FindInstance will return nil.
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	eventCh, _ := bus.Subscribe(ctx)
+
+	item := &session.ReviewItem{
+		SessionID:   "orphan-session",
+		SessionName: "orphan-session",
+		Reason:      session.ReasonIdleTimeout,
+		Priority:    session.PriorityLow,
+		DetectedAt:  time.Now(),
+	}
+	mgr.OnItemAdded(item)
+
+	var gotID string
+	deadline := time.After(2 * time.Second)
+	for gotID == "" {
+		select {
+		case e := <-eventCh:
+			if e.Type == events.EventNotification {
+				gotID = e.SessionID
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for notification event")
+		}
+	}
+
+	if gotID != "orphan-session" {
+		t.Errorf("notification event.SessionID = %q, want raw title %q", gotID, "orphan-session")
+	}
 }
