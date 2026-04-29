@@ -182,17 +182,23 @@ type Instance struct {
 	ActiveCheckpoint string
 	ForkedFromID     string
 
+	// OneShot runs claude in -p mode; the session exits after the task completes.
+	OneShot bool
+
+	// ProjectID is the optional project this session belongs to.
+	ProjectID string
+
 	// HistoryFilePath is the path to the Claude conversation JSONL history file.
 	// Set by HistoryLinker when it correlates this session to an open JSONL file.
 	HistoryFilePath string
 
 	// MCPServerURL is the URL of the stapler-squad HTTP MCP endpoint.
-	// When set, passed as --mcp-server to claude on session start so no
+	// When set, passed as --mcp-config to claude on session start so no
 	// settings-file injection is needed.
 	MCPServerURL string `json:"mcp_server_url,omitempty"`
 
 	// LaunchCommand is the full command passed to tmux on session start, including
-	// any injected flags (--resume, --mcp-server, -y, initial prompt). Set once on
+	// any injected flags (--resume, --mcp-config, -y, initial prompt). Set once on
 	// first start and updated on restart. Empty for external (mux-discovered) sessions.
 	LaunchCommand string `json:"launch_command,omitempty"`
 
@@ -306,8 +312,14 @@ func (i *Instance) ToInstanceData() InstanceData {
 		ForkedFromID:     i.ForkedFromID,
 		// History file linkage
 		HistoryFilePath: i.HistoryFilePath,
+		// One-shot mode
+		OneShot: i.OneShot,
+		// Project association
+		ProjectID: i.ProjectID,
 		// Full launch command for diagnostics
 		LaunchCommand: i.LaunchCommand,
+		// MCP server URL for re-injection on restart
+		MCPServerURL: i.MCPServerURL,
 	}
 
 	// Only include worktree data if gitWorktree is initialized
@@ -442,8 +454,14 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		ForkedFromID:     data.ForkedFromID,
 		// History file linkage
 		HistoryFilePath: data.HistoryFilePath,
+		// One-shot mode
+		OneShot: data.OneShot,
+		// Project association
+		ProjectID: data.ProjectID,
 		// Launch command for diagnostics
 		LaunchCommand: data.LaunchCommand,
+		// MCP server URL for re-injection on restart
+		MCPServerURL: data.MCPServerURL,
 	}
 
 	// MIGRATION: Assign UUID to existing sessions that pre-date UUID assignment
@@ -505,19 +523,45 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 		}
 	}
 
-	if instance.Paused() || instance.Status == Stopped {
+	if instance.Paused() {
 		instance.started = true
-		// Use configurable prefix or default
 		tmuxPrefix := instance.TmuxPrefix
 		if tmuxPrefix == "" {
-			tmuxPrefix = "staplersquad_" // Default fallback
+			tmuxPrefix = "staplersquad_"
 		}
 
-		// Use server socket isolation if specified, otherwise use prefix-only isolation
+		// Use server socket isolation if specified, otherwise use prefix-only isolation.
+		// WithRegistry(nil) prevents a background reconnect loop on isolated sockets —
+		// the loop tries attach-session on a keepalive that doesn't exist there, causing
+		// intermittent exit status 1 from concurrent new-session calls.
+		if instance.TmuxServerSocket != "" {
+			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithServerSocket(instance.Title, instance.Program, tmuxPrefix, instance.TmuxServerSocket, tmux.WithRegistry(nil)))
+		} else {
+			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithPrefix(instance.Title, instance.Program, tmuxPrefix))
+		}
+	} else if instance.Status == Stopped {
+		// Wire the tmux session object so DoesSessionExist() can be called.
+		tmuxPrefix := instance.TmuxPrefix
+		if tmuxPrefix == "" {
+			tmuxPrefix = "staplersquad_"
+		}
 		if instance.TmuxServerSocket != "" {
 			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithServerSocket(instance.Title, instance.Program, tmuxPrefix, instance.TmuxServerSocket))
 		} else {
 			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithPrefix(instance.Title, instance.Program, tmuxPrefix))
+		}
+		// If the underlying tmux session is still alive (e.g. server crashed mid-write
+		// or exit callback fired falsely), recover it rather than leave it stuck as Stopped.
+		if instance.tmuxManager.DoesSessionExist() {
+			log.WarningLog.Printf("[FromInstanceData] Session '%s' stored as Stopped but tmux is alive — recovering to Running", instance.Title)
+			instance.setStatus(Running)
+			if err := instance.Start(false); err != nil {
+				log.WarningLog.Printf("[FromInstanceData] Recovery Start failed for '%s': %v — keeping Stopped", instance.Title, err)
+				instance.setStatus(Stopped)
+				instance.started = true
+			}
+		} else {
+			instance.started = true
 		}
 	} else {
 		if err := instance.Start(false); err != nil {
@@ -592,8 +636,15 @@ type InstanceOptions struct {
 	// ResumeId is the Claude conversation ID to resume (from history browser).
 	// When set, the session will start with --resume <id> flag.
 	ResumeId string
+
+	// OneShot runs claude in -p mode; the session exits after the task completes.
+	OneShot bool
+
+	// ProjectID associates the session with a project.
+	ProjectID string
+
 	// MCPServerURL, when non-empty and the program is claude, passes
-	// --mcp-server '{"stapler-squad":{"url":"<MCPServerURL>"}}' so the
+	// --mcp-config '{"stapler-squad":{"type":"http","url":"<MCPServerURL>"}}' so the
 	// session can call back into stapler-squad without any file injection.
 	MCPServerURL string
 }
@@ -670,7 +721,10 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 		GitHubRepo:      opts.GitHubRepo,
 		GitHubSourceRef: opts.GitHubSourceRef,
 		ClonedRepoPath:  opts.ClonedRepoPath,
-		MCPServerURL:    opts.MCPServerURL,
+		// One-shot mode and project
+		OneShot:      opts.OneShot,
+		ProjectID:    opts.ProjectID,
+		MCPServerURL: opts.MCPServerURL,
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice
@@ -692,7 +746,7 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 	if opts.ResumeId != "" {
 		instance.claudeSession = &ClaudeSessionData{
 			ConversationUUID: opts.ResumeId,
-			LastAttached: t,
+			LastAttached:     t,
 			Metadata: map[string]string{
 				"resumed_from_history": "true",
 			},
@@ -1034,14 +1088,37 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	return nil
 }
 
+// buildLaunchCommand constructs the full launch command applying all enrichments:
+// --resume (Claude sessions), MCP server injection, AutoYes, and initial prompt.
+func (i *Instance) buildLaunchCommand(claudeSessionID string) string {
+	program := i.Program
+	if claudeSessionID != "" && strings.Contains(program, "claude") {
+		program = fmt.Sprintf("%s --resume %s", program, claudeSessionID)
+	}
+	if i.MCPServerURL != "" && strings.Contains(program, "claude") {
+		mcpFlag := fmt.Sprintf(`--mcp-config '{"mcpServers":{"stapler-squad":{"type":"http","url":%q}}}'`, i.MCPServerURL)
+		program = program + " " + mcpFlag
+	}
+	if i.AutoYes {
+		program = program + " -y"
+	}
+	if i.Prompt != "" && claudeSessionID == "" {
+		program = fmt.Sprintf("%s %q", program, i.Prompt)
+	}
+	return program
+}
+
 // initTmuxSession creates (or reuses) the tmux.TmuxSession object without starting it.
 func (i *Instance) initTmuxSession() {
 	if i.tmuxManager.HasSession() {
 		log.InfoLog.Printf("Reusing existing tmux session for instance '%s'", i.Title)
 		return
 	}
-	commandBuilder := NewClaudeCommandBuilder(i.Program, i.claudeSession)
-	enrichedProgram := commandBuilder.Build()
+	var claudeSessionID string
+	if i.claudeSession != nil {
+		claudeSessionID = i.claudeSession.ConversationUUID
+	}
+	enrichedProgram := i.buildLaunchCommand(claudeSessionID)
 	i.LaunchCommand = enrichedProgram
 	log.InfoLog.Printf("Creating tmux session for instance '%s' with program '%s'", i.Title, enrichedProgram)
 
@@ -1052,7 +1129,7 @@ func (i *Instance) initTmuxSession() {
 
 	var session *tmux.TmuxSession
 	if i.TmuxServerSocket != "" {
-		session = tmux.NewTmuxSessionWithServerSocket(i.Title, enrichedProgram, tmuxPrefix, i.TmuxServerSocket)
+		session = tmux.NewTmuxSessionWithServerSocket(i.Title, enrichedProgram, tmuxPrefix, i.TmuxServerSocket, tmux.WithRegistry(nil))
 	} else {
 		session = tmux.NewTmuxSessionWithPrefix(i.Title, enrichedProgram, tmuxPrefix)
 	}
@@ -1327,6 +1404,24 @@ func (i *Instance) Started() bool {
 	return i.started
 }
 
+// TmuxSessionExists reports whether the underlying tmux session is currently alive.
+// Used at startup to reconcile stale Stopped status against live tmux sessions.
+func (i *Instance) TmuxSessionExists() bool {
+	return i.tmuxManager.DoesSessionExist()
+}
+
+// RecoverFromStopped resets a stale Stopped status to Ready so the instance can be
+// hot-restored via Start(false). Only call this during startup reconciliation when
+// the tmux session is confirmed alive; it bypasses the state machine intentionally.
+func (i *Instance) RecoverFromStopped() {
+	i.stateMutex.Lock()
+	defer i.stateMutex.Unlock()
+	if i.Status == Stopped {
+		i.setStatus(Ready)
+		i.started = false
+	}
+}
+
 // SetTitle sets the title of the instance. Returns an error if the instance has started.
 // We cant change the title once it's been used for a tmux session etc.
 func (i *Instance) SetTitle(title string) error {
@@ -1549,9 +1644,7 @@ func (i *Instance) Restart(preserveOutput bool) error {
 		return ErrCannotRestart
 	}
 
-	if i.Status == Paused {
-		return fmt.Errorf("%w: session is paused, resume it first", ErrCannotRestart)
-	}
+	waspaused := i.Status == Paused
 
 	// Capture terminal output if requested
 	var savedOutput string
@@ -1581,6 +1674,24 @@ func (i *Instance) Restart(preserveOutput bool) error {
 	// Determine the working directory
 	var worktreePath string
 	if i.gitManager.HasWorktree() {
+		// Paused sessions have their worktree directory removed by Pause().
+		// Recreate it now so the new tmux session starts in the right place.
+		if waspaused {
+			if err := i.gitManager.Setup(); err != nil {
+				return fmt.Errorf("failed to recreate worktree for paused session: %w", err)
+			}
+			// Claude stores conversation history keyed by the project directory path.
+			// After worktree recreation the encoded path matches the worktree, not the
+			// main repo, so --resume with a UUID that was captured in the main repo
+			// (or a previous worktree incarnation) will fail with "no conversation found"
+			// and cause Claude to exit immediately.  Clear the UUID so Claude starts
+			// fresh instead.
+			claudeSessionID = ""
+			if i.claudeSession != nil {
+				i.claudeSession.ConversationUUID = ""
+				i.HistoryFilePath = ""
+			}
+		}
 		worktreePath = i.gitManager.GetWorktreePath()
 	} else if i.SessionType == SessionTypeExistingWorktree && i.ExistingWorktree != "" {
 		worktreePath = i.ExistingWorktree
@@ -1588,29 +1699,7 @@ func (i *Instance) Restart(preserveOutput bool) error {
 		worktreePath = i.Path
 	}
 
-	// Build the program command with Claude resume flag if applicable
-	program := i.Program
-	if claudeSessionID != "" && strings.Contains(program, "claude") {
-		// Add --resume flag for Claude sessions
-		program = fmt.Sprintf("%s --resume %s", program, claudeSessionID)
-	}
-
-	// Inject MCP server URL via CLI flag so no settings-file write is needed.
-	// Only for claude commands; other programs (aider, etc.) don't support this flag.
-	if i.MCPServerURL != "" && strings.Contains(program, "claude") {
-		mcpFlag := fmt.Sprintf(`--mcp-server '{"stapler-squad":{"type":"http","url":%q}}'`, i.MCPServerURL)
-		program = program + " " + mcpFlag
-	}
-
-	// Add AutoYes flag if needed
-	if i.AutoYes {
-		program = program + " -y"
-	}
-
-	// Add initial prompt if provided and not already restarting with resume
-	if i.Prompt != "" && claudeSessionID == "" {
-		program = fmt.Sprintf("%s %q", program, i.Prompt)
-	}
+	program := i.buildLaunchCommand(claudeSessionID)
 
 	// Create a new tmux session
 	// Use configurable prefix or default
@@ -1624,7 +1713,7 @@ func (i *Instance) Restart(preserveOutput bool) error {
 
 	// Use server socket isolation if specified, otherwise use prefix-only isolation
 	if i.TmuxServerSocket != "" {
-		i.tmuxManager.SetSession(tmux.NewTmuxSessionWithServerSocket(i.Title, program, tmuxPrefix, i.TmuxServerSocket))
+		i.tmuxManager.SetSession(tmux.NewTmuxSessionWithServerSocket(i.Title, program, tmuxPrefix, i.TmuxServerSocket, tmux.WithRegistry(nil)))
 	} else {
 		i.tmuxManager.SetSession(tmux.NewTmuxSessionWithPrefix(i.Title, program, tmuxPrefix))
 	}
@@ -1654,9 +1743,16 @@ func (i *Instance) Restart(preserveOutput bool) error {
 		// Continue - controller is optional functionality
 	}
 
-	// Restart preserves the existing status (already Running or NeedsApproval).
-	// No state transition is needed since the session stays in its current operational state.
+	// For paused sessions, transition to Running now that the new tmux session is live.
+	// For already-running sessions, preserve the existing status.
 	i.stateMutex.Lock()
+	if waspaused {
+		if err := i.transitionTo(Running); err != nil {
+			log.WarningLog.Printf("Restart: failed to transition '%s' from Paused to Running: %v", i.Title, err)
+			i.setStatus(Running)
+		}
+		i.started = true
+	}
 	i.UpdatedAt = time.Now()
 	i.stateMutex.Unlock()
 
@@ -2027,10 +2123,10 @@ func (i *Instance) createNewClaudeSession() error {
 	// Update the instance's Claude session data
 	i.claudeSession = &ClaudeSessionData{
 		ConversationUUID: newSession.ID,
-		SquadSessionID: newSession.ConversationID,
-		ProjectName:    newSession.ProjectName,
-		LastAttached:   time.Now(),
-		Settings:       i.claudeSession.Settings, // Preserve existing settings
+		SquadSessionID:   newSession.ConversationID,
+		ProjectName:      newSession.ProjectName,
+		LastAttached:     time.Now(),
+		Settings:         i.claudeSession.Settings, // Preserve existing settings
 		Metadata: map[string]string{
 			"working_dir": newSession.WorkingDir,
 			"created_at":  time.Now().Format(time.RFC3339),

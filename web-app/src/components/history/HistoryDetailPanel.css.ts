@@ -8,7 +8,7 @@ export const detailPanel = style({
   border: `1px solid ${vars.color.borderColor}`,
   borderRadius: "8px",
   padding: "20px",
-  maxHeight: "calc(100vh - 280px)",
+  maxHeight: "calc(var(--viewport-height, 100dvh) - 280px)",
   overflowY: "auto",
 
   "@media": {

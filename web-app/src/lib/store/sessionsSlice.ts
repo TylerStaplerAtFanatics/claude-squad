@@ -15,6 +15,12 @@ interface SessionsExtraState {
   detectedStatusMap: Record<string, { detectedStatus: string; detectedContext: string }>;
   /** WatchSessions stream connection state for UI staleness indicator. */
   connectionState: ConnectionState;
+  /**
+   * IDs of sessions that have been confirmed deleted client-side. Filtered out of
+   * every setSessions call so a stream reconnect's listSessions snapshot cannot
+   * resurrect a session that was just removed but hasn't propagated server-side yet.
+   */
+  deletedIds: Record<string, true>;
 }
 
 const initialState = sessionsAdapter.getInitialState<SessionsExtraState>({
@@ -22,6 +28,7 @@ const initialState = sessionsAdapter.getInitialState<SessionsExtraState>({
   error: null,
   detectedStatusMap: {},
   connectionState: "disconnected",
+  deletedIds: {},
 });
 
 const sessionsSlice = createSlice({
@@ -29,13 +36,18 @@ const sessionsSlice = createSlice({
   initialState,
   reducers: {
     setSessions(state, action: PayloadAction<Session[]>) {
-      sessionsAdapter.setAll(state, action.payload);
+      const filtered = action.payload.filter(s => !state.deletedIds[s.id]);
+      sessionsAdapter.setAll(state, filtered);
     },
     upsertSession(state, action: PayloadAction<Session>) {
-      sessionsAdapter.upsertOne(state, action.payload);
+      // Don't resurrect a deleted session via an in-flight update event
+      if (!state.deletedIds[action.payload.id]) {
+        sessionsAdapter.upsertOne(state, action.payload);
+      }
     },
     removeSession(state, action: PayloadAction<string>) {
       sessionsAdapter.removeOne(state, action.payload);
+      state.deletedIds[action.payload] = true;
     },
     setLoading(state, action: PayloadAction<boolean>) {
       state.loading = action.payload;

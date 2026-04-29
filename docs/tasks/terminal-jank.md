@@ -1,7 +1,8 @@
 # Implementation Plan: Terminal Jank Elimination
 
-Status: Ready for Implementation
+Status: Stories 1 & 2 Complete — Story 3 Pending
 Created: 2026-04-09
+Updated: 2026-04-20
 Requirements: `project_plans/terminal-jank/requirements.md`
 Research: `project_plans/terminal-jank/research/`
 ADRs: `project_plans/terminal-jank/decisions/ADR-001..003`
@@ -35,9 +36,10 @@ Stories 1 and 2 can proceed in parallel. Story 3 depends on Story 1 (pooled term
 
 ---
 
-## Story 1: Immediate Fixes -- ED3 Filter + Remove Clear Prefix + xterm 6.0 Upgrade
+## ✅ Story 1: Immediate Fixes -- ED3 Filter + Remove Clear Prefix + xterm 6.0 Upgrade
 
 **Priority**: P0 (fixes active user-facing bugs)
+**Status**: ✅ COMPLETE (2026-04-20)
 **Scope**: ~1 day
 **Risk**: Low -- isolated changes, no architectural impact
 
@@ -47,7 +49,7 @@ Claude Code's TUI emits `\x1b[2J\x1b[3J` (ED2 + ED3) on every streaming repaint.
 
 ### Tasks
 
-#### Task 1.1: Add ED3 filter to EscapeSequenceParser
+#### ✅ Task 1.1: Add ED3 filter to EscapeSequenceParser
 
 **Files**: `web-app/src/lib/terminal/EscapeSequenceParser.ts`
 **Estimate**: 1 hour
@@ -74,7 +76,7 @@ The filter must run before the partial-sequence detection (on `fullData`), becau
 - AND standalone `\x1b[3J` (without preceding ED2) is preserved (user-initiated clear)
 - AND unit tests cover: paired ED2+ED3, standalone ED3, ED2 alone, multiple pairs in one chunk
 
-#### Task 1.2: Remove clear-screen prefix from cold-start snapshot
+#### ✅ Task 1.2: Remove clear-screen prefix from cold-start snapshot
 
 **Files**: `server/services/connectrpc_websocket.go`
 **Estimate**: 30 minutes
@@ -97,7 +99,7 @@ clearAndHome := "\x1b[H"
 - AND the terminal displays the snapshot content without a visible flash
 - AND existing reconnect paths (resync, state restore) still function correctly
 
-#### Task 1.3: Upgrade xterm.js to 6.0
+#### ✅ Task 1.3: Upgrade xterm.js to 6.0
 
 **Files**: `web-app/package.json`, `web-app/src/components/sessions/XtermTerminal.tsx` (import adjustments if API changed)
 **Estimate**: 2 hours
@@ -134,9 +136,10 @@ Run `make restart-web`, open two sessions in the web UI, and verify:
 
 ---
 
-## Story 2: Cold-Start Latency Reduction -- Quiescence Detector + Snapshot Cache
+## ✅ Story 2: Cold-Start Latency Reduction -- Quiescence Detector + Snapshot Cache
 
 **Priority**: P1
+**Status**: ✅ COMPLETE (2026-04-20)
 **Scope**: ~2 days
 **Risk**: Medium -- Go-side concurrency, timing-sensitive behavior
 **ADR**: `ADR-003-cold-start-quiescence.md`
@@ -147,7 +150,7 @@ The current cold-start path in `streamViaControlMode()` uses hard-coded `time.Sl
 
 ### Tasks
 
-#### Task 2.1: Implement output quiescence detector
+#### ✅ Task 2.1: Implement output quiescence detector
 
 **Files**: `server/services/connectrpc_websocket.go` (new function + modify `streamViaControlMode`)
 **Estimate**: 3 hours
@@ -201,7 +204,7 @@ Wire it into `streamViaControlMode`:
 - THEN the quiescence detector waits until output settles (up to 500ms hard cap)
 - AND the captured snapshot reflects the settled TUI state
 
-#### Task 2.2: Implement per-session snapshot cache
+#### ✅ Task 2.2: Implement per-session snapshot cache
 
 **Files**: `server/services/connectrpc_websocket.go` (new type + modify handler struct)
 **Estimate**: 2 hours
@@ -237,7 +240,7 @@ Cache lifecycle:
 - WHEN a client connects
 - THEN the server runs capture-pane, updates the cache, and serves fresh content
 
-#### Task 2.3: Mark snapshots dirty on control mode output
+#### ✅ Task 2.3: Mark snapshots dirty on control mode output
 
 **Files**: `server/services/connectrpc_websocket.go` (in the control mode output handler)
 **Estimate**: 1 hour

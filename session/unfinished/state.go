@@ -51,8 +51,8 @@ type unfinishedState struct {
 // StateStore manages persistent state for the unfinished-work feature.
 // All public methods are thread-safe.
 type StateStore struct {
-	mu   sync.RWMutex
-	path string
+	mu    sync.RWMutex
+	path  string
 	state unfinishedState
 }
 

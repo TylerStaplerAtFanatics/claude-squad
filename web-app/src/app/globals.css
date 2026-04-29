@@ -72,6 +72,9 @@
   --breakpoint-fold: 600px;    /* between outer and inner */
   --breakpoint-inner: 900px;   /* inner screen */
 
+  /* Bottom navigation bar height — used for page padding-bottom clearance */
+  --bottom-nav-height: 56px;
+
   /* Touch target sizes (WCAG 2.1 AA) */
   --min-touch-target: 44px;
 
@@ -375,8 +378,7 @@ a {
 
 @media (max-width: 768px) {
   .modal {
-    max-height: calc(100vh - 5rem);
-    max-height: calc(100dvh - 5rem);
+    max-height: calc(var(--viewport-height) - 5rem);
     border-radius: 12px 12px 0 0;
     width: 100%;
     max-width: 100%;

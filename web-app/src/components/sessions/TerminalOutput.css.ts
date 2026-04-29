@@ -137,6 +137,54 @@ export const toolbarButton = style({
 
 export const debugActive = style({});
 
+// Toolbar toggle button — always visible on mobile, hidden on desktop
+export const toolbarToggle = style({
+  padding: "0.5rem",
+  background: "#3e3e42",
+  border: "1px solid #555555",
+  borderRadius: "4px",
+  color: "#cccccc",
+  fontSize: "0.75rem",
+  cursor: "pointer",
+  minWidth: "var(--min-touch-target, 44px)",
+  minHeight: "var(--min-touch-target, 44px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+  selectors: {
+    "&:hover": {
+      background: "#505050",
+    },
+  },
+  "@media": {
+    // On desktop always show the full toolbar; hide the toggle
+    "screen and (min-width: 1024px)": {
+      display: "none",
+    },
+  },
+});
+
+// Container for collapsible toolbar buttons
+export const toolbarActions = style({
+  display: "flex",
+  gap: "0.5rem",
+  "@media": {
+    "screen and (max-width: 768px)": {
+      gap: "0.25rem",
+      overflowX: "auto",
+      WebkitOverflowScrolling: "touch" as "auto",
+      whiteSpace: "nowrap",
+      scrollbarWidth: "none",
+      msOverflowStyle: "none",
+    },
+    // On desktop toolbarActions always visible regardless of toolbarExpanded
+    "screen and (min-width: 1024px)": {
+      display: "flex !important" as "flex",
+    },
+  },
+});
+
 export const devOnly = style({
   "@media": {
     "screen and (max-width: 768px)": {
@@ -188,9 +236,14 @@ export const terminal = style({
   color: "#d4d4d4",
   overflow: "hidden",
   position: "relative",
+  // Safe-area padding for landscape notch (horizontal insets only)
+  paddingLeft: "var(--safe-area-left, 0px)",
+  paddingRight: "var(--safe-area-right, 0px)",
   "@media": {
     "screen and (max-width: 768px)": {
       padding: "0.75rem",
+      paddingLeft: "max(0.75rem, var(--safe-area-left, 0px))",
+      paddingRight: "max(0.75rem, var(--safe-area-right, 0px))",
       fontSize: "13px",
     },
   },
@@ -285,6 +338,10 @@ export const mobileKey = style({
   // Tighter padding so 7 keys fit per row on a 375 px screen
   padding: "0.45rem 0.25rem",
   minWidth: 0, // allow flex shrink below content width
+  minHeight: "var(--min-touch-target, 44px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   background: "#3c3c3c",
   border: "1px solid #555",
   borderBottom: "3px solid #333",

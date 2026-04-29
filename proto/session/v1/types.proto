@@ -142,9 +142,15 @@ message Session {
   // Matches the UUID in the JSONL filename under ~/.claude/projects/<dir>/<uuid>.jsonl.
   string claude_conversation_uuid = 42;
 
+  // Project ID this session belongs to (empty if not in a project).
+  string project_id = 43;
+
+  // Initial prompt that was injected into CLAUDE.md at session creation.
+  string initial_prompt = 44;
+
   // Full launch command as passed to tmux on session start, including injected flags
   // (e.g. --resume <id>, --mcp-server ..., -y, initial prompt). Empty for external sessions.
-  string launch_command = 43;
+  string launch_command = 45;
 }
 
 // SessionStatus represents the current state of a session.
@@ -357,6 +363,13 @@ message ReviewItem {
   // This is the actual last activity time, used for sorting and display.
   // Used instead of detected_at for showing when the session was last active.
   google.protobuf.Timestamp last_activity = 17;
+
+  // GitHub PR URL for the session (empty if no PR exists yet).
+  string github_pr_url = 18;
+
+  // True if the session's branch has diverged from the base branch (main/master).
+  // Populated by RunOneShot pre-check; shows warning badge in review queue UI.
+  bool branch_diverged_from_base = 19;
 }
 
 // Priority levels for review queue items (highest to lowest urgency).

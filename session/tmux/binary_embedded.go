@@ -13,7 +13,8 @@ import (
 
 // tmuxEmbedded holds the raw bytes of the platform-specific tmux binary.
 // Populated at compile time from session/tmux/embed/tmux, which is built by:
-//   make build-tmux-embed
+//
+//	make build-tmux-embed
 //
 // If the file doesn't exist, `go build -tags embed_tmux` will fail with a clear
 // compile error — run the prerequisite first.

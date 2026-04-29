@@ -99,7 +99,7 @@ func NewSessionStatusChangedEvent(sess *session.Instance, oldStatus, newStatus s
 		Type:      EventSessionStatusChanged,
 		Timestamp: time.Now(),
 		Session:   sess,
-		SessionID: sess.Title,
+		SessionID: sess.GetStableID(),
 		OldStatus: oldStatus,
 		NewStatus: newStatus,
 	}

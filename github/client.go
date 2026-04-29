@@ -25,8 +25,8 @@ type authResult struct {
 }
 
 var (
-	ghAuthState atomic.Value        // stores authResult
-	ghAuthGroup singleflight.Group  //nolint:exhaustruct
+	ghAuthState atomic.Value       // stores authResult
+	ghAuthGroup singleflight.Group //nolint:exhaustruct
 )
 
 const ghAuthTTL = 5 * time.Minute

@@ -3,7 +3,8 @@ import { style } from "@vanilla-extract/css";
 export const container = style({
   display: "flex",
   flexDirection: "column",
-  height: "100vh",
+  height: "var(--viewport-height, 100dvh)",
+  overflow: "hidden",
   padding: "1.5rem",
   backgroundColor: "#0a0a0a",
   color: "#e5e5e5",

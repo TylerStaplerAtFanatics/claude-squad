@@ -154,7 +154,7 @@ export function OmnibarCreationPanel({
         {/* One-off informational banner */}
         {sessionType === "one_off" && (
           <div className={hint} style={{ marginTop: 0 }}>
-            Directory will be created at <code>~/oneoff/YYYYMMDD-word-word-NN</code>
+            Directory will be created in your one-off base directory (default: <code>~/oneoff</code>) with format <code>YYYYMMDD-word-word-NN</code>. Configure in Settings → Defaults.
           </div>
         )}
 

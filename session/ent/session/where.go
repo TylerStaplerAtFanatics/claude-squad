@@ -175,6 +175,21 @@ func LastAcknowledged(v time.Time) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldLastAcknowledged, v))
 }
 
+// McpServerURL applies equality check predicate on the "mcp_server_url" field. It's identical to McpServerURLEQ.
+func McpServerURL(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldMcpServerURL, v))
+}
+
+// InitialPrompt applies equality check predicate on the "initial_prompt" field. It's identical to InitialPromptEQ.
+func InitialPrompt(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldInitialPrompt, v))
+}
+
+// OneShot applies equality check predicate on the "one_shot" field. It's identical to OneShotEQ.
+func OneShot(v bool) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldOneShot, v))
+}
+
 // TitleEQ applies the EQ predicate on the "title" field.
 func TitleEQ(v string) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldTitle, v))
@@ -1535,6 +1550,166 @@ func LastAcknowledgedNotNil() predicate.Session {
 	return predicate.Session(sql.FieldNotNull(FieldLastAcknowledged))
 }
 
+// McpServerURLEQ applies the EQ predicate on the "mcp_server_url" field.
+func McpServerURLEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldMcpServerURL, v))
+}
+
+// McpServerURLNEQ applies the NEQ predicate on the "mcp_server_url" field.
+func McpServerURLNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldMcpServerURL, v))
+}
+
+// McpServerURLIn applies the In predicate on the "mcp_server_url" field.
+func McpServerURLIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldMcpServerURL, vs...))
+}
+
+// McpServerURLNotIn applies the NotIn predicate on the "mcp_server_url" field.
+func McpServerURLNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldMcpServerURL, vs...))
+}
+
+// McpServerURLGT applies the GT predicate on the "mcp_server_url" field.
+func McpServerURLGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldMcpServerURL, v))
+}
+
+// McpServerURLGTE applies the GTE predicate on the "mcp_server_url" field.
+func McpServerURLGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldMcpServerURL, v))
+}
+
+// McpServerURLLT applies the LT predicate on the "mcp_server_url" field.
+func McpServerURLLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldMcpServerURL, v))
+}
+
+// McpServerURLLTE applies the LTE predicate on the "mcp_server_url" field.
+func McpServerURLLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldMcpServerURL, v))
+}
+
+// McpServerURLContains applies the Contains predicate on the "mcp_server_url" field.
+func McpServerURLContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldMcpServerURL, v))
+}
+
+// McpServerURLHasPrefix applies the HasPrefix predicate on the "mcp_server_url" field.
+func McpServerURLHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldMcpServerURL, v))
+}
+
+// McpServerURLHasSuffix applies the HasSuffix predicate on the "mcp_server_url" field.
+func McpServerURLHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldMcpServerURL, v))
+}
+
+// McpServerURLIsNil applies the IsNil predicate on the "mcp_server_url" field.
+func McpServerURLIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldMcpServerURL))
+}
+
+// McpServerURLNotNil applies the NotNil predicate on the "mcp_server_url" field.
+func McpServerURLNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldMcpServerURL))
+}
+
+// McpServerURLEqualFold applies the EqualFold predicate on the "mcp_server_url" field.
+func McpServerURLEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldMcpServerURL, v))
+}
+
+// McpServerURLContainsFold applies the ContainsFold predicate on the "mcp_server_url" field.
+func McpServerURLContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldMcpServerURL, v))
+}
+
+// InitialPromptEQ applies the EQ predicate on the "initial_prompt" field.
+func InitialPromptEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldInitialPrompt, v))
+}
+
+// InitialPromptNEQ applies the NEQ predicate on the "initial_prompt" field.
+func InitialPromptNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldInitialPrompt, v))
+}
+
+// InitialPromptIn applies the In predicate on the "initial_prompt" field.
+func InitialPromptIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldInitialPrompt, vs...))
+}
+
+// InitialPromptNotIn applies the NotIn predicate on the "initial_prompt" field.
+func InitialPromptNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldInitialPrompt, vs...))
+}
+
+// InitialPromptGT applies the GT predicate on the "initial_prompt" field.
+func InitialPromptGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldInitialPrompt, v))
+}
+
+// InitialPromptGTE applies the GTE predicate on the "initial_prompt" field.
+func InitialPromptGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldInitialPrompt, v))
+}
+
+// InitialPromptLT applies the LT predicate on the "initial_prompt" field.
+func InitialPromptLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldInitialPrompt, v))
+}
+
+// InitialPromptLTE applies the LTE predicate on the "initial_prompt" field.
+func InitialPromptLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldInitialPrompt, v))
+}
+
+// InitialPromptContains applies the Contains predicate on the "initial_prompt" field.
+func InitialPromptContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldInitialPrompt, v))
+}
+
+// InitialPromptHasPrefix applies the HasPrefix predicate on the "initial_prompt" field.
+func InitialPromptHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldInitialPrompt, v))
+}
+
+// InitialPromptHasSuffix applies the HasSuffix predicate on the "initial_prompt" field.
+func InitialPromptHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldInitialPrompt, v))
+}
+
+// InitialPromptIsNil applies the IsNil predicate on the "initial_prompt" field.
+func InitialPromptIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldInitialPrompt))
+}
+
+// InitialPromptNotNil applies the NotNil predicate on the "initial_prompt" field.
+func InitialPromptNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldInitialPrompt))
+}
+
+// InitialPromptEqualFold applies the EqualFold predicate on the "initial_prompt" field.
+func InitialPromptEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldInitialPrompt, v))
+}
+
+// InitialPromptContainsFold applies the ContainsFold predicate on the "initial_prompt" field.
+func InitialPromptContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldInitialPrompt, v))
+}
+
+// OneShotEQ applies the EQ predicate on the "one_shot" field.
+func OneShotEQ(v bool) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldOneShot, v))
+}
+
+// OneShotNEQ applies the NEQ predicate on the "one_shot" field.
+func OneShotNEQ(v bool) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldOneShot, v))
+}
+
 // HasWorktree applies the HasEdge predicate on the "worktree" edge.
 func HasWorktree() predicate.Session {
 	return predicate.Session(func(s *sql.Selector) {
@@ -1619,6 +1794,29 @@ func HasClaudeSession() predicate.Session {
 func HasClaudeSessionWith(preds ...predicate.ClaudeSession) predicate.Session {
 	return predicate.Session(func(s *sql.Selector) {
 		step := newClaudeSessionStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasProject applies the HasEdge predicate on the "project" edge.
+func HasProject() predicate.Session {
+	return predicate.Session(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, ProjectTable, ProjectColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasProjectWith applies the HasEdge predicate on the "project" edge with a given conditions (other predicates).
+func HasProjectWith(preds ...predicate.Project) predicate.Session {
+	return predicate.Session(func(s *sql.Selector) {
+		step := newProjectStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)
