@@ -400,8 +400,16 @@ func (rqp *ReviewQueuePoller) reconcileSessions() {
 			continue
 		}
 		if !liveSessions[sessionName] {
-			log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: managed session '%s' (tmux: %s) not found in live sessions — firing EventExited",
+			log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: managed session '%s' (tmux: %s) not found in live sessions — transitioning to Stopped",
 				inst.Title, sessionName)
+			inst.stateMutex.Lock()
+			if inst.Status == Running || inst.Status == Ready {
+				if err := inst.transitionTo(Stopped); err != nil {
+					log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: transition to Stopped failed for '%s': %v — using setStatus", inst.Title, err)
+					inst.setStatus(Stopped)
+				}
+			}
+			inst.stateMutex.Unlock()
 			inst.fireLifecycleEvent(EventExited, "reconcile-session-missing")
 		}
 	}

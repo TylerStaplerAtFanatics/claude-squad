@@ -18,6 +18,10 @@ make restart-web    # Build web UI and restart server (ALWAYS use this)
                     # IMPORTANT: Do NOT pipe or redirect make restart-web output (e.g. | tail -20) as it will block forever.
                     #            Run it plain: make restart-web
 
+# Deploy to production (macOS LaunchAgent / Linux systemd)
+make install-service    # Build + install as system service, auto-starts on login
+make uninstall-service  # Remove the service and disable auto-start
+
 # Enable profiling for web server (to diagnose lock-ups)
 make restart-web-profile  # Restart with --profile --trace enabled
 
