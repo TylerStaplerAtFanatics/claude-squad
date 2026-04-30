@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Tree } from "react-arborist";
 import type { NodeApi, TreeApi } from "react-arborist";
 import type { FileNode } from "@/gen/session/v1/types_pb";
@@ -311,11 +311,15 @@ function getFileIcon(name: string): string {
 
 // ---- Main component ----
 
+// Stable empty map to avoid creating a new Map reference on every render when
+// gitStatusMap is not provided, which would break useMemo dependency checks.
+const EMPTY_GIT_STATUS_MAP = new Map<string, string>();
+
 export function FileTree({
   sessionId,
   baseUrl,
   onFileSelect,
-  gitStatusMap = new Map(),
+  gitStatusMap = EMPTY_GIT_STATUS_MAP,
   selectedPath,
   includeIgnored = false,
   searchTerm = "",
@@ -347,6 +351,25 @@ export function FileTree({
   const savedOpenStateRef = useRef<Record<string, boolean>>({});
 
   const treeRef = useRef<TreeApi<TreeNode> | undefined>(undefined);
+
+  // ResizeObserver: track container dimensions for react-window (requires numeric width/height).
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dims, setDims] = useState({ w: 300, h: 600 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      requestAnimationFrame(() => {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setDims({ w: Math.floor(width), h: Math.floor(height) });
+        }
+      });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Register collapseAll callback with parent when treeRef or onCollapseAllRef changes.
   useEffect(() => {
@@ -502,12 +525,32 @@ export function FileTree({
     }
   }, [searchResults]);
 
-  // Build dirStatusMap for directory-level git status propagation.
-  const rootNodes = dirContents.get(".") ?? [];
-  const treeData = buildTreeData(rootNodes, dirContents);
-  const displayedData = searchResults ?? treeData;
-  const dirStatusMap = new Map<string, string>();
-  computeDirStatuses(displayedData, gitStatusMap, dirStatusMap);
+  // Memoized tree computations — only recompute when their inputs actually change.
+  const treeData = useMemo(
+    () => buildTreeData(dirContents.get(".") ?? [], dirContents),
+    [dirContents]
+  );
+  const displayedData = useMemo(
+    () => searchResults ?? treeData,
+    [searchResults, treeData]
+  );
+  const dirStatusMap = useMemo(() => {
+    const m = new Map<string, string>();
+    computeDirStatuses(displayedData, gitStatusMap, m);
+    return m;
+  }, [displayedData, gitStatusMap]);
+
+  // Set of all known directory ids across all loaded children.
+  // Allows handleToggle to skip non-directory ids without re-traversing the tree.
+  const knownDirIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const nodes of dirContents.values()) {
+      for (const node of nodes) {
+        if (node.isDir) s.add(node.id);
+      }
+    }
+    return s;
+  }, [dirContents]);
 
   const handleActivate = useCallback(
     (node: NodeApi<TreeNode>) => {
@@ -521,29 +564,16 @@ export function FileTree({
 
   const handleToggle = useCallback(
     (id: string) => {
-      // In search mode all data is already present; no lazy loading needed.
+      // load-bearing guard: prevents openAll() fan-out in search mode.
       if (searchResults !== null) return;
-
-      // Find the node and load its children if it's a directory not yet loaded.
-      const findNode = (nodes: TreeNode[]): TreeNode | undefined => {
-        for (const n of nodes) {
-          if (n.id === id) return n;
-          if (n.children) {
-            const found = findNode(n.children);
-            if (found) return found;
-          }
-        }
-        return undefined;
-      };
-
-      const allNodes = buildTreeData(rootNodes, dirContents);
-      const node = findNode(allNodes);
+      // Only attempt to load known directory ids; ignore files and unknown ids.
+      if (!knownDirIds.has(id)) return;
       // Load if not yet fetched, or retry if a previous load errored.
-      if (node?.isDir && (!dirContents.has(id) || errorPaths.has(id))) {
+      if (!dirContents.has(id) || errorPaths.has(id)) {
         loadDirectory(id);
       }
     },
-    [rootNodes, dirContents, loadDirectory, searchResults, errorPaths]
+    [dirContents, errorPaths, knownDirIds, loadDirectory, searchResults]
   );
 
   if (rootLoading) {
@@ -615,7 +645,7 @@ export function FileTree({
   }
 
   return (
-    <div className={container}>
+    <div className={container} ref={containerRef}>
       {searchTruncated && (
         <div className={searchTruncatedClass}>
           Showing first 500 results — refine your search for more specific matches.
@@ -637,8 +667,8 @@ export function FileTree({
         onToggle={handleToggle}
         rowHeight={28}
         openByDefault={false}
-        width="100%"
-        height={600}
+        width={dims.w}
+        height={dims.h}
         searchTerm={searchResults === null ? (searchTerm || undefined) : undefined}
         searchMatch={(node, term) => {
           const t = term.toLowerCase();

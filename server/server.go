@@ -285,6 +285,13 @@ func NewServer(addr string) *Server {
 		telemetryHandler := handlers.NewTelemetryHandler()
 		srv.mux.HandleFunc("POST /api/telemetry", telemetryHandler.HandleTelemetry)
 		log.InfoLog.Printf("Registered telemetry handler at POST /api/telemetry")
+
+		// Register raw file download endpoint.
+		// Uses the FileService inside SessionService to validate paths against
+		// the session worktree root (path traversal prevention).
+		fileSvc := deps.SessionService.GetFileService()
+		srv.mux.HandleFunc("/api/files/raw", fileSvc.ServeFileRaw)
+		log.InfoLog.Printf("Registered raw file download handler at /api/files/raw")
 	}
 
 	// Register image upload endpoint — saves clipboard images to a temp directory
