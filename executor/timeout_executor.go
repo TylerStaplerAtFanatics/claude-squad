@@ -52,7 +52,14 @@ func (e *TimeoutExecutor) Run(cmd *exec.Cmd) error {
 		}
 		return fmt.Errorf("command timed out after %v: %s", e.timeout, ToString(cmd))
 	case err := <-done:
-		// Command completed (successfully or with error)
+		// Command completed (successfully or with error).
+		// On Linux, exec-not-found errors may surface via Wait() instead of Start() —
+		// wrap them so callers always see "failed to start" for non-exit errors.
+		if err != nil {
+			if _, isExitErr := err.(*exec.ExitError); !isExitErr {
+				return fmt.Errorf("failed to start command: %w", err)
+			}
+		}
 		return err
 	}
 }
