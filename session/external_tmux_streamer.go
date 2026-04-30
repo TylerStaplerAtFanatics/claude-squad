@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/session/tmux"
 )
 
 // ExternalTmuxStreamer provides terminal content streaming for external sessions.
@@ -203,6 +204,7 @@ func (s *ExternalTmuxStreamer) startControlMode() bool {
 		log.WarningLog.Printf("Control mode failed to start for '%s': %v", s.tmuxSessionName, err)
 		return false
 	}
+	tmux.TrackChildPID(cmd.Process.Pid, "tmux external control-mode session="+s.tmuxSessionName)
 
 	s.controlModeCmd = cmd
 	s.controlModeActive = true
@@ -231,6 +233,7 @@ func (s *ExternalTmuxStreamer) stopControlMode() {
 
 	// Kill the process
 	if s.controlModeCmd.Process != nil {
+		tmux.UntrackChildPID(s.controlModeCmd.Process.Pid)
 		s.controlModeCmd.Process.Kill()
 	}
 

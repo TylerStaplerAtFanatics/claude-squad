@@ -81,6 +81,55 @@ func (r *timestampRing) countSince(cutoff time.Time) int64 {
 	return n
 }
 
+// spawnEntry records the origin description for a live child process.
+type spawnEntry struct {
+	Description string
+	StartedAt   time.Time
+}
+
+// spawnRegistry tracks live child PIDs so zombie detection can log which component
+// is responsible. Keyed by PID; entries added via TrackChildPID after cmd.Start()
+// and removed via UntrackChildPID after cmd.Wait().
+var spawnRegistry struct {
+	mu      sync.Mutex
+	entries map[int]spawnEntry
+}
+
+func init() {
+	spawnRegistry.entries = make(map[int]spawnEntry)
+}
+
+// TrackChildPID registers a child PID with a human-readable description so zombie
+// alerts can identify which component failed to call Wait(). Call after cmd.Start().
+// description should identify the component and purpose, e.g.:
+//
+//	"tmux control-mode session=my-session"
+//	"tmux registry control-mode socket=/tmp/tmux.sock"
+func TrackChildPID(pid int, description string) {
+	spawnRegistry.mu.Lock()
+	spawnRegistry.entries[pid] = spawnEntry{Description: description, StartedAt: time.Now()}
+	spawnRegistry.mu.Unlock()
+}
+
+// UntrackChildPID removes a PID from the registry. Call after cmd.Wait() returns.
+func UntrackChildPID(pid int) {
+	spawnRegistry.mu.Lock()
+	delete(spawnRegistry.entries, pid)
+	spawnRegistry.mu.Unlock()
+}
+
+// LookupChildPID returns the description and start time for a tracked PID.
+// Returns ("unknown", zero, false) if the PID was not registered.
+func LookupChildPID(pid int) (description string, startedAt time.Time, ok bool) {
+	spawnRegistry.mu.Lock()
+	e, ok := spawnRegistry.entries[pid]
+	spawnRegistry.mu.Unlock()
+	if !ok {
+		return "unknown", time.Time{}, false
+	}
+	return e.Description, e.StartedAt, true
+}
+
 // forkMonitor is the process-wide fork pressure monitor.
 var forkMonitor = struct {
 	totalSpawns   atomic.Int64
@@ -147,14 +196,21 @@ func recordFailure(now time.Time) {
 }
 
 // RecordZombieProcess records detection of a zombie child process (Z state in ps).
-// sessionName identifies which tmux session spawned the zombie.
+// sessionName is the comm field from ps (process name). The spawn registry is checked
+// to include the originating component in the log message.
 func RecordZombieProcess(pid int, sessionName string, warnFn func(string, ...any)) {
 	now := time.Now()
 	forkMonitor.totalZombies.Add(1)
 	forkMonitor.zombieRing.record(now)
 	if warnFn != nil {
-		warnFn("[ForkPressure] zombie process detected: pid=%d session=%q (total=%d)",
-			pid, sessionName, forkMonitor.totalZombies.Load())
+		if desc, startedAt, ok := LookupChildPID(pid); ok {
+			age := now.Sub(startedAt).Truncate(time.Millisecond)
+			warnFn("[ForkPressure] zombie child detected: pid=%d comm=%q origin=%q age=%v (total=%d)",
+				pid, sessionName, desc, age, forkMonitor.totalZombies.Load())
+		} else {
+			warnFn("[ForkPressure] zombie child detected: pid=%d comm=%q origin=unregistered (total=%d)",
+				pid, sessionName, forkMonitor.totalZombies.Load())
+		}
 	}
 	checkPressure(now)
 }

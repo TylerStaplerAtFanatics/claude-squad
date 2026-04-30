@@ -281,6 +281,7 @@ func (r *TmuxServerRegistry) startControlMode() (*exec.Cmd, *bufio.Scanner, io.W
 		stdin.Close()
 		return nil, nil, nil, fmt.Errorf("cmd.Start: %w", err)
 	}
+	TrackChildPID(cmd.Process.Pid, "tmux registry control-mode socket="+r.serverSocket)
 	return cmd, bufio.NewScanner(stdout), stdin, nil
 }
 
@@ -351,6 +352,7 @@ func (r *TmuxServerRegistry) reconnectLoop() {
 		// Closing stdin signals tmux to exit cleanly (it sends %exit on EOF).
 		stdin.Close()
 		// Clean up the process.
+		UntrackChildPID(cmd.Process.Pid)
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 

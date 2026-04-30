@@ -83,6 +83,7 @@ func (t *TmuxSession) StartControlMode() error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start control mode for session '%s': %w", t.sanitizedName, err)
 	}
+	TrackChildPID(cmd.Process.Pid, "tmux control-mode session="+t.sanitizedName)
 
 	// Store control mode infrastructure
 	t.controlModeCmd = cmd
@@ -131,6 +132,7 @@ func (t *TmuxSession) StopControlMode() error {
 	t.cmdSendMu.Unlock()
 
 	// Wait for process to exit (with timeout)
+	UntrackChildPID(t.controlModeCmd.Process.Pid)
 	done := make(chan error, 1)
 	go func() {
 		done <- t.controlModeCmd.Wait()

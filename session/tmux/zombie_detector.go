@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -17,10 +18,12 @@ type ZombieInfo struct {
 	Command string
 }
 
-// ScanZombies returns all zombie processes (state "Z") owned by the current user.
-// Uses `ps` to avoid any additional subprocess overhead beyond a single ps call.
+// ScanZombies returns zombie processes (state "Z") that are direct children of
+// the current process. Only direct children can be reaped via Wait4(-1, WNOHANG),
+// so reporting system-wide zombies would produce un-reapable noise.
 func ScanZombies() ([]ZombieInfo, error) {
-	// -u: current user only; axo: all processes, custom columns; state Z = zombie
+	ourPID := os.Getpid()
+	// -axo: all processes, custom columns; state Z = zombie
 	psCtx, psCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer psCancel()
 	psCmd := exec.CommandContext(psCtx, "ps", "-axo", "pid,ppid,stat,comm")
@@ -51,6 +54,10 @@ func ScanZombies() ([]ZombieInfo, error) {
 			continue
 		}
 		ppid, _ := strconv.Atoi(fields[1])
+		// Only track zombies we can actually reap (direct children only).
+		if ppid != ourPID {
+			continue
+		}
 		zombies = append(zombies, ZombieInfo{
 			PID:     pid,
 			PPID:    ppid,
