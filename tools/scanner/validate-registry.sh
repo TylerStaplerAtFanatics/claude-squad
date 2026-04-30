@@ -54,7 +54,14 @@ if ! ./tools/scanner/backend/cmd/scanner \
       proto/session/v1/session.proto \
       server/services/ \
       "${TEMP_BACKEND}" 2>&1; then
-  echo "ERROR: backend scanner failed" >&2
+  echo "ERROR: backend scanner failed (session.proto)" >&2
+  exit 2
+fi
+if ! ./tools/scanner/backend/cmd/scanner \
+      proto/session/v1/unfinished.proto \
+      server/services/ \
+      "${TEMP_BACKEND}" 2>&1; then
+  echo "ERROR: backend scanner failed (unfinished.proto)" >&2
   exit 2
 fi
 

@@ -4,11 +4,11 @@
   "service": "UnfinishedWorkService",
   "method": "SnoozeWorktree",
   "protoFile": "proto/session/v1/unfinished.proto",
-  "markerFound": true,
+  "markerFound": false,
   "tested": true,
   "testIds": [
     "TestStateStore_SnoozeWorktree",
     "TestStateStore_IsSnoozeActive"
   ],
-  "lastModified": "2026-04-28T00:00:00Z"
+  "lastModified": "2026-04-26T11:20:14.318047801-07:00"
 }
