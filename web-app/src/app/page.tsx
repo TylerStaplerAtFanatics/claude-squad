@@ -229,10 +229,13 @@ function HomeContent() {
     }
   }, [searchParams, sessions]);
 
-  // Detect ?new=true or ?duplicate=<id> query params and auto-open wizard
+  // Detect ?new=true, ?duplicate=<id>, or ?worktree=<path>&branch=<branch> query params
   useEffect(() => {
     const newParam = searchParams.get("new");
     const duplicateId = searchParams.get("duplicate");
+    const worktreePath = searchParams.get("worktree");
+    const worktreeBranch = searchParams.get("branch");
+    const worktreeTitle = searchParams.get("title");
 
     if (newParam === "true") {
       setWizardInitialData(undefined);
@@ -263,6 +266,20 @@ function HomeContent() {
         // If loading the session fails, still open wizard without initial data
         setShowWizard(true);
       });
+    } else if (worktreePath) {
+      openedViaQueryParam.current = true;
+      router.replace("/", { scroll: false });
+      setWizardInitialData({
+        title: worktreeTitle || "",
+        path: worktreePath,
+        branch: worktreeBranch || "",
+        workingDir: "",
+        program: "claude",
+        category: "",
+        prompt: "",
+        autoYes: false,
+      });
+      setShowWizard(true);
     }
   }, [searchParams, getSession]);
 

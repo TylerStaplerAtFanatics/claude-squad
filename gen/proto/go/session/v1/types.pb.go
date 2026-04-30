@@ -4451,9 +4451,9 @@ type UnfinishedWorktree struct {
 	ScanStatus   ScanStatus `protobuf:"varint,16,opt,name=scan_status,json=scanStatus,proto3,enum=session.v1.ScanStatus" json:"scan_status,omitempty"`
 	ScanErrorMsg string     `protobuf:"bytes,17,opt,name=scan_error_msg,json=scanErrorMsg,proto3" json:"scan_error_msg,omitempty"` // human-readable error, empty on success
 	// Action state
-	IsDismissed   bool   `protobuf:"varint,18,opt,name=is_dismissed,json=isDismissed,proto3" json:"is_dismissed,omitempty"`
-	IsSnoozed     bool   `protobuf:"varint,19,opt,name=is_snoozed,json=isSnoozed,proto3" json:"is_snoozed,omitempty"`
-	SessionId     string `protobuf:"bytes,20,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // non-empty if an active session covers this branch
+	IsDismissed   bool     `protobuf:"varint,18,opt,name=is_dismissed,json=isDismissed,proto3" json:"is_dismissed,omitempty"`
+	IsSnoozed     bool     `protobuf:"varint,19,opt,name=is_snoozed,json=isSnoozed,proto3" json:"is_snoozed,omitempty"`
+	SessionIds    []string `protobuf:"bytes,20,rep,name=session_ids,json=sessionIds,proto3" json:"session_ids,omitempty"` // UUIDs of active sessions covering this worktree path
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4621,11 +4621,11 @@ func (x *UnfinishedWorktree) GetIsSnoozed() bool {
 	return false
 }
 
-func (x *UnfinishedWorktree) GetSessionId() string {
+func (x *UnfinishedWorktree) GetSessionIds() []string {
 	if x != nil {
-		return x.SessionId
+		return x.SessionIds
 	}
-	return ""
+	return nil
 }
 
 // UnfinishedWorkConfig holds user-configurable source settings.
@@ -5068,7 +5068,7 @@ const file_session_v1_types_proto_rawDesc = "" +
 	"\x0fscrollback_path\x18\x06 \x01(\tR\x0escrollbackPath\x12(\n" +
 	"\x10claude_conv_uuid\x18\a \x01(\tR\x0eclaudeConvUuid\x12$\n" +
 	"\x0egit_commit_sha\x18\b \x01(\tR\fgitCommitSha\x128\n" +
-	"\ttimestamp\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"\xa3\x06\n" +
+	"\ttimestamp\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"\xa5\x06\n" +
 	"\x12UnfinishedWorktree\x12\x1b\n" +
 	"\trepo_path\x18\x01 \x01(\tR\brepoPath\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12#\n" +
@@ -5092,9 +5092,9 @@ const file_session_v1_types_proto_rawDesc = "" +
 	"\x0escan_error_msg\x18\x11 \x01(\tR\fscanErrorMsg\x12!\n" +
 	"\fis_dismissed\x18\x12 \x01(\bR\visDismissed\x12\x1d\n" +
 	"\n" +
-	"is_snoozed\x18\x13 \x01(\bR\tisSnoozed\x12\x1d\n" +
-	"\n" +
-	"session_id\x18\x14 \x01(\tR\tsessionId\"\x8a\x01\n" +
+	"is_snoozed\x18\x13 \x01(\bR\tisSnoozed\x12\x1f\n" +
+	"\vsession_ids\x18\x14 \x03(\tR\n" +
+	"sessionIds\"\x8a\x01\n" +
 	"\x14UnfinishedWorkConfig\x120\n" +
 	"\x14auto_spider_sessions\x18\x01 \x01(\bR\x12autoSpiderSessions\x12\x1d\n" +
 	"\n" +

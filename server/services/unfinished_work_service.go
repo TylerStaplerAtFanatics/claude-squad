@@ -13,6 +13,7 @@ import (
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/server/events"
+	"github.com/tstapler/stapler-squad/session"
 	"github.com/tstapler/stapler-squad/session/unfinished"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -28,6 +29,7 @@ type UnfinishedWorkService struct {
 	scanner    *unfinished.Scanner
 	stateStore *unfinished.StateStore
 	eventBus   *events.EventBus
+	storage    *session.Storage
 
 	// perWorktreeMu prevents duplicate AI summary generation for the same worktree.
 	aiMu sync.Map // map[string]*sync.Mutex  key = repoPath+"|"+branch
@@ -38,12 +40,33 @@ func NewUnfinishedWorkService(
 	scanner *unfinished.Scanner,
 	stateStore *unfinished.StateStore,
 	eventBus *events.EventBus,
+	storage *session.Storage,
 ) *UnfinishedWorkService {
 	return &UnfinishedWorkService{
 		scanner:    scanner,
 		stateStore: stateStore,
 		eventBus:   eventBus,
+		storage:    storage,
 	}
+}
+
+// sessionPathIndex builds a worktreePath → []sessionUUID map from all loaded instances.
+// Multiple sessions can target the same worktree path.
+func (s *UnfinishedWorkService) sessionPathIndex() map[string][]string {
+	if s.storage == nil {
+		return map[string][]string{}
+	}
+	instances, err := s.storage.LoadInstances()
+	if err != nil {
+		return map[string][]string{}
+	}
+	index := make(map[string][]string, len(instances))
+	for _, inst := range instances {
+		if inst.Path != "" && inst.UUID != "" {
+			index[inst.Path] = append(index[inst.Path], inst.UUID)
+		}
+	}
+	return index
 }
 
 // ListUnfinishedWork returns the current snapshot of all unfinished worktrees.
@@ -52,8 +75,10 @@ func (s *UnfinishedWorkService) ListUnfinishedWork(
 	_ *connect.Request[sessionv1.ListUnfinishedWorkRequest],
 ) (*connect.Response[sessionv1.ListUnfinishedWorkResponse], error) {
 	results := s.scanner.GetAllResults()
+	pathIndex := s.sessionPathIndex()
 	worktrees := make([]*sessionv1.UnfinishedWorktree, 0, len(results))
 	for _, r := range results {
+		r.SessionIDs = pathIndex[r.WorktreePath]
 		worktrees = append(worktrees, scanResultToProto(r))
 	}
 	return connect.NewResponse(&sessionv1.ListUnfinishedWorkResponse{
@@ -71,7 +96,9 @@ func (s *UnfinishedWorkService) WatchUnfinishedWork(
 ) error {
 	// 1. Send initial snapshot.
 	results := s.scanner.GetAllResults()
+	pathIndex := s.sessionPathIndex()
 	for _, r := range results {
+		r.SessionIDs = pathIndex[r.WorktreePath]
 		evt := &sessionv1.UnfinishedWorkEvent{
 			Payload: &sessionv1.UnfinishedWorkEvent_WorktreeUpdated{
 				WorktreeUpdated: scanResultToProto(r),
@@ -119,6 +146,7 @@ func (s *UnfinishedWorkService) convertUnfinishedEvent(evt *events.Event) *sessi
 		if !ok {
 			return nil
 		}
+		r.SessionIDs = s.sessionPathIndex()[r.WorktreePath]
 		return &sessionv1.UnfinishedWorkEvent{
 			Payload: &sessionv1.UnfinishedWorkEvent_WorktreeUpdated{
 				WorktreeUpdated: scanResultToProto(r),
@@ -430,7 +458,7 @@ func scanResultToProto(r unfinished.ScanResult) *sessionv1.UnfinishedWorktree {
 		LinesRemoved:        int32(r.LinesRemoved),
 		AheadCommitMessages: r.AheadMessages,
 		IsDismissed:         r.Status == unfinished.ScanResultStatusError, // used below
-		SessionId:           r.SessionID,
+		SessionIds:          r.SessionIDs,
 	}
 
 	// Correct the is_dismissed field (ScanResult doesn't carry this).
