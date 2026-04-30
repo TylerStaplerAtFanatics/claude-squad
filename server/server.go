@@ -212,6 +212,15 @@ func NewServer(addr string) *Server {
 			log.InfoLog.Printf(format, args...)
 		})
 
+		// Become the subreaper for our process tree so that tmux's zombie children
+		// get reparented to us (not init) when tmux hasn't yet reaped them.
+		// No-op on macOS and Windows; effective on Linux only.
+		if err := tmux.SetSubreaper(); err != nil {
+			log.WarningLog.Printf("[zombie] SetSubreaper failed (non-fatal): %v", err)
+		} else {
+			log.InfoLog.Printf("[zombie] subreaper enabled: tmux descendant zombies will be reparented here")
+		}
+
 		// Start zombie watcher (scans for zombie child processes every 30s).
 		tmux.StartZombieWatcher(serverCtx, 30*time.Second, func(format string, args ...any) {
 			log.WarningLog.Printf(format, args...)
