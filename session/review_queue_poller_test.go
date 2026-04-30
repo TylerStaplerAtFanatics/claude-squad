@@ -314,7 +314,7 @@ func TestReviewQueuePoller_AcknowledgedSession_RemovedOnNextPoll(t *testing.T) {
 		t.Fatal("precondition: session must be in queue before checkSession")
 	}
 
-	poller.checkSession(inst)
+	poller.checkSession(inst, nil)
 
 	if _, exists := queue.Get("acked-session"); exists {
 		t.Error("session should have been removed from queue after acknowledgment snooze")

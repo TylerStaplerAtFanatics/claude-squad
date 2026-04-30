@@ -82,7 +82,7 @@ func TestReviewQueue_UncommittedChangesDetection(t *testing.T) {
 
 	// Test 1: Clean worktree (no uncommitted changes) should not be added to queue
 	t.Run("clean_worktree_not_added", func(t *testing.T) {
-		poller.checkSession(instance)
+		poller.checkSession(instance, nil)
 		if queue.Has(instance.Title) {
 			t.Error("Expected clean worktree to not be in review queue")
 		}
@@ -101,7 +101,7 @@ func TestReviewQueue_UncommittedChangesDetection(t *testing.T) {
 		worktree.InvalidateDirtyCache()
 
 		// Check session - should detect uncommitted changes
-		poller.checkSession(instance)
+		poller.checkSession(instance, nil)
 
 		// Verify added to queue with correct reason
 		if !queue.Has(instance.Title) {
@@ -134,7 +134,7 @@ func TestReviewQueue_UncommittedChangesDetection(t *testing.T) {
 		}
 
 		// Check session again - should be removed from queue
-		poller.checkSession(instance)
+		poller.checkSession(instance, nil)
 
 		if queue.Has(instance.Title) {
 			item, _ := queue.Get(instance.Title)
@@ -242,7 +242,7 @@ func TestReviewQueue_UncommittedChanges_NoWorktree(t *testing.T) {
 	poller.AddInstance(instance)
 
 	// Check session - should not crash and not add to queue for uncommitted changes
-	poller.checkSession(instance)
+	poller.checkSession(instance, nil)
 
 	// If added to queue, it should NOT be for uncommitted changes
 	if queue.Has(instance.Title) {
@@ -387,7 +387,7 @@ func TestReviewQueue_UncommittedChanges_Integration(t *testing.T) {
 
 // Helper function to run git commands
 func runGitCommand(dir string, args ...string) error {
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd := exec.CommandContext(context.Background(), "git", append([]string{"-C", dir}, args...)...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git command failed: %s (%w)", output, err)

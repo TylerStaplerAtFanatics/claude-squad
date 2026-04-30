@@ -319,7 +319,10 @@ func (s *UnfinishedWorkService) QuickCommitPush(
 	worktreePath := r.WorktreePath
 
 	// git add .
-	addCmd := exec.Command("git", "-C", worktreePath, "add", ".")
+	addCtx, addCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer addCancel()
+	addCmd := exec.CommandContext(addCtx, "git", "-C", worktreePath, "add", ".")
+	addCmd.WaitDelay = 2 * time.Second
 	if out, err := addCmd.CombinedOutput(); err != nil {
 		return connect.NewResponse(&sessionv1.QuickCommitPushResponse{
 			Success:      false,
@@ -328,7 +331,10 @@ func (s *UnfinishedWorkService) QuickCommitPush(
 	}
 
 	// git commit -m <message>
-	commitCmd := exec.Command("git", "-C", worktreePath, "commit", "-m", req.Msg.CommitMessage)
+	commitCtx, commitCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer commitCancel()
+	commitCmd := exec.CommandContext(commitCtx, "git", "-C", worktreePath, "commit", "-m", req.Msg.CommitMessage)
+	commitCmd.WaitDelay = 2 * time.Second
 	if out, err := commitCmd.CombinedOutput(); err != nil {
 		return connect.NewResponse(&sessionv1.QuickCommitPushResponse{
 			Success:      false,

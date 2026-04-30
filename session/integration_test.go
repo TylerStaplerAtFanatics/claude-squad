@@ -441,17 +441,17 @@ func setupTestRepository(t *testing.T) string {
 	tempDir := t.TempDir()
 
 	// Initialize git repo
-	cmd := exec.Command("git", "init")
+	cmd := exec.CommandContext(context.Background(), "git", "init")
 	cmd.Dir = tempDir
 	err := cmd.Run()
 	require.NoError(t, err)
 
 	// Configure git
-	configCmd := exec.Command("git", "config", "user.email", "test@example.com")
+	configCmd := exec.CommandContext(context.Background(), "git", "config", "user.email", "test@example.com")
 	configCmd.Dir = tempDir
 	_ = configCmd.Run()
 
-	configCmd2 := exec.Command("git", "config", "user.name", "Test User")
+	configCmd2 := exec.CommandContext(context.Background(), "git", "config", "user.name", "Test User")
 	configCmd2.Dir = tempDir
 	_ = configCmd2.Run()
 
@@ -460,12 +460,12 @@ func setupTestRepository(t *testing.T) string {
 	err = os.WriteFile(readmeFile, []byte("# Test Repository"), 0644)
 	require.NoError(t, err)
 
-	addCmd := exec.Command("git", "add", ".")
+	addCmd := exec.CommandContext(context.Background(), "git", "add", ".")
 	addCmd.Dir = tempDir
 	err = addCmd.Run()
 	require.NoError(t, err)
 
-	commitCmd := exec.Command("git", "commit", "-m", "Initial commit")
+	commitCmd := exec.CommandContext(context.Background(), "git", "commit", "-m", "Initial commit")
 	commitCmd.Dir = tempDir
 	err = commitCmd.Run()
 	require.NoError(t, err)
@@ -791,26 +791,26 @@ func BenchmarkSessionRestorePerformance(b *testing.B) {
 func setupTestRepositoryBench(b *testing.B) string {
 	tempDir := b.TempDir()
 
-	cmd := exec.Command("git", "init")
+	cmd := exec.CommandContext(context.Background(), "git", "init")
 	cmd.Dir = tempDir
 	_ = cmd.Run()
 
-	configCmd := exec.Command("git", "config", "user.email", "test@example.com")
+	configCmd := exec.CommandContext(context.Background(), "git", "config", "user.email", "test@example.com")
 	configCmd.Dir = tempDir
 	_ = configCmd.Run()
 
-	configCmd2 := exec.Command("git", "config", "user.name", "Test User")
+	configCmd2 := exec.CommandContext(context.Background(), "git", "config", "user.name", "Test User")
 	configCmd2.Dir = tempDir
 	_ = configCmd2.Run()
 
 	readmeFile := filepath.Join(tempDir, "README.md")
 	_ = os.WriteFile(readmeFile, []byte("# Benchmark Repository"), 0644)
 
-	addCmd := exec.Command("git", "add", ".")
+	addCmd := exec.CommandContext(context.Background(), "git", "add", ".")
 	addCmd.Dir = tempDir
 	_ = addCmd.Run()
 
-	commitCmd := exec.Command("git", "commit", "-m", "Initial commit")
+	commitCmd := exec.CommandContext(context.Background(), "git", "commit", "-m", "Initial commit")
 	commitCmd.Dir = tempDir
 	_ = commitCmd.Run()
 

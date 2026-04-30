@@ -1,6 +1,7 @@
 package tmux
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -209,11 +210,15 @@ func testSessionRecoveryWithRealTmux(t *testing.T) {
 	// other packages that share the default tmux server when running `go test ./...`.
 	socketName := fmt.Sprintf("test_recovery_%d", time.Now().UnixNano())
 	t.Cleanup(func() {
-		_ = exec.Command("tmux", "-L", socketName, "kill-server").Run()
+		killServerCtx, killServerCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer killServerCancel()
+		_ = exec.CommandContext(killServerCtx, "tmux", "-L", socketName, "kill-server").Run()
 	})
 
 	// Clean up any existing session on the isolated server
-	killCmd := exec.Command("tmux", "-L", socketName, "kill-session", "-t", tmuxSessionName)
+	killCtx, killCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer killCancel()
+	killCmd := exec.CommandContext(killCtx, "tmux", "-L", socketName, "kill-session", "-t", tmuxSessionName)
 	_ = killCmd.Run()
 
 	// Create session using our RestoreWithWorkDir logic on the isolated server
@@ -400,7 +405,7 @@ func TestRecoverFromServerFailure_EnsureRunningFails(t *testing.T) {
 	executor.GetGlobalRegistry().Register(key, cbExec)
 	t.Cleanup(func() { executor.GetGlobalRegistry().Unregister(key) })
 
-	_ = cbExec.Run(exec.Command("tmux", "list-sessions"))
+	_ = cbExec.Run(exec.CommandContext(context.Background(), "tmux", "list-sessions"))
 	snaps := executor.GetGlobalRegistry().AllBreakers()
 	tripKey := key + "/tmux-list-sessions"
 	snap, ok := snaps[tripKey]

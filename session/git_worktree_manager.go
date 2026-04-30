@@ -1,10 +1,12 @@
 package session
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/tstapler/stapler-squad/session/git"
 )
@@ -244,7 +246,10 @@ func (gm *GitWorktreeManager) GetCurrentCommitSHA() (string, error) {
 		return "", nil
 	}
 
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "HEAD")
+	revCtx, revCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer revCancel()
+	cmd := exec.CommandContext(revCtx, "git", "-C", dir, "rev-parse", "HEAD")
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		// Not a fatal error — repo may have no commits yet.

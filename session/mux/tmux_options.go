@@ -1,6 +1,7 @@
 package mux
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -35,10 +36,14 @@ func WriteSessionUserOptions(sessionName, socketPath, cwd, command string, pid i
 		{tmuxOptStartTime, strconv.FormatInt(startTime, 10)},
 	}
 	for _, opt := range opts {
-		cmd := exec.Command("tmux", "set-option", "-t", sessionName, opt.key, opt.value)
-		if out, err := cmd.CombinedOutput(); err != nil {
+		setCtx, setCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cmd := exec.CommandContext(setCtx, "tmux", "set-option", "-t", sessionName, opt.key, opt.value)
+		cmd.WaitDelay = 2 * time.Second
+		out, runErr := cmd.CombinedOutput()
+		setCancel()
+		if runErr != nil {
 			return fmt.Errorf("set %s on %s: %w (output: %s)",
-				opt.key, sessionName, err, strings.TrimSpace(string(out)))
+				opt.key, sessionName, runErr, strings.TrimSpace(string(out)))
 		}
 	}
 	return nil
@@ -64,7 +69,10 @@ func ScanByUserOptions() ([]*DiscoveredSession, error) {
 		"#{" + tmuxOptStartTime + "}",
 	}, "\t")
 
-	cmd := exec.Command("tmux", "list-sessions", "-F", format)
+	scanCtx, scanCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer scanCancel()
+	cmd := exec.CommandContext(scanCtx, "tmux", "list-sessions", "-F", format)
+	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.Output()
 	if err != nil {
 		// tmux exits non-zero when the server is not running or there are no

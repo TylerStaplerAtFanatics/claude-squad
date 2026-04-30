@@ -697,7 +697,11 @@ func resolveLANHostnames(lanIPStr string) []string {
 	}
 
 	// 2. Linux-specific: mDNS reverse lookup via avahi-resolve
-	if out, err := exec.Command("avahi-resolve", "-a", lanIPStr).Output(); err == nil {
+	avahiCtx, avahiCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer avahiCancel()
+	avahiCmd := exec.CommandContext(avahiCtx, "avahi-resolve", "-a", lanIPStr)
+	avahiCmd.WaitDelay = 2 * time.Second
+	if out, err := avahiCmd.Output(); err == nil {
 		fields := strings.Fields(string(out))
 		if len(fields) >= 2 {
 			add(fields[1])
@@ -705,7 +709,11 @@ func resolveLANHostnames(lanIPStr string) []string {
 	}
 
 	// 3. Try hostname -f for FQDN
-	if out, err := exec.Command("hostname", "-f").Output(); err == nil {
+	hostnameCtx, hostnameCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer hostnameCancel()
+	hostnameCmd := exec.CommandContext(hostnameCtx, "hostname", "-f")
+	hostnameCmd.WaitDelay = 2 * time.Second
+	if out, err := hostnameCmd.Output(); err == nil {
 		add(string(out))
 	}
 
@@ -753,7 +761,11 @@ func getDNSSearchDomains() []string {
 	}
 
 	// scutil --dns — macOS authoritative source for search domains.
-	if out, err := exec.Command("scutil", "--dns").Output(); err == nil {
+	scutilCtx, scutilCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer scutilCancel()
+	scutilCmd := exec.CommandContext(scutilCtx, "scutil", "--dns")
+	scutilCmd.WaitDelay = 2 * time.Second
+	if out, err := scutilCmd.Output(); err == nil {
 		for _, line := range strings.Split(string(out), "\n") {
 			line = strings.TrimSpace(line)
 			// Format: "search domain[N] : example.com"

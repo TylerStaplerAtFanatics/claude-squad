@@ -1,12 +1,14 @@
 package classifier
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // RiskLevel indicates the severity of a tool use request.
@@ -534,12 +536,20 @@ func (c *RuleBasedClassifier) BuildContext(cwd string) ClassificationContext {
 	if cwd == "" {
 		return ctx
 	}
-	if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--show-toplevel").Output(); err == nil {
+	gitCtx, gitCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer gitCancel()
+	toplevelCmd := exec.CommandContext(gitCtx, "git", "-C", cwd, "rev-parse", "--show-toplevel")
+	toplevelCmd.WaitDelay = 2 * time.Second
+	if out, err := toplevelCmd.Output(); err == nil {
 		ctx.RepoRoot = strings.TrimSpace(string(out))
 		ctx.IsGitRepo = true
 	}
 	if ctx.IsGitRepo {
-		if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-dir").Output(); err == nil {
+		gitDirCtx, gitDirCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer gitDirCancel()
+		gitDirCmd := exec.CommandContext(gitDirCtx, "git", "-C", cwd, "rev-parse", "--git-dir")
+		gitDirCmd.WaitDelay = 2 * time.Second
+		if out, err := gitDirCmd.Output(); err == nil {
 			ctx.IsWorktree = strings.Contains(string(out), "worktrees")
 		}
 	}

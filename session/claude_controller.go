@@ -110,7 +110,7 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 	}
 
 	// Create circular buffer for PTY output
-	buffer := NewCircularBuffer(10 * 1024 * 1024) // 10MB buffer
+	buffer := NewCircularBuffer(1 * 1024 * 1024) // 1MB: status detection needs ≤4KB; scrollback handles long-term history
 	cc.ptyAccess = NewPTYAccess(cc.sessionName, ptyReader, buffer)
 
 	// Create rate limit detection handler

@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -200,7 +201,9 @@ func TestTmuxTestServer_AutomaticCleanup(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Try to list sessions on the now-dead server (should fail)
-	cmd := exec.Command("tmux", "-L", socketName, "list-sessions")
+	listCtx, listCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer listCancel()
+	cmd := exec.CommandContext(listCtx, "tmux", "-L", socketName, "list-sessions")
 	output, err := cmd.CombinedOutput()
 
 	// Should get an error indicating the server is gone.

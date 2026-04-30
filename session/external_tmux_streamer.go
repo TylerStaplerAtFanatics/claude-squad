@@ -182,7 +182,8 @@ func (s *ExternalTmuxStreamer) ConsumerCount() int {
 // Returns true if control mode started successfully, false if it failed (caller
 // should fall back to polling).
 func (s *ExternalTmuxStreamer) startControlMode() bool {
-	cmd := exec.Command("tmux", "-C", "attach-session", "-t", s.tmuxSessionName, "-r")
+	// Use s.ctx so the process is killed when the streamer is stopped.
+	cmd := exec.CommandContext(s.ctx, "tmux", "-C", "attach-session", "-t", s.tmuxSessionName, "-r")
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -422,7 +423,10 @@ func (s *ExternalTmuxStreamer) capturePane() (string, error) {
 	// Use -e to preserve ANSI escape sequences (colors)
 	// Use -p to print to stdout
 	// Use -J to join wrapped lines
-	cmd := exec.Command("tmux", "capture-pane", "-p", "-e", "-J", "-t", s.tmuxSessionName)
+	captureCtx, captureCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer captureCancel()
+	cmd := exec.CommandContext(captureCtx, "tmux", "capture-pane", "-p", "-e", "-J", "-t", s.tmuxSessionName)
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err

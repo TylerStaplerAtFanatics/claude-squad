@@ -1,6 +1,7 @@
 package unfinished
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -260,7 +261,7 @@ func TestComputeDiffHashSameOutput(t *testing.T) {
 
 // runCmd is a test helper that runs a command and returns combined output.
 func runCmd(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(context.Background(), name, args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

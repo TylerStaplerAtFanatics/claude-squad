@@ -6,9 +6,25 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 
 	kgzip "github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/zstd"
+)
+
+var (
+	zstdPool = sync.Pool{
+		New: func() any {
+			enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
+			return enc
+		},
+	}
+	gzipPool = sync.Pool{
+		New: func() any {
+			gz, _ := kgzip.NewWriterLevel(io.Discard, kgzip.DefaultCompression)
+			return gz
+		},
+	}
 )
 
 // compressResponseWriter wraps http.ResponseWriter to transparently compress the response.
@@ -21,6 +37,7 @@ type compressResponseWriter struct {
 	encoding     string                     // "gzip" or "zstd" — sent in Content-Encoding header
 	wroteHeader  bool
 	skipCompress bool
+	pool         *sync.Pool // non-nil when cw was borrowed from a pool
 }
 
 func (c *compressResponseWriter) Header() http.Header {
@@ -45,20 +62,16 @@ func (c *compressResponseWriter) WriteHeader(code int) {
 
 	switch c.encoding {
 	case "zstd":
-		enc, err := zstd.NewWriter(c.ResponseWriter, zstd.WithEncoderLevel(zstd.SpeedDefault))
-		if err == nil {
-			c.cw = enc
-			c.flusher = enc
-		} else {
-			c.skipCompress = true
-		}
+		enc := zstdPool.Get().(*zstd.Encoder)
+		enc.Reset(c.ResponseWriter)
+		c.cw = enc
+		c.flusher = enc
+		c.pool = &zstdPool
 	default: // "gzip"
-		gz, err := kgzip.NewWriterLevel(c.ResponseWriter, kgzip.DefaultCompression)
-		if err == nil {
-			c.cw = gz
-		} else {
-			c.skipCompress = true
-		}
+		gz := gzipPool.Get().(*kgzip.Writer)
+		gz.Reset(c.ResponseWriter)
+		c.cw = gz
+		c.pool = &gzipPool
 	}
 
 	c.ResponseWriter.WriteHeader(code)
@@ -100,6 +113,10 @@ func (c *compressResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 func (c *compressResponseWriter) close() {
 	if c.cw != nil {
 		_ = c.cw.Close()
+		if c.pool != nil {
+			c.pool.Put(c.cw)
+			c.pool = nil
+		}
 		c.cw = nil
 	}
 }

@@ -1,9 +1,11 @@
 package vc
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // JujutsuProvider implements VCSProvider for Jujutsu repositories
@@ -38,8 +40,11 @@ func (j *JujutsuProvider) WorkDir() string {
 
 // runJJ executes a jj command and returns the output
 func (j *JujutsuProvider) runJJ(args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	// Use --no-pager to prevent interactive output
-	cmd := exec.Command("jj", append([]string{"--no-pager", "-R", j.repoRoot}, args...)...)
+	cmd := exec.CommandContext(ctx, "jj", append([]string{"--no-pager", "-R", j.repoRoot}, args...)...)
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
