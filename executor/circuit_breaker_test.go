@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"context"
 	"errors"
 	"os/exec"
 	"sync"
@@ -94,7 +95,7 @@ func succeedingExecutor() *mockExecutor {
 }
 
 func dummyCmd(name string, args ...string) *exec.Cmd {
-	return exec.Command(name, args...)
+	return exec.CommandContext(context.Background(), name, args...)
 }
 
 // --- commandClass tests ---
@@ -112,42 +113,42 @@ func TestCommandClass(t *testing.T) {
 		},
 		{
 			name:     "simple command",
-			cmd:      exec.Command("git"),
+			cmd:      exec.CommandContext(context.Background(), "git"),
 			expected: "git",
 		},
 		{
 			name:     "command with subcommand",
-			cmd:      exec.Command("git", "diff"),
+			cmd:      exec.CommandContext(context.Background(), "git", "diff"),
 			expected: "git-diff",
 		},
 		{
 			name:     "command with flags before subcommand",
-			cmd:      exec.Command("git", "--no-pager", "log"),
+			cmd:      exec.CommandContext(context.Background(), "git", "--no-pager", "log"),
 			expected: "git-log",
 		},
 		{
 			name:     "command with only flags",
-			cmd:      exec.Command("ls", "-la", "-R"),
+			cmd:      exec.CommandContext(context.Background(), "ls", "-la", "-R"),
 			expected: "ls",
 		},
 		{
 			name:     "tmux capture-pane",
-			cmd:      exec.Command("tmux", "capture-pane", "-t", "session"),
+			cmd:      exec.CommandContext(context.Background(), "tmux", "capture-pane", "-t", "session"),
 			expected: "tmux-capture-pane",
 		},
 		{
 			name:     "full path binary",
-			cmd:      exec.Command("/usr/bin/git", "status"),
+			cmd:      exec.CommandContext(context.Background(), "/usr/bin/git", "status"),
 			expected: "git-status",
 		},
 		{
 			name:     "tmux with -L socket flag before subcommand",
-			cmd:      exec.Command("tmux", "-L", "mysocket", "list-sessions", "-F", "#{session_name}"),
+			cmd:      exec.CommandContext(context.Background(), "tmux", "-L", "mysocket", "list-sessions", "-F", "#{session_name}"),
 			expected: "tmux-list-sessions",
 		},
 		{
 			name:     "tmux new-session with -L socket flag",
-			cmd:      exec.Command("tmux", "-L", "mysocket", "new-session", "-d", "-s", "myname"),
+			cmd:      exec.CommandContext(context.Background(), "tmux", "-L", "mysocket", "new-session", "-d", "-s", "myname"),
 			expected: "tmux-new-session",
 		},
 	}
@@ -835,7 +836,7 @@ func TestCircuitBreakerExecutor_IsFailure(t *testing.T) {
 
 	mock := &mockExecutor{}
 	cbe := NewCircuitBreakerExecutor(mock, config)
-	cmd := exec.Command("tmux", "list-sessions")
+	cmd := exec.CommandContext(context.Background(), "tmux", "list-sessions")
 
 	t.Run("soft errors do not trip the breaker", func(t *testing.T) {
 		mock.combinedOutputFunc = func(_ *exec.Cmd) ([]byte, error) {

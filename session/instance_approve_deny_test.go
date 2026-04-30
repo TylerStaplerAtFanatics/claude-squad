@@ -116,8 +116,8 @@ func TestDeny_FromPaused_Fails(t *testing.T) {
 	}
 }
 
-func TestApprove_FromStopped_Fails(t *testing.T) {
-	// Stopped is terminal -- no outgoing transitions
+func TestApprove_FromStopped_Succeeds(t *testing.T) {
+	// Stopped → Running is now valid for session revival via the reconciler.
 	inst := &Instance{
 		Title:   "test-approve-stopped",
 		Status:  Stopped,
@@ -125,13 +125,11 @@ func TestApprove_FromStopped_Fails(t *testing.T) {
 	}
 
 	err := inst.Approve()
-	if err == nil {
-		t.Fatal("Approve from Stopped should return error (Stopped is terminal)")
+	if err != nil {
+		t.Fatalf("Approve from Stopped should succeed (Stopped → Running is valid for revival), got: %v", err)
 	}
-
-	var transErr ErrInvalidTransition
-	if !errors.As(err, &transErr) {
-		t.Fatalf("expected ErrInvalidTransition, got %T: %v", err, err)
+	if inst.Status != Running {
+		t.Errorf("expected status Running after Approve from Stopped, got %s", inst.Status)
 	}
 }
 
@@ -205,7 +203,7 @@ func TestApprove_AllSourceStatuses(t *testing.T) {
 		{"Paused->Running", Paused, true},
 		{"NeedsApproval->Running", NeedsApproval, true},
 		{"Loading->Running", Loading, true},
-		{"Stopped->Running", Stopped, false}, // terminal
+		{"Stopped->Running", Stopped, true}, // recoverable — reconciler can revive stopped sessions
 	}
 
 	for _, tt := range tests {

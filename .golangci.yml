@@ -12,26 +12,31 @@ linters:
     - errcheck
   settings:
     forbidigo:
+      analyze-types: false
       forbid:
         - pattern: ^fmt\.Print(f|ln)?$
           msg: "use the log package instead of fmt.Print* in production code"
+        - pattern: '(?m)exec\.Command$'
+          msg: "use exec.CommandContext with context.WithTimeout; raw exec.Command can hang indefinitely"
       exclude-godoc-examples: true
   exclusions:
     paths:
       - session/tmux/tmux_windows
       - web-app
     rules:
-      # Allow fmt.Print* in main.go (CLI output) and test files
+      # Allow fmt.Print* in main.go, test files, cmd/, and tests/demo/ (CLI/test output)
       - path: "main\\.go"
         linters: [forbidigo]
+        text: "fmt\\.Print"
       - path: "_test\\.go"
         linters: [forbidigo]
-      # Allow fmt.Print* in cmd/ subdirectories (CLI output)
+        text: "fmt\\.Print"
       - path: "^cmd/"
         linters: [forbidigo]
-      # Allow fmt.Print* in tests/demo/ directory (demo helpers)
+        text: "fmt\\.Print"
       - path: "^tests/demo/"
         linters: [forbidigo]
+        text: "fmt\\.Print"
       # SA5011 false positives: staticcheck doesn't model t.Fatal/t.Fatalf as non-returning,
       # so nil-guard patterns like "if x == nil { t.Fatal(...) }; x.Field" get flagged.
       - path: "_test\\.go"

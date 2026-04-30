@@ -1058,7 +1058,7 @@ message UnfinishedWorktree {
   // Action state
   bool is_dismissed  = 18;
   bool is_snoozed    = 19;
-  string session_id  = 20; // non-empty if an active session covers this branch
+  repeated string session_ids = 20; // UUIDs of active sessions covering this worktree path
 }
 
 // UnfinishedWorkConfig holds user-configurable source settings.

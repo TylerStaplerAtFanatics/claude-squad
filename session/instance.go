@@ -1292,7 +1292,10 @@ func (i *Instance) KillExternalSession() error {
 	i.StopController()
 
 	// Kill the tmux session
-	cmd := exec.Command("tmux", "kill-session", "-t", i.ExternalMetadata.TmuxSessionName)
+	killCtx, killCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer killCancel()
+	cmd := exec.CommandContext(killCtx, "tmux", "kill-session", "-t", i.ExternalMetadata.TmuxSessionName)
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to kill tmux session '%s': %w", i.ExternalMetadata.TmuxSessionName, err)
 	}
@@ -1317,11 +1320,17 @@ func (i *Instance) combineErrors(errs []error) error {
 }
 
 func (i *Instance) Preview() (string, error) {
-	if !i.started || i.Status == Paused {
+	if !i.started || i.Status == Paused || i.Status == Stopped {
 		return "", nil
 	}
 
-	// Check if the tmux session is still alive before trying to capture content
+	// Prefer the in-memory PTY buffer from ClaudeController (no subprocess).
+	if ctrl := i.GetController(); ctrl != nil {
+		raw := ctrl.GetRecentOutput(0)
+		return string(raw), nil
+	}
+
+	// Fallback for external/attached sessions: use capture-pane subprocess.
 	if !i.TmuxAlive() {
 		return "", nil
 	}
@@ -1438,7 +1447,7 @@ func (i *Instance) Paused() bool {
 
 // TmuxAlive returns true if the tmux session is alive. This is a sanity check before attaching.
 func (i *Instance) TmuxAlive() bool {
-	if i.Status == Paused || !i.started || !i.tmuxManager.HasSession() {
+	if i.Status == Paused || i.Status == Stopped || !i.started || !i.tmuxManager.HasSession() {
 		return false
 	}
 	return i.tmuxManager.IsAlive()
@@ -1940,7 +1949,7 @@ func (i *Instance) SendPrompt(prompt string) error {
 
 // PreviewFullHistory captures the entire tmux pane output including full scrollback history
 func (i *Instance) PreviewFullHistory() (string, error) {
-	if !i.started || i.Status == Paused {
+	if !i.started || i.Status == Paused || i.Status == Stopped {
 		return "", nil
 	}
 

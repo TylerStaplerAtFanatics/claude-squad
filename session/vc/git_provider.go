@@ -1,10 +1,12 @@
 package vc
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // GitProvider implements VCSProvider for Git repositories
@@ -39,7 +41,10 @@ func (g *GitProvider) WorkDir() string {
 
 // runGit executes a git command and returns the output
 func (g *GitProvider) runGit(args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", g.repoRoot}, args...)...)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", g.repoRoot}, args...)...)
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

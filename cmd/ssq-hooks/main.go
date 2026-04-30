@@ -466,11 +466,23 @@ func installServiceLinux(home, binPath, logDir, envPath string, uninstall bool) 
 	serviceFile := filepath.Join(serviceDir, "stapler-squad.service")
 
 	if uninstall {
-		exec.Command("systemctl", "--user", "stop", "stapler-squad").Run()    //nolint:errcheck
-		exec.Command("systemctl", "--user", "disable", "stapler-squad").Run() //nolint:errcheck
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer stopCancel()
+		stopCmd := exec.CommandContext(stopCtx, "systemctl", "--user", "stop", "stapler-squad")
+		stopCmd.WaitDelay = 2 * time.Second
+		stopCmd.Run() //nolint:errcheck
+		disableCtx, disableCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer disableCancel()
+		disableCmd := exec.CommandContext(disableCtx, "systemctl", "--user", "disable", "stapler-squad")
+		disableCmd.WaitDelay = 2 * time.Second
+		disableCmd.Run() //nolint:errcheck
 		if _, err := os.Stat(serviceFile); err == nil {
-			os.Remove(serviceFile)                                     //nolint:errcheck
-			exec.Command("systemctl", "--user", "daemon-reload").Run() //nolint:errcheck
+			os.Remove(serviceFile) //nolint:errcheck
+			reloadCtx, reloadCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer reloadCancel()
+			reloadCmd := exec.CommandContext(reloadCtx, "systemctl", "--user", "daemon-reload")
+			reloadCmd.WaitDelay = 2 * time.Second
+			reloadCmd.Run() //nolint:errcheck
 			fmt.Printf("Removed: %s\n", serviceFile)
 		} else {
 			fmt.Printf("Service file not found (already removed?): %s\n", serviceFile)
@@ -535,7 +547,11 @@ func installServiceMacOS(home, binPath, logDir, envPath string, uninstall bool) 
 	plistFile := filepath.Join(plistDir, "com.stapler-squad.plist")
 
 	if uninstall {
-		exec.Command("launchctl", "unload", plistFile).Run() //nolint:errcheck
+		unloadCtx, unloadCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer unloadCancel()
+		unloadCmd := exec.CommandContext(unloadCtx, "launchctl", "unload", plistFile)
+		unloadCmd.WaitDelay = 2 * time.Second
+		unloadCmd.Run() //nolint:errcheck
 		if _, err := os.Stat(plistFile); err == nil {
 			os.Remove(plistFile) //nolint:errcheck
 			fmt.Printf("Removed: %s\n", plistFile)

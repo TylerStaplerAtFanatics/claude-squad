@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"github.com/tstapler/stapler-squad/log"
 	"os"
@@ -47,7 +48,10 @@ func checkGHCLI() error {
 	}
 
 	// Check if gh is authenticated
-	cmd := exec.Command("gh", "auth", "status")
+	authCtx, authCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer authCancel()
+	cmd := exec.CommandContext(authCtx, "gh", "auth", "status")
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("GitHub CLI is not configured. Please run 'gh auth login' first")
 	}
@@ -127,7 +131,10 @@ func findGitRepoRoot(path string) (string, error) {
 
 // getCurrentBranchName returns the current branch name for a git repository or worktree
 func getCurrentBranchName(path string) (string, error) {
-	cmd := exec.Command("git", "-C", path, "branch", "--show-current")
+	branchCtx, branchCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer branchCancel()
+	cmd := exec.CommandContext(branchCtx, "git", "-C", path, "branch", "--show-current")
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get current branch name: %w", err)
@@ -143,7 +150,10 @@ func getCurrentBranchName(path string) (string, error) {
 
 // getHeadCommitSHA returns the SHA of the HEAD commit for a git repository or worktree
 func getHeadCommitSHA(path string) (string, error) {
-	cmd := exec.Command("git", "-C", path, "rev-parse", "HEAD")
+	shaCtx, shaCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shaCancel()
+	cmd := exec.CommandContext(shaCtx, "git", "-C", path, "rev-parse", "HEAD")
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get HEAD commit SHA: %w", err)

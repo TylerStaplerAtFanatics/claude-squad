@@ -1,6 +1,7 @@
 package vc
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -194,7 +195,7 @@ func TestJujutsuProviderGetBranch(t *testing.T) {
 		initJJRepo(t, tmpDir)
 
 		// Create a bookmark
-		cmd := exec.Command("jj", "bookmark", "create", "test-bookmark")
+		cmd := exec.CommandContext(context.Background(), "jj", "bookmark", "create", "test-bookmark")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to create bookmark: %v", err)
@@ -296,7 +297,7 @@ func TestJujutsuProviderGetChangedFiles(t *testing.T) {
 		}
 
 		// Track the file
-		cmd := exec.Command("jj", "file", "track", "new.txt")
+		cmd := exec.CommandContext(context.Background(), "jj", "file", "track", "new.txt")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to track file: %v", err)
@@ -642,18 +643,18 @@ func initJJRepo(t *testing.T, dir string) {
 	t.Helper()
 
 	// Initialize jj repo
-	cmd := exec.Command("jj", "git", "init")
+	cmd := exec.CommandContext(context.Background(), "jj", "git", "init")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to init jj repo: %v", err)
 	}
 
 	// Configure jj user (if not set globally)
-	cmd = exec.Command("jj", "config", "set", "--repo", "user.name", "Test User")
+	cmd = exec.CommandContext(context.Background(), "jj", "config", "set", "--repo", "user.name", "Test User")
 	cmd.Dir = dir
 	_ = cmd.Run() // Ignore error if already set
 
-	cmd = exec.Command("jj", "config", "set", "--repo", "user.email", "test@test.com")
+	cmd = exec.CommandContext(context.Background(), "jj", "config", "set", "--repo", "user.email", "test@test.com")
 	cmd.Dir = dir
 	_ = cmd.Run() // Ignore error if already set
 }
@@ -671,20 +672,20 @@ func initJJRepoWithFile(t *testing.T, dir string) {
 	}
 
 	// Track the file
-	cmd := exec.Command("jj", "file", "track", "test.txt")
+	cmd := exec.CommandContext(context.Background(), "jj", "file", "track", "test.txt")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to track file: %v", err)
 	}
 
 	// Create a new change to establish a "clean" baseline with the file committed
-	cmd = exec.Command("jj", "describe", "-m", "initial commit")
+	cmd = exec.CommandContext(context.Background(), "jj", "describe", "-m", "initial commit")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to describe change: %v", err)
 	}
 
-	cmd = exec.Command("jj", "new")
+	cmd = exec.CommandContext(context.Background(), "jj", "new")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to create new change: %v", err)

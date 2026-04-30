@@ -3,6 +3,7 @@ package vcs
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -38,8 +39,11 @@ func (g *GitClient) RepoPath() string {
 
 // run executes a git command and returns the output
 func (g *GitClient) run(args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = g.repoPath
+	cmd.WaitDelay = 2 * time.Second
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -466,7 +470,10 @@ func (g *GitClient) ListWorktrees() ([]Worktree, error) {
 
 // GetGitVersion returns the installed Git version
 func GetGitVersion() (string, error) {
-	cmd := exec.Command("git", "--version")
+	vCtx, vCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer vCancel()
+	cmd := exec.CommandContext(vCtx, "git", "--version")
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err

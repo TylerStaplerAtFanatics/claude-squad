@@ -55,7 +55,7 @@ func StartDemoServer(t *testing.T) *DemoServer {
 		t.Fatalf("failed to ensure binary: %v", err)
 	}
 
-	cmd := exec.Command(binaryPath,
+	cmd := exec.CommandContext(context.Background(), binaryPath,
 		"--test-mode",
 		"--test-dir", testDir,
 	)
@@ -278,7 +278,9 @@ func ensureBinary(binaryPath string) error {
 
 	fmt.Println("Building stapler-squad binary...")
 	root := filepath.Dir(binaryPath)
-	cmd := exec.Command("go", "build", "-o", binaryPath, ".")
+	buildCtx, buildCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer buildCancel()
+	cmd := exec.CommandContext(buildCtx, "go", "build", "-o", binaryPath, ".")
 	cmd.Dir = root
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

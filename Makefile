@@ -67,6 +67,7 @@ registry-generate-backend: ## Scan proto+markers → write per-feature files und
 	@cd tools/scanner && go build -o backend/cmd/scanner ./backend/cmd/
 	@echo "Scanning backend features..."
 	@./$(BACKEND_SCANNER_BIN) proto/session/v1/session.proto server/services/ $(BACKEND_FEATURES_DIR)
+	@./$(BACKEND_SCANNER_BIN) proto/session/v1/unfinished.proto server/services/ $(BACKEND_FEATURES_DIR)
 	@echo "✅ Backend per-feature files written to $(BACKEND_FEATURES_DIR)/"
 
 registry-generate-frontend: ## Generate frontend feature registry from React component markers

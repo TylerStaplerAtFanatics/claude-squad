@@ -34,7 +34,8 @@ var validTransitionSet = map[[2]Status]bool{
 	{Loading, Running}: true,
 	{Loading, Paused}:  true,
 	{Loading, Stopped}: true,
-	// Stopped — terminal, no outgoing transitions
+	// Stopped — recoverable: Stopped → Running is allowed for session revival
+	{Stopped, Running}: true,
 }
 
 // TestCanTransition_ExhaustiveMatrix verifies every pair of known statuses against
@@ -109,8 +110,7 @@ func TestCanTransition_InvalidTransitions(t *testing.T) {
 		from Status
 		to   Status
 	}{
-		// Stopped is terminal — no outgoing transitions
-		{"Stopped -> Running", Stopped, Running},
+		// Stopped allows only Running (recovery); all other outgoing transitions are invalid
 		{"Stopped -> Paused", Stopped, Paused},
 		{"Stopped -> Ready", Stopped, Ready},
 		{"Stopped -> NeedsApproval", Stopped, NeedsApproval},
@@ -171,13 +171,15 @@ func TestErrInvalidTransition(t *testing.T) {
 	}
 }
 
-func TestAllowedTransitions_StoppedIsTerminal(t *testing.T) {
+func TestAllowedTransitions_StoppedRecovery(t *testing.T) {
+	// Stopped allows exactly one outgoing transition: Running (session revival).
+	// This enables the reconciler to revive sessions whose tmux process reappears.
 	allowed, ok := allowedTransitions[Stopped]
 	if !ok {
 		t.Fatal("Stopped should be present in allowedTransitions map")
 	}
-	if len(allowed) != 0 {
-		t.Errorf("Stopped should have 0 allowed transitions, got %d: %v", len(allowed), allowed)
+	if len(allowed) != 1 || allowed[0] != Running {
+		t.Errorf("Stopped should have exactly 1 transition [Running], got %d: %v", len(allowed), allowed)
 	}
 }
 

@@ -28,7 +28,9 @@ var allowedTransitions = map[Status][]Status{
 	Paused:        {Running, Stopped},
 	NeedsApproval: {Running, Paused, Stopped},
 	Loading:       {Running, Paused, Stopped},
-	Stopped:       {},
+	// Stopped → Running allows recovery when a stopped session's tmux process is
+	// found alive again (e.g. external restart or reconciler false-positive).
+	Stopped: {Running},
 }
 
 // CanTransition returns true if transitioning from -> to is a valid state transition.

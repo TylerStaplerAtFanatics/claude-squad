@@ -1,12 +1,14 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"github.com/tstapler/stapler-squad/log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -476,7 +478,10 @@ func CleanupWorktrees() error {
 	}
 
 	// Get a list of all branches associated with worktrees
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	listCtx, listCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer listCancel()
+	cmd := exec.CommandContext(listCtx, "git", "worktree", "list", "--porcelain")
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to list worktrees: %w", err)
@@ -507,8 +512,12 @@ func CleanupWorktrees() error {
 			for path, branch := range worktreeBranches {
 				if strings.Contains(path, entry.Name()) {
 					// Delete the branch
-					deleteCmd := exec.Command("git", "branch", "-D", branch)
-					if err := deleteCmd.Run(); err != nil {
+					delCtx, delCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					deleteCmd := exec.CommandContext(delCtx, "git", "branch", "-D", branch)
+					deleteCmd.WaitDelay = 2 * time.Second
+					delErr := deleteCmd.Run()
+					delCancel()
+					if delErr != nil {
 						// Log the error but continue with other worktrees
 						log.ErrorLog.Printf("failed to delete branch %s: %v", branch, err)
 					}
@@ -522,7 +531,10 @@ func CleanupWorktrees() error {
 	}
 
 	// You have to prune the cleaned up worktrees.
-	cmd = exec.Command("git", "worktree", "prune")
+	pruneCtx, pruneCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer pruneCancel()
+	cmd = exec.CommandContext(pruneCtx, "git", "worktree", "prune")
+	cmd.WaitDelay = 2 * time.Second
 	_, err = cmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to prune worktrees: %w", err)

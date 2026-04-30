@@ -2,6 +2,7 @@ package profiling
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/session/tmux"
 )
 
 // Config holds profiling configuration
@@ -76,15 +78,43 @@ func StartProfiling(cfg Config) (func(), error) {
 	// Start HTTP profiling server
 	if cfg.HTTPPort > 0 {
 		addr := fmt.Sprintf("localhost:%d", cfg.HTTPPort)
-		srv := &http.Server{Addr: addr}
+		mux := http.NewServeMux()
+		// pprof handlers are registered on http.DefaultServeMux by the blank import;
+		// forward all /debug/pprof/ requests there.
+		mux.Handle("/debug/pprof/", http.DefaultServeMux)
+
+		// Fork pressure metrics endpoint — no pprof dependency, zero-cost to query.
+		mux.HandleFunc("/debug/fork-pressure", func(w http.ResponseWriter, r *http.Request) {
+			s := tmux.ForkPressureSnapshot()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"level":              s.Level.String(),
+				"window_seconds":     int(s.WindowDuration.Seconds()),
+				"spawns_in_window":   s.SpawnsInWindow,
+				"failures_in_window": s.FailuresInWindow,
+				"zombies_in_window":  s.ZombiesInWindow,
+				"total_spawns":       s.TotalSpawns,
+				"total_failures":     s.TotalFailures,
+				"total_zombies":      s.TotalZombies,
+				"last_alert_at":      s.LastAlertAt,
+				"thresholds": map[string]any{
+					"failure_alert": 5,
+					"spawn_warn":    60,
+					"zombie_alert":  3,
+				},
+			})
+		})
+
+		srv := &http.Server{Addr: addr, Handler: mux}
 
 		go func() {
 			log.InfoLog.Printf("Profiling server started on http://%s/debug/pprof/", addr)
-			log.InfoLog.Printf("  - Goroutines: http://%s/debug/pprof/goroutine?debug=1", addr)
-			log.InfoLog.Printf("  - Heap:       http://%s/debug/pprof/heap", addr)
-			log.InfoLog.Printf("  - Block:      http://%s/debug/pprof/block?debug=1", addr)
-			log.InfoLog.Printf("  - Mutex:      http://%s/debug/pprof/mutex?debug=1", addr)
-			log.InfoLog.Printf("  - CPU:        curl http://%s/debug/pprof/profile?seconds=30 > cpu.prof", addr)
+			log.InfoLog.Printf("  - Goroutines:    http://%s/debug/pprof/goroutine?debug=1", addr)
+			log.InfoLog.Printf("  - Heap:          http://%s/debug/pprof/heap", addr)
+			log.InfoLog.Printf("  - Block:         http://%s/debug/pprof/block?debug=1", addr)
+			log.InfoLog.Printf("  - Mutex:         http://%s/debug/pprof/mutex?debug=1", addr)
+			log.InfoLog.Printf("  - CPU:           curl http://%s/debug/pprof/profile?seconds=30 > cpu.prof", addr)
+			log.InfoLog.Printf("  - Fork pressure: http://%s/debug/fork-pressure", addr)
 			if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 				log.ErrorLog.Printf("Profiling server error: %v", err)
 			}

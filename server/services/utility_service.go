@@ -22,6 +22,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+var logLineRegex = regexp.MustCompile(`^\[([^\]]+)\]\s+(\w+):(\d{4}/\d{2}/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+([^:]+:\d+):\s+(.*)$`)
+
 // UtilityService handles miscellaneous utility RPCs: GetLogs, FocusWindow,
 // and CreateDebugSnapshot.
 //
@@ -308,10 +310,6 @@ type parseLogsResult struct {
 
 // parseLogs reads log file and applies filters to return matching entries
 func parseLogs(reader io.Reader, req *sessionv1.GetLogsRequest) (*parseLogsResult, error) {
-	// Log line format: [instance] LEVEL:date time file:line: message
-	// Example: [pid-12345-timestamp] INFO:2025/10/17 14:23:45 app.go:123: Starting session
-	logLineRegex := regexp.MustCompile(`^\[([^\]]+)\]\s+(\w+):(\d{4}/\d{2}/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+([^:]+:\d+):\s+(.*)$`)
-
 	var entries []*sessionv1.LogEntry
 	scanner := bufio.NewScanner(reader)
 

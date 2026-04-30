@@ -1,6 +1,7 @@
 package vc
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,7 +14,7 @@ func TestNewGitProvider(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Initialize a git repository
-		cmd := exec.Command("git", "init")
+		cmd := exec.CommandContext(context.Background(), "git", "init")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to init git repo: %v", err)
@@ -53,7 +54,7 @@ func TestNewGitProvider(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Initialize a git repository
-		cmd := exec.Command("git", "init")
+		cmd := exec.CommandContext(context.Background(), "git", "init")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to init git repo: %v", err)
@@ -86,7 +87,7 @@ func TestGitProviderType(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Initialize a git repository
-	cmd := exec.Command("git", "init")
+	cmd := exec.CommandContext(context.Background(), "git", "init")
 	cmd.Dir = tmpDir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to init git repo: %v", err)
@@ -106,7 +107,7 @@ func TestGitProviderName(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Initialize a git repository
-	cmd := exec.Command("git", "init")
+	cmd := exec.CommandContext(context.Background(), "git", "init")
 	cmd.Dir = tmpDir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to init git repo: %v", err)
@@ -126,7 +127,7 @@ func TestGitProviderWorkDir(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Initialize a git repository
-	cmd := exec.Command("git", "init")
+	cmd := exec.CommandContext(context.Background(), "git", "init")
 	cmd.Dir = tmpDir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to init git repo: %v", err)
@@ -175,7 +176,7 @@ func TestGitProviderGetBranch(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Initialize a git repository
-		cmd := exec.Command("git", "init", "-b", "main")
+		cmd := exec.CommandContext(context.Background(), "git", "init", "-b", "main")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to init git repo: %v", err)
@@ -190,13 +191,13 @@ func TestGitProviderGetBranch(t *testing.T) {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 
-		cmd = exec.Command("git", "add", ".")
+		cmd = exec.CommandContext(context.Background(), "git", "add", ".")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to add file: %v", err)
 		}
 
-		cmd = exec.Command("git", "commit", "-m", "initial commit")
+		cmd = exec.CommandContext(context.Background(), "git", "commit", "-m", "initial commit")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to commit: %v", err)
@@ -221,7 +222,7 @@ func TestGitProviderGetBranch(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Initialize a git repository
-		cmd := exec.Command("git", "init", "-b", "main")
+		cmd := exec.CommandContext(context.Background(), "git", "init", "-b", "main")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to init git repo: %v", err)
@@ -236,20 +237,20 @@ func TestGitProviderGetBranch(t *testing.T) {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 
-		cmd = exec.Command("git", "add", ".")
+		cmd = exec.CommandContext(context.Background(), "git", "add", ".")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to add file: %v", err)
 		}
 
-		cmd = exec.Command("git", "commit", "-m", "initial commit")
+		cmd = exec.CommandContext(context.Background(), "git", "commit", "-m", "initial commit")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to commit: %v", err)
 		}
 
 		// Get the commit hash
-		cmd = exec.Command("git", "rev-parse", "HEAD")
+		cmd = exec.CommandContext(context.Background(), "git", "rev-parse", "HEAD")
 		cmd.Dir = tmpDir
 		out, err := cmd.Output()
 		if err != nil {
@@ -258,7 +259,7 @@ func TestGitProviderGetBranch(t *testing.T) {
 		commitHash := strings.TrimSpace(string(out))
 
 		// Detach HEAD
-		cmd = exec.Command("git", "checkout", "--detach", "HEAD")
+		cmd = exec.CommandContext(context.Background(), "git", "checkout", "--detach", "HEAD")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to detach HEAD: %v", err)
@@ -355,7 +356,7 @@ func TestGitProviderGetChangedFiles(t *testing.T) {
 			t.Fatalf("Failed to create new file: %v", err)
 		}
 
-		cmd := exec.Command("git", "add", "new.txt")
+		cmd := exec.CommandContext(context.Background(), "git", "add", "new.txt")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to stage file: %v", err)
@@ -614,7 +615,7 @@ func TestGitProviderCommit(t *testing.T) {
 		}
 
 		// Verify commit message
-		cmd := exec.Command("git", "log", "-1", "--pretty=%s")
+		cmd := exec.CommandContext(context.Background(), "git", "log", "-1", "--pretty=%s")
 		cmd.Dir = tmpDir
 		out, err := cmd.Output()
 		if err != nil {
@@ -688,7 +689,7 @@ func TestGitProviderGetStatus(t *testing.T) {
 		if err := os.WriteFile(stagedFile, []byte("staged"), 0644); err != nil {
 			t.Fatalf("Failed to create staged file: %v", err)
 		}
-		cmd := exec.Command("git", "add", "staged.txt")
+		cmd := exec.CommandContext(context.Background(), "git", "add", "staged.txt")
 		cmd.Dir = tmpDir
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("Failed to stage file: %v", err)
@@ -796,7 +797,7 @@ func TestGitProviderGetInteractiveCommand(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Initialize a git repository
-	cmd := exec.Command("git", "init")
+	cmd := exec.CommandContext(context.Background(), "git", "init")
 	cmd.Dir = tmpDir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to init git repo: %v", err)
@@ -828,7 +829,7 @@ func TestGitProviderGetLogCommand(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Initialize a git repository
-	cmd := exec.Command("git", "init")
+	cmd := exec.CommandContext(context.Background(), "git", "init")
 	cmd.Dir = tmpDir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to init git repo: %v", err)
@@ -861,13 +862,13 @@ func TestGitProviderGetLogCommand(t *testing.T) {
 func configureGitUser(t *testing.T, dir string) {
 	t.Helper()
 
-	cmd := exec.Command("git", "config", "user.email", "test@test.com")
+	cmd := exec.CommandContext(context.Background(), "git", "config", "user.email", "test@test.com")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to configure git email: %v", err)
 	}
 
-	cmd = exec.Command("git", "config", "user.name", "Test User")
+	cmd = exec.CommandContext(context.Background(), "git", "config", "user.name", "Test User")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to configure git name: %v", err)
@@ -878,7 +879,7 @@ func initGitRepoWithCommit(t *testing.T, dir string) {
 	t.Helper()
 
 	// Initialize git repo
-	cmd := exec.Command("git", "init", "-b", "main")
+	cmd := exec.CommandContext(context.Background(), "git", "init", "-b", "main")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to init git repo: %v", err)
@@ -893,13 +894,13 @@ func initGitRepoWithCommit(t *testing.T, dir string) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	cmd = exec.Command("git", "add", ".")
+	cmd = exec.CommandContext(context.Background(), "git", "add", ".")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
 
-	cmd = exec.Command("git", "commit", "-m", "initial commit")
+	cmd = exec.CommandContext(context.Background(), "git", "commit", "-m", "initial commit")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to commit: %v", err)

@@ -127,10 +127,8 @@ func (h *ApprovalHandler) HandlePermissionRequest(w http.ResponseWriter, r *http
 
 	// Map to a stapler-squad session using the X-CS-Session-ID header first,
 	// then fall back to cwd prefix matching against session paths.
-	sessionID := r.Header.Get("X-CS-Session-ID")
-	if sessionID == "" {
-		sessionID = h.mapSessionByCwd(payload.Cwd)
-	}
+	// Always resolve to the stable ID (UUID) so the client can match the notification.
+	sessionID := h.resolveSessionID(r.Header.Get("X-CS-Session-ID"), payload.Cwd)
 	if sessionID == "" {
 		sessionID = "unknown"
 	}
@@ -383,30 +381,40 @@ func buildApprovalMessage(approval *PendingApproval) string {
 	return fmt.Sprintf("Claude needs permission to use %s", approval.ToolName)
 }
 
-// mapSessionByCwd finds a stapler-squad session by matching cwd against session paths.
-// Returns the session title of the best (longest-prefix) match, or "" if no match.
-func (h *ApprovalHandler) mapSessionByCwd(cwd string) string {
-	if cwd == "" {
-		return ""
+// resolveSessionID returns the stable session ID (UUID) for a given raw header
+// value and cwd. It tries the header first (matching by title or UUID via
+// MatchesID), then falls back to cwd prefix matching.
+func (h *ApprovalHandler) resolveSessionID(headerVal, cwd string) string {
+	if h.storage == nil {
+		return headerVal
 	}
 	instances, err := h.storage.LoadInstances()
 	if err != nil {
 		return ""
 	}
-	bestTitle := ""
+	if headerVal != "" {
+		for _, inst := range instances {
+			if inst.MatchesID(headerVal) {
+				return inst.GetStableID()
+			}
+		}
+	}
+	// Fall back to cwd prefix matching
+	bestID := ""
 	bestLen := 0
 	for _, inst := range instances {
 		if p := inst.Path; p != "" && strings.HasPrefix(cwd, p) && len(p) > bestLen {
-			bestTitle = inst.Title
+			bestID = inst.GetStableID()
 			bestLen = len(p)
 		}
 		if wd := inst.WorkingDir; wd != "" && strings.HasPrefix(cwd, wd) && len(wd) > bestLen {
-			bestTitle = inst.Title
+			bestID = inst.GetStableID()
 			bestLen = len(wd)
 		}
 	}
-	return bestTitle
+	return bestID
 }
+
 
 // writeDeferDecision returns an empty HTTP 200 with no body.
 // Claude Code interprets the absence of hookSpecificOutput as "no decision made by the hook"

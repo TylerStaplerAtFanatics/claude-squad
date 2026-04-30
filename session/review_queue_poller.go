@@ -64,15 +64,20 @@ type ReviewQueuePoller struct {
 	approvalProvider ApprovalMetadataProvider  // Optional: enriches approval items with hook metadata
 
 	// Content cache: avoids spawning a tmux capture-pane subprocess when the session
-	// has not produced new output since the last poll. For sessions with an active
-	// ClaudeController the idle detector's lastActivity timestamp (driven by PTY output
-	// reading, no subprocess) is used as a change signal. For sessions without a
-	// ClaudeController, a 500ms TTL cache is used to limit subprocess calls to at most
-	// 2 per second regardless of the number of sessions.
-	cacheMu          sync.Mutex
-	lastSeenActivity map[string]time.Time // per-session: last IdleDetector.lastActivity seen
-	cachedContent    map[string]string    // per-session: content from last Preview() call
-	lastPreviewTime  map[string]time.Time // per-session: when Preview() was last called (for TTL cache)
+	// has not produced new output since the last poll.
+	//
+	// For sessions with an active ClaudeController: the idle detector's lastActivity
+	// timestamp (driven by PTY reads, no subprocess) is the change signal.
+	//
+	// For sessions without a ClaudeController: #{pane_last_activity} from a single
+	// `tmux list-panes -a` call (fetched once per checkSessions tick) is the change
+	// signal. A capture-pane subprocess is spawned only when that timestamp advances.
+	// A 30s TTL acts as a safety fallback when list-panes is unavailable.
+	cacheMu               sync.Mutex
+	lastSeenActivity      map[string]time.Time // per-session: last IdleDetector.lastActivity seen
+	lastSeenPaneActivity  map[string]time.Time // per-session: last #{pane_last_activity} seen
+	cachedContent         map[string]string    // per-session: content from last Preview() call
+	lastPreviewTime       map[string]time.Time // per-session: fallback TTL timestamp
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -101,15 +106,16 @@ func NewReviewQueuePoller(queue *ReviewQueue, statusManager *InstanceStatusManag
 // The storage parameter is optional (can be nil) but required for persisting LastAddedToQueue timestamps.
 func NewReviewQueuePollerWithConfig(queue *ReviewQueue, statusManager *InstanceStatusManager, storage *Storage, config ReviewQueuePollerConfig) *ReviewQueuePoller {
 	return &ReviewQueuePoller{
-		queue:            queue,
-		statusManager:    statusManager,
-		storage:          storage,
-		instances:        make([]*Instance, 0),
-		config:           config,
-		statusDetector:   detection.NewStatusDetector(), // For detecting status in sessions without ClaudeController
-		lastSeenActivity: make(map[string]time.Time),
-		cachedContent:    make(map[string]string),
-		lastPreviewTime:  make(map[string]time.Time),
+		queue:                 queue,
+		statusManager:         statusManager,
+		storage:               storage,
+		instances:             make([]*Instance, 0),
+		config:                config,
+		statusDetector:        detection.NewStatusDetector(),
+		lastSeenActivity:      make(map[string]time.Time),
+		lastSeenPaneActivity:  make(map[string]time.Time),
+		cachedContent:         make(map[string]string),
+		lastPreviewTime:       make(map[string]time.Time),
 	}
 }
 
@@ -150,6 +156,7 @@ func (rqp *ReviewQueuePoller) RemoveInstance(instanceTitle string) {
 	}
 	rqp.cacheMu.Lock()
 	delete(rqp.lastSeenActivity, evictKey)
+	delete(rqp.lastSeenPaneActivity, evictKey)
 	delete(rqp.cachedContent, evictKey)
 	delete(rqp.lastPreviewTime, evictKey)
 	rqp.cacheMu.Unlock()
@@ -356,8 +363,17 @@ func (rqp *ReviewQueuePoller) backoffDuration(consecutiveErrors int) time.Durati
 	return backoff
 }
 
-// reconcileSessions compares in-memory Running/Ready instances against live tmux sessions.
-// Any managed instance not found in tmux is presumed dead and transitions to Paused via EventExited.
+// ForceReconcile immediately runs session reconciliation outside the normal 30s cadence.
+// Safe to call concurrently; typically used by the fork pressure monitor to rapidly clean
+// up dead sessions when subprocess failures indicate stale Running/Ready states.
+func (rqp *ReviewQueuePoller) ForceReconcile() {
+	log.InfoLog.Printf("[ReviewQueuePoller] ForceReconcile triggered")
+	rqp.reconcileSessions()
+}
+
+// reconcileSessions compares in-memory instances against live tmux sessions.
+// - Running/Ready instances not found in tmux are transitioned to Stopped.
+// - Stopped instances whose tmux session is found alive are revived to Running.
 func (rqp *ReviewQueuePoller) reconcileSessions() {
 	rqp.mu.RLock()
 	instances := make([]*Instance, len(rqp.instances))
@@ -388,29 +404,45 @@ func (rqp *ReviewQueuePoller) reconcileSessions() {
 	}
 
 	for _, inst := range instances {
-		// Only reconcile managed Running or Ready instances that have a tmux session name.
 		if !inst.IsManaged {
-			continue
-		}
-		if inst.Status != Running && inst.Status != Ready {
 			continue
 		}
 		sessionName := inst.GetTmuxSessionName()
 		if sessionName == "" {
 			continue
 		}
-		if !liveSessions[sessionName] {
-			log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: managed session '%s' (tmux: %s) not found in live sessions — transitioning to Stopped",
-				inst.Title, sessionName)
-			inst.stateMutex.Lock()
-			if inst.Status == Running || inst.Status == Ready {
-				if err := inst.transitionTo(Stopped); err != nil {
-					log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: transition to Stopped failed for '%s': %v — using setStatus", inst.Title, err)
-					inst.setStatus(Stopped)
+
+		switch inst.Status {
+		case Running, Ready:
+			// Running/Ready but tmux session gone — mark Stopped.
+			if !liveSessions[sessionName] {
+				log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: managed session '%s' (tmux: %s) not found in live sessions — transitioning to Stopped",
+					inst.Title, sessionName)
+				inst.stateMutex.Lock()
+				switch inst.Status {
+				case Running, Ready:
+					if err := inst.transitionTo(Stopped); err != nil {
+						log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: transition to Stopped failed for '%s': %v — using setStatus", inst.Title, err)
+						inst.setStatus(Stopped)
+					}
 				}
+				inst.stateMutex.Unlock()
+				inst.fireLifecycleEvent(EventExited, "reconcile-session-missing")
 			}
-			inst.stateMutex.Unlock()
-			inst.fireLifecycleEvent(EventExited, "reconcile-session-missing")
+		case Stopped:
+			// Stopped but tmux session is alive — revive to Running.
+			if liveSessions[sessionName] {
+				log.InfoLog.Printf("[ReviewQueuePoller] reconcileSessions: stopped session '%s' (tmux: %s) found alive — reviving to Running",
+					inst.Title, sessionName)
+				inst.stateMutex.Lock()
+				if inst.Status == Stopped {
+					if err := inst.transitionTo(Running); err != nil {
+						log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: revival to Running failed for '%s': %v", inst.Title, err)
+					}
+				}
+				inst.stateMutex.Unlock()
+				inst.fireLifecycleEvent(EventStarted, "reconcile-session-revived")
+			}
 		}
 	}
 }
@@ -427,6 +459,10 @@ func (rqp *ReviewQueuePoller) checkSessions() {
 	copy(instances, rqp.instances)
 	rqp.mu.RUnlock()
 
+	// Fetch pane activity timestamps once for all sessions. This single subprocess call
+	// replaces per-session capture-pane calls when content hasn't changed.
+	paneActivity := batchPaneActivity("")
+
 	sem := make(chan struct{}, checkSessionsConcurrency)
 	var wg sync.WaitGroup
 	for _, inst := range instances {
@@ -435,7 +471,7 @@ func (rqp *ReviewQueuePoller) checkSessions() {
 		go func(i *Instance) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			rqp.checkSession(i)
+			rqp.checkSession(i, paneActivity)
 		}(inst)
 	}
 	wg.Wait()
@@ -489,28 +525,26 @@ func detectProcessing(inst *Instance, content string, statusInfo InstanceStatusI
 	return false
 }
 
-// previewCacheTTL is the maximum age of a cached Preview() result for sessions
-// without an active ClaudeController. At the default 2-second poll interval this
-// limits tmux capture-pane subprocess calls to at most 2 per second regardless of
-// the number of monitored sessions.
-const previewCacheTTL = 500 * time.Millisecond
+// previewCacheTTL is the fallback maximum age of a cached Preview() result when
+// pane activity timestamps are unavailable (e.g. tmux not running). The primary
+// invalidation mechanism is #{pane_last_activity} from batchPaneActivity(); this
+// TTL is only a safety net and is intentionally long.
+const previewCacheTTL = 30 * time.Second
 
 // getContent returns the terminal content for inst, using a cache to avoid
 // spawning a subprocess when no new output has arrived since the last poll.
 //
 // For sessions with an active ClaudeController: the idle detector's lastActivity
-// timestamp is used as a change signal. lastActivity is updated in real-time
-// via PTY output reading (no subprocess), so a zero-cost check tells us whether
-// any new bytes arrived. If nothing changed, the last captured content is returned
-// directly, saving one `tmux capture-pane` subprocess per idle session per tick.
+// timestamp (driven by PTY reads, no subprocess) is the change signal.
 //
-// For sessions without a ClaudeController: a 500ms TTL cache is used. At most one
-// Preview() subprocess call is issued per session per 500ms, even if the poller
-// fires multiple times within that window.
+// For sessions without a ClaudeController: #{pane_last_activity} from the
+// paneActivity snapshot (one `tmux list-panes -a` call shared across all sessions)
+// is the change signal. capture-pane is only called when that timestamp advances.
+// A 30s TTL acts as a fallback when paneActivity is nil (tmux unavailable).
 //
-// The error case returns the last cached content (empty string on the first poll)
-// so callers can continue with empty content as before.
-func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStatusInfo) string {
+// On error, the last cached content is returned so callers see empty string only
+// on the very first poll for a session.
+func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStatusInfo, paneActivity map[string]time.Time) string {
 	if statusInfo.IsControllerActive {
 		lastActivity := statusInfo.IdleState.LastActivity
 		if !lastActivity.IsZero() {
@@ -526,14 +560,24 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 			}
 		}
 	} else {
-		// No ClaudeController: use a TTL cache to avoid spawning a subprocess on
-		// every poll tick. If the cached content is still fresh, return it directly.
 		rqp.cacheMu.Lock()
-		lastCall := rqp.lastPreviewTime[inst.Title]
 		cached := rqp.cachedContent[inst.Title]
+		lastSeenPane := rqp.lastSeenPaneActivity[inst.Title]
+		lastCall := rqp.lastPreviewTime[inst.Title]
 		rqp.cacheMu.Unlock()
 
-		if !lastCall.IsZero() && time.Since(lastCall) < previewCacheTTL {
+		if paneActivity != nil {
+			// Primary: event-driven via #{pane_last_activity}.
+			tmuxName := inst.GetTmuxSessionName()
+			if currentActivity, ok := paneActivity[tmuxName]; ok {
+				if !currentActivity.IsZero() && currentActivity.Equal(lastSeenPane) {
+					log.DebugLog.Printf("[ReviewQueue] Session '%s': pane activity cache hit (activity=%s, %d bytes)",
+						inst.Title, currentActivity.Format("15:04:05.000"), len(cached))
+					return cached
+				}
+			}
+		} else if !lastCall.IsZero() && time.Since(lastCall) < previewCacheTTL {
+			// Fallback: TTL cache when list-panes unavailable.
 			log.DebugLog.Printf("[ReviewQueue] Session '%s': TTL cache hit (age=%s, %d bytes)",
 				inst.Title, time.Since(lastCall).Round(time.Millisecond), len(cached))
 			return cached
@@ -554,6 +598,12 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 	if statusInfo.IsControllerActive && !statusInfo.IdleState.LastActivity.IsZero() {
 		rqp.lastSeenActivity[inst.Title] = statusInfo.IdleState.LastActivity
 	} else {
+		if paneActivity != nil {
+			tmuxName := inst.GetTmuxSessionName()
+			if currentActivity, ok := paneActivity[tmuxName]; ok && !currentActivity.IsZero() {
+				rqp.lastSeenPaneActivity[inst.Title] = currentActivity
+			}
+		}
 		rqp.lastPreviewTime[inst.Title] = time.Now()
 	}
 	rqp.cacheMu.Unlock()
@@ -562,13 +612,14 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 }
 
 // checkSession checks a single session and adds/removes from queue as needed.
-func (rqp *ReviewQueuePoller) checkSession(inst *Instance) {
+// paneActivity is the snapshot from batchPaneActivity(); nil falls back to TTL cache.
+func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[string]time.Time) {
 	if inst.LastMeaningfulOutput.IsZero() {
 		log.DebugLog.Printf("[ReviewQueue] Session '%s': LastMeaningfulOutput is zero — processing without output timestamp", inst.Title)
 	}
 
-	// Skip paused or unstarted sessions
-	if !inst.Started() || inst.Paused() {
+	// Skip paused, stopped, or unstarted sessions
+	if !inst.Started() || inst.Paused() || inst.Status == Stopped {
 		return
 	}
 
@@ -578,7 +629,7 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance) {
 	// STEP 1: Get terminal content for prompt detection.
 	// Uses cached content when the controller reports no new activity since the last
 	// poll — avoids a subprocess spawn on every tick for idle controller-managed sessions.
-	content := rqp.getContent(inst, statusInfo)
+	content := rqp.getContent(inst, statusInfo, paneActivity)
 
 	// STEP 2: Detect and track prompts
 	isNewPrompt := inst.detectAndTrackPrompt(content, statusInfo)
@@ -1154,8 +1205,9 @@ func (rqp *ReviewQueuePoller) GetMonitoredCount() int {
 // CheckSession checks a single session immediately (exported for ReactiveQueueManager).
 // This allows external components to trigger immediate re-evaluation without waiting for
 // the next poll cycle, providing <100ms feedback on user interactions.
+// Fetches a fresh pane activity snapshot for accurate cache invalidation.
 func (rqp *ReviewQueuePoller) CheckSession(inst *Instance) {
-	rqp.checkSession(inst)
+	rqp.checkSession(inst, batchPaneActivity(""))
 }
 
 // FindInstance finds an instance by session ID (exported for ReactiveQueueManager).

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,7 +20,7 @@ func setupTestRepo(t *testing.T) string {
 
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(context.Background(), "git", args...)
 		cmd.Dir = dir
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "git %s failed: %s", strings.Join(args, " "), out)
@@ -89,7 +90,7 @@ func TestExistingBranchWorktree_SetsBaseCommitSHA(t *testing.T) {
 	repoDir := setupTestRepo(t)
 
 	// Create a branch manually so it already exists when we call Setup().
-	cmd := exec.Command("git", "branch", "existing-feature")
+	cmd := exec.CommandContext(context.Background(), "git", "branch", "existing-feature")
 	cmd.Dir = repoDir
 	require.NoError(t, cmd.Run())
 
