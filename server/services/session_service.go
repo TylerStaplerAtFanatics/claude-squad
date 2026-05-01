@@ -2174,6 +2174,12 @@ func (s *SessionService) SearchFiles(
 	return s.fileSvc.SearchFiles(ctx, req)
 }
 
+// GetFileService returns the underlying FileService so callers can register
+// additional HTTP handlers (e.g. the raw file download endpoint).
+func (s *SessionService) GetFileService() *FileService {
+	return s.fileSvc
+}
+
 // ─── Prompt History ───────────────────────────────────────────────────────────
 
 // +api: session:list-prompt-history

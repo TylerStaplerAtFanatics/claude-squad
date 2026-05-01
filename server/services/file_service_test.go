@@ -238,7 +238,7 @@ func (t *testFileService) searchFiles(ctx context.Context, req *connect.Request[
 	if maxResults <= 0 {
 		maxResults = maxSearchResults
 	}
-	files, truncated, totalMatches, err := searchFilesInWorktree(ctx, t.testRoot, req.Msg.Query, req.Msg.IncludeIgnored, maxResults)
+	files, truncated, totalMatches, err := searchFilesInWorktree(ctx, t.testRoot, req.Msg.Query, req.Msg.IncludeIgnored, maxResults, nil)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

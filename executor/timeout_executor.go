@@ -41,6 +41,13 @@ func (e *TimeoutExecutor) Run(cmd *exec.Cmd) error {
 	if ctx.Err() != nil {
 		return fmt.Errorf("command timed out after %v: %s", e.timeout, ToString(cmd))
 	}
+	// On Linux, exec-not-found errors may not be wrapped by the caller.
+	// Ensure non-exit errors (e.g. "executable file not found") always surface as "failed to start".
+	if err != nil {
+		if _, isExitErr := err.(*exec.ExitError); !isExitErr {
+			return fmt.Errorf("failed to start command: %w", err)
+		}
+	}
 	return err
 }
 
