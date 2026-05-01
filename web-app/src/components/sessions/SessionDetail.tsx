@@ -497,6 +497,7 @@ export function SessionDetail({
         {activeTab === "vcs" && (
           <div className={styles.tabContent} role="tabpanel" aria-labelledby="tab-vcs">
             <VcsPanel
+              session={session}
               onNavigateToFile={(path) => {
                 setFilesSelectedPath(path);
                 handleTabChange("files");

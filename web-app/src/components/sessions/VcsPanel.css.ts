@@ -99,6 +99,83 @@ export const refreshButton = style({
   },
 });
 
+export const githubSection = style({
+  marginBottom: "16px",
+  padding: "10px 12px",
+  background: vars.color.cardBackground,
+  borderRadius: "8px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+});
+
+export const githubRow = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  flexWrap: "wrap",
+  fontSize: "13px",
+});
+
+export const githubIcon = style({
+  color: vars.color.textSecondary,
+  fontSize: "14px",
+  flexShrink: 0,
+});
+
+export const githubRepo = style({
+  fontFamily: "monospace",
+  fontWeight: 600,
+  color: vars.color.textPrimary,
+  textDecoration: "none",
+  selectors: {
+    "&:hover": { textDecoration: "underline" },
+  },
+});
+
+export const githubPrLink = style({
+  fontFamily: "monospace",
+  color: "#3b82f6",
+  textDecoration: "none",
+  selectors: {
+    "&:hover": { textDecoration: "underline" },
+  },
+});
+
+export const githubPrState = style({
+  color: vars.color.textSecondary,
+  fontFamily: "sans-serif",
+  fontSize: "12px",
+});
+
+export const githubDraft = style({
+  color: "#888",
+  fontFamily: "sans-serif",
+  fontSize: "12px",
+});
+
+export const githubReviews = style({
+  marginLeft: "auto",
+  display: "flex",
+  gap: "8px",
+  fontSize: "12px",
+});
+
+export const githubApproved = style({
+  color: "#7ee787",
+  fontWeight: 500,
+});
+
+export const githubChangesReq = style({
+  color: "#f97583",
+  fontWeight: 500,
+});
+
+export const githubCi = style({
+  fontSize: "12px",
+  fontFamily: "monospace",
+});
+
 export const branchInfo = style({
   marginBottom: "16px",
   padding: "12px",
