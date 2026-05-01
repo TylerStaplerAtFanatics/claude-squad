@@ -45,16 +45,6 @@ export function Header() {
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
-  // Clear session params from URL when navigating away from home, so returning doesn't reopen
-  const handleNavLinkClick = () => {
-    if (typeof window !== "undefined" && pathname === routes.home) {
-      const url = new URL(window.location.href);
-      if (url.searchParams.has("session")) {
-        window.history.replaceState(null, "", "/");
-      }
-    }
-  };
-
   return (
     <>
       <header className={styles.header}>
@@ -90,7 +80,6 @@ export function Header() {
                   key={page.href}
                   href={page.href}
                   className={`${styles.navLink} ${isActive ? styles.active : ""}`}
-                  onClick={handleNavLinkClick}
                   aria-current={isActive ? "page" : undefined}
                 >
                   {page.href === routes.unfinished ? (
@@ -107,7 +96,6 @@ export function Header() {
               <AppLink
                 href={routes.account}
                 className={`${styles.navLink} ${pathname === routes.account ? styles.active : ""}`}
-                onClick={handleNavLinkClick}
                 aria-current={pathname === routes.account ? "page" : undefined}
               >
                 Account
