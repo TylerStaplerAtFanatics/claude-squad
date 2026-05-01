@@ -114,14 +114,19 @@ type TmuxSession struct {
 	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers, controlModeExited, and pendingCmds
 	controlModeExited      bool                   // True after readControlModeOutput exits; new subscribers get pre-closed channel
 
-	// Control mode command dispatch (Phase 2)
-	// cmdSendMu serializes (enqueue + write-to-stdin) pairs so tmux receives commands
-	// in the same order as channels are added to pendingCmds.
-	cmdSendMu   sync.Mutex       // serializes enqueue+write in sendCMCommand and stdin close in StopControlMode
-	pendingCmds []chan cmdResult // FIFO of pending response channels; protected by controlModeSubMu
-	cmdBodyBuf  strings.Builder  // body accumulator between %begin and %end; reader goroutine only
-	curCmdCh    chan cmdResult   // current in-flight response channel; reader goroutine only
-	inCmdResp   bool             // true while inside a %begin/%end block; reader goroutine only
+	// Control mode command dispatch — priority queue
+	// A dedicated sender goroutine owns the stdin write path so that high-priority
+	// requests (interactive user input) always jump ahead of low-priority ones
+	// (background polling, resize, capture-pane). The goroutine drains highPriSendCh
+	// before touching normPriSendCh.
+	highPriSendCh chan cmSendReq   // user send-keys — processed before normPriSendCh
+	normPriSendCh chan cmSendReq   // background commands (polling, resize, capture-pane)
+	cmSenderExited chan struct{}    // closed when runCMSender exits; lets StopControlMode know stdin is safe to close
+	cmdSendMu     sync.Mutex       // guards stdin-close in StopControlMode vs sender goroutine writes
+	pendingCmds   []chan cmdResult // FIFO of pending response channels; protected by controlModeSubMu
+	cmdBodyBuf    strings.Builder  // body accumulator between %begin and %end; reader goroutine only
+	curCmdCh      chan cmdResult   // current in-flight response channel; reader goroutine only
+	inCmdResp     bool             // true while inside a %begin/%end block; reader goroutine only
 
 
 	// Exit detection: fired when the session exits unexpectedly (not via StopControlMode).
@@ -1337,7 +1342,7 @@ func (t *TmuxSession) SetWindowSize(cols, rows int) error {
 	log.InfoLog.Printf("🔧 Running tmux resize-window command for '%s' to %dx%d", t.sanitizedName, cols, rows)
 	colsStr := fmt.Sprintf("%d", cols)
 	rowsStr := fmt.Sprintf("%d", rows)
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		if _, cmErr := t.sendCMCommand(ctx,
@@ -1573,7 +1578,7 @@ func (t *TmuxSession) DoesSessionExistNoCache() bool {
 // This is critical after resizing to update cursor positions and line wrapping.
 func (t *TmuxSession) RefreshClient() error {
 	// CM path: send refresh-client over the existing control mode connection.
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		if _, cmErr := t.sendCMCommand(ctx, "refresh-client", "-t", t.sanitizedName); cmErr == nil {
@@ -1612,9 +1617,15 @@ func (t *TmuxSession) RefreshClient() error {
 }
 
 // cmEnabled returns true when the CM command dispatch path should be attempted.
-// Must be called before any sendCMCommand call.
 func (t *TmuxSession) cmEnabled() bool {
-	return cmCommandsEnabled.Load() && t.controlModeStdin != nil
+	return cmCommandsEnabled.Load() && t.normPriSendCh != nil
+}
+
+// cmEnabledForBackground returns true when CM is available AND the normal-priority
+// send queue has room. Background ops skip CM when the queue is backed up — they
+// fall back to subprocess so that the queue stays clear for high-priority user input.
+func (t *TmuxSession) cmEnabledForBackground() bool {
+	return t.cmEnabled() && len(t.normPriSendCh) == 0
 }
 
 // cmCtx returns a 3-second context for use with sendCMCommand.
@@ -1626,7 +1637,7 @@ func cmCtx() (context.Context, context.CancelFunc) {
 // When STAPLER_SQUAD_CM_COMMANDS=true and control mode is running, the query is sent
 // over the control mode stdin pipe (zero new subprocesses); otherwise falls back to subprocess.
 func (t *TmuxSession) CapturePaneContent() (string, error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx, "capture-pane", "-p", "-e", "-J", "-t", t.sanitizedName)
@@ -1659,7 +1670,7 @@ func (t *TmuxSession) CapturePaneContent() (string, error) {
 // This is essential for hybrid streaming where we need to preserve exact cursor positioning.
 // The -J flag (join wrapped lines) strips cursor positioning codes, breaking TUI rendering.
 func (t *TmuxSession) CapturePaneContentRaw() (string, error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx, "capture-pane", "-p", "-e", "-t", t.sanitizedName)
@@ -1688,7 +1699,7 @@ func (t *TmuxSession) CapturePaneContentRaw() (string, error) {
 // CapturePaneContentWithOptions captures the pane content with additional options.
 // start and end specify the starting and ending line numbers (use "-" for the start/end of history).
 func (t *TmuxSession) CapturePaneContentWithOptions(start, end string) (string, error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx, "capture-pane", "-p", "-e", "-J",
@@ -1733,7 +1744,7 @@ func (t *TmuxSession) FilterBanners(content string) (filteredContent string, ban
 // GetCursorPosition returns the current cursor position in the tmux pane.
 // Returns cursor X (column) and Y (row) coordinates, both 0-based.
 func (t *TmuxSession) GetCursorPosition() (x, y int, err error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx,
@@ -1773,7 +1784,7 @@ func (t *TmuxSession) GetCursorPosition() (x, y int, err error) {
 // over the existing control mode stdin pipe (zero new subprocesses). Otherwise it falls
 // back to the original subprocess path.
 func (t *TmuxSession) GetPaneDimensions() (width, height int, err error) {
-	if cmCommandsEnabled.Load() && t.controlModeStdin != nil {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx,
@@ -1925,7 +1936,7 @@ func sanitizeUTF8String(rawBytes []byte) string {
 // GetPaneCurrentPath returns the current working directory of the tmux pane.
 // This is used by CaptureCurrentState to persist cwd before shutdown for cold restore.
 func (t *TmuxSession) GetPaneCurrentPath() (string, error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx,
@@ -1952,7 +1963,7 @@ func (t *TmuxSession) GetPaneCurrentPath() (string, error) {
 // GetPanePID returns the PID of the foreground process in the pane.
 // This is used by HistoryLinker to correlate open files with session records.
 func (t *TmuxSession) GetPanePID() (int32, error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx,

@@ -688,26 +688,20 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 					instance.UpdateTerminalTimestamps(string(input.Data), true)
 					instance.MarkUserResponded()
 
-					// Send input to tmux session using tmux send-keys (hex-encoded)
-					if err := sendInputToTmux(tmuxSessionName, input.Data); err != nil {
-						log.ErrorLog.Printf("[streamViaControlMode] Error sending input to tmux '%s': %v",
-							tmuxSessionName, err)
-						// Send error back to client
-						errorData := &sessionv1.TerminalData{
-							SessionId: sessionID,
-							Data: &sessionv1.TerminalData_Error{
-								Error: &sessionv1.TerminalError{
-									Message: fmt.Sprintf("Input error: %v", err),
-									Code:    "input_error",
-								},
-							},
+					// Try CM path first (low-latency, no subprocess). Falls back to
+					// subprocess send-keys if CM queue is backed up or not running.
+					// Errors are non-fatal — keystrokes may be lost under load but
+					// the stream stays alive (sending TerminalError kills the stream).
+					sendCtx, sendCancel := context.WithTimeout(context.Background(), 2*time.Second)
+					sendErr := instance.SendInputViaControlMode(sendCtx, input.Data)
+					sendCancel()
+					if sendErr != nil {
+						log.WarningLog.Printf("[streamViaControlMode] CM input failed for '%s', retrying via subprocess: %v",
+							tmuxSessionName, sendErr)
+						if fbErr := sendInputToTmux(tmuxSessionName, input.Data); fbErr != nil {
+							log.ErrorLog.Printf("[streamViaControlMode] Subprocess fallback also failed for '%s': %v",
+								tmuxSessionName, fbErr)
 						}
-						errorBytes, _ := proto.Marshal(errorData)
-						errorEnvelope := protocol.CreateEnvelope(0, errorBytes)
-						if err := stream.WriteMessage(websocket.BinaryMessage, errorEnvelope); err != nil {
-							log.ErrorLog.Printf("[streamViaControlMode] Failed to send input error to client: %v", err)
-						}
-						continue
 					}
 				}
 
@@ -970,26 +964,10 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 					// Update timestamps for user interaction
 					instance.UpdateTerminalTimestamps(string(input.Data), true)
 
-					// Send input to tmux session
+					// Send input to tmux session — errors are non-fatal (stream stays alive).
 					if err := sendInputToTmux(tmuxSessionName, input.Data); err != nil {
-						log.ErrorLog.Printf("[streamViaTmuxCapture] Error sending input to tmux '%s': %v",
+						log.WarningLog.Printf("[streamViaTmuxCapture] Error sending input to tmux '%s': %v",
 							tmuxSessionName, err)
-						// Send error back to client
-						errorData := &sessionv1.TerminalData{
-							SessionId: sessionID,
-							Data: &sessionv1.TerminalData_Error{
-								Error: &sessionv1.TerminalError{
-									Message: fmt.Sprintf("Input error: %v", err),
-									Code:    "input_error",
-								},
-							},
-						}
-						if errBytes, err := proto.Marshal(errorData); err == nil {
-							errEnvelope := protocol.CreateEnvelope(0, errBytes)
-							if err := stream.WriteMessage(websocket.BinaryMessage, errEnvelope); err != nil {
-								log.ErrorLog.Printf("[streamViaTmuxCapture] Failed to send input error to client: %v", err)
-							}
-						}
 					} else {
 						log.DebugLog.Printf("[streamViaTmuxCapture] Sent input (%d bytes) to tmux '%s'",
 							len(input.Data), tmuxSessionName)

@@ -23,6 +23,12 @@ type cmdResult struct {
 	err  error
 }
 
+// cmSendReq is an outgoing command queued for the priority sender goroutine.
+type cmSendReq struct {
+	line     string          // full tmux command line (e.g. "send-keys -t sess -H 61")
+	resultCh chan cmdResult  // buffered(1) channel for the response
+}
+
 var (
 	// ErrControlModeNotRunning is returned when sendCMCommand is called but control mode is not active.
 	ErrControlModeNotRunning = errors.New("control mode not running")
@@ -91,6 +97,11 @@ func (t *TmuxSession) StartControlMode() error {
 	t.controlModeStdin = stdin
 	t.controlModeDone = make(chan struct{})
 
+	// Initialize priority send queues and sender-exit signal.
+	t.highPriSendCh = make(chan cmSendReq, 64)
+	t.normPriSendCh = make(chan cmSendReq, 256)
+	t.cmSenderExited = make(chan struct{})
+
 	// Initialize subscriber map and reset exited flag
 	t.controlModeSubMu.Lock()
 	if t.controlModeSubscribers == nil {
@@ -99,7 +110,9 @@ func (t *TmuxSession) StartControlMode() error {
 	t.controlModeExited = false
 	t.controlModeSubMu.Unlock()
 
-	// Start goroutines for output processing and error monitoring
+	// Start goroutines: priority sender, output reader, stderr monitor.
+	doneCh := t.controlModeDone
+	go t.runCMSender(doneCh, stdin)
 	go t.readControlModeOutput()
 	go t.monitorControlModeErrors(stderr)
 
@@ -116,14 +129,28 @@ func (t *TmuxSession) StopControlMode() error {
 	// in readControlModeOutput() knows not to fire the onExit callback.
 	t.intentionalStop.Store(true)
 
-	// Signal termination
+	// Signal termination — this causes runCMSender to drain its queues and exit.
 	if t.controlModeDone != nil {
 		close(t.controlModeDone)
 		t.controlModeDone = nil
 	}
 
-	// Close stdin to signal tmux to exit. cmdSendMu prevents a concurrent
-	// sendCMCommand from writing to the pipe after we nil it.
+	// Wait for the sender goroutine to exit before closing stdin. The sender
+	// owns all stdin writes; closing stdin underneath it would panic or corrupt state.
+	if t.cmSenderExited != nil {
+		select {
+		case <-t.cmSenderExited:
+		case <-time.After(2 * time.Second):
+			log.WarningLog.Printf("CM sender goroutine did not exit in time for session '%s'", t.sanitizedName)
+		}
+		t.cmSenderExited = nil
+	}
+
+	// Nil out send queues so cmEnabled() returns false immediately.
+	t.highPriSendCh = nil
+	t.normPriSendCh = nil
+
+	// Close stdin to signal tmux to exit.
 	t.cmdSendMu.Lock()
 	if t.controlModeStdin != nil {
 		t.controlModeStdin.Close()
@@ -397,32 +424,99 @@ func (t *TmuxSession) processControlModeLine(line string) {
 	}
 }
 
-// sendCMCommand writes a tmux command over the control mode stdin pipe and waits
-// for the corresponding %begin/%end response. Returns the response body or an error.
+// runCMSender is the single goroutine that owns all stdin writes to the control mode
+// process. It drains highPriSendCh (user input) before touching normPriSendCh
+// (background polling / resize), giving interactive keystrokes true queue-jumping
+// priority over background operations.
 //
-// args are joined with spaces and terminated with a newline. Format strings containing
-// spaces must be pre-quoted (e.g. "'#{pane_width} #{pane_height}'").
-//
-// Concurrent calls are safe: a dedicated mutex serializes the (enqueue + write) pair so
-// that tmux receives commands in the same order as response channels enter the FIFO queue.
-// If ctx is cancelled before the response arrives, sendCMCommand returns immediately;
-// the stale response channel remains in the queue until tmux delivers its response.
-func (t *TmuxSession) sendCMCommand(ctx context.Context, args ...string) (string, error) {
-	resultCh := make(chan cmdResult, 1)
+// doneCh is closed by StopControlMode to trigger shutdown. The goroutine closes
+// cmSenderExited when it returns so that StopControlMode can safely close stdin.
+func (t *TmuxSession) runCMSender(doneCh <-chan struct{}, stdin io.WriteCloser) {
+	defer close(t.cmSenderExited)
 
-	t.cmdSendMu.Lock()
-	if t.controlModeStdin == nil {
-		t.cmdSendMu.Unlock()
+	process := func(req cmSendReq) {
+		// Enqueue the response channel BEFORE writing so the reader goroutine
+		// never encounters a %begin with no matching pending channel.
+		t.controlModeSubMu.Lock()
+		t.pendingCmds = append(t.pendingCmds, req.resultCh)
+		t.controlModeSubMu.Unlock()
+
+		if _, err := fmt.Fprintf(stdin, "%s\n", req.line); err != nil {
+			// Write failed — the resultCh is orphaned in pendingCmds and will absorb
+			// the next tmux response out-of-order. This is extremely rare (stdin close
+			// during shutdown). No-op: StopControlMode is about to drain pendingCmds.
+			if log.DebugLog != nil {
+				log.DebugLog.Printf("CM sender write error for session '%s': %v", t.sanitizedName, err)
+			}
+		}
+	}
+
+	drain := func(err error) {
+		for {
+			select {
+			case req := <-t.highPriSendCh:
+				select {
+				case req.resultCh <- cmdResult{err: err}:
+				default:
+				}
+			case req := <-t.normPriSendCh:
+				select {
+				case req.resultCh <- cmdResult{err: err}:
+				default:
+				}
+			default:
+				return
+			}
+		}
+	}
+
+	for {
+		// Always drain high-priority queue first before considering normal-priority.
+		select {
+		case req := <-t.highPriSendCh:
+			process(req)
+			continue
+		default:
+		}
+
+		select {
+		case req := <-t.highPriSendCh:
+			process(req)
+		case req := <-t.normPriSendCh:
+			process(req)
+		case <-doneCh:
+			drain(ErrControlModeStopped)
+			return
+		}
+	}
+}
+
+// sendCMCommand enqueues a normal-priority command and waits for its response.
+// Background operations (capture-pane, resize, display-message) use this path.
+// User input uses sendCMCommandHighPri so it always jumps ahead in the queue.
+func (t *TmuxSession) sendCMCommand(ctx context.Context, args ...string) (string, error) {
+	return t.enqueueCMCommand(ctx, t.normPriSendCh, args...)
+}
+
+// sendCMCommandHighPri enqueues a high-priority command that is always processed
+// before any pending normal-priority commands. Used for interactive send-keys.
+func (t *TmuxSession) sendCMCommandHighPri(ctx context.Context, args ...string) (string, error) {
+	return t.enqueueCMCommand(ctx, t.highPriSendCh, args...)
+}
+
+// enqueueCMCommand is the shared implementation: builds the request, sends it to
+// the appropriate priority channel, then waits for the response or ctx cancellation.
+func (t *TmuxSession) enqueueCMCommand(ctx context.Context, ch chan cmSendReq, args ...string) (string, error) {
+	if ch == nil {
 		return "", ErrControlModeNotRunning
 	}
-	t.controlModeSubMu.Lock()
-	t.pendingCmds = append(t.pendingCmds, resultCh)
-	t.controlModeSubMu.Unlock()
-	_, writeErr := fmt.Fprintf(t.controlModeStdin, "%s\n", strings.Join(args, " "))
-	t.cmdSendMu.Unlock()
+	resultCh := make(chan cmdResult, 1)
+	req := cmSendReq{line: strings.Join(args, " "), resultCh: resultCh}
 
-	if writeErr != nil {
-		return "", fmt.Errorf("write to control mode stdin: %w", writeErr)
+	select {
+	case ch <- req:
+	case <-ctx.Done():
+		return "", ctx.Err()
 	}
 
 	select {
@@ -530,4 +624,19 @@ func (t *TmuxSession) UnsubscribeFromControlModeUpdates(subscriberID string) {
 		close(ch)
 		delete(t.controlModeSubscribers, subscriberID)
 	}
+}
+
+// SendInputViaControlMode sends raw bytes to the active pane through the already-open
+// control mode connection. Uses the HIGH-PRIORITY queue so user keystrokes always
+// jump ahead of any queued background operations (capture-pane, resize, etc.).
+func (t *TmuxSession) SendInputViaControlMode(ctx context.Context, data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+	args := []string{"send-keys", "-t", t.sanitizedName, "-H"}
+	for _, b := range data {
+		args = append(args, fmt.Sprintf("%02x", b))
+	}
+	_, err := t.sendCMCommandHighPri(ctx, args...)
+	return err
 }

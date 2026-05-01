@@ -2041,6 +2041,15 @@ func (i *Instance) SendKeys(keys string) error {
 	return err
 }
 
+// SendInputViaControlMode sends raw bytes through the existing control mode connection,
+// avoiding the subprocess spawn overhead and timeout risk of exec.CommandContext.
+func (i *Instance) SendInputViaControlMode(ctx context.Context, data []byte) error {
+	if !i.started || i.Status == Paused {
+		return fmt.Errorf("cannot send input to instance that has not been started or is paused")
+	}
+	return i.tmuxManager.SendInputViaControlMode(ctx, data)
+}
+
 // ==== Claude Session Management ====
 // handleClaudeSessionReattachment and related helpers for Claude Code session persistence.
 

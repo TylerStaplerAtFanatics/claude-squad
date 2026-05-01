@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"fmt"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/tmux"
@@ -176,6 +177,14 @@ func (tm *TmuxProcessManager) SendKeys(keys string) (int, error) {
 		return 0, fmt.Errorf("tmux session not initialized")
 	}
 	return tm.session.SendKeys(keys)
+}
+
+// SendInputViaControlMode sends raw bytes through the existing control mode connection.
+func (tm *TmuxProcessManager) SendInputViaControlMode(ctx context.Context, data []byte) error {
+	if tm.session == nil {
+		return fmt.Errorf("tmux session not initialized")
+	}
+	return tm.session.SendInputViaControlMode(ctx, data)
 }
 
 // SetWindowSize resizes the tmux window to the given columns and rows.
