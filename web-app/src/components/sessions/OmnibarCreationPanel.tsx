@@ -77,6 +77,7 @@ export interface OmnibarCreationPanelProps {
   onSubmit: () => void;
   onCancel: () => void;
   worktrees: WorktreeEntry[];
+  isWorktreesLoading?: boolean;
   isSubmitting: boolean;
   canSubmit: boolean;
   error: string | null;
@@ -97,6 +98,7 @@ export function OmnibarCreationPanel({
   onSubmit,
   onCancel,
   worktrees,
+  isWorktreesLoading = false,
   isSubmitting,
   canSubmit,
   error,
@@ -199,14 +201,18 @@ export function OmnibarCreationPanel({
             <label className={labelClass} htmlFor="omnibar-existing-worktree">
               Existing Worktree Path *
             </label>
-            {worktrees.length > 0 ? (
+            {isWorktreesLoading ? (
+              <select id="omnibar-existing-worktree" className={selectClass} disabled>
+                <option>Loading worktrees…</option>
+              </select>
+            ) : worktrees.length > 0 ? (
               <select
                 id="omnibar-existing-worktree"
                 className={selectClass}
                 value={existingWorktree}
                 onChange={(e) => setFormField("existingWorktree", e.target.value)}
               >
-                <option value="">Select a worktree...</option>
+                <option value="">Select a worktree…</option>
                 {worktrees.map((wt) => (
                   <option key={wt.path} value={wt.path}>
                     {wt.branch ? `${wt.branch} (${wt.path})` : wt.path}
@@ -224,7 +230,9 @@ export function OmnibarCreationPanel({
               />
             )}
             <span className={hint}>
-              {worktrees.length > 0
+              {isWorktreesLoading
+                ? "Scanning for git worktrees…"
+                : worktrees.length > 0
                 ? "Select an existing git worktree for this repository"
                 : "Absolute path to an existing git worktree"}
             </span>

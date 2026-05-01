@@ -170,9 +170,16 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
 
   const { getMatching: getHistoryMatching, getAll: getAllHistory, save: saveHistory } = usePathHistory();
 
-  // Worktree suggestions for the "Use Existing Worktree" mode
-  const repoPathForWorktrees = isPathInput ? (detection?.localPath ?? "") : "";
-  const { worktrees } = useWorktreeSuggestions(repoPathForWorktrees, {
+  // Worktree suggestions for the "Use Existing Worktree" mode.
+  // Prefer the pre-selected repo path from creation_with_repo mode; fall back to the
+  // live-detected local path when the user typed a path directly in the input.
+  const repoPathForWorktrees =
+    modeState.type === "creation_with_repo" && modeState.path
+      ? modeState.path
+      : isPathInput
+      ? (detection?.localPath ?? "")
+      : "";
+  const { worktrees, isLoading: isWorktreesLoading } = useWorktreeSuggestions(repoPathForWorktrees, {
     enabled: sessionType === "existing_worktree" && !!repoPathForWorktrees,
   });
 
@@ -799,6 +806,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
             onSubmit={handleSubmit}
             onCancel={onClose}
             worktrees={worktrees}
+            isWorktreesLoading={isWorktreesLoading}
             isSubmitting={isSubmitting}
             canSubmit={canSubmit}
             error={error}
