@@ -848,15 +848,16 @@ Sessions run in isolated tmux sessions for:
 
 ## Pull Request Requirements
 
-All PRs to `main` must have exactly one semver label or the `Label Check` CI job will fail:
+Use [Conventional Commits](https://www.conventionalcommits.org/) in commit messages — release-please reads these to build the changelog and determine the next version automatically:
 
-| Label | When to use |
+| Commit prefix | Effect |
 |---|---|
-| `patch` | Bug fixes, dependency updates, documentation |
-| `minor` | New features, non-breaking enhancements |
-| `major` | Breaking changes, major redesigns |
+| `fix:` | Patch version bump |
+| `feat:` | Minor version bump |
+| `feat!:` or `BREAKING CHANGE:` in footer | Major version bump |
+| `chore:`, `docs:`, `refactor:`, `test:` | No version bump (hidden from changelog) |
 
-Add via: `gh pr edit <number> --add-label "patch"` (create label first if it doesn't exist: `gh label create "patch" --color "e4e669"`)
+Releases are **not automatic**. release-please opens a "Release PR" that accumulates changes. Merge it whenever you're ready to ship. The merge creates the tag and triggers GoReleaser.
 
 ## Adding New Features
 
