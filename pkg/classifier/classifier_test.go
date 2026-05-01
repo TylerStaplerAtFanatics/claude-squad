@@ -1481,9 +1481,149 @@ func TestClassify_GhApi_Escalate(t *testing.T) {
 	ctx := ClassificationContext{}
 
 	cmds := []string{
+		// generic REST call with no read indicator
 		"gh api repos/owner/repo/issues",
+		// graphql with unrecognized query content still escalates
 		"gh api graphql -f query='...'",
-		"gh api repos/owner/repo/pulls/1/comments/1/replies -f body='Fixed'",
+		// explicit POST — escalated by the 515 guard even though --jq is present
+		"gh api repos/owner/repo/issues -X POST --field title=foo --jq '.id'",
+		// PUT write
+		"gh api repos/owner/repo/branches/main/protection -X PUT --input /tmp/rules.json",
+		// DELETE
+		"gh api repos/owner/repo/git/refs/heads/stale-branch -X DELETE",
+		// PATCH
+		"gh api repos/owner/repo/pulls/1 --method PATCH --field state=closed",
+		// explicit body field (REST POST comment without -X flag — gh infers POST from -f body)
+		"gh api repos/owner/repo/issues/1/comments --field body='comment text'",
+		// --input flag (reads body from file → write operation)
+		"gh api repos/owner/repo/milestones --input /tmp/milestone.json",
+		// -f with --jq: 515 guard catches -f before the 510 --jq allow fires
+		"gh api repos/owner/repo/issues -f title='new issue' --jq '.id'",
+		// --field with --paginate: same bypass attempt, 515 fires first
+		"gh api repos/owner/repo/pulls --field state=closed --paginate",
+		// -F (multipart) field combined with --jq
+		"gh api repos/owner/repo/releases -F tag_name=v1.0 --jq '.id'",
+		// staged graphql: -f query=$(cat /tmp/...) — caught by 515 -f guard
+		`gh api graphql -f query="$(cat /tmp/review-threads.graphql)" -f owner="myorg" -f repo="myrepo" -F pr=42`,
+		// replies endpoint with DELETE method — 525 guard fires before 520 allow
+		"gh api repos/owner/repo/pulls/1/comments/42/replies -X DELETE",
+		// replies endpoint with PUT method
+		"gh api repos/owner/repo/pulls/1/comments/42/replies --method PUT -f body='updated'",
+		// replies endpoint with --input
+		"gh api repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies --input /tmp/reply.json",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != Escalate {
+			t.Errorf("cmd %q: expected Escalate, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_GhApiReadOnly_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		// --jq: common analytics pattern — actions runs
+		"gh api repos/owner/repo/actions/runs --jq '.workflow_runs[:5] | .[] | {name, conclusion}'",
+		// --jq: PR head SHA
+		"gh api repos/owner/repo/pulls/37 --jq '.head.sha'",
+		// --jq: workflow runs filtered by branch
+		"gh api repos/owner/repo/actions/runs --jq '[.workflow_runs[] | select(.head_branch == \"main\")] | .[0]'",
+		// --jq: specific run jobs
+		"gh api repos/owner/repo/actions/runs/12345/jobs --jq '.jobs[] | \"\\(.name): \\(.conclusion)\"'",
+		// --jq: repo file contents (GitHub API returns base64-encoded)
+		"gh api repos/JetBrains/kotlin/contents/CHANGELOG.md --jq '.content'",
+		// --jq: release body
+		"gh api repos/JetBrains/kotlin/releases/tags/v2.3.0 --jq '.body'",
+		// --jq: issue comments
+		"gh api repos/owner/repo/issues/60/comments --jq '.[] | {id, body}'",
+		// --jq: commit check-runs
+		"gh api repos/owner/repo/commits/abc123/check-runs --jq '.check_runs[] | {name, conclusion}'",
+		// --jq: workflows list
+		"gh api repos/owner/repo/actions/workflows --jq '.workflows[] | {name, state, id}'",
+		// --jq: authenticated user (short form)
+		"gh api user --jq '.login'",
+		// --jq: leading slash form
+		"gh api /repos/owner/repo/actions/runs/12345 --jq '{name, status}'",
+		// --paginate: reading all PR comments
+		"gh api repos/owner/repo/pulls/23/comments --paginate",
+		// --paginate with jq filter
+		"gh api repos/owner/repo/issues --paginate --jq '.[] | {number, title}'",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_GhApiPRReviewWorkflow_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		// posting a reply to a review comment (literal path)
+		"gh api repos/owner/repo/pulls/1/comments/42/replies -f body='Fixed'",
+		// posting a reply with shell variables (as the skill uses them)
+		"gh api repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies -f body='Good catch, addressed.'",
+		// resolveReviewThread mutation (inline, as the skill uses it)
+		// This uses -f query=... so it must be at 520 above the 515 -f guard.
+		"gh api graphql -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }' -f id='RT_kwDOAbc123'",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_Base64_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"base64 -d",
+		"base64 /tmp/file.b64",
+		"base64 --decode /tmp/encoded.txt",
+		"base64",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_Base64FileOutput_Escalate(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		// BSD/macOS: -o writes decoded output to a file instead of stdout
+		"base64 -o /tmp/decoded.bin /tmp/encoded.b64",
+		// long form
+		"base64 --output /tmp/decoded.bin /tmp/encoded.b64",
 	}
 	for _, cmd := range cmds {
 		payload := PermissionRequestPayload{
