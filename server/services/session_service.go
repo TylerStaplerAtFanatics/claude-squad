@@ -967,10 +967,17 @@ func (s *SessionService) WatchSessions(
 	req *connect.Request[sessionv1.WatchSessionsRequest],
 	stream *connect.ServerStream[sessionv1.SessionEvent],
 ) error {
-	// Send initial snapshot of all sessions
-	instances, err := s.loadInstancesWithWiring()
-	if err != nil {
-		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
+	// Send initial snapshot using in-memory poller cache — avoids a full SQLite
+	// scan on every new WatchSessions connection (same approach as ListSessions).
+	var instances []*session.Instance
+	if s.reviewQueuePoller != nil {
+		instances = s.reviewQueuePoller.GetInstances()
+	} else {
+		var err error
+		instances, err = s.loadInstancesWithWiring()
+		if err != nil {
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
+		}
 	}
 
 	// Apply optional filters from request
@@ -1124,24 +1131,30 @@ func (s *SessionService) StreamTerminal(
 			}
 		}()
 
-		buf := make([]byte, 1024) // 1KB chunks as per task requirements
+		buf := make([]byte, 32*1024)
 		for {
+			// Block until unpaused rather than spinning.
+			if ptyPaused {
+				select {
+				case <-streamCtx.Done():
+					return
+				case ptyPaused = <-pauseCh:
+					if !ptyPaused {
+						log.InfoLog.Printf("[FlowControl] PTY reading RESUMED for session %s", initialMsg.SessionId)
+					}
+				}
+				continue
+			}
+
 			select {
 			case <-streamCtx.Done():
 				return
 			case paused := <-pauseCh:
-				// Update pause state
 				ptyPaused = paused
 				if paused {
 					log.InfoLog.Printf("[FlowControl] PTY reading PAUSED for session %s", initialMsg.SessionId)
-				} else {
-					log.InfoLog.Printf("[FlowControl] PTY reading RESUMED for session %s", initialMsg.SessionId)
 				}
 			default:
-				// Skip PTY reading when paused (backpressure from client)
-				if ptyPaused {
-					continue
-				}
 
 				n, readErr := ptyFile.Read(buf)
 				if n > 0 {
@@ -2172,6 +2185,12 @@ func (s *SessionService) SearchFiles(
 	req *connect.Request[sessionv1.SearchFilesRequest],
 ) (*connect.Response[sessionv1.SearchFilesResponse], error) {
 	return s.fileSvc.SearchFiles(ctx, req)
+}
+
+// GetFileService returns the underlying FileService so callers can register
+// additional HTTP handlers (e.g. the raw file download endpoint).
+func (s *SessionService) GetFileService() *FileService {
+	return s.fileSvc
 }
 
 // ─── Prompt History ───────────────────────────────────────────────────────────

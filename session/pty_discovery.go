@@ -2,6 +2,7 @@ package session
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,175 @@ import (
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/tmux"
 )
+
+// paneEntry holds the result of one row from `tmux list-panes -a`.
+type paneEntry struct {
+	pty string
+	pid int
+}
+
+// batchPTYInfo fetches pane_tty and pane_pid for all sessions in one tmux call.
+// Returns a map keyed by session name; only the first pane per session is kept.
+// socket is the tmux server socket name (empty = default server).
+func batchPTYInfo(socket string) map[string]paneEntry {
+	args := []string{"list-panes", "-a", "-F", "#{session_name} #{pane_tty} #{pane_pid}"}
+	if socket != "" {
+		args = append([]string{"-L", socket}, args...)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "tmux", args...)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	result := make(map[string]paneEntry)
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) != 3 {
+			continue
+		}
+		sessionName := parts[0]
+		if _, exists := result[sessionName]; exists {
+			continue // keep first pane per session
+		}
+		pid, err := strconv.Atoi(parts[2])
+		if err != nil {
+			continue
+		}
+		result[sessionName] = paneEntry{pty: parts[1], pid: pid}
+	}
+	return result
+}
+
+// batchProcessStates runs a single `ps` invocation for all given PIDs and returns
+// their PTYStatus. Missing PIDs (exited processes) map to PTYError.
+func batchProcessStates(pids []int) map[int]PTYStatus {
+	if len(pids) == 0 {
+		return nil
+	}
+	pidStrs := make([]string, len(pids))
+	for i, p := range pids {
+		pidStrs[i] = strconv.Itoa(p)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ps", "-p", strings.Join(pidStrs, ","), "-o", "pid=,state=")
+	output, err := cmd.Output()
+	result := make(map[int]PTYStatus, len(pids))
+	if err == nil {
+		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) < 2 {
+				continue
+			}
+			pid, err := strconv.Atoi(fields[0])
+			if err != nil {
+				continue
+			}
+			result[pid] = parseProcessState(fields[1])
+		}
+	}
+	// Fill missing PIDs (ps omits exited processes).
+	for _, p := range pids {
+		if _, ok := result[p]; !ok {
+			result[p] = PTYError
+		}
+	}
+	return result
+}
+
+// parseProcessState maps a single-character ps state to PTYStatus.
+func parseProcessState(state string) PTYStatus {
+	if len(state) == 0 {
+		return PTYError
+	}
+	switch state[0] {
+	case 'R':
+		return PTYBusy
+	case 'S', 'I':
+		return PTYReady
+	case 'D':
+		return PTYBusy
+	case 'Z':
+		return PTYError
+	case 'T':
+		return PTYIdle
+	default:
+		return PTYReady
+	}
+}
+
+// batchPaneActivity returns the last-activity timestamp for each session (first pane wins)
+// by running a single `tmux list-panes -a` call. The tmux format #{pane_last_activity}
+// is a Unix timestamp updated whenever the pane produces output. Use it to detect whether
+// a session has produced new output since the last capture, without spawning capture-pane.
+// Returns nil when tmux is unavailable.
+func batchPaneActivity(socket string) map[string]time.Time {
+	args := []string{"list-panes", "-a", "-F", "#{session_name} #{pane_last_activity}"}
+	if socket != "" {
+		args = append([]string{"-L", socket}, args...)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "tmux", args...)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	result := make(map[string]time.Time)
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) != 2 {
+			continue
+		}
+		sessionName := parts[0]
+		if _, exists := result[sessionName]; exists {
+			continue // keep first pane per session
+		}
+		ts, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		result[sessionName] = time.Unix(ts, 0)
+	}
+	return result
+}
+
+// batchIsClaudeProcess checks which PIDs are running a Claude process in one ps call.
+// Returns a set of PIDs whose command line contains "claude".
+func batchIsClaudeProcess(pids []int) map[int]bool {
+	if len(pids) == 0 {
+		return nil
+	}
+	pidStrs := make([]string, len(pids))
+	for i, p := range pids {
+		pidStrs[i] = strconv.Itoa(p)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ps", "-p", strings.Join(pidStrs, ","), "-o", "pid=,command=")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	result := make(map[int]bool, len(pids))
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		// Format: "  PID command..."  - split on first space boundary after pid
+		line = strings.TrimSpace(line)
+		spaceIdx := strings.IndexByte(line, ' ')
+		if spaceIdx < 0 {
+			continue
+		}
+		pid, err := strconv.Atoi(line[:spaceIdx])
+		if err != nil {
+			continue
+		}
+		cmdLine := strings.ToLower(line[spaceIdx+1:])
+		result[pid] = strings.Contains(cmdLine, "claude")
+	}
+	return result
+}
 
 // PTYStatus represents the current state of a PTY
 type PTYStatus int
@@ -235,27 +405,37 @@ func (pd *PTYDiscovery) monitorLoop() {
 	}
 }
 
-// discoverPTYs performs the actual PTY discovery
+// discoverPTYs performs the actual PTY discovery.
+// The default-server pane info is fetched once and shared across all discovery methods
+// to avoid redundant tmux subprocess calls.
 func (pd *PTYDiscovery) discoverPTYs() ([]*PTYConnection, error) {
 	connections := make([]*PTYConnection, 0)
 
-	// Method 1: Discover from squad-managed sessions
-	squadPTYs := pd.discoverSquadPTYs()
+	// Fetch all default-server pane info in one shot; shared by methods 1 and 2.
+	defaultPaneInfo := batchPTYInfo("")
+
+	// Method 1: Discover from squad-managed sessions.
+	squadPTYs := pd.discoverSquadPTYsWithCache(defaultPaneInfo)
 	connections = append(connections, squadPTYs...)
 
-	// Method 2: Discover orphaned Claude processes in staplersquad_ prefixed sessions
-	orphanedPTYs := pd.discoverOrphanedPTYs()
+	// Build the set of managed PIDs so method 2 can skip them cheaply.
+	managedPIDs := make(map[int]bool, len(squadPTYs))
+	for _, c := range squadPTYs {
+		managedPIDs[c.PID] = true
+	}
+
+	// Method 2: Discover orphaned Claude processes in staplersquad_ prefixed sessions.
+	orphanedPTYs := pd.discoverOrphanedPTYsWithCache(defaultPaneInfo, managedPIDs)
 	connections = append(connections, orphanedPTYs...)
 
-	// Method 3: Discover external Claude instances if enabled
+	// Method 3: Discover external Claude instances if enabled.
 	if pd.config.ShouldDiscoverExternal() {
-		// Discover from default tmux server
-		externalPTYs := pd.discoverExternalClaude("")
+		externalPTYs := pd.discoverExternalClaude("", defaultPaneInfo, managedPIDs)
 		connections = append(connections, externalPTYs...)
 
-		// Discover from additional specified sockets
 		for _, socket := range pd.config.ExternalSockets {
-			morePTYs := pd.discoverExternalClaude(socket)
+			socketPaneInfo := batchPTYInfo(socket)
+			morePTYs := pd.discoverExternalClaude(socket, socketPaneInfo, managedPIDs)
 			connections = append(connections, morePTYs...)
 		}
 	}
@@ -263,82 +443,102 @@ func (pd *PTYDiscovery) discoverPTYs() ([]*PTYConnection, error) {
 	return connections, nil
 }
 
-// discoverSquadPTYs finds PTYs from managed sessions
-func (pd *PTYDiscovery) discoverSquadPTYs() []*PTYConnection {
-	connections := make([]*PTYConnection, 0)
+func (pd *PTYDiscovery) discoverSquadPTYsWithCache(paneInfoMap map[string]paneEntry) []*PTYConnection {
+	// paneInfoMap may be nil (e.g. tmux not running); treat as empty.
 
+	type pendingEntry struct {
+		sessionName     string
+		tmuxSessionName string
+		pty             string
+		pid             int
+		instance        *Instance
+	}
+
+	var pending []pendingEntry
 	for sessionName, instance := range pd.sessionMap {
 		if instance.Status != Running && instance.Status != Ready {
 			continue
 		}
-
-		// Get PTY from instance (uses private tmuxSession field via GetTmuxSessionName)
-		pty, pid, err := pd.getPTYForInstance(instance)
-		if err != nil {
-			log.DebugLog.Printf("Failed to get PTY for session %s: %v", sessionName, err)
+		tmuxName := tmux.ToStaplerSquadTmuxName(instance.Title)
+		if paneInfoMap == nil {
 			continue
 		}
+		info, ok := paneInfoMap[tmuxName]
+		if !ok {
+			log.DebugLog.Printf("No pane info found for session %s (tmux name: %s)", sessionName, tmuxName)
+			continue
+		}
+		pending = append(pending, pendingEntry{
+			sessionName:     sessionName,
+			tmuxSessionName: tmuxName,
+			pty:             info.pty,
+			pid:             info.pid,
+			instance:        instance,
+		})
+	}
 
-		conn := &PTYConnection{
-			Path:            pty,
-			PID:             pid,
-			Command:         instance.Program, // Use actual program name
-			SessionName:     sessionName,
-			Status:          pd.detectPTYStatus(pty, pid),
+	// Single ps call gets all process states.
+	pids := make([]int, len(pending))
+	for i, p := range pending {
+		pids[i] = p.pid
+	}
+	states := batchProcessStates(pids)
+
+	connections := make([]*PTYConnection, 0, len(pending))
+	for _, p := range pending {
+		status := PTYError
+		if states != nil {
+			status = states[p.pid]
+		}
+		connections = append(connections, &PTYConnection{
+			Path:            p.pty,
+			PID:             p.pid,
+			Command:         p.instance.Program,
+			SessionName:     p.sessionName,
+			Status:          status,
 			LastActivity:    time.Now(),
 			IsManaged:       true,
-			TmuxSocket:      instance.TmuxServerSocket,
-			TmuxSessionName: tmux.ToStaplerSquadTmuxName(instance.Title),
+			TmuxSocket:      p.instance.TmuxServerSocket,
+			TmuxSessionName: p.tmuxSessionName,
 			CanAttach:       true,
 			CanDestroy:      true,
 			Owner:           "squad",
-		}
-
-		connections = append(connections, conn)
+		})
 	}
-
 	return connections
 }
 
-// getPTYForInstance gets the PTY from an Instance using tmux's built-in info
-func (pd *PTYDiscovery) getPTYForInstance(instance *Instance) (string, int, error) {
-	// Get PTY info directly from tmux - this is cross-platform and more reliable
-	// than trying to resolve file descriptors
-	// Generate tmux session name from instance title using the same sanitization logic
-	tmuxSession := tmux.ToStaplerSquadTmuxName(instance.Title)
-	return pd.getPTYInfoFromTmux(tmuxSession)
-}
-
-// getPTYInfoFromTmux gets both PTY path and PID from tmux in one call
-// This is cross-platform and works on Linux, macOS, and BSD systems
+// getPTYInfoFromTmux gets PTY path and PID from tmux for a single session.
+// Used as a fallback when no batch pane info is available.
 func (pd *PTYDiscovery) getPTYInfoFromTmux(sessionName string) (string, int, error) {
-	// Use tmux's display-message to get both PTY device and PID
-	// #{pane_tty} gives us /dev/pts/X (Linux) or /dev/ttysXXX (macOS)
-	// #{pane_pid} gives us the process ID
-	cmd := exec.Command("tmux", "display-message", "-p", "-t", sessionName,
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "tmux", "display-message", "-p", "-t", sessionName,
 		"#{pane_tty}:#{pane_pid}")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to get tmux pane info: %w", err)
 	}
-
 	parts := strings.Split(strings.TrimSpace(string(output)), ":")
 	if len(parts) != 2 {
 		return "", 0, fmt.Errorf("unexpected tmux output format: %s", string(output))
 	}
-
-	ptyPath := parts[0]
 	pid, err := strconv.Atoi(parts[1])
 	if err != nil {
 		return "", 0, fmt.Errorf("invalid PID '%s': %w", parts[1], err)
 	}
-
-	return ptyPath, pid, nil
+	return parts[0], pid, nil
 }
 
-// discoverOrphanedPTYs finds unmanaged Claude processes in stapler-squad tmux sessions
-// This only discovers Claude processes running in tmux sessions with the stapler-squad prefix
+// discoverOrphanedPTYs finds unmanaged Claude processes in stapler-squad tmux sessions.
+// Uses batched subprocess calls; accepts a precomputed managedPIDs set to avoid O(n²) work.
+// paneInfoMap is the result of a prior batchPTYInfo("") call (may be nil).
+// managedPIDs is the set of PIDs already accounted for by discoverSquadPTYs (may be nil).
 func (pd *PTYDiscovery) discoverOrphanedPTYs() []*PTYConnection {
+	return pd.discoverOrphanedPTYsWithCache(nil, nil)
+}
+
+func (pd *PTYDiscovery) discoverOrphanedPTYsWithCache(paneInfoMap map[string]paneEntry, managedPIDs map[int]bool) []*PTYConnection {
 	connections := make([]*PTYConnection, 0)
 
 	// Collect session names: prefer the injected SessionLister to avoid exec forks.
@@ -349,11 +549,11 @@ func (pd *PTYDiscovery) discoverOrphanedPTYs() []*PTYConnection {
 			sessionNames = append(sessionNames, name)
 		}
 	} else {
-		// Fallback: exec tmux list-sessions directly.
-		cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "tmux", "list-sessions", "-F", "#{session_name}")
 		output, err := cmd.Output()
 		if err != nil {
-			// No tmux sessions found (normal case)
 			return connections
 		}
 		scanner := bufio.NewScanner(strings.NewReader(string(output)))
@@ -362,71 +562,83 @@ func (pd *PTYDiscovery) discoverOrphanedPTYs() []*PTYConnection {
 		}
 	}
 
+	// Filter to prefixed sessions, then collect PIDs using the pre-fetched pane map.
+	type candidate struct {
+		sessionName string
+		pty         string
+		pid         int
+	}
+	var candidates []candidate
 	for _, sessionName := range sessionNames {
-
-		// Only check sessions with stapler-squad prefix (also accept legacy claudesquad_ for migration)
 		if !strings.HasPrefix(sessionName, "staplersquad_") && !strings.HasPrefix(sessionName, "claudesquad_") {
 			continue
 		}
-
-		// Get PTY info for this tmux session
-		pty, pid, err := pd.getPTYInfoFromTmux(sessionName)
-		if err != nil {
+		var info paneEntry
+		if paneInfoMap != nil {
+			var ok bool
+			info, ok = paneInfoMap[sessionName]
+			if !ok {
+				continue
+			}
+		} else {
+			// Fallback: individual tmux call (only when no batch map provided).
+			pty, pid, err := pd.getPTYInfoFromTmux(sessionName)
+			if err != nil {
+				continue
+			}
+			info = paneEntry{pty: pty, pid: pid}
+		}
+		if managedPIDs != nil && managedPIDs[info.pid] {
 			continue
 		}
-
-		// Check if this PID is already managed by a squad session
-		if pd.isPIDManaged(pid) {
-			continue
-		}
-
-		// Check if the process is actually Claude
-		if !pd.isClaudeProcess(pid) {
-			continue
-		}
-
-		conn := &PTYConnection{
-			Path:            pty,
-			PID:             pid,
-			Command:         "claude",
-			SessionName:     "",
-			Status:          pd.detectPTYStatus(pty, pid),
-			LastActivity:    time.Now(),
-			IsManaged:       false,
-			TmuxSocket:      "", // Default tmux server
-			TmuxSessionName: sessionName,
-			CanAttach:       pd.config.CanAttachExternal(),
-			CanDestroy:      false, // Never allow destroying external instances
-			Owner:           "external",
-		}
-
-		connections = append(connections, conn)
+		candidates = append(candidates, candidate{sessionName, info.pty, info.pid})
 	}
 
+	if len(candidates) == 0 {
+		return connections
+	}
+
+	// Single ps call to check which PIDs are Claude processes.
+	pids := make([]int, len(candidates))
+	for i, c := range candidates {
+		pids[i] = c.pid
+	}
+	isClaudeMap := batchIsClaudeProcess(pids)
+	states := batchProcessStates(pids)
+
+	for _, c := range candidates {
+		if isClaudeMap != nil && !isClaudeMap[c.pid] {
+			continue
+		}
+		status := PTYError
+		if states != nil {
+			status = states[c.pid]
+		}
+		connections = append(connections, &PTYConnection{
+			Path:            c.pty,
+			PID:             c.pid,
+			Command:         "claude",
+			SessionName:     "",
+			Status:          status,
+			LastActivity:    time.Now(),
+			IsManaged:       false,
+			TmuxSocket:      "",
+			TmuxSessionName: c.sessionName,
+			CanAttach:       pd.config.CanAttachExternal(),
+			CanDestroy:      false,
+			Owner:           "external",
+		})
+	}
 	return connections
 }
 
-// isClaudeProcess checks if a PID is running Claude
-func (pd *PTYDiscovery) isClaudeProcess(pid int) bool {
-	// Get command line for this PID
-	cmd := exec.Command("ps", "-p", fmt.Sprintf("%d", pid), "-o", "command=")
-	output, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-
-	cmdLine := strings.ToLower(strings.TrimSpace(string(output)))
-	return strings.Contains(cmdLine, "claude")
-}
-
-// discoverExternalClaude discovers Claude instances from non-prefixed tmux sessions
-// This discovers Claude instances NOT managed by stapler-squad on the specified tmux server
-// socket: tmux server socket name (empty string = default server)
-func (pd *PTYDiscovery) discoverExternalClaude(socket string) []*PTYConnection {
+// discoverExternalClaude discovers Claude instances from non-prefixed tmux sessions.
+// paneInfoMap is a pre-fetched batch result for socket (nil = fetch individually as fallback).
+// managedPIDs is the set of PIDs already tracked; used to skip duplicates.
+func (pd *PTYDiscovery) discoverExternalClaude(socket string, paneInfoMap map[string]paneEntry, managedPIDs map[int]bool) []*PTYConnection {
 	connections := make([]*PTYConnection, 0)
 
-	// Collect session names.
-	// For the default socket (empty string) we can use the injected SessionLister when healthy.
+	// Collect session names via the registry (no exec) when possible.
 	var sessionNames []string
 	if socket == "" && pd.sessionLister != nil && pd.sessionLister.IsHealthy() {
 		m := pd.sessionLister.ListSessions()
@@ -434,16 +646,16 @@ func (pd *PTYDiscovery) discoverExternalClaude(socket string) []*PTYConnection {
 			sessionNames = append(sessionNames, name)
 		}
 	} else {
-		// Fallback: exec tmux list-sessions (with optional -L socket flag).
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		var cmd *exec.Cmd
 		if socket != "" {
-			cmd = exec.Command("tmux", "-L", socket, "list-sessions", "-F", "#{session_name}")
+			cmd = exec.CommandContext(ctx, "tmux", "-L", socket, "list-sessions", "-F", "#{session_name}")
 		} else {
-			cmd = exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
+			cmd = exec.CommandContext(ctx, "tmux", "list-sessions", "-F", "#{session_name}")
 		}
 		output, err := cmd.Output()
 		if err != nil {
-			// No tmux sessions found on this server (normal case)
 			return connections
 		}
 		scanner := bufio.NewScanner(strings.NewReader(string(output)))
@@ -452,61 +664,85 @@ func (pd *PTYDiscovery) discoverExternalClaude(socket string) []*PTYConnection {
 		}
 	}
 
+	type candidate struct {
+		sessionName string
+		pty         string
+		pid         int
+	}
+	var candidates []candidate
 	for _, sessionName := range sessionNames {
-
-		// Skip squad-managed sessions (they're handled by discoverSquadPTYs and discoverOrphanedPTYs)
 		if strings.HasPrefix(sessionName, pd.config.ManagedPrefix) {
 			continue
 		}
-
-		// Get PTY info for this tmux session
-		pty, pid, err := pd.getPTYInfoFromTmuxWithSocket(sessionName, socket)
-		if err != nil {
-			log.DebugLog.Printf("Failed to get PTY info for external session %s (socket: %s): %v", sessionName, socket, err)
+		var info paneEntry
+		if paneInfoMap != nil {
+			var ok bool
+			info, ok = paneInfoMap[sessionName]
+			if !ok {
+				continue
+			}
+		} else {
+			pty, pid, err := pd.getPTYInfoFromTmuxWithSocket(sessionName, socket)
+			if err != nil {
+				log.DebugLog.Printf("Failed to get PTY info for external session %s (socket: %s): %v", sessionName, socket, err)
+				continue
+			}
+			info = paneEntry{pty: pty, pid: pid}
+		}
+		if managedPIDs != nil && managedPIDs[info.pid] {
 			continue
 		}
+		candidates = append(candidates, candidate{sessionName, info.pty, info.pid})
+	}
 
-		// Check if this PID is already managed by a squad session
-		if pd.isPIDManaged(pid) {
+	if len(candidates) == 0 {
+		return connections
+	}
+
+	pids := make([]int, len(candidates))
+	for i, c := range candidates {
+		pids[i] = c.pid
+	}
+	isClaudeMap := batchIsClaudeProcess(pids)
+	states := batchProcessStates(pids)
+
+	for _, c := range candidates {
+		if isClaudeMap != nil && !isClaudeMap[c.pid] {
 			continue
 		}
-
-		// Check if the process is actually Claude
-		if !pd.isClaudeProcess(pid) {
-			continue
+		status := PTYError
+		if states != nil {
+			status = states[c.pid]
 		}
-
-		conn := &PTYConnection{
-			Path:            pty,
-			PID:             pid,
+		connections = append(connections, &PTYConnection{
+			Path:            c.pty,
+			PID:             c.pid,
 			Command:         "claude",
-			SessionName:     "", // External instances don't have squad session names
-			Status:          pd.detectPTYStatus(pty, pid),
+			SessionName:     "",
+			Status:          status,
 			LastActivity:    time.Now(),
 			IsManaged:       false,
 			TmuxSocket:      socket,
-			TmuxSessionName: sessionName,
+			TmuxSessionName: c.sessionName,
 			CanAttach:       pd.config.CanAttachExternal(),
-			CanDestroy:      false, // Never allow destroying external instances
+			CanDestroy:      false,
 			Owner:           "external",
-		}
-
-		connections = append(connections, conn)
+		})
 	}
-
 	return connections
 }
 
 // getPTYInfoFromTmuxWithSocket gets PTY path and PID from tmux with socket support
 // This is similar to getPTYInfoFromTmux but supports specifying a tmux server socket
 func (pd *PTYDiscovery) getPTYInfoFromTmuxWithSocket(sessionName string, socket string) (string, int, error) {
-	// Build command based on socket
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	var cmd *exec.Cmd
 	if socket != "" {
-		cmd = exec.Command("tmux", "-L", socket, "display-message", "-p", "-t", sessionName,
+		cmd = exec.CommandContext(ctx, "tmux", "-L", socket, "display-message", "-p", "-t", sessionName,
 			"#{pane_tty}:#{pane_pid}")
 	} else {
-		cmd = exec.Command("tmux", "display-message", "-p", "-t", sessionName,
+		cmd = exec.CommandContext(ctx, "tmux", "display-message", "-p", "-t", sessionName,
 			"#{pane_tty}:#{pane_pid}")
 	}
 
@@ -527,57 +763,6 @@ func (pd *PTYDiscovery) getPTYInfoFromTmuxWithSocket(sessionName string, socket 
 	}
 
 	return ptyPath, pid, nil
-}
-
-// isPIDManaged checks if a PID is already managed by squad
-func (pd *PTYDiscovery) isPIDManaged(pid int) bool {
-	for _, instance := range pd.sessionMap {
-		if instance.Status == Running || instance.Status == Ready {
-			// Get PTY for this instance and check PID
-			_, instancePID, err := pd.getPTYForInstance(instance)
-			if err == nil && instancePID == pid {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// detectPTYStatus detects the current status of a PTY
-// This is cross-platform and works on Linux, macOS, and BSD
-func (pd *PTYDiscovery) detectPTYStatus(ptyPath string, pid int) PTYStatus {
-	// Use ps command for cross-platform process state detection
-	// ps -p PID -o state= returns just the state character
-	cmd := exec.Command("ps", "-p", fmt.Sprintf("%d", pid), "-o", "state=")
-	output, err := cmd.Output()
-	if err != nil {
-		// Process doesn't exist or ps failed
-		return PTYError
-	}
-
-	state := strings.TrimSpace(string(output))
-	if len(state) == 0 {
-		return PTYError
-	}
-
-	// Parse first character of state (same across platforms)
-	// R = Running, S = Sleeping, I = Idle, T = Stopped, Z = Zombie
-	switch state[0] {
-	case 'R': // Running
-		return PTYBusy
-	case 'S': // Sleeping (interruptible) - waiting for input
-		return PTYReady
-	case 'I': // Idle (BSD/macOS specific)
-		return PTYReady
-	case 'D': // Disk sleep (uninterruptible)
-		return PTYBusy
-	case 'Z': // Zombie
-		return PTYError
-	case 'T': // Stopped
-		return PTYIdle
-	default:
-		return PTYReady
-	}
 }
 
 // categorizeConnection determines the category for a PTY connection

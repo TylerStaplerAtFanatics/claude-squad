@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -38,7 +39,7 @@ func newTimeoutCommandExecutor(timeout time.Duration) *timeoutCommandExecutor {
 }
 
 func (t *timeoutCommandExecutor) Command(name string, args ...string) *exec.Cmd {
-	return exec.Command(name, args...)
+	return exec.CommandContext(context.Background(), name, args...)
 }
 
 func (t *timeoutCommandExecutor) Output(cmd *exec.Cmd) ([]byte, error) {

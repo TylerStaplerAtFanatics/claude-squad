@@ -16,7 +16,12 @@ export const routes = {
   settingsUnfinished: "/settings/unfinished",
   login: "/login",
   account: "/account",
-  sessionDetail: (id: string) => `/sessions/${id}`,
+  sessionDetail: (id: string) => `/?session=${id}`,
+  newSessionFromWorktree: (worktreePath: string, branch: string, title?: string) => {
+    const params = new URLSearchParams({ worktree: worktreePath, branch });
+    if (title) params.set("title", title);
+    return `/?${params.toString()}`;
+  },
 } as const;
 
 export type Route = typeof routes;

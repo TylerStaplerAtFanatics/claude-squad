@@ -1,0 +1,22 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Release PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          # RELEASE_TOKEN (a PAT with repo+workflow scopes) is required so that
+          # the tag release-please pushes triggers the release.yml workflow.
+          # GITHUB_TOKEN pushes are blocked from triggering other workflows.
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}

@@ -84,11 +84,14 @@ func (ns *NotificationService) SendNotification(
 	// Use the session ID as the display name. LoadInstances() cannot be used here because
 	// it calls FromInstanceData() which calls Start() on every non-paused session --
 	// a catastrophic side-effect that restarts all sessions on each notification.
-	// The poller holds live instances; if the session exists there, use its title.
+	// The poller holds live instances; if the session exists there, use its title and
+	// resolve to the stable ID (UUID) so the client can match it precisely.
 	sessionName := req.Msg.SessionId // Default to session ID
+	resolvedSessionID := req.Msg.SessionId
 	if ns.reviewQueuePoller != nil {
 		if inst := ns.reviewQueuePoller.FindInstance(req.Msg.SessionId); inst != nil {
 			sessionName = inst.Title
+			resolvedSessionID = inst.GetStableID()
 		}
 	}
 
@@ -102,7 +105,7 @@ func (ns *NotificationService) SendNotification(
 
 	// Broadcast notification via event bus
 	event := events.NewNotificationEvent(
-		req.Msg.SessionId,
+		resolvedSessionID,
 		sessionName,
 		notificationID,
 		int32(req.Msg.NotificationType),
@@ -114,7 +117,8 @@ func (ns *NotificationService) SendNotification(
 	ns.eventBus.Publish(event)
 
 	log.InfoS("Notification sent", map[string]interface{}{
-		"session_id":        req.Msg.SessionId,
+		"session_id":        resolvedSessionID,
+		"requested_id":      req.Msg.SessionId,
 		"session_name":      sessionName,
 		"notification_type": req.Msg.NotificationType.String(),
 		"priority":          req.Msg.Priority.String(),

@@ -3,6 +3,7 @@ package vcs
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -35,8 +36,11 @@ func (j *JJClient) RepoPath() string {
 
 // run executes a jj command and returns the output
 func (j *JJClient) run(args ...string) (string, error) {
-	cmd := exec.Command("jj", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "jj", args...)
 	cmd.Dir = j.repoPath
+	cmd.WaitDelay = 2 * time.Second
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -423,7 +427,10 @@ func truncateID(id string, length int) string {
 
 // GetJJVersion returns the installed JJ version
 func GetJJVersion() (string, error) {
-	cmd := exec.Command("jj", "--version")
+	vCtx, vCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer vCancel()
+	cmd := exec.CommandContext(vCtx, "jj", "--version")
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err

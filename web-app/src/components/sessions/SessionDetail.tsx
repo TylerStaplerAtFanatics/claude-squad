@@ -111,6 +111,14 @@ export function SessionDetail({
   const [checkpointLabel, setCheckpointLabel] = useState("");
   const actions = useSessionActions(session.id);
   const allSessions = useAppSelector(selectAllSessions);
+  // Category/Tags inline editing state
+  const [isEditingCategory, setIsEditingCategory] = useState(false);
+  const [categoryValue, setCategoryValue] = useState(session.category || "");
+  const [isEditingTags, setIsEditingTags] = useState(false);
+  const [tagsInputValue, setTagsInputValue] = useState((session.tags ?? []).join(", "));
+  // Launch command display state
+  const [launchCmdExpanded, setLaunchCmdExpanded] = useState(false);
+  const [copiedLaunchCmd, setCopiedLaunchCmd] = useState(false);
 
   // Measure click-to-render latency when the detail panel first mounts for a session
   useEffect(() => {
@@ -227,6 +235,32 @@ export function SessionDetail({
   const handleCancelWorkingDirEdit = () => {
     setWorkingDirValue(session.workingDir || "");
     setIsEditingWorkingDir(false);
+  };
+
+  const handleSaveCategory = async () => {
+    if (categoryValue !== (session.category || "")) {
+      await actions.update({ category: categoryValue });
+    }
+    setIsEditingCategory(false);
+  };
+
+  const handleCancelCategoryEdit = () => {
+    setCategoryValue(session.category || "");
+    setIsEditingCategory(false);
+  };
+
+  const handleSaveTags = async () => {
+    const newTags = tagsInputValue.split(",").map((t) => t.trim()).filter(Boolean);
+    const current = session.tags ?? [];
+    if (JSON.stringify(newTags) !== JSON.stringify(current)) {
+      await actions.update({ tags: newTags });
+    }
+    setIsEditingTags(false);
+  };
+
+  const handleCancelTagsEdit = () => {
+    setTagsInputValue((session.tags ?? []).join(", "));
+    setIsEditingTags(false);
   };
 
   // Action sheet handlers
@@ -463,6 +497,7 @@ export function SessionDetail({
         {activeTab === "vcs" && (
           <div className={styles.tabContent} role="tabpanel" aria-labelledby="tab-vcs">
             <VcsPanel
+              session={session}
               onNavigateToFile={(path) => {
                 setFilesSelectedPath(path);
                 handleTabChange("files");
@@ -567,72 +602,152 @@ export function SessionDetail({
                 )}
               </div>
               {/* Organization */}
-              {session.category && (
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Category:</span>
-                  <span className={styles.infoValue}>{session.category}</span>
-                </div>
-              )}
-              {session.tags && session.tags.length > 0 && (
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Tags:</span>
-                  <span className={styles.infoValue}>{session.tags.join(", ")}</span>
-                </div>
-              )}
-              {session.autoYes && (
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Auto Yes:</span>
-                  <span className={styles.infoValue}>Enabled</span>
-                </div>
-              )}
+              <div className={styles.infoItem}>
+                <span className={styles.infoLabel}>Category:</span>
+                {isEditingCategory ? (
+                  <div className={styles.editContainer}>
+                    <input
+                      type="text"
+                      value={categoryValue}
+                      onChange={(e) => setCategoryValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleSaveCategory(); else if (e.key === "Escape") handleCancelCategoryEdit(); }}
+                      autoFocus
+                      className={styles.editInput}
+                      placeholder="e.g. Work/Frontend"
+                    />
+                    <button onClick={handleSaveCategory} className={styles.saveButton}>✓</button>
+                    <button onClick={handleCancelCategoryEdit} className={styles.cancelButton}>✕</button>
+                  </div>
+                ) : (
+                  <span className={styles.infoValue}>
+                    {session.category || <em style={{ opacity: 0.5 }}>None</em>}
+                    <button
+                      onClick={() => { setCategoryValue(session.category || ""); setIsEditingCategory(true); }}
+                      className={styles.editButton}
+                      title="Edit category"
+                    >
+                      ✏️
+                    </button>
+                  </span>
+                )}
+              </div>
+              <div className={styles.infoItem}>
+                <span className={styles.infoLabel}>Tags:</span>
+                {isEditingTags ? (
+                  <div className={styles.editContainer}>
+                    <input
+                      type="text"
+                      value={tagsInputValue}
+                      onChange={(e) => setTagsInputValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleSaveTags(); else if (e.key === "Escape") handleCancelTagsEdit(); }}
+                      autoFocus
+                      className={styles.editInput}
+                      placeholder="tag1, tag2, tag3"
+                    />
+                    <button onClick={handleSaveTags} className={styles.saveButton}>✓</button>
+                    <button onClick={handleCancelTagsEdit} className={styles.cancelButton}>✕</button>
+                  </div>
+                ) : (
+                  <span className={styles.infoValue}>
+                    {(session.tags ?? []).length > 0 ? session.tags!.join(", ") : <em style={{ opacity: 0.5 }}>None</em>}
+                    <button
+                      onClick={() => { setTagsInputValue((session.tags ?? []).join(", ")); setIsEditingTags(true); }}
+                      className={styles.editButton}
+                      title="Edit tags"
+                    >
+                      ✏️
+                    </button>
+                  </span>
+                )}
+              </div>
+              <div className={styles.infoItem}>
+                <span className={styles.infoLabel}>Auto Yes:</span>
+                <span className={styles.infoValue}>{session.autoYes ? "Enabled" : "Disabled"}</span>
+              </div>
               {/* Program */}
-              {session.program && (
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Program:</span>
-                  {isEditingProgram ? (
-                    <div className={styles.editContainer}>
-                      <select
-                        value={programValue}
-                        onChange={(e) => setProgramValue(e.target.value)}
-                        autoFocus
-                        className={styles.editInput}
-                      >
-                        {PROGRAMS.map((p) => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
-                        {!isKnownProgram(programValue) && (
-                          <option value={programValue}>Custom: {programValue}</option>
-                        )}
-                      </select>
-                      <button onClick={handleSaveProgram} className={styles.saveButton}>
-                        ✓
-                      </button>
-                      <button onClick={handleCancelProgramEdit} className={styles.cancelButton}>
-                        ✕
-                      </button>
-                    </div>
+              <div className={styles.infoItem}>
+                <span className={styles.infoLabel}>Program:</span>
+                {isEditingProgram ? (
+                  <div className={styles.editContainer}>
+                    <select
+                      value={programValue}
+                      onChange={(e) => setProgramValue(e.target.value)}
+                      autoFocus
+                      className={styles.editInput}
+                    >
+                      {PROGRAMS.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                      {!isKnownProgram(programValue) && (
+                        <option value={programValue}>Custom: {programValue}</option>
+                      )}
+                    </select>
+                    <button onClick={handleSaveProgram} className={styles.saveButton}>✓</button>
+                    <button onClick={handleCancelProgramEdit} className={styles.cancelButton}>✕</button>
+                  </div>
+                ) : (
+                  <span className={styles.infoValue}>
+                    {session.program ? getProgramDisplay(session.program) : <em style={{ opacity: 0.5 }}>None</em>}
+                    <button
+                      onClick={() => { setProgramValue(session.program || ""); setIsEditingProgram(true); }}
+                      className={styles.editButton}
+                      title="Edit program"
+                    >
+                      ✏️
+                    </button>
+                  </span>
+                )}
+              </div>
+              <div className={styles.infoItem} style={{ alignItems: 'flex-start' }}>
+                <span className={styles.infoLabel} style={{ paddingTop: '2px' }}>Launch Command:</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {session.launchCommand ? (
+                    <>
+                      <pre style={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.82em',
+                        margin: 0,
+                        padding: '6px 8px',
+                        background: 'var(--terminal-background, #1a1a2e)',
+                        color: 'var(--terminal-foreground, #e0e0e0)',
+                        borderRadius: '4px',
+                        overflowX: launchCmdExpanded ? 'auto' : 'hidden',
+                        whiteSpace: launchCmdExpanded ? 'pre' : 'nowrap',
+                        textOverflow: launchCmdExpanded ? 'clip' : 'ellipsis',
+                        maxHeight: launchCmdExpanded ? '200px' : undefined,
+                        overflowY: launchCmdExpanded ? 'auto' : undefined,
+                        cursor: 'default',
+                      }}>
+                        {session.launchCommand}
+                      </pre>
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                        <button
+                          onClick={() => setLaunchCmdExpanded((v) => !v)}
+                          className={styles.editButton}
+                          title={launchCmdExpanded ? "Collapse" : "Expand full command"}
+                          style={{ fontSize: '0.75em' }}
+                        >
+                          {launchCmdExpanded ? "▲ collapse" : "▼ expand"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(session.launchCommand);
+                            setCopiedLaunchCmd(true);
+                            setTimeout(() => setCopiedLaunchCmd(false), 2000);
+                          }}
+                          className={styles.editButton}
+                          title="Copy to clipboard"
+                          style={{ fontSize: '0.75em' }}
+                        >
+                          {copiedLaunchCmd ? "✓ copied" : "⎘ copy"}
+                        </button>
+                      </div>
+                    </>
                   ) : (
-                    <span className={styles.infoValue}>
-                      {getProgramDisplay(session.program)}
-                      <button
-                        onClick={() => setIsEditingProgram(true)}
-                        className={styles.editButton}
-                        title="Edit program"
-                      >
-                        ✏️
-                      </button>
-                    </span>
+                    <em style={{ opacity: 0.5 }}>Not started yet</em>
                   )}
                 </div>
-              )}
-              {session.launchCommand && (
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Launch Command:</span>
-                  <span className={styles.infoValue} style={{ fontFamily: 'monospace', wordBreak: 'break-all', fontSize: '0.85em' }}>
-                    {session.launchCommand}
-                  </span>
-                </div>
-              )}
+              </div>
               {session.tmuxPrefix && (
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Tmux Prefix:</span>

@@ -37,9 +37,9 @@ func TestColdRestore_WithUUID(t *testing.T) {
 	inst, cleanup, err := NewInstanceWithCleanup(InstanceOptions{
 		Title:            title,
 		Path:             t.TempDir(),
-		Program:          "sh",
+		Program:          "sleep 300",
 		SessionType:      SessionTypeDirectory,
-		AutoYes:          true,
+		AutoYes:          false,
 		TmuxPrefix:       fmt.Sprintf("test_coldrestore_%d_", time.Now().UnixNano()),
 		TmuxServerSocket: coldRestoreSocket(t),
 	})
@@ -76,7 +76,9 @@ func TestColdRestore_WithUUID(t *testing.T) {
 
 	assert.True(t, inst.Started(), "instance must be marked as started after cold restore")
 	assert.Equal(t, Running, inst.Status, "instance status must be Running after cold restore")
-	assert.True(t, inst.TmuxAlive(), "tmux session must be alive after cold restore")
+	// DoesSessionExist slow path has a 3s timeout; deadline must exceed that to guarantee
+	// at least one successful check before the Eventually deadline fires.
+	require.Eventually(t, inst.TmuxAlive, 10*time.Second, 50*time.Millisecond, "tmux session must be alive after cold restore")
 }
 
 // TestColdRestore_WithoutUUID verifies that when the tmux session is dead and
@@ -90,9 +92,9 @@ func TestColdRestore_WithoutUUID(t *testing.T) {
 	inst, cleanup, err := NewInstanceWithCleanup(InstanceOptions{
 		Title:            title,
 		Path:             t.TempDir(),
-		Program:          "sh",
+		Program:          "sleep 300",
 		SessionType:      SessionTypeDirectory,
-		AutoYes:          true,
+		AutoYes:          false,
 		TmuxPrefix:       fmt.Sprintf("test_coldrestore_%d_", time.Now().UnixNano()),
 		TmuxServerSocket: coldRestoreSocket(t),
 	})
@@ -118,7 +120,7 @@ func TestColdRestore_WithoutUUID(t *testing.T) {
 
 	assert.True(t, inst.Started(), "instance must be marked as started after cold start")
 	assert.Equal(t, Running, inst.Status, "instance status must be Running after cold start")
-	assert.True(t, inst.TmuxAlive(), "tmux session must be alive after cold start")
+	require.Eventually(t, inst.TmuxAlive, 10*time.Second, 50*time.Millisecond, "tmux session must be alive after cold start")
 }
 
 // TestHotRestore_ExistingSession verifies that when the tmux session is already
@@ -135,9 +137,9 @@ func TestHotRestore_ExistingSession(t *testing.T) {
 	inst1, cleanup1, err := NewInstanceWithCleanup(InstanceOptions{
 		Title:            title,
 		Path:             tmpDir,
-		Program:          "sh",
+		Program:          "sleep 300",
 		SessionType:      SessionTypeDirectory,
-		AutoYes:          true,
+		AutoYes:          false,
 		TmuxPrefix:       prefix,
 		TmuxServerSocket: socket,
 	})
@@ -158,16 +160,16 @@ func TestHotRestore_ExistingSession(t *testing.T) {
 		}
 	}()
 
-	require.True(t, inst1.TmuxAlive(), "inst1 tmux session must be alive before hot restore")
+	require.Eventually(t, inst1.TmuxAlive, 10*time.Second, 50*time.Millisecond, "inst1 tmux session must be alive before hot restore")
 
 	// Second instance: same title/socket — simulates an instance reloaded from storage
 	// while the original tmux session is still alive.
 	inst2, cleanup2, err := NewInstanceWithCleanup(InstanceOptions{
 		Title:            title,
 		Path:             tmpDir,
-		Program:          "sh",
+		Program:          "sleep 300",
 		SessionType:      SessionTypeDirectory,
-		AutoYes:          true,
+		AutoYes:          false,
 		TmuxPrefix:       prefix,
 		TmuxServerSocket: socket,
 	})

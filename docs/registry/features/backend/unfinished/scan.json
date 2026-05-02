@@ -1,0 +1,14 @@
+{
+  "id": "unfinished:scan",
+  "type": "backend",
+  "service": "UnfinishedWorkService",
+  "method": "ScanUnfinishedWork",
+  "protoFile": "proto/session/v1/unfinished.proto",
+  "markerFound": false,
+  "tested": true,
+  "testIds": [
+    "unfinished-work \u003e Refresh button triggers a scan RPC",
+    "unfinished-work \u003e scan completed event updates last-scanned timestamp"
+  ],
+  "lastModified": "2026-04-26T11:20:14.318047801-07:00"
+}

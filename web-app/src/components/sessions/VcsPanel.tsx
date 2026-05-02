@@ -1,13 +1,16 @@
 "use client";
 
-import { VCSType, FileStatus, FileChange } from "@/gen/session/v1/types_pb";
+import { VCSType, FileStatus, FileChange, Session } from "@/gen/session/v1/types_pb";
 import { VcsStatusDisplay } from "@/components/shared/VcsStatusDisplay";
 import { useSessionVcsContext } from "@/lib/contexts/SessionVcsContext";
+import { vars } from "@/styles/theme.css";
 import * as styles from "./VcsPanel.css";
 
 interface VcsPanelProps {
   /** Optional callback to navigate to a file in the Files tab. */
   onNavigateToFile?: (path: string) => void;
+  /** Session object for displaying GitHub PR/repo info. */
+  session?: Session;
 }
 
 function getFileStatusIcon(status: FileStatus): string {
@@ -80,7 +83,67 @@ function FileList({
   );
 }
 
-export function VcsPanel({ onNavigateToFile }: VcsPanelProps) {
+function GitHubSection({ session }: { session: Session }) {
+  const hasGitHub = session.githubOwner && session.githubRepo;
+  if (!hasGitHub) return null;
+
+  const ciColor =
+    session.githubCheckConclusion === "success" ? "#7ee787"
+    : session.githubCheckConclusion === "failure" ? "#f97583"
+    : vars.color.textSecondary;
+
+  return (
+    <div className={styles.githubSection}>
+      <div className={styles.githubRow}>
+        <span className={styles.githubIcon}>⑂</span>
+        <a
+          href={`https://github.com/${session.githubOwner}/${session.githubRepo}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.githubRepo}
+        >
+          {session.githubOwner}/{session.githubRepo}
+        </a>
+      </div>
+      {session.githubPrUrl && (
+        <div className={styles.githubRow}>
+          <span className={styles.githubIcon}>⎇</span>
+          <a
+            href={session.githubPrUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.githubPrLink}
+          >
+            PR #{session.githubPrNumber}
+            {session.githubPrState && (
+              <span className={styles.githubPrState}> {session.githubPrState}</span>
+            )}
+            {session.githubPrIsDraft && (
+              <span className={styles.githubDraft}> Draft</span>
+            )}
+          </a>
+          {(session.githubApprovedCount > 0 || session.githubChangesReqCount > 0) && (
+            <span className={styles.githubReviews}>
+              {session.githubApprovedCount > 0 && (
+                <span className={styles.githubApproved}>✓ {session.githubApprovedCount}</span>
+              )}
+              {session.githubChangesReqCount > 0 && (
+                <span className={styles.githubChangesReq}>✗ {session.githubChangesReqCount}</span>
+              )}
+            </span>
+          )}
+          {session.githubCheckConclusion && (
+            <span className={styles.githubCi} style={{ color: ciColor }}>
+              CI: {session.githubCheckConclusion}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function VcsPanel({ onNavigateToFile, session }: VcsPanelProps) {
   const { status, statusLoading, error, refresh } = useSessionVcsContext();
 
   if (statusLoading && !status) {
@@ -129,6 +192,9 @@ export function VcsPanel({ onNavigateToFile }: VcsPanelProps) {
           🔄
         </button>
       </div>
+
+      {/* GitHub repo / PR info */}
+      {session && <GitHubSection session={session} />}
 
       {/* Commit description (HEAD summary — VcsPanel-specific) */}
       {(status.headCommit || status.description) && (

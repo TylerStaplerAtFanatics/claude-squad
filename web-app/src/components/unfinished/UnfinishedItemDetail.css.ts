@@ -136,3 +136,55 @@ export const noChanges = style({
   fontSize: vars.fontSize.sm,
   fontStyle: "italic",
 });
+
+export const sessionBtnWrapper = style({
+  position: "relative",
+  display: "inline-flex",
+});
+
+export const sessionPicker = style({
+  position: "absolute",
+  top: "calc(100% + 4px)",
+  left: 0,
+  zIndex: 100,
+  background: vars.color.cardBackground,
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: vars.radii.sm,
+  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+  minWidth: "180px",
+  overflow: "hidden",
+});
+
+export const sessionPickerItem = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  width: "100%",
+  padding: `${vars.space["2"]} ${vars.space["3"]}`,
+  fontSize: vars.fontSize.sm,
+  fontWeight: 500,
+  cursor: "pointer",
+  border: "none",
+  background: "transparent",
+  color: vars.color.textPrimary,
+  textAlign: "left",
+  ":hover": {
+    background: vars.color.hoverBackground,
+  },
+  ":focus-visible": {
+    outline: `2px solid ${vars.color.inputFocusBorder}`,
+    outlineOffset: "-2px",
+  },
+  selectors: {
+    "&:not(:last-child)": {
+      borderBottom: `1px solid ${vars.color.borderSubtle}`,
+    },
+  },
+});
+
+export const sessionPickerIdHint = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textMuted,
+  marginLeft: vars.space["2"],
+});

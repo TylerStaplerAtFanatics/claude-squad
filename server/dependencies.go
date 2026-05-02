@@ -591,7 +591,7 @@ func BuildRuntimeDeps(svc *ServiceDeps) (*RuntimeDeps, error) {
 		}
 		if unfinishedStateStore != nil {
 			unfinishedScanner = unfinished.NewScanner(eventBus, unfinishedStateStore)
-			unfinishedWorkSvc = services.NewUnfinishedWorkService(unfinishedScanner, unfinishedStateStore, eventBus)
+			unfinishedWorkSvc = services.NewUnfinishedWorkService(unfinishedScanner, unfinishedStateStore, eventBus, storage)
 			log.InfoLog.Printf("UnfinishedWorkService initialized (state: %s)", statePath)
 		}
 	} else {

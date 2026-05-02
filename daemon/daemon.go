@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"github.com/tstapler/stapler-squad/config"
@@ -342,7 +343,9 @@ func LaunchDaemon() error {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	cmd := exec.Command(execPath, "--daemon")
+	// Use context.Background(): this is a daemon launch; we only need a context for the
+	// exec.CommandContext API. The daemon process runs indefinitely after Start() returns.
+	cmd := exec.CommandContext(context.Background(), execPath, "--daemon")
 
 	// Detach the process from the parent
 	cmd.Stdin = nil

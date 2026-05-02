@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { BottomNav } from "../BottomNav";
 
 // Mock next/navigation
@@ -29,6 +29,23 @@ jest.mock("@/components/sessions/ReviewQueueNavBadge", () => ({
   ReviewQueueNavBadge: () => null,
 }));
 
+// Mock OmnibarContext
+const mockOpenOmnibar = jest.fn();
+jest.mock("@/lib/contexts/OmnibarContext", () => ({
+  useOmnibar: () => ({ open: mockOpenOmnibar }),
+}));
+
+// Mock AuthContext
+jest.mock("@/lib/contexts/AuthContext", () => ({
+  useAuth: () => ({ authenticated: false, authEnabled: false }),
+}));
+
+// Mock NotificationContext
+const mockTogglePanel = jest.fn();
+jest.mock("@/lib/contexts/NotificationContext", () => ({
+  useNotifications: () => ({ togglePanel: mockTogglePanel, getUnreadCount: () => 0 }),
+}));
+
 // Mock the CSS module
 jest.mock("../BottomNav.css", () => ({
   nav: "nav",
@@ -36,32 +53,63 @@ jest.mock("../BottomNav.css", () => ({
   navItemActive: "navItemActive",
   navItemIcon: "navItemIcon",
   navItemLabel: "navItemLabel",
+  newSessionButton: "newSessionButton",
+  newSessionButtonInner: "newSessionButtonInner",
+  notificationButton: "notificationButton",
+  notificationIconWrap: "notificationIconWrap",
+  notificationBadge: "notificationBadge",
+  moreBackdrop: "moreBackdrop",
+  moreSheet: "moreSheet",
+  moreSheetOpen: "moreSheetOpen",
+  moreSheetItem: "moreSheetItem",
+  moreSheetItemActive: "moreSheetItemActive",
+  moreSheetItemIcon: "moreSheetItemIcon",
 }));
 
 import { usePathname } from "next/navigation";
 
+const PRIMARY_ITEMS = [
+  { href: "/", label: "Sessions" },
+  { href: "/unfinished", label: "Unfinished" },
+  { href: "/review-queue", label: "Review" },
+] as const;
+
 describe("BottomNav", () => {
-  it("renders all 5 nav items", () => {
+  beforeEach(() => {
+    mockOpenOmnibar.mockClear();
+    mockTogglePanel.mockClear();
+  });
+
+  it("renders all primary nav items and the New session button", () => {
     (usePathname as jest.Mock).mockReturnValue("/");
     render(<BottomNav />);
 
-    expect(screen.getByText("Sessions")).toBeInTheDocument();
-    expect(screen.getByText("Review")).toBeInTheDocument();
-    expect(screen.getByText("Rules")).toBeInTheDocument();
-    expect(screen.getByText("History")).toBeInTheDocument();
-    expect(screen.getByText("Config")).toBeInTheDocument();
+    const remaining = new Set(PRIMARY_ITEMS.map((p) => p.href));
+    for (const item of PRIMARY_ITEMS) {
+      expect(screen.getByText(item.label)).toBeInTheDocument();
+      remaining.delete(item.href);
+    }
+    expect(remaining.size).toBe(0);
+    expect(screen.getByRole("button", { name: "Create new session" })).toBeInTheDocument();
+  });
+
+  it("opens omnibar when New session button is clicked", () => {
+    (usePathname as jest.Mock).mockReturnValue("/");
+    render(<BottomNav />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create new session" }));
+    expect(mockOpenOmnibar).toHaveBeenCalledTimes(1);
   });
 
   it("marks Sessions as active on home route", () => {
     (usePathname as jest.Mock).mockReturnValue("/");
     render(<BottomNav />);
 
-    // The Sessions link should have aria-current="page"
     const sessionsLink = screen.getByText("Sessions").closest("a");
     expect(sessionsLink).toHaveAttribute("aria-current", "page");
   });
 
-  it("does not mark other items as active on home route", () => {
+  it("does not mark Review as active on home route", () => {
     (usePathname as jest.Mock).mockReturnValue("/");
     render(<BottomNav />);
 
@@ -83,5 +131,12 @@ describe("BottomNav", () => {
 
     const sessionsLink = screen.getByText("Sessions").closest("a");
     expect(sessionsLink).not.toHaveAttribute("aria-current", "page");
+  });
+
+  it("renders the More button", () => {
+    (usePathname as jest.Mock).mockReturnValue("/");
+    render(<BottomNav />);
+
+    expect(screen.getByRole("button", { name: "More navigation options" })).toBeInTheDocument();
   });
 });

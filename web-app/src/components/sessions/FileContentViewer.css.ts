@@ -1,5 +1,5 @@
 import { style, keyframes, globalStyle } from "@vanilla-extract/css";
-import { vars } from "@/styles/theme.css";
+import { vars, lightTheme, darkTheme } from "@/styles/theme.css";
 
 const spin = keyframes({
   to: { transform: "rotate(360deg)" },
@@ -121,6 +121,24 @@ globalStyle(`${shikiOutput} .line::before`, {
   userSelect: "none",
 });
 
+// Shiki dual-theme activation: light theme
+globalStyle(`.${lightTheme} .${shikiOutput} .shiki`, {
+  backgroundColor: "var(--shiki-light-bg) !important" as "inherit",
+  color: "var(--shiki-light) !important" as "inherit",
+});
+globalStyle(`.${lightTheme} .${shikiOutput} .shiki span`, {
+  color: "var(--shiki-light) !important" as "inherit",
+});
+
+// Shiki dual-theme activation: dark theme
+globalStyle(`.${darkTheme} .${shikiOutput} .shiki`, {
+  backgroundColor: "var(--shiki-dark-bg) !important" as "inherit",
+  color: "var(--shiki-dark) !important" as "inherit",
+});
+globalStyle(`.${darkTheme} .${shikiOutput} .shiki span`, {
+  color: "var(--shiki-dark) !important" as "inherit",
+});
+
 export const plainPre = style({
   margin: 0,
   padding: 16,
@@ -165,4 +183,36 @@ export const binaryTitle = style({
 export const binaryMeta = style({
   fontSize: 12,
   margin: 0,
+});
+
+export const downloadButton = style({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: vars.space[1],
+  padding: `${vars.space[1]} ${vars.space[2]}`,
+  fontSize: vars.fontSize.sm,
+  borderRadius: vars.radii.sm,
+  textDecoration: "none",
+  color: vars.color.textSecondary,
+  border: `1px solid ${vars.color.borderColor}`,
+  marginLeft: "auto",
+  ":hover": {
+    color: vars.color.textPrimary,
+    backgroundColor: vars.color.hoverBackground,
+  },
+});
+
+export const imageViewer = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flex: 1,
+  overflow: "auto",
+  padding: vars.space[4],
+});
+
+export const imagePreview = style({
+  maxWidth: "100%",
+  maxHeight: "100%",
+  objectFit: "contain",
 });
