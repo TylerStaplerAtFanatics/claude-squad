@@ -151,6 +151,12 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
   const handleSubmitRef = useRef<() => void>(() => {});
   // Holds the latest attached image paths from OmnibarCreationPanel without causing re-renders.
   const attachedImagePathsRef = useRef<string[]>([]);
+  // Refs for form fields read inside the detection effect — avoids re-triggering
+  // the effect (and resetting to discovery mode) when only form fields change.
+  const sessionNameRef = useRef(sessionName);
+  const branchRef = useRef(branch);
+  useEffect(() => { sessionNameRef.current = sessionName; }, [sessionName]);
+  useEffect(() => { branchRef.current = branch; }, [branch]);
 
   // API base URL for pre-session image uploads — uses shared helper for SSR/dev consistency.
   const uploadBaseUrl = getApiBaseUrl();
@@ -331,14 +337,14 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
         // 2. Session name matches the last auto-suggested name (not manually edited)
         // This allows suggestions to update as the user types the path (e.g., "~" → "sqlway")
         if (result.suggestedName) {
-          if (!sessionName || sessionName === lastSuggestedNameRef.current) {
+          if (!sessionNameRef.current || sessionNameRef.current === lastSuggestedNameRef.current) {
             setSessionName(result.suggestedName);
             lastSuggestedNameRef.current = result.suggestedName;
           }
         }
 
         // Auto-fill branch if detected
-        if (result.branch && !branch) {
+        if (result.branch && !branchRef.current) {
           setBranch(result.branch);
         }
       } else {
@@ -353,7 +359,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
         clearTimeout(debounceRef.current);
       }
     };
-  }, [input, sessionName, branch]);
+  }, [input]);
 
   // Focus input when opened
   useEffect(() => {
