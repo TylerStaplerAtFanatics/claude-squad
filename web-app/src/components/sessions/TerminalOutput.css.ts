@@ -193,6 +193,74 @@ export const devOnly = style({
   },
 });
 
+// Wrapper for secondary buttons + ··· trigger — needs relative positioning for the overlay
+export const mobileMoreWrapper = style({
+  display: "contents",
+  "@media": {
+    "screen and (max-width: 768px)": {
+      display: "flex",
+      alignItems: "center",
+      position: "relative",
+    },
+  },
+});
+
+// Secondary actions group — inline on desktop, hidden on mobile (revealed via overlay)
+export const secondaryGroup = style({
+  display: "flex",
+  gap: "0.5rem",
+  "@media": {
+    "screen and (max-width: 768px)": {
+      display: "none",
+    },
+  },
+});
+
+// Overlay state for secondary group on mobile
+export const secondaryGroupOpen = style({
+  "@media": {
+    "screen and (max-width: 768px)": {
+      display: "flex",
+      flexDirection: "column",
+      position: "absolute",
+      bottom: "calc(100% + 6px)",
+      right: "0",
+      background: "#2d2d30",
+      border: "1px solid #555555",
+      borderRadius: "8px",
+      padding: "0.3rem",
+      gap: "0.25rem",
+      minWidth: "150px",
+      zIndex: 100,
+      boxShadow: "0 -4px 20px rgba(0,0,0,0.55)",
+    },
+  },
+});
+
+// Fixed transparent backdrop to dismiss the overflow menu on tap-outside
+export const mobileOverflowBackdrop = style({
+  position: "fixed",
+  inset: "0",
+  zIndex: 99,
+  background: "transparent",
+});
+
+// ··· trigger button — only shown on mobile, hidden on desktop
+export const mobileMoreButton = style({
+  display: "none",
+  "@media": {
+    "screen and (max-width: 768px)": {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      letterSpacing: "0.1em",
+      fontWeight: "bold",
+      minWidth: "var(--min-touch-target, 44px)",
+      minHeight: "var(--min-touch-target, 44px)",
+    },
+  },
+});
+
 // Always visible — keyboard toggle and mouse mode toggle are useful on all screen sizes.
 export const mobileKeyboardToggle = style({
   display: "inline-flex",
