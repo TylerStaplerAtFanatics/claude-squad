@@ -546,7 +546,7 @@ func FromInstanceData(data InstanceData) (*Instance, error) {
 			tmuxPrefix = "staplersquad_"
 		}
 		if instance.TmuxServerSocket != "" {
-			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithServerSocket(instance.Title, instance.Program, tmuxPrefix, instance.TmuxServerSocket))
+			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithServerSocket(instance.Title, instance.Program, tmuxPrefix, instance.TmuxServerSocket, tmux.WithRegistry(nil)))
 		} else {
 			instance.tmuxManager.SetSession(tmux.NewTmuxSessionWithPrefix(instance.Title, instance.Program, tmuxPrefix))
 		}

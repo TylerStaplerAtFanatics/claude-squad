@@ -7,13 +7,16 @@ import (
 	"time"
 )
 
-// BackendFeature represents a single RPC endpoint discovered from proto or marker scanning.
+// BackendFeature represents a single backend endpoint discovered from proto or marker scanning.
+// Proto-derived entries have ProtoFile set; HTTP handler entries have HTTPMethod and HTTPPath set.
 type BackendFeature struct {
 	ID           string    `json:"id"`
 	Type         string    `json:"type"`
 	Service      string    `json:"service"`
 	Method       string    `json:"method"`
-	ProtoFile    string    `json:"protoFile"`
+	ProtoFile    string    `json:"protoFile,omitempty"`
+	HTTPMethod   string    `json:"httpMethod,omitempty"`
+	HTTPPath     string    `json:"httpPath,omitempty"`
 	MarkerFound  bool      `json:"markerFound"`
 	HandlerFile  string    `json:"handlerFile,omitempty"`
 	Tested       bool      `json:"tested"`
@@ -102,15 +105,15 @@ var methodToID = map[string]string{
 	"UpsertDirectoryRule": "directory-rule:upsert",
 	"DeleteDirectoryRule": "directory-rule:delete",
 	// Unfinished work RPCs (UnfinishedWorkService in unfinished.proto)
-	"ListUnfinishedWork":       "unfinished:list",
-	"WatchUnfinishedWork":      "unfinished:watch",
-	"ScanUnfinishedWork":       "unfinished:scan",
-	"DismissWorktree":          "unfinished:dismiss",
-	"UndismissWorktree":        "unfinished:undismiss",
-	"SnoozeWorktree":           "unfinished:snooze",
-	"GetWorktreeAISummary":     "unfinished:get-ai-summary",
-	"QuickCommitPush":          "unfinished:commit-push",
-	"GetUnfinishedWorkConfig":  "unfinished:get-config",
+	"ListUnfinishedWork":         "unfinished:list",
+	"WatchUnfinishedWork":        "unfinished:watch",
+	"ScanUnfinishedWork":         "unfinished:scan",
+	"DismissWorktree":            "unfinished:dismiss",
+	"UndismissWorktree":          "unfinished:undismiss",
+	"SnoozeWorktree":             "unfinished:snooze",
+	"GetWorktreeAISummary":       "unfinished:get-ai-summary",
+	"QuickCommitPush":            "unfinished:commit-push",
+	"GetUnfinishedWorkConfig":    "unfinished:get-config",
 	"UpdateUnfinishedWorkConfig": "unfinished:update-config",
 }
 
