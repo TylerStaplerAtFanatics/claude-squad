@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"github.com/tstapler/stapler-squad/log"
 	"os/exec"
@@ -11,8 +12,11 @@ import (
 // runGitCommand executes a git command and returns any error.
 // Uses the executor for circuit breaker support when available.
 func (g *GitWorktree) runGitCommand(path string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	baseArgs := []string{"-C", path}
-	cmd := exec.Command("git", append(baseArgs, args...)...)
+	cmd := exec.CommandContext(ctx, "git", append(baseArgs, args...)...)
+	cmd.WaitDelay = 2 * time.Second
 
 	var output []byte
 	var err error
@@ -56,11 +60,17 @@ func (g *GitWorktree) PushChanges(commitMessage string, open bool) error {
 	}
 
 	// First push the branch to remote to ensure it exists
-	pushCmd := exec.Command("gh", "repo", "sync", "--source", "-b", g.branchName)
+	pushCtx, pushCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer pushCancel()
+	pushCmd := exec.CommandContext(pushCtx, "gh", "repo", "sync", "--source", "-b", g.branchName)
+	pushCmd.WaitDelay = 2 * time.Second
 	pushCmd.Dir = g.worktreePath
 	if err := g.runExec(pushCmd); err != nil {
 		// If sync fails, try creating the branch on remote first
-		gitPushCmd := exec.Command("git", "push", "-u", "origin", g.branchName)
+		gitPushCtx, gitPushCancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer gitPushCancel()
+		gitPushCmd := exec.CommandContext(gitPushCtx, "git", "push", "-u", "origin", g.branchName)
+		gitPushCmd.WaitDelay = 2 * time.Second
 		gitPushCmd.Dir = g.worktreePath
 		if pushOutput, pushErr := g.runCombinedOutput(gitPushCmd); pushErr != nil {
 			log.ErrorLog.Print(pushErr)
@@ -69,7 +79,10 @@ func (g *GitWorktree) PushChanges(commitMessage string, open bool) error {
 	}
 
 	// Now sync with remote
-	syncCmd := exec.Command("gh", "repo", "sync", "-b", g.branchName)
+	syncCtx, syncCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer syncCancel()
+	syncCmd := exec.CommandContext(syncCtx, "gh", "repo", "sync", "-b", g.branchName)
+	syncCmd.WaitDelay = 2 * time.Second
 	syncCmd.Dir = g.worktreePath
 	if output, err := g.runCombinedOutput(syncCmd); err != nil {
 		log.ErrorLog.Print(err)
@@ -178,7 +191,10 @@ func (g *GitWorktree) OpenBranchURL() error {
 		return err
 	}
 
-	cmd := exec.Command("gh", "browse", "--branch", g.branchName)
+	browseCtx, browseCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer browseCancel()
+	cmd := exec.CommandContext(browseCtx, "gh", "browse", "--branch", g.branchName)
+	cmd.WaitDelay = 2 * time.Second
 	cmd.Dir = g.worktreePath
 	if err := g.runExec(cmd); err != nil {
 		return fmt.Errorf("failed to open branch URL: %w", err)

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/executor"
@@ -259,8 +260,11 @@ func NewGitWorktreeFromExistingWithExecutor(existingWorktreePath string, session
 // Returns the path to the existing worktree and true if found, empty string and false otherwise
 func findExistingWorktreeForBranch(repoPath, branchName string) (string, bool) {
 	// Run git worktree list --porcelain to get detailed worktree information
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	wtCtx, wtCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer wtCancel()
+	cmd := exec.CommandContext(wtCtx, "git", "worktree", "list", "--porcelain")
 	cmd.Dir = repoPath
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		// If the command fails, assume no existing worktrees

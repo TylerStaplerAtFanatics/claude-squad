@@ -54,8 +54,9 @@ type ScanResult struct {
 	Status   ScanResultStatus
 	ErrorMsg string
 
-	// SessionID is non-empty if an active stapler-squad session tracks this branch.
-	SessionID string
+	// SessionIDs holds the UUIDs of all active stapler-squad sessions whose Path
+	// matches this worktree. Multiple sessions can target the same worktree.
+	SessionIDs []string
 }
 
 // IsUnfinished returns true when at least one unfinished-work criterion is met.
@@ -369,7 +370,7 @@ func (s *Scanner) scanWorktree(wt WorktreeInfo, defaultBranch, repoPath string) 
 	}
 
 	// git status --porcelain
-	statusCmd := exec.Command("git", "-C", wt.Path, "status", "--porcelain")
+	statusCmd := exec.CommandContext(context.Background(), "git", "-C", wt.Path, "status", "--porcelain")
 	statusOut, err := exec5s.CombinedOutput(statusCmd)
 	if err != nil {
 		if strings.Contains(err.Error(), "timed out") {
@@ -389,7 +390,7 @@ func (s *Scanner) scanWorktree(wt WorktreeInfo, defaultBranch, repoPath string) 
 
 	// git rev-list --left-right --count HEAD...<defaultBranch>
 	if defaultBranch != "" {
-		revCmd := exec.Command("git", "-C", wt.Path, "rev-list", "--left-right", "--count",
+		revCmd := exec.CommandContext(context.Background(), "git", "-C", wt.Path, "rev-list", "--left-right", "--count",
 			"HEAD..."+defaultBranch)
 		revOut, revErr := exec3s.CombinedOutput(revCmd)
 		if revErr == nil {
@@ -402,7 +403,7 @@ func (s *Scanner) scanWorktree(wt WorktreeInfo, defaultBranch, repoPath string) 
 
 		// git log defaultBranch..HEAD --oneline --max-count=5
 		if result.AheadCount > 0 {
-			logCmd := exec.Command("git", "-C", wt.Path, "log", defaultBranch+"..HEAD",
+			logCmd := exec.CommandContext(context.Background(), "git", "-C", wt.Path, "log", defaultBranch+"..HEAD",
 				"--oneline", "--max-count=5")
 			logOut, logErr := exec3s.CombinedOutput(logCmd)
 			if logErr == nil {
@@ -416,7 +417,7 @@ func (s *Scanner) scanWorktree(wt WorktreeInfo, defaultBranch, repoPath string) 
 	}
 
 	// git diff --shortstat HEAD
-	diffCmd := exec.Command("git", "-C", wt.Path, "diff", "--shortstat", "HEAD")
+	diffCmd := exec.CommandContext(context.Background(), "git", "-C", wt.Path, "diff", "--shortstat", "HEAD")
 	diffOut, diffErr := exec3s.CombinedOutput(diffCmd)
 	if diffErr == nil {
 		parseDiffShortstat(strings.TrimSpace(string(diffOut)), &result)

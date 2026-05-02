@@ -2,13 +2,17 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tstapler/stapler-squad/server/events"
+	"github.com/tstapler/stapler-squad/session"
 )
 
 // newTestHandler creates an ApprovalHandler wired with real in-memory dependencies
@@ -356,4 +360,127 @@ func TestRepairSettingsJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+// --------------------------------------------------------------------------
+// resolveSessionID tests — verify notification events carry stable UUID
+// --------------------------------------------------------------------------
+
+// newHandlerWithStorage creates an ApprovalHandler wired with a real storage.
+func newHandlerWithStorage(t *testing.T) (*ApprovalHandler, *session.Storage) {
+	t.Helper()
+	storage := createTestStorage(t)
+	bus := events.NewEventBus(10)
+	t.Cleanup(bus.Close)
+	h := NewApprovalHandler(NewApprovalStore(""), storage, bus)
+	return h, storage
+}
+
+// addPausedInstanceWithUUID inserts a paused instance with an explicit UUID.
+func addPausedInstanceWithUUID(t *testing.T, storage *session.Storage, title, uuid, path string) {
+	t.Helper()
+	now := time.Now()
+	inst := &session.Instance{
+		Title:     title,
+		UUID:      uuid,
+		Path:      path,
+		Status:    session.Paused,
+		Program:   "claude",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	require.NoError(t, storage.AddInstance(inst))
+}
+
+// TestResolveSessionID_ByTitle verifies that when a hook sends a session title
+// as the session identifier, resolveSessionID returns the session's stable UUID.
+func TestResolveSessionID_ByTitle(t *testing.T) {
+	h, storage := newHandlerWithStorage(t)
+	addPausedInstanceWithUUID(t, storage, "stelekit", "aaaabbbb-1111-2222-3333-ffffffffffff", "/projects/stelekit")
+
+	got := h.resolveSessionID("stelekit", "")
+	assert.Equal(t, "aaaabbbb-1111-2222-3333-ffffffffffff", got,
+		"resolveSessionID should return UUID when given the session title")
+}
+
+// TestResolveSessionID_ByUUID verifies that passing a UUID directly also resolves correctly.
+func TestResolveSessionID_ByUUID(t *testing.T) {
+	h, storage := newHandlerWithStorage(t)
+	const uuid = "aaaabbbb-1111-2222-3333-ffffffffffff"
+	addPausedInstanceWithUUID(t, storage, "stelekit", uuid, "/projects/stelekit")
+
+	got := h.resolveSessionID(uuid, "")
+	assert.Equal(t, uuid, got, "resolveSessionID should return the same UUID when given a UUID")
+}
+
+// TestResolveSessionID_ByCwd verifies that when no header is given, cwd prefix
+// matching falls back to the correct session's UUID.
+func TestResolveSessionID_ByCwd(t *testing.T) {
+	h, storage := newHandlerWithStorage(t)
+	addPausedInstanceWithUUID(t, storage, "stelekit", "aaaabbbb-1111-2222-3333-ffffffffffff", "/projects/stelekit")
+
+	got := h.resolveSessionID("", "/projects/stelekit/src/some/file.go")
+	assert.Equal(t, "aaaabbbb-1111-2222-3333-ffffffffffff", got,
+		"resolveSessionID should resolve UUID via cwd prefix match when header is absent")
+}
+
+// TestResolveSessionID_UnknownReturnsEmpty verifies graceful fallback when
+// neither header nor cwd matches any known session.
+func TestResolveSessionID_UnknownReturnsEmpty(t *testing.T) {
+	h, _ := newHandlerWithStorage(t)
+
+	got := h.resolveSessionID("no-such-session", "/totally/unrelated/path")
+	assert.Equal(t, "", got, "resolveSessionID should return empty string for an unknown session")
+}
+
+// TestHandlePermissionRequest_NotificationUsesUUID verifies end-to-end that
+// when HandlePermissionRequest fires a broadcastApprovalNotification, the
+// event published on the event bus has the session UUID, not the title.
+func TestHandlePermissionRequest_NotificationUsesUUID(t *testing.T) {
+	storage := createTestStorage(t)
+	bus := events.NewEventBus(32)
+	t.Cleanup(bus.Close)
+
+	store := NewApprovalStore("")
+	h := NewApprovalHandler(store, storage, bus)
+	h.timeout = 100 * time.Millisecond // short timeout so the test doesn't block
+
+	const title = "stelekit"
+	const uuid = "aaaabbbb-1111-2222-3333-ffffffffffff"
+	addPausedInstanceWithUUID(t, storage, title, uuid, "/projects/stelekit")
+
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	eventCh, _ := bus.Subscribe(ctx)
+
+	// Fire a permission request using the session title in the header.
+	payload := map[string]interface{}{
+		"tool_name":  "Bash",
+		"tool_input": map[string]interface{}{"command": "ls"},
+		"cwd":        "/projects/stelekit",
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/hooks/permission-request", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CS-Session-ID", title)
+
+	rr := httptest.NewRecorder()
+	go h.HandlePermissionRequest(rr, req) // runs in goroutine; will time out after 100ms
+
+	// Collect events until we get a notification or timeout.
+	var gotID string
+	deadline := time.After(2 * time.Second)
+	for gotID == "" {
+		select {
+		case e := <-eventCh:
+			if e.Type == events.EventNotification {
+				gotID = e.SessionID
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for notification event from HandlePermissionRequest")
+		}
+	}
+
+	assert.Equal(t, uuid, gotID,
+		"approval notification event.SessionID should be the UUID, not the title %q", title)
 }

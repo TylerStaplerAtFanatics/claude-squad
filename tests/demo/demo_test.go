@@ -1,6 +1,7 @@
 package demo
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -37,7 +38,9 @@ func TestRecordDemo(t *testing.T) {
 
 	e2eDir := filepath.Join(projectRoot(), "tests", "e2e")
 	playwrightBin := filepath.Join(e2eDir, "node_modules", ".bin", "playwright")
-	cmd := exec.Command(playwrightBin, "test",
+	playwrightCtx, playwrightCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer playwrightCancel()
+	cmd := exec.CommandContext(playwrightCtx, playwrightBin, "test",
 		"--config", "playwright.demo.config.ts",
 		"--project=chromium",
 	)

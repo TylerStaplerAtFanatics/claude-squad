@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
@@ -59,6 +60,8 @@ func isAllowedOrigin(r *http.Request) bool {
 // These sequences (absolute cursor positioning, screen clears, alternate-screen switches)
 // assume a specific prior terminal state that doesn't exist on initial load.
 // SGR color sequences (ESC[nm) are intentionally NOT matched and are preserved.
+var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
 var rePositionCodes = regexp.MustCompile(
 	`\x1b\[\d*;?\d*[Hf]` + // Absolute cursor: ESC[H, ESC[n;mH, ESC[n;mf
 		`|\x1b\[\d*J` + // Screen clear: ESC[J, ESC[1J, ESC[2J, ESC[3J
@@ -685,26 +688,20 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 					instance.UpdateTerminalTimestamps(string(input.Data), true)
 					instance.MarkUserResponded()
 
-					// Send input to tmux session using tmux send-keys (hex-encoded)
-					if err := sendInputToTmux(tmuxSessionName, input.Data); err != nil {
-						log.ErrorLog.Printf("[streamViaControlMode] Error sending input to tmux '%s': %v",
-							tmuxSessionName, err)
-						// Send error back to client
-						errorData := &sessionv1.TerminalData{
-							SessionId: sessionID,
-							Data: &sessionv1.TerminalData_Error{
-								Error: &sessionv1.TerminalError{
-									Message: fmt.Sprintf("Input error: %v", err),
-									Code:    "input_error",
-								},
-							},
+					// Try CM path first (low-latency, no subprocess). Falls back to
+					// subprocess send-keys if CM queue is backed up or not running.
+					// Errors are non-fatal — keystrokes may be lost under load but
+					// the stream stays alive (sending TerminalError kills the stream).
+					sendCtx, sendCancel := context.WithTimeout(context.Background(), 2*time.Second)
+					sendErr := instance.SendInputViaControlMode(sendCtx, input.Data)
+					sendCancel()
+					if sendErr != nil {
+						log.WarningLog.Printf("[streamViaControlMode] CM input failed for '%s', retrying via subprocess: %v",
+							tmuxSessionName, sendErr)
+						if fbErr := sendInputToTmux(tmuxSessionName, input.Data); fbErr != nil {
+							log.ErrorLog.Printf("[streamViaControlMode] Subprocess fallback also failed for '%s': %v",
+								tmuxSessionName, fbErr)
 						}
-						errorBytes, _ := proto.Marshal(errorData)
-						errorEnvelope := protocol.CreateEnvelope(0, errorBytes)
-						if err := stream.WriteMessage(websocket.BinaryMessage, errorEnvelope); err != nil {
-							log.ErrorLog.Printf("[streamViaControlMode] Failed to send input error to client: %v", err)
-						}
-						continue
 					}
 				}
 
@@ -967,26 +964,10 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 					// Update timestamps for user interaction
 					instance.UpdateTerminalTimestamps(string(input.Data), true)
 
-					// Send input to tmux session
+					// Send input to tmux session — errors are non-fatal (stream stays alive).
 					if err := sendInputToTmux(tmuxSessionName, input.Data); err != nil {
-						log.ErrorLog.Printf("[streamViaTmuxCapture] Error sending input to tmux '%s': %v",
+						log.WarningLog.Printf("[streamViaTmuxCapture] Error sending input to tmux '%s': %v",
 							tmuxSessionName, err)
-						// Send error back to client
-						errorData := &sessionv1.TerminalData{
-							SessionId: sessionID,
-							Data: &sessionv1.TerminalData_Error{
-								Error: &sessionv1.TerminalError{
-									Message: fmt.Sprintf("Input error: %v", err),
-									Code:    "input_error",
-								},
-							},
-						}
-						if errBytes, err := proto.Marshal(errorData); err == nil {
-							errEnvelope := protocol.CreateEnvelope(0, errBytes)
-							if err := stream.WriteMessage(websocket.BinaryMessage, errEnvelope); err != nil {
-								log.ErrorLog.Printf("[streamViaTmuxCapture] Failed to send input error to client: %v", err)
-							}
-						}
 					} else {
 						log.DebugLog.Printf("[streamViaTmuxCapture] Sent input (%d bytes) to tmux '%s'",
 							len(input.Data), tmuxSessionName)
@@ -1027,20 +1008,26 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 					} else {
 						// External sessions: Use tmux commands (best effort)
 						// External sessions may be attached to other terminals which control the actual size
-						resizeCmd := exec.Command("tmux", "resize-window", "-t", tmuxSessionName,
+						rwCtx, rwCancel := context.WithTimeout(context.Background(), 5*time.Second)
+						resizeCmd := exec.CommandContext(rwCtx, "tmux", "resize-window", "-t", tmuxSessionName,
 							"-x", fmt.Sprintf("%d", targetCols), "-y", fmt.Sprintf("%d", targetRows))
+						resizeCmd.WaitDelay = 2 * time.Second
 						if err := resizeCmd.Run(); err != nil {
 							log.WarningLog.Printf("[streamViaTmuxCapture] Failed to resize tmux window for external '%s': %v",
 								tmuxSessionName, err)
 						}
+						rwCancel()
 
 						// Also try to resize the pane
-						paneCmd := exec.Command("tmux", "resize-pane", "-t", tmuxSessionName,
+						rpCtx, rpCancel := context.WithTimeout(context.Background(), 5*time.Second)
+						paneCmd := exec.CommandContext(rpCtx, "tmux", "resize-pane", "-t", tmuxSessionName,
 							"-x", fmt.Sprintf("%d", targetCols), "-y", fmt.Sprintf("%d", targetRows))
+						paneCmd.WaitDelay = 2 * time.Second
 						if err := paneCmd.Run(); err != nil {
 							log.WarningLog.Printf("[streamViaTmuxCapture] Failed to resize tmux pane for external '%s': %v",
 								tmuxSessionName, err)
 						}
+						rpCancel()
 
 						// PHASE 1: Verify external session resize
 						actualCols, actualRows, verifyErr := instance.GetPaneDimensions()
@@ -1232,7 +1219,10 @@ func sendInputToTmux(tmuxSessionName string, data []byte) error {
 		args = append(args, fmt.Sprintf("%02x", b))
 	}
 
-	cmd := exec.Command("tmux", args...)
+	skCtx, skCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer skCancel()
+	cmd := exec.CommandContext(skCtx, "tmux", args...)
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("tmux send-keys failed: %w", err)
 	}
@@ -1314,10 +1304,6 @@ func detectContentWidth(content string) int {
 }
 
 // stripAnsiCodes removes ANSI escape sequences from a string to count visible characters.
-// This includes color codes, cursor movements, and other terminal control sequences.
 func stripAnsiCodes(s string) string {
-	// ANSI escape sequences start with ESC (0x1B) followed by '[' and end with a letter
-	// We use a simplified regex that catches most common sequences
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
-	return ansiRegex.ReplaceAllString(s, "")
+	return ansiEscapeRe.ReplaceAllString(s, "")
 }

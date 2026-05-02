@@ -203,7 +203,10 @@ func (m *Multiplexer) Start() error {
 			return fmt.Errorf("attach mode requires a tmux session name")
 		}
 		// Check if session exists
-		checkCmd := exec.Command("tmux", "has-session", "-t", m.tmuxSession)
+		checkCtx, checkCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer checkCancel()
+		checkCmd := exec.CommandContext(checkCtx, "tmux", "has-session", "-t", m.tmuxSession)
+		checkCmd.WaitDelay = 2 * time.Second
 		if err := checkCmd.Run(); err != nil {
 			m.listener.Close()
 			os.Remove(m.socketPath)
@@ -254,7 +257,10 @@ func (m *Multiplexer) Start() error {
 		}
 
 		// Start tmux session with the command (detached)
-		startCmd := exec.Command("tmux", "new-session", "-d", "-s", m.tmuxSession, "-c", cwd, fullCmd)
+		startCtx, startCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer startCancel()
+		startCmd := exec.CommandContext(startCtx, "tmux", "new-session", "-d", "-s", m.tmuxSession, "-c", cwd, fullCmd)
+		startCmd.WaitDelay = 2 * time.Second
 		if err := startCmd.Run(); err != nil {
 			// Clean up hooks file on failure
 			if m.hooksPath != "" {
@@ -267,14 +273,19 @@ func (m *Multiplexer) Start() error {
 	}
 
 	// Attach to the tmux session - this is what we wrap in PTY for the local terminal
-	m.cmd = exec.Command("tmux", "attach-session", "-t", m.tmuxSession)
+	// Use m.ctx so the attach process is killed when the multiplexer shuts down.
+	m.cmd = exec.CommandContext(m.ctx, "tmux", "attach-session", "-t", m.tmuxSession)
 
 	// Start attach command in PTY
 	ptmx, err := pty.Start(m.cmd)
 	if err != nil {
 		// Clean up tmux session if attach fails (but not in attach-only mode)
 		if !m.attachOnly {
-			_ = exec.Command("tmux", "kill-session", "-t", m.tmuxSession).Run()
+			killCtx, killCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer killCancel()
+			killCmd := exec.CommandContext(killCtx, "tmux", "kill-session", "-t", m.tmuxSession)
+			killCmd.WaitDelay = 2 * time.Second
+			_ = killCmd.Run()
 		}
 		m.listener.Close()
 		os.Remove(m.socketPath)
@@ -389,7 +400,11 @@ func (m *Multiplexer) Shutdown() {
 	// Kill tmux session on cleanup (user closed their terminal)
 	// In attach-only mode, preserve the session so it can be reattached later
 	if m.tmuxSession != "" && !m.attachOnly {
-		_ = exec.Command("tmux", "kill-session", "-t", m.tmuxSession).Run()
+		shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutCancel()
+		shutCmd := exec.CommandContext(shutCtx, "tmux", "kill-session", "-t", m.tmuxSession)
+		shutCmd.WaitDelay = 2 * time.Second
+		_ = shutCmd.Run()
 	}
 
 	// Clean up hooks file
@@ -411,7 +426,11 @@ func (m *Multiplexer) CapturePane() ([]byte, error) {
 	if m.tmuxSession == "" {
 		return nil, fmt.Errorf("tmux session not initialized")
 	}
-	output, err := exec.Command("tmux", "capture-pane", "-t", m.tmuxSession, "-p").Output()
+	captureCtx, captureCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer captureCancel()
+	captureCmd := exec.CommandContext(captureCtx, "tmux", "capture-pane", "-t", m.tmuxSession, "-p")
+	captureCmd.WaitDelay = 2 * time.Second
+	output, err := captureCmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to capture pane: %w", err)
 	}
@@ -813,7 +832,10 @@ func RunAttach(tmuxSession string) (int, error) {
 // ListStaplerSquadSessions returns a list of tmux sessions that match the stapler-squad naming convention.
 // These are sessions that can be attached to using RunAttach.
 func ListStaplerSquadSessions() ([]string, error) {
-	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
+	listCtx, listCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer listCancel()
+	cmd := exec.CommandContext(listCtx, "tmux", "list-sessions", "-F", "#{session_name}")
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		// tmux returns error if no sessions exist

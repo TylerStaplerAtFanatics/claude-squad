@@ -114,14 +114,19 @@ type TmuxSession struct {
 	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers, controlModeExited, and pendingCmds
 	controlModeExited      bool                   // True after readControlModeOutput exits; new subscribers get pre-closed channel
 
-	// Control mode command dispatch (Phase 2)
-	// cmdSendMu serializes (enqueue + write-to-stdin) pairs so tmux receives commands
-	// in the same order as channels are added to pendingCmds.
-	cmdSendMu   sync.Mutex       // serializes enqueue+write in sendCMCommand and stdin close in StopControlMode
-	pendingCmds []chan cmdResult // FIFO of pending response channels; protected by controlModeSubMu
-	cmdBodyBuf  strings.Builder  // body accumulator between %begin and %end; reader goroutine only
-	curCmdCh    chan cmdResult   // current in-flight response channel; reader goroutine only
-	inCmdResp   bool             // true while inside a %begin/%end block; reader goroutine only
+	// Control mode command dispatch — priority queue
+	// A dedicated sender goroutine owns the stdin write path so that high-priority
+	// requests (interactive user input) always jump ahead of low-priority ones
+	// (background polling, resize, capture-pane). The goroutine drains highPriSendCh
+	// before touching normPriSendCh.
+	highPriSendCh chan cmSendReq   // user send-keys — processed before normPriSendCh
+	normPriSendCh chan cmSendReq   // background commands (polling, resize, capture-pane)
+	cmSenderExited chan struct{}    // closed when runCMSender exits; lets StopControlMode know stdin is safe to close
+	cmdSendMu     sync.Mutex       // guards stdin-close in StopControlMode vs sender goroutine writes
+	pendingCmds   []chan cmdResult // FIFO of pending response channels; protected by controlModeSubMu
+	cmdBodyBuf    strings.Builder  // body accumulator between %begin and %end; reader goroutine only
+	curCmdCh      chan cmdResult   // current in-flight response channel; reader goroutine only
+	inCmdResp     bool             // true while inside a %begin/%end block; reader goroutine only
 
 
 	// Exit detection: fired when the session exits unexpectedly (not via StopControlMode).
@@ -219,7 +224,10 @@ var ErrServerDown = errors.New("tmux server not running")
 // Returns ErrServerDown when the tmux server is not running.
 func ListAllSessions(serverSocket string) (map[string]bool, error) {
 	args := prependSocket(serverSocket, []string{"list-sessions", "-F", "#{session_name}"})
-	cmd := exec.Command(Binary(), args...)
+	listCtx, listCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer listCancel()
+	cmd := exec.CommandContext(listCtx, Binary(), args...)
+	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.Output()
 	if err != nil {
 		// Collect stderr for server-down detection
@@ -246,7 +254,10 @@ func ListAllSessions(serverSocket string) (map[string]bool, error) {
 // and returns true if the server is not running.
 func checkServerNotRunning(serverSocket string) bool {
 	args := prependSocket(serverSocket, []string{"list-sessions"})
-	cmd := exec.Command(Binary(), args...)
+	checkCtx, checkCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer checkCancel()
+	cmd := exec.CommandContext(checkCtx, Binary(), args...)
+	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.CombinedOutput()
 	return err != nil && serverNotRunning(out)
 }
@@ -268,7 +279,10 @@ func EnsureServerRunning(serverSocket string) error {
 		return nil // server is already running
 	}
 	args := prependSocket(serverSocket, []string{"start-server"})
-	cmd := exec.Command(Binary(), args...)
+	startCtx, startCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer startCancel()
+	cmd := exec.CommandContext(startCtx, Binary(), args...)
+	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("tmux start-server failed: %w (output: %s)", err, out)
@@ -301,7 +315,10 @@ func SetExitEmpty(serverSocket string, enabled bool) error {
 		value = "on"
 	}
 	args := prependSocket(serverSocket, []string{"set-option", "-g", "exit-empty", value})
-	cmd := exec.Command(Binary(), args...)
+	optCtx, optCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer optCancel()
+	cmd := exec.CommandContext(optCtx, Binary(), args...)
+	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("tmux set-option exit-empty %s failed: %w (output: %s)", value, err, out)
@@ -317,13 +334,20 @@ func CreateKeepaliveSession(serverSocket string) error {
 
 	// Check if already exists
 	hasArgs := prependSocket(serverSocket, []string{"has-session", "-t", keepaliveName})
-	if exec.Command(Binary(), hasArgs...).Run() == nil {
+	hasCtx, hasCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer hasCancel()
+	hasCmd := exec.CommandContext(hasCtx, Binary(), hasArgs...)
+	hasCmd.WaitDelay = 2 * time.Second
+	if hasCmd.Run() == nil {
 		return nil // already exists
 	}
 
 	// Create a detached session with an idle shell
 	newArgs := prependSocket(serverSocket, []string{"new-session", "-d", "-s", keepaliveName})
-	cmd := exec.Command(Binary(), newArgs...)
+	newCtx, newCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer newCancel()
+	cmd := exec.CommandContext(newCtx, Binary(), newArgs...)
+	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to create keepalive session: %w (output: %s)", err, out)
@@ -363,7 +387,7 @@ func tmuxCircuitBreakerConfig() executor.CircuitBreakerConfig {
 // NewTmuxSession creates a new TmuxSession with the given name and program.
 // The executor is wrapped with a CircuitBreakerExecutor for resilience.
 func NewTmuxSession(name string, program string) *TmuxSession {
-	baseExec := executor.MakeExecutor()
+	baseExec := executor.MakeTimeoutExecutor(5 * time.Second)
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
 	key := "tmux-" + name
 	executor.GetGlobalRegistry().Register(key, cbExec)
@@ -375,7 +399,7 @@ func NewTmuxSession(name string, program string) *TmuxSession {
 // NewTmuxSessionWithPrefix creates a new TmuxSession with a custom prefix for process isolation.
 // The executor is wrapped with a CircuitBreakerExecutor for resilience.
 func NewTmuxSessionWithPrefix(name string, program string, prefix string) *TmuxSession {
-	baseExec := executor.MakeExecutor()
+	baseExec := executor.MakeTimeoutExecutor(5 * time.Second)
 	cbExec := executor.NewCircuitBreakerExecutor(baseExec, tmuxCircuitBreakerConfig())
 	key := "tmux-" + name
 	executor.GetGlobalRegistry().Register(key, cbExec)
@@ -537,6 +561,8 @@ func (t *TmuxSession) AttachToExisting() error {
 
 // buildTmuxCommand creates a tmux command with proper server isolation.
 // If serverSocket is set, adds -L flag for complete server isolation.
+// The returned command has no context; callers that need timeout protection
+// should use exec.CommandContext directly or wrap with a TimeoutExecutor.
 func (t *TmuxSession) buildTmuxCommand(args ...string) *exec.Cmd {
 	var cmdArgs []string
 
@@ -548,7 +574,8 @@ func (t *TmuxSession) buildTmuxCommand(args ...string) *exec.Cmd {
 	// Add the actual tmux command arguments
 	cmdArgs = append(cmdArgs, args...)
 
-	return exec.Command(Binary(), cmdArgs...)
+	// Use background context; callers supply their own timeout via the executor layer.
+	return exec.CommandContext(context.Background(), Binary(), cmdArgs...)
 }
 
 // buildAttachCommand creates a tmux attach-session command for PTY operations.
@@ -1315,7 +1342,7 @@ func (t *TmuxSession) SetWindowSize(cols, rows int) error {
 	log.InfoLog.Printf("🔧 Running tmux resize-window command for '%s' to %dx%d", t.sanitizedName, cols, rows)
 	colsStr := fmt.Sprintf("%d", cols)
 	rowsStr := fmt.Sprintf("%d", rows)
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		if _, cmErr := t.sendCMCommand(ctx,
@@ -1551,7 +1578,7 @@ func (t *TmuxSession) DoesSessionExistNoCache() bool {
 // This is critical after resizing to update cursor positions and line wrapping.
 func (t *TmuxSession) RefreshClient() error {
 	// CM path: send refresh-client over the existing control mode connection.
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		if _, cmErr := t.sendCMCommand(ctx, "refresh-client", "-t", t.sanitizedName); cmErr == nil {
@@ -1577,7 +1604,10 @@ func (t *TmuxSession) RefreshClient() error {
 		}
 
 		panePID := strings.TrimSpace(string(output))
-		killCmd := exec.Command("kill", "-WINCH", panePID)
+		winchCtx, winchCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer winchCancel()
+		killCmd := exec.CommandContext(winchCtx, "kill", "-WINCH", panePID)
+		killCmd.WaitDelay = 2 * time.Second
 		if err := killCmd.Run(); err != nil {
 			return fmt.Errorf("failed to send SIGWINCH: %w", err)
 		}
@@ -1587,9 +1617,15 @@ func (t *TmuxSession) RefreshClient() error {
 }
 
 // cmEnabled returns true when the CM command dispatch path should be attempted.
-// Must be called before any sendCMCommand call.
 func (t *TmuxSession) cmEnabled() bool {
-	return cmCommandsEnabled.Load() && t.controlModeStdin != nil
+	return cmCommandsEnabled.Load() && t.normPriSendCh != nil
+}
+
+// cmEnabledForBackground returns true when CM is available AND the normal-priority
+// send queue has room. Background ops skip CM when the queue is backed up — they
+// fall back to subprocess so that the queue stays clear for high-priority user input.
+func (t *TmuxSession) cmEnabledForBackground() bool {
+	return t.cmEnabled() && len(t.normPriSendCh) == 0
 }
 
 // cmCtx returns a 3-second context for use with sendCMCommand.
@@ -1601,7 +1637,7 @@ func cmCtx() (context.Context, context.CancelFunc) {
 // When STAPLER_SQUAD_CM_COMMANDS=true and control mode is running, the query is sent
 // over the control mode stdin pipe (zero new subprocesses); otherwise falls back to subprocess.
 func (t *TmuxSession) CapturePaneContent() (string, error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx, "capture-pane", "-p", "-e", "-J", "-t", t.sanitizedName)
@@ -1614,11 +1650,16 @@ func (t *TmuxSession) CapturePaneContent() (string, error) {
 	}
 
 	cmd := t.buildTmuxCommand("capture-pane", "-p", "-e", "-J", "-t", t.sanitizedName)
+	recordSpawn(time.Now())
 	output, err := t.cmdExec.Output(cmd)
 	if err != nil {
-		if log.ErrorLog != nil {
-			log.ErrorLog.Printf("Failed to capture pane content for session '%s': %v", t.sanitizedName, err)
-			log.ErrorLog.Printf("Tmux command: %s", cmd.String())
+		recordFailure(time.Now())
+		// Invalidate cache so TmuxAlive() returns false on the next call without
+		// waiting for the 5-second TTL. This prevents repeated ERROR-level subprocess
+		// failures when a session has died and the registry hasn't caught up yet.
+		t.invalidateExistsCache()
+		if log.WarningLog != nil {
+			log.WarningLog.Printf("Failed to capture pane content for session '%s': %v", t.sanitizedName, err)
 		}
 		return "", fmt.Errorf("error capturing pane content for session '%s': %v", t.sanitizedName, err)
 	}
@@ -1629,7 +1670,7 @@ func (t *TmuxSession) CapturePaneContent() (string, error) {
 // This is essential for hybrid streaming where we need to preserve exact cursor positioning.
 // The -J flag (join wrapped lines) strips cursor positioning codes, breaking TUI rendering.
 func (t *TmuxSession) CapturePaneContentRaw() (string, error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx, "capture-pane", "-p", "-e", "-t", t.sanitizedName)
@@ -1642,10 +1683,13 @@ func (t *TmuxSession) CapturePaneContentRaw() (string, error) {
 	}
 
 	cmd := t.buildTmuxCommand("capture-pane", "-p", "-e", "-t", t.sanitizedName)
+	recordSpawn(time.Now())
 	output, err := t.cmdExec.Output(cmd)
 	if err != nil {
-		if log.ErrorLog != nil {
-			log.ErrorLog.Printf("Failed to capture raw pane content for session '%s': %v", t.sanitizedName, err)
+		recordFailure(time.Now())
+		t.invalidateExistsCache()
+		if log.WarningLog != nil {
+			log.WarningLog.Printf("Failed to capture raw pane content for session '%s': %v", t.sanitizedName, err)
 		}
 		return "", fmt.Errorf("error capturing raw pane content: %v", err)
 	}
@@ -1655,7 +1699,7 @@ func (t *TmuxSession) CapturePaneContentRaw() (string, error) {
 // CapturePaneContentWithOptions captures the pane content with additional options.
 // start and end specify the starting and ending line numbers (use "-" for the start/end of history).
 func (t *TmuxSession) CapturePaneContentWithOptions(start, end string) (string, error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx, "capture-pane", "-p", "-e", "-J",
@@ -1700,7 +1744,7 @@ func (t *TmuxSession) FilterBanners(content string) (filteredContent string, ban
 // GetCursorPosition returns the current cursor position in the tmux pane.
 // Returns cursor X (column) and Y (row) coordinates, both 0-based.
 func (t *TmuxSession) GetCursorPosition() (x, y int, err error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx,
@@ -1740,7 +1784,7 @@ func (t *TmuxSession) GetCursorPosition() (x, y int, err error) {
 // over the existing control mode stdin pipe (zero new subprocesses). Otherwise it falls
 // back to the original subprocess path.
 func (t *TmuxSession) GetPaneDimensions() (width, height int, err error) {
-	if cmCommandsEnabled.Load() && t.controlModeStdin != nil {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx,
@@ -1783,12 +1827,15 @@ func CleanupSessions(cmdExec executor.Executor) error {
 // serverSocket: socket name for server isolation, empty string for default server
 func CleanupSessionsOnServer(cmdExec executor.Executor, serverSocket string) error {
 	// First try to list sessions
+	lsCtx, lsCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer lsCancel()
 	var cmd *exec.Cmd
 	if serverSocket != "" {
-		cmd = exec.Command(Binary(), "-L", serverSocket, "ls")
+		cmd = exec.CommandContext(lsCtx, Binary(), "-L", serverSocket, "ls")
 	} else {
-		cmd = exec.Command(Binary(), "ls")
+		cmd = exec.CommandContext(lsCtx, Binary(), "ls")
 	}
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmdExec.Output(cmd)
 
 	// If there's an error and it's because no server is running, that's fine
@@ -1808,14 +1855,18 @@ func CleanupSessionsOnServer(cmdExec executor.Executor, serverSocket string) err
 
 	for _, match := range matches {
 		log.InfoLog.Printf("cleaning up session: %s", match)
+		killCtx, killCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		var killCmd *exec.Cmd
 		if serverSocket != "" {
-			killCmd = exec.Command(Binary(), "-L", serverSocket, "kill-session", "-t", match)
+			killCmd = exec.CommandContext(killCtx, Binary(), "-L", serverSocket, "kill-session", "-t", match)
 		} else {
-			killCmd = exec.Command(Binary(), "kill-session", "-t", match)
+			killCmd = exec.CommandContext(killCtx, Binary(), "kill-session", "-t", match)
 		}
-		if err := cmdExec.Run(killCmd); err != nil {
-			return fmt.Errorf("failed to kill tmux session %s: %v", match, err)
+		killCmd.WaitDelay = 2 * time.Second
+		runErr := cmdExec.Run(killCmd)
+		killCancel()
+		if runErr != nil {
+			return fmt.Errorf("failed to kill tmux session %s: %v", match, runErr)
 		}
 	}
 	return nil
@@ -1885,7 +1936,7 @@ func sanitizeUTF8String(rawBytes []byte) string {
 // GetPaneCurrentPath returns the current working directory of the tmux pane.
 // This is used by CaptureCurrentState to persist cwd before shutdown for cold restore.
 func (t *TmuxSession) GetPaneCurrentPath() (string, error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx,
@@ -1912,7 +1963,7 @@ func (t *TmuxSession) GetPaneCurrentPath() (string, error) {
 // GetPanePID returns the PID of the foreground process in the pane.
 // This is used by HistoryLinker to correlate open files with session records.
 func (t *TmuxSession) GetPanePID() (int32, error) {
-	if t.cmEnabled() {
+	if t.cmEnabledForBackground() {
 		ctx, cancel := cmCtx()
 		defer cancel()
 		body, cmErr := t.sendCMCommand(ctx,

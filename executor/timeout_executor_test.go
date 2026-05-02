@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"context"
 	"os/exec"
 	"strings"
 	"testing"
@@ -14,7 +15,7 @@ func TestTimeoutExecutor_Run_Success(t *testing.T) {
 	executor := NewTimeoutExecutor(2 * time.Second)
 
 	// Run a quick command that should complete within timeout
-	cmd := exec.Command("echo", "hello world")
+	cmd := exec.CommandContext(context.Background(), "echo", "hello world")
 	err := executor.Run(cmd)
 
 	assert.NoError(t, err, "Quick command should succeed")
@@ -24,7 +25,7 @@ func TestTimeoutExecutor_Run_Timeout(t *testing.T) {
 	executor := NewTimeoutExecutor(500 * time.Millisecond)
 
 	// Run a command that sleeps longer than the timeout
-	cmd := exec.Command("sleep", "2")
+	cmd := exec.CommandContext(context.Background(), "sleep", "2")
 	err := executor.Run(cmd)
 
 	require.Error(t, err, "Long-running command should timeout")
@@ -36,7 +37,7 @@ func TestTimeoutExecutor_Run_CommandFailure(t *testing.T) {
 	executor := NewTimeoutExecutor(2 * time.Second)
 
 	// Run a command that fails (non-zero exit code)
-	cmd := exec.Command("sh", "-c", "exit 1")
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", "exit 1")
 	err := executor.Run(cmd)
 
 	require.Error(t, err, "Failed command should return error")
@@ -48,7 +49,7 @@ func TestTimeoutExecutor_Run_InvalidCommand(t *testing.T) {
 	executor := NewTimeoutExecutor(2 * time.Second)
 
 	// Try to run a command that doesn't exist
-	cmd := exec.Command("this-command-does-not-exist-12345")
+	cmd := exec.CommandContext(context.Background(), "this-command-does-not-exist-12345")
 	err := executor.Run(cmd)
 
 	require.Error(t, err, "Invalid command should return error")
@@ -59,7 +60,7 @@ func TestTimeoutExecutor_Output_Success(t *testing.T) {
 	executor := NewTimeoutExecutor(2 * time.Second)
 
 	// Run a command and capture output
-	cmd := exec.Command("echo", "hello world")
+	cmd := exec.CommandContext(context.Background(), "echo", "hello world")
 	output, err := executor.Output(cmd)
 
 	assert.NoError(t, err, "Quick command should succeed")
@@ -72,7 +73,7 @@ func TestTimeoutExecutor_Output_Timeout(t *testing.T) {
 	executor := NewTimeoutExecutor(500 * time.Millisecond)
 
 	// Run a command that sleeps longer than the timeout
-	cmd := exec.Command("sleep", "2")
+	cmd := exec.CommandContext(context.Background(), "sleep", "2")
 	output, err := executor.Output(cmd)
 
 	require.Error(t, err, "Long-running command should timeout")
@@ -84,7 +85,7 @@ func TestTimeoutExecutor_OutputWithPipes_Success(t *testing.T) {
 	executor := NewTimeoutExecutor(2 * time.Second)
 
 	// Run a command and capture output
-	cmd := exec.Command("echo", "hello world")
+	cmd := exec.CommandContext(context.Background(), "echo", "hello world")
 	output, err := executor.OutputWithPipes(cmd)
 
 	assert.NoError(t, err, "Quick command should succeed")
@@ -95,7 +96,7 @@ func TestTimeoutExecutor_OutputWithPipes_Timeout(t *testing.T) {
 	executor := NewTimeoutExecutor(500 * time.Millisecond)
 
 	// Run a command that sleeps longer than the timeout
-	cmd := exec.Command("sleep", "2")
+	cmd := exec.CommandContext(context.Background(), "sleep", "2")
 	output, err := executor.OutputWithPipes(cmd)
 
 	require.Error(t, err, "Long-running command should timeout")
@@ -107,7 +108,7 @@ func TestTimeoutExecutor_OutputWithPipes_MultilineOutput(t *testing.T) {
 	executor := NewTimeoutExecutor(2 * time.Second)
 
 	// Run a command that produces multiple lines of output
-	cmd := exec.Command("sh", "-c", "echo line1; echo line2; echo line3")
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", "echo line1; echo line2; echo line3")
 	output, err := executor.OutputWithPipes(cmd)
 
 	assert.NoError(t, err, "Command should succeed")
@@ -121,7 +122,7 @@ func TestTimeoutExecutor_OutputWithPipes_CommandFailure(t *testing.T) {
 	executor := NewTimeoutExecutor(2 * time.Second)
 
 	// Run a command that fails with stderr output
-	cmd := exec.Command("sh", "-c", "echo 'error message' >&2; exit 1")
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", "echo 'error message' >&2; exit 1")
 	output, err := executor.OutputWithPipes(cmd)
 
 	require.Error(t, err, "Failed command should return error")
@@ -138,7 +139,7 @@ func TestTimeoutExecutor_ConcurrentExecution(t *testing.T) {
 
 	for i := 0; i < numConcurrent; i++ {
 		go func(id int) {
-			cmd := exec.Command("echo", "test")
+			cmd := exec.CommandContext(context.Background(), "echo", "test")
 			done <- executor.Run(cmd)
 		}(i)
 	}
@@ -186,7 +187,7 @@ func TestTimeoutExecutor_TimeoutDuration(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			executor := NewTimeoutExecutor(tc.timeout)
-			cmd := exec.Command("sleep", tc.sleep)
+			cmd := exec.CommandContext(context.Background(), "sleep", tc.sleep)
 			err := executor.Run(cmd)
 
 			if tc.shouldTimeout {
@@ -204,7 +205,7 @@ func TestTimeoutExecutor_RealWorldScenario(t *testing.T) {
 	executor := NewTimeoutExecutor(2 * time.Second)
 
 	// Simulate the 'which' command that was causing hangs
-	cmd := exec.Command("sh", "-c", "which sh") // 'which sh' should always work
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", "which sh") // 'which sh' should always work
 	output, err := executor.OutputWithPipes(cmd)
 
 	assert.NoError(t, err, "'which' command should succeed")
@@ -217,7 +218,7 @@ func TestTimeoutExecutor_HangingCommand(t *testing.T) {
 	executor := NewTimeoutExecutor(500 * time.Millisecond)
 
 	// Command that hangs indefinitely - infinite loop
-	cmd := exec.Command("sh", "-c", "while true; do sleep 1; done")
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", "while true; do sleep 1; done")
 	startTime := time.Now()
 	err := executor.Run(cmd)
 	elapsed := time.Since(startTime)
@@ -234,7 +235,7 @@ func TestTimeoutExecutor_ProcessCleanup(t *testing.T) {
 	executor := NewTimeoutExecutor(200 * time.Millisecond)
 
 	// Start a long-running command
-	cmd := exec.Command("sleep", "10")
+	cmd := exec.CommandContext(context.Background(), "sleep", "10")
 	err := executor.Run(cmd)
 
 	require.Error(t, err, "Long command should timeout")
@@ -255,7 +256,7 @@ func BenchmarkTimeoutExecutor_FastCommand(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cmd := exec.Command("echo", "test")
+		cmd := exec.CommandContext(context.Background(), "echo", "test")
 		_ = executor.Run(cmd)
 	}
 }
@@ -265,7 +266,7 @@ func BenchmarkTimeoutExecutor_OutputCapture(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cmd := exec.Command("echo", "benchmark test output")
+		cmd := exec.CommandContext(context.Background(), "echo", "benchmark test output")
 		_, _ = executor.OutputWithPipes(cmd)
 	}
 }
@@ -282,7 +283,7 @@ func TestTimeoutExecutor_ErrorMessages(t *testing.T) {
 			name:    "Timeout error includes duration",
 			timeout: 500 * time.Millisecond,
 			cmdFunc: func() *exec.Cmd {
-				return exec.Command("sleep", "2")
+				return exec.CommandContext(context.Background(), "sleep", "2")
 			},
 			expectedInMsg: []string{"timed out", "500ms", "sleep"},
 		},
@@ -290,7 +291,7 @@ func TestTimeoutExecutor_ErrorMessages(t *testing.T) {
 			name:    "Start failure includes command",
 			timeout: 1 * time.Second,
 			cmdFunc: func() *exec.Cmd {
-				return exec.Command("nonexistent-command-12345")
+				return exec.CommandContext(context.Background(), "nonexistent-command-12345")
 			},
 			expectedInMsg: []string{"failed to start"},
 		},

@@ -16,7 +16,7 @@ export const overlay = style({
   inset: 0,
   background: vars.color.overlayBackground,
   animation: `${fadeIn} 0.15s ease`,
-  zIndex: 50,
+  zIndex: 1100,
 });
 
 export const content = style({
@@ -33,7 +33,7 @@ export const content = style({
   maxHeight: "85vh",
   overflowY: "auto",
   animation: `${slideUp} 0.15s ease`,
-  zIndex: 51,
+  zIndex: 1101,
   // Safe area for mobile
   paddingBottom: `max(${vars.space["6"]}, env(safe-area-inset-bottom))`,
 });

@@ -25,8 +25,8 @@ type authResult struct {
 }
 
 var (
-	ghAuthState atomic.Value        // stores authResult
-	ghAuthGroup singleflight.Group  //nolint:exhaustruct
+	ghAuthState atomic.Value       // stores authResult
+	ghAuthGroup singleflight.Group //nolint:exhaustruct
 )
 
 const ghAuthTTL = 5 * time.Minute
@@ -147,7 +147,10 @@ func CheckGHAuth() error {
 			authErr = fmt.Errorf("GitHub CLI (gh) is not installed. Please install it: https://cli.github.com/")
 		} else {
 			// Check if gh is authenticated.
-			cmd := exec.Command("gh", "auth", "status")
+			authCheckCtx, authCheckCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer authCheckCancel()
+			cmd := exec.CommandContext(authCheckCtx, "gh", "auth", "status")
+			cmd.WaitDelay = 2 * time.Second
 			if runErr := cmd.Run(); runErr != nil {
 				authErr = fmt.Errorf("GitHub CLI is not authenticated. Please run 'gh auth login' first")
 			}
@@ -186,6 +189,7 @@ func GetPRInfoCtx(ctx context.Context, owner, repo string, prNumber int) (*PRInf
 
 	fields := "number,title,body,headRefName,baseRefName,state,url,createdAt,updatedAt,isDraft,mergeable,additions,deletions,changedFiles,author,labels,reviews,reviewDecision,statusCheckRollup"
 	cmd := exec.CommandContext(ctx, "gh", "pr", "view", prRef, "--repo", repoRef, "--json", fields)
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -319,6 +323,7 @@ func GetPRForBranch(ctx context.Context, owner, repo, branch string) (*PRInfo, e
 		"--state", "all",
 		"--limit", "10",
 	)
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -358,6 +363,7 @@ func IsForkRepo(ctx context.Context, owner, repo string) (bool, error) {
 		fmt.Sprintf("repos/%s/%s", owner, repo),
 		"--jq", ".fork",
 	)
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -379,7 +385,10 @@ func GetPRComments(owner, repo string, prNumber int) ([]PRComment, error) {
 	prRef := strconv.Itoa(prNumber)
 
 	// Get comments
-	cmd := exec.Command("gh", "pr", "view", prRef, "--repo", repoRef, "--json", "comments")
+	commentsCtx, commentsCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer commentsCancel()
+	cmd := exec.CommandContext(commentsCtx, "gh", "pr", "view", prRef, "--repo", repoRef, "--json", "comments")
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -421,7 +430,10 @@ func GetPRDiff(owner, repo string, prNumber int) (string, error) {
 	repoRef := fmt.Sprintf("%s/%s", owner, repo)
 	prRef := strconv.Itoa(prNumber)
 
-	cmd := exec.Command("gh", "pr", "diff", prRef, "--repo", repoRef)
+	diffCtx, diffCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer diffCancel()
+	cmd := exec.CommandContext(diffCtx, "gh", "pr", "diff", prRef, "--repo", repoRef)
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -442,7 +454,10 @@ func PostPRComment(owner, repo string, prNumber int, body string) error {
 	repoRef := fmt.Sprintf("%s/%s", owner, repo)
 	prRef := strconv.Itoa(prNumber)
 
-	cmd := exec.Command("gh", "pr", "comment", prRef, "--repo", repoRef, "--body", body)
+	commentCtx, commentCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer commentCancel()
+	cmd := exec.CommandContext(commentCtx, "gh", "pr", "comment", prRef, "--repo", repoRef, "--body", body)
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return fmt.Errorf("failed to post comment: %s", string(exitErr.Stderr))
@@ -473,7 +488,10 @@ func MergePR(owner, repo string, prNumber int, method string) error {
 		args = append(args, "--merge")
 	}
 
-	cmd := exec.Command("gh", args...)
+	mergeCtx, mergeCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer mergeCancel()
+	cmd := exec.CommandContext(mergeCtx, "gh", args...)
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return fmt.Errorf("failed to merge PR: %s", string(exitErr.Stderr))
@@ -493,7 +511,10 @@ func ClosePR(owner, repo string, prNumber int) error {
 	repoRef := fmt.Sprintf("%s/%s", owner, repo)
 	prRef := strconv.Itoa(prNumber)
 
-	cmd := exec.Command("gh", "pr", "close", prRef, "--repo", repoRef)
+	closeCtx, closeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer closeCancel()
+	cmd := exec.CommandContext(closeCtx, "gh", "pr", "close", prRef, "--repo", repoRef)
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return fmt.Errorf("failed to close PR: %s", string(exitErr.Stderr))
@@ -511,7 +532,10 @@ func CloneRepository(owner, repo, targetPath string) error {
 	}
 
 	repoRef := fmt.Sprintf("%s/%s", owner, repo)
-	cmd := exec.Command("gh", "repo", "clone", repoRef, targetPath)
+	cloneCtx, cloneCancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cloneCancel()
+	cmd := exec.CommandContext(cloneCtx, "gh", "repo", "clone", repoRef, targetPath)
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return fmt.Errorf("failed to clone repository: %s", string(exitErr.Stderr))
@@ -525,7 +549,10 @@ func CloneRepository(owner, repo, targetPath string) error {
 // FetchBranch fetches a specific branch in an existing repository
 func FetchBranch(repoPath, branchName string) error {
 	// Fetch the branch from origin
-	cmd := exec.Command("git", "-C", repoPath, "fetch", "origin", branchName)
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer fetchCancel()
+	cmd := exec.CommandContext(fetchCtx, "git", "-C", repoPath, "fetch", "origin", branchName)
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return fmt.Errorf("failed to fetch branch: %s", string(exitErr.Stderr))
@@ -538,7 +565,10 @@ func FetchBranch(repoPath, branchName string) error {
 
 // CheckoutBranch checks out a branch in an existing repository
 func CheckoutBranch(repoPath, branchName string) error {
-	cmd := exec.Command("git", "-C", repoPath, "checkout", branchName)
+	checkoutCtx, checkoutCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer checkoutCancel()
+	cmd := exec.CommandContext(checkoutCtx, "git", "-C", repoPath, "checkout", branchName)
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return fmt.Errorf("failed to checkout branch: %s", string(exitErr.Stderr))
@@ -551,7 +581,10 @@ func CheckoutBranch(repoPath, branchName string) error {
 
 // GetRemoteURL returns the remote URL of a repository (used to determine owner/repo)
 func GetRemoteURL(repoPath string) (string, error) {
-	cmd := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin")
+	remoteCtx, remoteCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer remoteCancel()
+	cmd := exec.CommandContext(remoteCtx, "git", "-C", repoPath, "remote", "get-url", "origin")
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

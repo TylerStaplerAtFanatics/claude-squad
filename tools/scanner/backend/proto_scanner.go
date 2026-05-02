@@ -104,6 +104,17 @@ var methodToID = map[string]string{
 	// Directory rules RPCs
 	"UpsertDirectoryRule": "directory-rule:upsert",
 	"DeleteDirectoryRule": "directory-rule:delete",
+	// Unfinished work RPCs (UnfinishedWorkService in unfinished.proto)
+	"ListUnfinishedWork":         "unfinished:list",
+	"WatchUnfinishedWork":        "unfinished:watch",
+	"ScanUnfinishedWork":         "unfinished:scan",
+	"DismissWorktree":            "unfinished:dismiss",
+	"UndismissWorktree":          "unfinished:undismiss",
+	"SnoozeWorktree":             "unfinished:snooze",
+	"GetWorktreeAISummary":       "unfinished:get-ai-summary",
+	"QuickCommitPush":            "unfinished:commit-push",
+	"GetUnfinishedWorkConfig":    "unfinished:get-config",
+	"UpdateUnfinishedWorkConfig": "unfinished:update-config",
 }
 
 // rpcPattern matches lines like:   rpc MethodName(  (indented or not)

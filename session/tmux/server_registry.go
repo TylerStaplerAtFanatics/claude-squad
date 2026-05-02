@@ -197,8 +197,11 @@ func (r *TmuxServerRegistry) firePaneExit(sessionName string) {
 
 // syncSessions runs list-sessions and replaces the in-memory map atomically.
 func (r *TmuxServerRegistry) syncSessions() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	args := prependSocket(r.serverSocket, []string{"list-sessions", "-F", "#{session_name}"})
-	cmd := exec.Command("tmux", args...)
+	cmd := exec.CommandContext(ctx, "tmux", args...)
+	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("list-sessions: %w", err)
@@ -250,14 +253,18 @@ func (r *TmuxServerRegistry) startControlMode() (*exec.Cmd, *bufio.Scanner, io.W
 		// "new-session -d -s <name>" is idempotent: if the session already exists tmux
 		// exits with a non-zero code which we intentionally ignore.
 		createArgs := []string{"new-session", "-d", "-s", keepaliveName}
-		_ = exec.Command("tmux", createArgs...).Run()
+		keepaliveCtx, keepaliveCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer keepaliveCancel()
+		keepaliveCmd := exec.CommandContext(keepaliveCtx, "tmux", createArgs...)
+		keepaliveCmd.WaitDelay = 2 * time.Second
+		_ = keepaliveCmd.Run()
 	}
 
 	// No -r flag: read-only is irrelevant for event monitoring, and it caused
 	// immediate %exit on some tmux versions.
 	baseArgs := []string{"-C", "attach-session", "-t", keepaliveName}
 	args := prependSocket(r.serverSocket, baseArgs)
-	cmd := exec.Command("tmux", args...)
+	cmd := exec.CommandContext(r.ctx, "tmux", args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -274,6 +281,7 @@ func (r *TmuxServerRegistry) startControlMode() (*exec.Cmd, *bufio.Scanner, io.W
 		stdin.Close()
 		return nil, nil, nil, fmt.Errorf("cmd.Start: %w", err)
 	}
+	TrackChildPID(cmd.Process.Pid, "tmux registry control-mode socket="+r.serverSocket)
 	return cmd, bufio.NewScanner(stdout), stdin, nil
 }
 
@@ -344,6 +352,7 @@ func (r *TmuxServerRegistry) reconnectLoop() {
 		// Closing stdin signals tmux to exit cleanly (it sends %exit on EOF).
 		stdin.Close()
 		// Clean up the process.
+		UntrackChildPID(cmd.Process.Pid)
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 

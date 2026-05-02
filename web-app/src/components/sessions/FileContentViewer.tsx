@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useGetFileContent } from "@/lib/hooks/useFileService";
+import { darkTheme } from "@/styles/theme.css";
 import {
   container, emptyState, emptyIcon,
   loading as loadingClass, error as errorClass, spinner,
   breadcrumb, breadcrumbSegment, breadcrumbCurrent, breadcrumbSep,
   truncationWarning, viewer, shikiOutput, plainPre, codeMirrorEditor,
   binaryPlaceholder, binaryIcon, binaryTitle, binaryMeta,
+  downloadButton, imageViewer, imagePreview,
 } from "./FileContentViewer.css";
 
 // Language detection map: file extension → Shiki/CodeMirror language ID.
@@ -104,9 +106,10 @@ async function getHighlighter() {
 interface BreadcrumbProps {
   path: string;
   onSegmentClick?: (path: string) => void;
+  downloadUrl?: string;
 }
 
-function Breadcrumb({ path, onSegmentClick }: BreadcrumbProps) {
+function Breadcrumb({ path, onSegmentClick, downloadUrl }: BreadcrumbProps) {
   const segments = path.split("/").filter(Boolean);
   return (
     <div className={breadcrumb}>
@@ -126,8 +129,40 @@ function Breadcrumb({ path, onSegmentClick }: BreadcrumbProps) {
           </span>
         );
       })}
+      {downloadUrl && (
+        <a
+          href={downloadUrl}
+          download
+          className={downloadButton}
+          title="Download file"
+        >
+          ↓ Download
+        </a>
+      )}
     </div>
   );
+}
+
+// ---- App theme hook ----
+
+function useAppTheme(): "light" | "dark" {
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document === "undefined") return true;
+    return document.documentElement.classList.contains(darkTheme);
+  });
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains(darkTheme));
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  return isDark ? "dark" : "light";
 }
 
 // ---- CodeMirror viewer (large files) ----
@@ -140,6 +175,8 @@ interface CodeMirrorViewerProps {
 function CodeMirrorViewer({ content, language }: CodeMirrorViewerProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<import("@codemirror/view").EditorView | null>(null);
+  const appTheme = useAppTheme();
+  const isDark = appTheme === "dark";
 
   useEffect(() => {
     let view: import("@codemirror/view").EditorView | null = null;
@@ -164,7 +201,7 @@ function CodeMirrorViewer({ content, language }: CodeMirrorViewerProps) {
         basicSetup,
         EditorState.readOnly.of(true),
         EditorView.editable.of(false),
-        oneDark,
+        ...(isDark ? [oneDark] : []),
       ];
       if (langExtension) extensions.push(langExtension);
 
@@ -179,8 +216,9 @@ function CodeMirrorViewer({ content, language }: CodeMirrorViewerProps) {
 
     return () => {
       view?.destroy();
+      viewRef.current = null;
     };
-  }, [content, language]);
+  }, [content, language, isDark]);
 
   return <div ref={editorRef} className={codeMirrorEditor} />;
 }
@@ -291,6 +329,17 @@ function ShikiViewer({ content, language }: ShikiViewerProps) {
   );
 }
 
+// ---- Image content types ----
+
+const IMAGE_CONTENT_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/svg+xml",
+  "image/webp",
+  "image/bmp",
+]);
+
 // ---- Main component ----
 
 interface FileContentViewerProps {
@@ -310,6 +359,9 @@ export function FileContentViewer({ sessionId, filePath, baseUrl }: FileContentV
       </div>
     );
   }
+
+  const rawUrl = `/api/files/raw?sessionId=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(filePath)}`;
+  const downloadUrl = `${rawUrl}&download=true`;
 
   if (loading) {
     return (
@@ -336,11 +388,28 @@ export function FileContentViewer({ sessionId, filePath, baseUrl }: FileContentV
 
   if (!data) return null;
 
+  // Inline image rendering for known image content types.
+  const isImage = data.isBinary && IMAGE_CONTENT_TYPES.has(data.contentType ?? "");
+  if (isImage) {
+    return (
+      <div className={container}>
+        <Breadcrumb path={filePath} downloadUrl={downloadUrl} />
+        <div className={imageViewer}>
+          <img
+            src={rawUrl}
+            alt={filePath}
+            className={imagePreview}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (data.isBinary) {
     const sizeKb = Number(data.size) / 1024;
     return (
       <div className={container}>
-        <Breadcrumb path={filePath} />
+        <Breadcrumb path={filePath} downloadUrl={downloadUrl} />
         <div className={binaryPlaceholder}>
           <span className={binaryIcon}>🔒</span>
           <p className={binaryTitle}>Binary file — cannot display</p>
@@ -361,7 +430,7 @@ export function FileContentViewer({ sessionId, filePath, baseUrl }: FileContentV
 
   return (
     <div className={container}>
-      <Breadcrumb path={filePath} />
+      <Breadcrumb path={filePath} downloadUrl={downloadUrl} />
       {data.isTruncated && (
         <div className={truncationWarning}>
           ⚠ File truncated to 1 MB — only the first portion is shown

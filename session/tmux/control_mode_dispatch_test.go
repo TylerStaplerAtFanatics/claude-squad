@@ -17,15 +17,23 @@ import (
 func newDispatchTestSession(t *testing.T) (*TmuxSession, io.WriteCloser) {
 	t.Helper()
 	pr, pw := io.Pipe()
+	doneCh := make(chan struct{})
 	sess := &TmuxSession{
 		sanitizedName:    "test_session",
 		controlModeStdin: pw,
+		highPriSendCh:    make(chan cmSendReq, 64),
+		normPriSendCh:    make(chan cmSendReq, 256),
+		cmSenderExited:   make(chan struct{}),
 	}
 	// Drain the read side so writes don't block.
 	go func() {
 		io.Copy(io.Discard, pr)
 	}()
-	t.Cleanup(func() { pw.Close() })
+	go sess.runCMSender(doneCh, pw)
+	t.Cleanup(func() {
+		close(doneCh)
+		pw.Close()
+	})
 	return sess, pw
 }
 
@@ -380,11 +388,17 @@ func TestCMFeatureFlag_OnUsesCMPath(t *testing.T) {
 	}
 
 	pr, pw := io.Pipe()
+	doneCh := make(chan struct{})
 	sess := &TmuxSession{
 		sanitizedName:    "test",
 		cmdExec:          mock,
 		controlModeStdin: pw,
+		highPriSendCh:    make(chan cmSendReq, 64),
+		normPriSendCh:    make(chan cmSendReq, 256),
+		cmSenderExited:   make(chan struct{}),
 	}
+	defer func() { close(doneCh); pw.Close() }()
+	go sess.runCMSender(doneCh, pw)
 
 	// Capture what sendCMCommand writes.
 	written := make(chan string, 1)

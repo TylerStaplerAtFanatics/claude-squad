@@ -174,6 +174,64 @@ func NewServer(addr string) *Server {
 			log.InfoLog.Printf("Push notification service initialized")
 		}
 
+		// Wire fork pressure monitor → push notification + emergency reconcile.
+		// Fires when capture-pane subprocess failures or zombie counts exceed thresholds,
+		// indicating that dead sessions are flooding the poller with fork() calls.
+		tmux.RegisterForkPressureAlert(func(level tmux.ForkPressureLevel, stats tmux.ForkPressureStats) {
+			body := fmt.Sprintf(
+				"Subprocess failures: %d/%ds | Spawns: %d/%ds | Zombies: %d | Level: %s",
+				stats.FailuresInWindow, int(stats.WindowDuration.Seconds()),
+				stats.SpawnsInWindow, int(stats.WindowDuration.Seconds()),
+				stats.ZombiesInWindow, level,
+			)
+			notifType := int32(sessionv1.NotificationType_NOTIFICATION_TYPE_WARNING)
+			if level == tmux.ForkPressureCritical {
+				notifType = int32(sessionv1.NotificationType_NOTIFICATION_TYPE_ERROR)
+			}
+			event := events.NewNotificationEvent(
+				"fork-pressure",
+				"System",
+				uuid.New().String(),
+				notifType,
+				int32(sessionv1.NotificationPriority_NOTIFICATION_PRIORITY_HIGH),
+				fmt.Sprintf("Fork Pressure: %s", level),
+				body,
+				nil,
+			)
+			deps.EventBus.Publish(event)
+			log.WarningLog.Printf("[ForkPressure] alert dispatched: level=%s %s", level, body)
+
+			// Immediately reconcile to mark dead sessions Stopped, cutting spawn rate.
+			if deps.ReviewQueuePoller != nil {
+				deps.ReviewQueuePoller.ForceReconcile()
+			}
+		})
+
+		// Start fork pressure logger (logs stats every 30s when activity > 0).
+		tmux.StartForkPressureLogger(serverCtx, 30*time.Second, func(format string, args ...any) {
+			log.InfoLog.Printf(format, args...)
+		})
+
+		// Become the subreaper for our process tree so that tmux's zombie children
+		// get reparented to us (not init) when tmux hasn't yet reaped them.
+		// No-op on macOS and Windows; effective on Linux only.
+		if err := tmux.SetSubreaper(); err != nil {
+			log.WarningLog.Printf("[zombie] SetSubreaper failed (non-fatal): %v", err)
+		} else {
+			log.InfoLog.Printf("[zombie] subreaper enabled: tmux descendant zombies will be reparented here")
+		}
+
+		// Start zombie watcher (scans for zombie child processes every 30s).
+		tmux.StartZombieWatcher(serverCtx, 30*time.Second, func(format string, args ...any) {
+			log.WarningLog.Printf(format, args...)
+		})
+
+		// Start zombie reaper (calls waitpid(-1, WNOHANG) every 60s to reap any
+		// zombie children left by cmd.Start() paths that skipped cmd.Wait()).
+		tmux.StartZombieReaper(serverCtx, 60*time.Second, func(format string, args ...any) {
+			log.InfoLog.Printf(format, args...)
+		})
+
 		// Wire tmux server recovery → web UI toast notification.
 		tmux.SetServerRecoveryCallback(func() {
 			event := events.NewNotificationEvent(
@@ -290,6 +348,13 @@ func NewServer(addr string) *Server {
 		telemetryHandler := handlers.NewTelemetryHandler()
 		srv.mux.HandleFunc("POST /api/telemetry", telemetryHandler.HandleTelemetry)
 		log.InfoLog.Printf("Registered telemetry handler at POST /api/telemetry")
+
+		// Register raw file download endpoint.
+		// Uses the FileService inside SessionService to validate paths against
+		// the session worktree root (path traversal prevention).
+		fileSvc := deps.SessionService.GetFileService()
+		srv.mux.HandleFunc("/api/files/raw", fileSvc.ServeFileRaw)
+		log.InfoLog.Printf("Registered raw file download handler at /api/files/raw")
 	}
 
 	// Register image upload endpoint — saves clipboard images to a temp directory

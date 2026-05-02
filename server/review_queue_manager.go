@@ -274,8 +274,17 @@ func (rqm *ReactiveQueueManager) OnItemAdded(item *session.ReviewItem) {
 			message = fmt.Sprintf("Session '%s' needs attention", item.SessionName)
 		}
 
+		// item.SessionID is the session title (the queue key). Resolve it to the
+		// stable UUID so the web client can match the notification to a session.
+		resolvedID := item.SessionID
+		if rqm.poller != nil {
+			if inst := rqm.poller.FindInstance(item.SessionID); inst != nil {
+				resolvedID = inst.GetStableID()
+			}
+		}
+
 		notifEvent := events.NewNotificationEvent(
-			item.SessionID,
+			resolvedID,
 			item.SessionName,
 			notifID,
 			notifType,

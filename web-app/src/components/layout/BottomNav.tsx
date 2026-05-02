@@ -1,4 +1,5 @@
 "use client";
+// +feature: ui:bottom-nav
 
 import { useState, useEffect } from "react";
 import { AppLink } from "@/components/ui/AppLink";
