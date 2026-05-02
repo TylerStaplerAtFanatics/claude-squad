@@ -1,5 +1,8 @@
 # Feature Plan: Detect and Address Rate Limits
 
+**Implementation Status**: Core stories 1-4 implemented (`session/detection/ratelimit/`). Story 5 (config/per-session disable) and UX improvements (`rate-limit-ux-improvements.md`) remain pending.
+**Updated**: 2026-05-02
+
 ## Executive Summary
 
 This feature enables automatic detection and resolution of LLM API rate limits in terminal sessions. When rate limit dialogs appear in sessions running Claude Code, Aider, or other LLM programs, the system will automatically detect them, wait for the reset time to elapse, and send the appropriate input to resume without manual intervention.
