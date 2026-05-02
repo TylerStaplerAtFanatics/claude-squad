@@ -322,6 +322,14 @@ lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with comprehen
 	fi; \
 	golangci-lint run --enable=nilnil,staticcheck,ineffassign,govet
 
+lint-no-sleep-tests: ## ADR-003 audit: count time.Sleep calls in test files (non-blocking; 165 pre-existing violations)
+	@count=$$(grep -rn 'time\.Sleep' --include='*_test.go' . \
+	  | grep -v 'vendor\|web-app\|third_party\|bin/' | wc -l | tr -d ' '); \
+	echo "⏱  time.Sleep in test files: $$count (target: 0, per ADR-003)"; \
+	if [ "$$count" -gt 0 ]; then \
+	  grep -rn 'time\.Sleep' --include='*_test.go' . | grep -v 'vendor\|web-app\|third_party\|bin/'; \
+	fi
+
 format: ensure-tools ## Format code with gofmt
 	go fmt ./...
 
