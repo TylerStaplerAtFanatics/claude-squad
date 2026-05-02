@@ -54,6 +54,9 @@ const (
 	// UnfinishedWorkServiceGetWorktreeAISummaryProcedure is the fully-qualified name of the
 	// UnfinishedWorkService's GetWorktreeAISummary RPC.
 	UnfinishedWorkServiceGetWorktreeAISummaryProcedure = "/session.v1.UnfinishedWorkService/GetWorktreeAISummary"
+	// UnfinishedWorkServiceGetWorktreeDiffProcedure is the fully-qualified name of the
+	// UnfinishedWorkService's GetWorktreeDiff RPC.
+	UnfinishedWorkServiceGetWorktreeDiffProcedure = "/session.v1.UnfinishedWorkService/GetWorktreeDiff"
 	// UnfinishedWorkServiceQuickCommitPushProcedure is the fully-qualified name of the
 	// UnfinishedWorkService's QuickCommitPush RPC.
 	UnfinishedWorkServiceQuickCommitPushProcedure = "/session.v1.UnfinishedWorkService/QuickCommitPush"
@@ -82,6 +85,9 @@ type UnfinishedWorkServiceClient interface {
 	SnoozeWorktree(context.Context, *connect.Request[v1.SnoozeWorktreeRequest]) (*connect.Response[v1.SnoozeWorktreeResponse], error)
 	// GetWorktreeAISummary generates (or returns cached) an AI summary for a worktree.
 	GetWorktreeAISummary(context.Context, *connect.Request[v1.GetWorktreeAISummaryRequest]) (*connect.Response[v1.GetWorktreeAISummaryResponse], error)
+	// GetWorktreeDiff returns the full git diff for an unfinished worktree without
+	// requiring an open session. Compares the worktree against the remote default branch.
+	GetWorktreeDiff(context.Context, *connect.Request[v1.GetWorktreeDiffRequest]) (*connect.Response[v1.GetWorktreeDiffResponse], error)
 	// QuickCommitPush stages all changes, commits, and pushes in one operation.
 	QuickCommitPush(context.Context, *connect.Request[v1.QuickCommitPushRequest]) (*connect.Response[v1.QuickCommitPushResponse], error)
 	// GetUnfinishedWorkConfig retrieves current source configuration.
@@ -143,6 +149,12 @@ func NewUnfinishedWorkServiceClient(httpClient connect.HTTPClient, baseURL strin
 			connect.WithSchema(unfinishedWorkServiceMethods.ByName("GetWorktreeAISummary")),
 			connect.WithClientOptions(opts...),
 		),
+		getWorktreeDiff: connect.NewClient[v1.GetWorktreeDiffRequest, v1.GetWorktreeDiffResponse](
+			httpClient,
+			baseURL+UnfinishedWorkServiceGetWorktreeDiffProcedure,
+			connect.WithSchema(unfinishedWorkServiceMethods.ByName("GetWorktreeDiff")),
+			connect.WithClientOptions(opts...),
+		),
 		quickCommitPush: connect.NewClient[v1.QuickCommitPushRequest, v1.QuickCommitPushResponse](
 			httpClient,
 			baseURL+UnfinishedWorkServiceQuickCommitPushProcedure,
@@ -173,6 +185,7 @@ type unfinishedWorkServiceClient struct {
 	undismissWorktree          *connect.Client[v1.UndismissWorktreeRequest, v1.UndismissWorktreeResponse]
 	snoozeWorktree             *connect.Client[v1.SnoozeWorktreeRequest, v1.SnoozeWorktreeResponse]
 	getWorktreeAISummary       *connect.Client[v1.GetWorktreeAISummaryRequest, v1.GetWorktreeAISummaryResponse]
+	getWorktreeDiff            *connect.Client[v1.GetWorktreeDiffRequest, v1.GetWorktreeDiffResponse]
 	quickCommitPush            *connect.Client[v1.QuickCommitPushRequest, v1.QuickCommitPushResponse]
 	getUnfinishedWorkConfig    *connect.Client[v1.GetUnfinishedWorkConfigRequest, v1.GetUnfinishedWorkConfigResponse]
 	updateUnfinishedWorkConfig *connect.Client[v1.UpdateUnfinishedWorkConfigRequest, v1.UpdateUnfinishedWorkConfigResponse]
@@ -213,6 +226,11 @@ func (c *unfinishedWorkServiceClient) GetWorktreeAISummary(ctx context.Context, 
 	return c.getWorktreeAISummary.CallUnary(ctx, req)
 }
 
+// GetWorktreeDiff calls session.v1.UnfinishedWorkService.GetWorktreeDiff.
+func (c *unfinishedWorkServiceClient) GetWorktreeDiff(ctx context.Context, req *connect.Request[v1.GetWorktreeDiffRequest]) (*connect.Response[v1.GetWorktreeDiffResponse], error) {
+	return c.getWorktreeDiff.CallUnary(ctx, req)
+}
+
 // QuickCommitPush calls session.v1.UnfinishedWorkService.QuickCommitPush.
 func (c *unfinishedWorkServiceClient) QuickCommitPush(ctx context.Context, req *connect.Request[v1.QuickCommitPushRequest]) (*connect.Response[v1.QuickCommitPushResponse], error) {
 	return c.quickCommitPush.CallUnary(ctx, req)
@@ -246,6 +264,9 @@ type UnfinishedWorkServiceHandler interface {
 	SnoozeWorktree(context.Context, *connect.Request[v1.SnoozeWorktreeRequest]) (*connect.Response[v1.SnoozeWorktreeResponse], error)
 	// GetWorktreeAISummary generates (or returns cached) an AI summary for a worktree.
 	GetWorktreeAISummary(context.Context, *connect.Request[v1.GetWorktreeAISummaryRequest]) (*connect.Response[v1.GetWorktreeAISummaryResponse], error)
+	// GetWorktreeDiff returns the full git diff for an unfinished worktree without
+	// requiring an open session. Compares the worktree against the remote default branch.
+	GetWorktreeDiff(context.Context, *connect.Request[v1.GetWorktreeDiffRequest]) (*connect.Response[v1.GetWorktreeDiffResponse], error)
 	// QuickCommitPush stages all changes, commits, and pushes in one operation.
 	QuickCommitPush(context.Context, *connect.Request[v1.QuickCommitPushRequest]) (*connect.Response[v1.QuickCommitPushResponse], error)
 	// GetUnfinishedWorkConfig retrieves current source configuration.
@@ -303,6 +324,12 @@ func NewUnfinishedWorkServiceHandler(svc UnfinishedWorkServiceHandler, opts ...c
 		connect.WithSchema(unfinishedWorkServiceMethods.ByName("GetWorktreeAISummary")),
 		connect.WithHandlerOptions(opts...),
 	)
+	unfinishedWorkServiceGetWorktreeDiffHandler := connect.NewUnaryHandler(
+		UnfinishedWorkServiceGetWorktreeDiffProcedure,
+		svc.GetWorktreeDiff,
+		connect.WithSchema(unfinishedWorkServiceMethods.ByName("GetWorktreeDiff")),
+		connect.WithHandlerOptions(opts...),
+	)
 	unfinishedWorkServiceQuickCommitPushHandler := connect.NewUnaryHandler(
 		UnfinishedWorkServiceQuickCommitPushProcedure,
 		svc.QuickCommitPush,
@@ -337,6 +364,8 @@ func NewUnfinishedWorkServiceHandler(svc UnfinishedWorkServiceHandler, opts ...c
 			unfinishedWorkServiceSnoozeWorktreeHandler.ServeHTTP(w, r)
 		case UnfinishedWorkServiceGetWorktreeAISummaryProcedure:
 			unfinishedWorkServiceGetWorktreeAISummaryHandler.ServeHTTP(w, r)
+		case UnfinishedWorkServiceGetWorktreeDiffProcedure:
+			unfinishedWorkServiceGetWorktreeDiffHandler.ServeHTTP(w, r)
 		case UnfinishedWorkServiceQuickCommitPushProcedure:
 			unfinishedWorkServiceQuickCommitPushHandler.ServeHTTP(w, r)
 		case UnfinishedWorkServiceGetUnfinishedWorkConfigProcedure:
@@ -378,6 +407,10 @@ func (UnimplementedUnfinishedWorkServiceHandler) SnoozeWorktree(context.Context,
 
 func (UnimplementedUnfinishedWorkServiceHandler) GetWorktreeAISummary(context.Context, *connect.Request[v1.GetWorktreeAISummaryRequest]) (*connect.Response[v1.GetWorktreeAISummaryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.UnfinishedWorkService.GetWorktreeAISummary is not implemented"))
+}
+
+func (UnimplementedUnfinishedWorkServiceHandler) GetWorktreeDiff(context.Context, *connect.Request[v1.GetWorktreeDiffRequest]) (*connect.Response[v1.GetWorktreeDiffResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.UnfinishedWorkService.GetWorktreeDiff is not implemented"))
 }
 
 func (UnimplementedUnfinishedWorkServiceHandler) QuickCommitPush(context.Context, *connect.Request[v1.QuickCommitPushRequest]) (*connect.Response[v1.QuickCommitPushResponse], error) {

@@ -103,6 +103,7 @@ ExecStart=$bin_path --remote-access$extra_flags
 WorkingDirectory=$HOME
 Restart=on-failure
 RestartSec=5s
+KillMode=process
 StandardOutput=append:$log_dir/service.log
 StandardError=append:$log_dir/service.log
 Environment=HOME=$HOME

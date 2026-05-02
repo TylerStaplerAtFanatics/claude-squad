@@ -312,7 +312,7 @@ func (s *Scanner) scanRepo(repoPath string) []ScanResult {
 	}
 
 	// Resolve default branch once per repo.
-	defaultBranch := s.resolveDefaultBranch(repoPath)
+	defaultBranch := s.ResolveDefaultBranch(repoPath)
 
 	var results []ScanResult
 	for _, wt := range worktrees {
@@ -428,25 +428,31 @@ func (s *Scanner) scanWorktree(wt WorktreeInfo, defaultBranch, repoPath string) 
 	return result
 }
 
-// resolveDefaultBranch tries origin/HEAD then common branch names.
-func (s *Scanner) resolveDefaultBranch(repoPath string) string {
+// ResolveDefaultBranch returns the ref to compare unfinished work against.
+// It prefers remote tracking refs (origin/main) over local copies so the
+// comparison reflects the fetched remote state rather than a potentially
+// stale local branch.
+func (s *Scanner) ResolveDefaultBranch(repoPath string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// Try symbolic-ref origin/HEAD.
+	// Try symbolic-ref origin/HEAD — returns "origin/main". Keep the
+	// "origin/" prefix so git compares against the remote tracking ref.
 	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "symbolic-ref",
 		"refs/remotes/origin/HEAD", "--short")
 	out, err := cmd.Output()
 	if err == nil {
-		ref := strings.TrimSpace(string(out))
-		if strings.HasPrefix(ref, "origin/") {
-			return strings.TrimPrefix(ref, "origin/")
+		if ref := strings.TrimSpace(string(out)); ref != "" {
+			return ref // e.g. "origin/main"
 		}
-		return ref
 	}
 
-	// Fallback: try main, master, develop, trunk.
-	for _, candidate := range []string{"main", "master", "develop", "trunk"} {
+	// Fallback: prefer remote tracking refs; fall back to local branches for
+	// repos that have no remote configured.
+	for _, candidate := range []string{
+		"origin/main", "origin/master", "origin/develop", "origin/trunk",
+		"main", "master", "develop", "trunk",
+	} {
 		ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
 		checkCmd := exec.CommandContext(ctx2, "git", "-C", repoPath, "rev-parse",
 			"--verify", candidate)

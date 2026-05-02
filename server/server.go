@@ -317,7 +317,7 @@ func NewServer(addr string) *Server {
 		log.InfoLog.Printf("Registered Claude Code hook receivers at /api/hooks/{stop,pre-tool-use,post-tool-use,prompt-submit}")
 
 		// Register session-aware image upload endpoint (multipart/form-data, saves to worktree).
-		sessionUploadHandler := services.NewSessionImageUploadHandler(deps.Storage)
+		sessionUploadHandler := services.NewSessionImageUploadHandler(deps.Storage, deps.ReviewQueuePoller)
 		srv.mux.HandleFunc("POST /api/v1/upload-image", sessionUploadHandler.HandleUpload)
 		log.InfoLog.Printf("Registered session image upload handler at POST /api/v1/upload-image")
 
