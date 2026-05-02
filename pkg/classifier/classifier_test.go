@@ -1481,9 +1481,149 @@ func TestClassify_GhApi_Escalate(t *testing.T) {
 	ctx := ClassificationContext{}
 
 	cmds := []string{
+		// generic REST call with no read indicator
 		"gh api repos/owner/repo/issues",
+		// graphql with unrecognized query content still escalates
 		"gh api graphql -f query='...'",
-		"gh api repos/owner/repo/pulls/1/comments/1/replies -f body='Fixed'",
+		// explicit POST — escalated by the 515 guard even though --jq is present
+		"gh api repos/owner/repo/issues -X POST --field title=foo --jq '.id'",
+		// PUT write
+		"gh api repos/owner/repo/branches/main/protection -X PUT --input /tmp/rules.json",
+		// DELETE
+		"gh api repos/owner/repo/git/refs/heads/stale-branch -X DELETE",
+		// PATCH
+		"gh api repos/owner/repo/pulls/1 --method PATCH --field state=closed",
+		// explicit body field (REST POST comment without -X flag — gh infers POST from -f body)
+		"gh api repos/owner/repo/issues/1/comments --field body='comment text'",
+		// --input flag (reads body from file → write operation)
+		"gh api repos/owner/repo/milestones --input /tmp/milestone.json",
+		// -f with --jq: 515 guard catches -f before the 510 --jq allow fires
+		"gh api repos/owner/repo/issues -f title='new issue' --jq '.id'",
+		// --field with --paginate: same bypass attempt, 515 fires first
+		"gh api repos/owner/repo/pulls --field state=closed --paginate",
+		// -F (multipart) field combined with --jq
+		"gh api repos/owner/repo/releases -F tag_name=v1.0 --jq '.id'",
+		// staged graphql: -f query=$(cat /tmp/...) — caught by 515 -f guard
+		`gh api graphql -f query="$(cat /tmp/review-threads.graphql)" -f owner="myorg" -f repo="myrepo" -F pr=42`,
+		// replies endpoint with DELETE method — 525 guard fires before 520 allow
+		"gh api repos/owner/repo/pulls/1/comments/42/replies -X DELETE",
+		// replies endpoint with PUT method
+		"gh api repos/owner/repo/pulls/1/comments/42/replies --method PUT -f body='updated'",
+		// replies endpoint with --input
+		"gh api repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies --input /tmp/reply.json",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != Escalate {
+			t.Errorf("cmd %q: expected Escalate, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_GhApiReadOnly_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		// --jq: common analytics pattern — actions runs
+		"gh api repos/owner/repo/actions/runs --jq '.workflow_runs[:5] | .[] | {name, conclusion}'",
+		// --jq: PR head SHA
+		"gh api repos/owner/repo/pulls/37 --jq '.head.sha'",
+		// --jq: workflow runs filtered by branch
+		"gh api repos/owner/repo/actions/runs --jq '[.workflow_runs[] | select(.head_branch == \"main\")] | .[0]'",
+		// --jq: specific run jobs
+		"gh api repos/owner/repo/actions/runs/12345/jobs --jq '.jobs[] | \"\\(.name): \\(.conclusion)\"'",
+		// --jq: repo file contents (GitHub API returns base64-encoded)
+		"gh api repos/JetBrains/kotlin/contents/CHANGELOG.md --jq '.content'",
+		// --jq: release body
+		"gh api repos/JetBrains/kotlin/releases/tags/v2.3.0 --jq '.body'",
+		// --jq: issue comments
+		"gh api repos/owner/repo/issues/60/comments --jq '.[] | {id, body}'",
+		// --jq: commit check-runs
+		"gh api repos/owner/repo/commits/abc123/check-runs --jq '.check_runs[] | {name, conclusion}'",
+		// --jq: workflows list
+		"gh api repos/owner/repo/actions/workflows --jq '.workflows[] | {name, state, id}'",
+		// --jq: authenticated user (short form)
+		"gh api user --jq '.login'",
+		// --jq: leading slash form
+		"gh api /repos/owner/repo/actions/runs/12345 --jq '{name, status}'",
+		// --paginate: reading all PR comments
+		"gh api repos/owner/repo/pulls/23/comments --paginate",
+		// --paginate with jq filter
+		"gh api repos/owner/repo/issues --paginate --jq '.[] | {number, title}'",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_GhApiPRReviewWorkflow_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		// posting a reply to a review comment (literal path)
+		"gh api repos/owner/repo/pulls/1/comments/42/replies -f body='Fixed'",
+		// posting a reply with shell variables (as the skill uses them)
+		"gh api repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies -f body='Good catch, addressed.'",
+		// resolveReviewThread mutation (inline, as the skill uses it)
+		// This uses -f query=... so it must be at 520 above the 515 -f guard.
+		"gh api graphql -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }' -f id='RT_kwDOAbc123'",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_Base64_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		"base64 -d",
+		"base64 /tmp/file.b64",
+		"base64 --decode /tmp/encoded.txt",
+		"base64",
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("cmd %q: expected AutoAllow, got %v (rule=%s, reason=%s)", cmd, result.Decision, result.RuleID, result.Reason)
+		}
+	}
+}
+
+func TestClassify_Base64FileOutput_Escalate(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	cmds := []string{
+		// BSD/macOS: -o writes decoded output to a file instead of stdout
+		"base64 -o /tmp/decoded.bin /tmp/encoded.b64",
+		// long form
+		"base64 --output /tmp/decoded.bin /tmp/encoded.b64",
 	}
 	for _, cmd := range cmds {
 		payload := PermissionRequestPayload{
@@ -2153,20 +2293,23 @@ func TestClassify_Rtk_WrapperTransparency(t *testing.T) {
 	cases := []struct {
 		cmd          string
 		wantDecision ClassificationDecision
-		wantRule     string // substring match; empty = skip rule check
+		wantRule     string // empty = skip rule check
 	}{
-		// rtk is stripped; git read rule fires
+		// rtk is recursively evaluated; git read rule fires on inner command
 		{"rtk git status", AutoAllow, "seed-allow-git-read"},
-		// rtk stripped; deny rule fires on unwrapped rm -rf /
-		{"rtk rm -rf /", AutoDeny, "seed-deny-rm-rf-root"},
-		// rtk stripped; git push escalates
+		// inner "rm -rf /" triggers AuditCommand → audit-rm-rf-critical-path
+		{"rtk rm -rf /", AutoDeny, "audit-rm-rf-critical-path"},
+		// inner "git push origin main" escalates
 		{"rtk git push origin main", Escalate, "seed-escalate-git-push"},
-		// chained wrappers both unwrapped
+		// sudo wraps rtk wraps git status — two recursive-eval levels
 		{"sudo rtk git status", AutoAllow, "seed-allow-git-read"},
-		// bare rtk with no subcommand → escalate (no matching rule)
+		// bare rtk with no subcommand → no inner command → escalate
 		{"rtk", Escalate, ""},
-		// rtk gain → no seed rule for gain → escalate
+		// rtk gain → inner "gain" has no rule → escalate
 		{"rtk gain", Escalate, ""},
+		// rtk proxy is a pass-through sub-mode; "proxy" token is skipped
+		{"rtk proxy git status", AutoAllow, "seed-allow-git-read"},
+		{"rtk proxy git push", Escalate, "seed-escalate-git-push"},
 	}
 
 	for _, tc := range cases {
@@ -2277,5 +2420,416 @@ func TestParseBashCommand_ForLoop(t *testing.T) {
 	result := ParseBashCommand(cmd)
 	if result.Program != "gofmt" {
 		t.Errorf("ParseBashCommand(%q).Program=%q, want \"gofmt\"", cmd, result.Program)
+	}
+}
+
+// ── Recursive-eval wrapper tests ──────────────────────────────────────────────
+
+func newClassifier() *RuleBasedClassifier { return NewRuleBasedClassifier() }
+
+func bashPayload(cmd string) PermissionRequestPayload {
+	return PermissionRequestPayload{
+		ToolName:  "Bash",
+		ToolInput: map[string]interface{}{"command": cmd},
+	}
+}
+
+func TestClassify_Xargs_RecursiveEval_AllowReadOnly(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+
+	safe := []string{
+		"xargs grep -l pattern",
+		"xargs -n1 grep -rn TODO",
+		"xargs -I{} git status",
+		"find . -name '*.go' | xargs wc -l",
+		"xargs -n1 -P4 go test ./...",
+	}
+	for _, cmd := range safe {
+		r := c.Classify(bashPayload(cmd), ctx)
+		if r.Decision != AutoAllow {
+			t.Errorf("cmd=%q: got %v (%s), want AutoAllow", cmd, r.Decision, r.Reason)
+		}
+	}
+}
+
+func TestClassify_Xargs_RecursiveEval_EscalateOrDeny(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+
+	risky := []string{
+		"xargs git push",
+		"xargs rm -rf",
+		"xargs bash -c",
+		"xargs -I{} git push origin {}",
+	}
+	for _, cmd := range risky {
+		r := c.Classify(bashPayload(cmd), ctx)
+		if r.Decision == AutoAllow {
+			t.Errorf("cmd=%q: got AutoAllow, want Escalate or AutoDeny", cmd)
+		}
+	}
+}
+
+func TestClassify_Parallel_RecursiveEval_AllowReadOnly(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+
+	safe := []string{
+		"parallel git status",
+		"parallel -j4 go test ./...",
+		"parallel grep {} ::: file1 file2",
+	}
+	for _, cmd := range safe {
+		r := c.Classify(bashPayload(cmd), ctx)
+		if r.Decision != AutoAllow {
+			t.Errorf("cmd=%q: got %v (%s), want AutoAllow", cmd, r.Decision, r.Reason)
+		}
+	}
+}
+
+func TestClassify_Parallel_RecursiveEval_EscalateRisky(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+
+	risky := []string{
+		"parallel git push",
+		"parallel npm publish",
+	}
+	for _, cmd := range risky {
+		r := c.Classify(bashPayload(cmd), ctx)
+		if r.Decision == AutoAllow {
+			t.Errorf("cmd=%q: got AutoAllow, want Escalate or AutoDeny", cmd)
+		}
+	}
+}
+
+func TestClassify_Xargs_NestedRecursion_AllowSafe(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+	// xargs xargs git status: inner = "xargs git status" → inner = "git status" → AutoAllow
+	r := c.Classify(bashPayload("xargs xargs git status"), ctx)
+	if r.Decision != AutoAllow {
+		t.Errorf("nested xargs: got %v (%s), want AutoAllow", r.Decision, r.Reason)
+	}
+}
+
+func TestClassify_OtherWrappers_RecursiveEval_AllowSafe(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+
+	safe := []string{
+		"timeout 30 git status",
+		"timeout 5m go test ./...",
+		"stdbuf -oL grep pattern file",
+		"xvfb-run go test ./...",
+		"ionice -c 2 -n 5 go test ./...",
+		"setsid -w make test",
+		"catchsegv go test ./...",
+		"nohup go test ./...",
+		"env GIT_DIR=/tmp git status",
+		"watch -n 5 git status",
+		"nice -n 5 go test ./...",
+		"exec git status",
+		"command git status",
+		"sudo git status",
+		"sudo -u nobody git status",
+		"doas git status",
+		"doas -u root git status",
+		"run0 --user=root git status",
+	}
+	for _, cmd := range safe {
+		r := c.Classify(bashPayload(cmd), ctx)
+		if r.Decision != AutoAllow {
+			t.Errorf("cmd=%q: got %v (%s), want AutoAllow", cmd, r.Decision, r.Reason)
+		}
+	}
+}
+
+func TestClassify_OtherWrappers_EscalateRisky(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+
+	risky := []string{
+		"timeout 30 git push",
+		"sudo git push",
+		"sudo npm publish",
+		"nice -n 5 git push",
+		"env CI=true git push",
+		"nohup git push",
+		"watch git push",
+		"xvfb-run git push",
+		"exec git push",
+	}
+	for _, cmd := range risky {
+		r := c.Classify(bashPayload(cmd), ctx)
+		if r.Decision == AutoAllow {
+			t.Errorf("cmd=%q: got AutoAllow, want Escalate or AutoDeny", cmd)
+		}
+	}
+}
+
+func TestClassify_Rtk_RmRf_AutoDeny(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{Cwd: "/home/user"}
+	// rtk rm -rf ~ → inner = "rm -rf ~" → AuditCommand fires → AutoDeny
+	r := c.Classify(bashPayload("rtk rm -rf ~"), ctx)
+	if r.Decision != AutoDeny {
+		t.Errorf("rtk rm -rf ~: got %v (%s), want AutoDeny", r.Decision, r.Reason)
+	}
+}
+
+func TestClassify_Sudo_InPipeline_RecursiveEval(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+	// "sudo git status | head -5": both sub-commands must allow
+	r := c.Classify(bashPayload("sudo git status | head -5"), ctx)
+	if r.Decision != AutoAllow {
+		t.Errorf("sudo git status | head -5: got %v (%s), want AutoAllow", r.Decision, r.Reason)
+	}
+	// "sudo git push | head -5": git push escalates → compound escalates
+	r2 := c.Classify(bashPayload("sudo git push | head -5"), ctx)
+	if r2.Decision == AutoAllow {
+		t.Errorf("sudo git push | head -5: got AutoAllow, want Escalate")
+	}
+}
+
+// ── Shell expansion and command substitution tests ────────────────────────────
+
+// TestClassify_ShellExpansion_AsProgram verifies that commands where the program
+// token itself is a shell variable or substitution escalate with a specific reason
+// rather than the generic "No matching rule" catch-all.
+func TestClassify_ShellExpansion_AsProgram(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+
+	cases := []string{
+		"$SCRIPT",
+		"$CMD arg1 arg2",
+		"${SHELL} script.sh",
+		"$(which python) -m pytest",
+	}
+	for _, cmd := range cases {
+		r := c.Classify(bashPayload(cmd), ctx)
+		if r.Decision != Escalate {
+			t.Errorf("cmd=%q: got %v, want Escalate", cmd, r.Decision)
+			continue
+		}
+		if r.RuleID != "shell-expansion-program" {
+			t.Errorf("cmd=%q: got RuleID=%q, want %q", cmd, r.RuleID, "shell-expansion-program")
+		}
+	}
+}
+
+// TestClassify_ShellExpansion_PathStripped verifies that variable-prefixed paths
+// that can be stripped to a known program still classify correctly.
+// e.g. $HOME/.local/bin/rg → "rg" → AutoAllow (search rule).
+func TestClassify_ShellExpansion_PathStripped(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+
+	cases := []struct {
+		cmd  string
+		want ClassificationDecision
+	}{
+		// Path-stripped to known safe programs → AutoAllow
+		{"$HOME/.local/bin/rg pattern", AutoAllow},
+		{"${HOME}/bin/git status", AutoAllow},
+		{"$VIRTUAL_ENV/bin/pip install -r requirements.txt", AutoAllow}, // pip install is allowed
+		// Path-stripped to program with no AutoAllow rule → Escalate
+		{"$GOPATH/bin/golangci-lint run ./...", Escalate},
+	}
+	for _, tc := range cases {
+		r := c.Classify(bashPayload(tc.cmd), ctx)
+		if r.Decision != tc.want {
+			t.Errorf("cmd=%q: got %v (%s, rule=%s), want %v", tc.cmd, r.Decision, r.Reason, r.RuleID, tc.want)
+		}
+		// Path-stripped commands must NOT trigger the shell-expansion-program rule.
+		if r.RuleID == "shell-expansion-program" {
+			t.Errorf("cmd=%q: triggered shell-expansion-program rule but program was path-stripped", tc.cmd)
+		}
+	}
+}
+
+// TestClassify_CmdSubst_UnknownInner verifies that a command substitution with an
+// unknown inner command does NOT escalate the outer command. The outer command's
+// own rule determines the decision.
+func TestClassify_CmdSubst_UnknownInner(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+
+	cases := []struct {
+		cmd  string
+		want ClassificationDecision
+	}{
+		// Unknown inner commands: outer command has a rule → outer rule wins
+		{"make $(TARGET)", AutoAllow},
+		{"git tag $(cat .version-file)", AutoAllow},
+		{"echo $(UNKNOWN_CMD)", AutoAllow},
+		{"git checkout $(cat .default-branch)", AutoAllow},
+	}
+	for _, tc := range cases {
+		r := c.Classify(bashPayload(tc.cmd), ctx)
+		if r.Decision != tc.want {
+			t.Errorf("cmd=%q: got %v (%s, rule=%s), want %v", tc.cmd, r.Decision, r.Reason, r.RuleID, tc.want)
+		}
+	}
+}
+
+// TestClassify_CmdSubst_ExplicitEscalation verifies that a CmdSubst inner command
+// with an EXPLICIT escalate rule still escalates the outer command.
+func TestClassify_CmdSubst_ExplicitEscalation(t *testing.T) {
+	c := newClassifier()
+	ctx := ClassificationContext{}
+
+	cases := []string{
+		// git push has an explicit seed-escalate-git-push rule
+		"make $(git push origin main)",
+		// rm explicitly escalates
+		"echo $(rm old-file.txt)",
+	}
+	for _, cmd := range cases {
+		r := c.Classify(bashPayload(cmd), ctx)
+		if r.Decision == AutoAllow {
+			t.Errorf("cmd=%q: got AutoAllow, want Escalate or AutoDeny (inner command has explicit rule)", cmd)
+		}
+	}
+}
+
+// TestExpandEnvVars verifies the standalone ExpandEnvVars helper.
+func TestExpandEnvVars(t *testing.T) {
+	env := map[string]string{
+		"BRANCH":      "main",
+		"HOME":        "/home/user",
+		"BUILD_FLAGS": "--verbose --race",
+	}
+
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"git checkout $BRANCH", "git checkout main"},
+		{"git checkout ${BRANCH}", "git checkout main"},
+		{"ls $HOME/.config", "ls /home/user/.config"},
+		{"ls ${HOME}/.config", "ls /home/user/.config"},
+		{"go test $BUILD_FLAGS ./...", "go test --verbose --race ./..."},
+		// Unknown variable: left unexpanded.
+		{"git merge $UNKNOWN", "git merge $UNKNOWN"},
+		{"git merge ${UNKNOWN}", "git merge ${UNKNOWN}"},
+		// No variables: unchanged.
+		{"go test ./...", "go test ./..."},
+		// Mixed known and unknown.
+		{"git checkout $BRANCH && git merge $UNKNOWN", "git checkout main && git merge $UNKNOWN"},
+	}
+
+	for _, tc := range cases {
+		got := ExpandEnvVars(tc.in, env)
+		if got != tc.want {
+			t.Errorf("ExpandEnvVars(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestBuildContext_PopulatesEnvFromOS verifies that BuildContext populates ctx.Env
+// from the current OS environment so that simple variable expansions ($VAR, ${VAR})
+// in Bash commands are resolved before classification. This is the plumbing that
+// prevents Claude Code from showing "Contains simple_expansion" for commands like
+// "$RUSTC --version" when the variable is known in the process environment.
+func TestBuildContext_PopulatesEnvFromOS(t *testing.T) {
+	const testKey = "SSQ_TEST_BUILDCONTEXT_ENV_KEY"
+	const testVal = "go"
+	t.Setenv(testKey, testVal)
+
+	c := NewRuleBasedClassifier()
+	ctx := c.BuildContext("") // cwd="" skips git detection
+
+	if ctx.Env == nil {
+		t.Fatal("BuildContext: ctx.Env is nil; expected OS environment to be populated")
+	}
+	if got, ok := ctx.Env[testKey]; !ok || got != testVal {
+		t.Errorf("BuildContext: ctx.Env[%q] = %q, want %q", testKey, got, testVal)
+	}
+
+	// Confirm end-to-end: $SSQ_TEST_BUILDCONTEXT_ENV_KEY expands to "go", program
+	// becomes "go", which matches seed-allow-bash-go-safe → AutoAllow.
+	payload := PermissionRequestPayload{
+		ToolName:  "Bash",
+		ToolInput: map[string]interface{}{"command": "$" + testKey + " test ./..."},
+	}
+	result := c.Classify(payload, ctx)
+	if result.Decision != AutoAllow {
+		t.Errorf("expected AutoAllow after env expansion, got %v (rule=%s, reason=%s)",
+			result.Decision, result.RuleID, result.Reason)
+	}
+}
+
+// TestClassify_EnvExpansion verifies that ClassificationContext.Env causes $VAR
+// references in Bash commands to be expanded before classification, converting
+// an otherwise-unresolvable shell expansion into a known program name.
+func TestClassify_EnvExpansion(t *testing.T) {
+	c := newClassifier()
+
+	cases := []struct {
+		name string
+		cmd  string
+		env  map[string]string
+		want ClassificationDecision
+	}{
+		{
+			// $BRANCH expands to "main" → git checkout main → AutoAllow
+			name: "git checkout $BRANCH with env",
+			cmd:  "git checkout $BRANCH",
+			env:  map[string]string{"BRANCH": "main"},
+			want: AutoAllow,
+		},
+		{
+			// Without env, $BRANCH in the program position triggers shell-expansion-program
+			// → but here the program is still "git" (after path strip), the arg is $BRANCH,
+			// which is fine — git checkout matches a seed rule regardless.
+			// This case confirms that arg-position vars don't affect the outcome.
+			name: "git checkout $BRANCH without env",
+			cmd:  "git checkout $BRANCH",
+			env:  nil,
+			want: AutoAllow,
+		},
+		{
+			// $SCRIPT as the program: without env → shell-expansion-program → Escalate.
+			name: "expansion program without env escalates",
+			cmd:  "$SCRIPT --flag",
+			env:  nil,
+			want: Escalate,
+		},
+		{
+			// $SCRIPT expands to a known safe program → AutoAllow.
+			name: "expansion program resolved via env allows",
+			cmd:  "$SCRIPT --flag",
+			env:  map[string]string{"SCRIPT": "go test ./..."},
+			want: AutoAllow,
+		},
+		{
+			// ${RUNNER} expands to a risky program → Escalate (rm -rf).
+			name: "expansion program resolved via env to risky command escalates",
+			cmd:  "${RUNNER}",
+			env:  map[string]string{"RUNNER": "git push origin main"},
+			want: Escalate,
+		},
+		{
+			// Expansion in path prefix: $HOME/bin/git → git after path-strip → still AutoAllow.
+			name: "path-prefixed expansion resolves to safe program",
+			cmd:  "$HOME/bin/git status",
+			env:  map[string]string{"HOME": "/home/user"},
+			want: AutoAllow,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := ClassificationContext{Env: tc.env}
+			r := c.Classify(bashPayload(tc.cmd), ctx)
+			if r.Decision != tc.want {
+				t.Errorf("cmd=%q env=%v: got %v (rule=%s, reason=%s), want %v",
+					tc.cmd, tc.env, r.Decision, r.RuleID, r.Reason, tc.want)
+			}
+		})
 	}
 }
