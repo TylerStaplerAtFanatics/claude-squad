@@ -36,13 +36,21 @@ type TLSPaths struct {
 	CAFile   string
 }
 
-// EnsureTLSCerts generates a self-signed CA and server certificate when the
-// stored SAN hash doesn't match the current hostname list or the cert is
-// nearing expiry. Returns paths to the cert files.
+// EnsureTLSCerts ensures a stable CA exists and issues/reissues a server
+// certificate when the SAN list changes or the server cert nears expiry.
+//
+// The CA is intentionally kept stable across SAN changes so that phones only
+// need to import it once. Only the server cert (signed by the stable CA) is
+// replaced when hostnames change — the CA file on disk is never overwritten
+// unless it is missing or within 30 days of expiry.
 func EnsureTLSCerts(hostnames []string) (*TLSPaths, error) {
 	configDir, err := config.GetConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("get config dir: %w", err)
+	}
+
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return nil, fmt.Errorf("create config dir: %w", err)
 	}
 
 	paths := &TLSPaths{
@@ -52,32 +60,24 @@ func EnsureTLSCerts(hostnames []string) (*TLSPaths, error) {
 	}
 	hashFile := filepath.Join(configDir, certHashFileName)
 
+	// Step 1: ensure a stable CA (only regenerate if absent or near expiry).
+	caKey, caCert, err := ensureCA(paths.CAFile)
+	if err != nil {
+		return nil, fmt.Errorf("ensure CA: %w", err)
+	}
+
+	// Step 2: reuse the server cert if SANs and expiry are still valid.
 	want := sanHash(hostnames)
 	if certCurrent(paths.CertFile, hashFile, want) {
 		log.InfoLog.Printf("tls: reusing existing certificate at %s", paths.CertFile)
 		return paths, nil
 	}
 
-	log.InfoLog.Printf("tls: generating self-signed certificate for %v", hostnames)
+	log.InfoLog.Printf("tls: (re)issuing server certificate for %v", hostnames)
 
-	// 1. Generate CA key + cert
-	caKey, caCert, caCertPEM, err := generateCA()
-	if err != nil {
-		return nil, fmt.Errorf("generate CA: %w", err)
-	}
-
-	// 2. Generate server key + cert signed by the CA
 	certPEM, keyPEM, err := generateServerCert(caKey, caCert, hostnames)
 	if err != nil {
 		return nil, fmt.Errorf("generate server cert: %w", err)
-	}
-
-	// 3. Write files
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return nil, fmt.Errorf("create config dir: %w", err)
-	}
-	if err := os.WriteFile(paths.CAFile, caCertPEM, 0644); err != nil {
-		return nil, fmt.Errorf("write CA: %w", err)
 	}
 	if err := os.WriteFile(paths.CertFile, certPEM, 0644); err != nil {
 		return nil, fmt.Errorf("write cert: %w", err)
@@ -90,8 +90,79 @@ func EnsureTLSCerts(hostnames []string) (*TLSPaths, error) {
 	}
 
 	log.InfoLog.Printf("tls: certificate written to %s", paths.CertFile)
-	log.InfoLog.Printf("tls: CA certificate (for import on phones) at %s", paths.CAFile)
+	log.InfoLog.Printf("tls: CA certificate (import once on phones) at %s", paths.CAFile)
 	return paths, nil
+}
+
+// ensureCA loads the CA from disk if it exists and is not nearing expiry.
+// Otherwise it generates a new CA, writes it to disk, and returns it.
+// The CA private key file is stored alongside the CA cert as tls-ca-key.pem.
+const caKeyFileName = "tls-ca-key.pem"
+
+func ensureCA(caFile string) (*ecdsa.PrivateKey, *x509.Certificate, error) {
+	configDir := filepath.Dir(caFile)
+	caKeyFile := filepath.Join(configDir, caKeyFileName)
+
+	// Try to load existing CA.
+	if caKey, caCert, ok := loadCA(caFile, caKeyFile); ok {
+		// Regenerate only if within 30 days of expiry.
+		if time.Now().Add(30 * 24 * time.Hour).Before(caCert.NotAfter) {
+			log.InfoLog.Printf("tls: reusing existing CA (expires %s)", caCert.NotAfter.Format("2006-01-02"))
+			return caKey, caCert, nil
+		}
+		log.InfoLog.Printf("tls: CA near expiry (%s), regenerating", caCert.NotAfter.Format("2006-01-02"))
+	}
+
+	log.InfoLog.Printf("tls: generating new CA certificate")
+	caKey, caCert, caCertPEM, err := generateCA()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := os.WriteFile(caFile, caCertPEM, 0644); err != nil {
+		return nil, nil, fmt.Errorf("write CA cert: %w", err)
+	}
+
+	caKeyDER, err := x509.MarshalECPrivateKey(caKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshal CA key: %w", err)
+	}
+	caKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: caKeyDER})
+	if err := os.WriteFile(caKeyFile, caKeyPEM, 0600); err != nil {
+		return nil, nil, fmt.Errorf("write CA key: %w", err)
+	}
+
+	return caKey, caCert, nil
+}
+
+// loadCA reads the CA cert and key from disk. Returns (nil, nil, false) on any error.
+func loadCA(caFile, caKeyFile string) (*ecdsa.PrivateKey, *x509.Certificate, bool) {
+	certData, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, nil, false
+	}
+	block, _ := pem.Decode(certData)
+	if block == nil {
+		return nil, nil, false
+	}
+	caCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, nil, false
+	}
+
+	keyData, err := os.ReadFile(caKeyFile)
+	if err != nil {
+		return nil, nil, false
+	}
+	keyBlock, _ := pem.Decode(keyData)
+	if keyBlock == nil {
+		return nil, nil, false
+	}
+	caKey, err := x509.ParseECPrivateKey(keyBlock.Bytes)
+	if err != nil {
+		return nil, nil, false
+	}
+
+	return caKey, caCert, true
 }
 
 // LoadTLSConfig returns a *tls.Config from the given certificate files.

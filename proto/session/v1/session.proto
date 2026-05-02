@@ -260,6 +260,11 @@ service SessionService {
   // GetTerminalSnapshot returns the last N lines of terminal output for a session
   // without requiring an active stream. Suitable for session card previews.
   rpc GetTerminalSnapshot(GetTerminalSnapshotRequest) returns (GetTerminalSnapshotResponse) {}
+
+  // LogClientEvents receives batched browser console log entries from the web UI.
+  // Used for remote debugging of mobile browser sessions where DevTools are unavailable.
+  // Always returns an empty response; malformed entries are silently discarded.
+  rpc LogClientEvents(LogClientEventsRequest) returns (LogClientEventsResponse) {}
 }
 
 // ListSessionsRequest allows filtering sessions by various criteria.
@@ -1700,3 +1705,20 @@ message GetTerminalSnapshotResponse {
   // True when content is entirely whitespace (cleared terminal).
   bool is_empty = 2;
 }
+
+// LogClientEvents
+
+message ClientLogEntry {
+  string level = 1;
+  string message = 2;
+  string timestamp = 3;
+  string url = 4;
+  string user_agent = 5;
+  string session_id = 6;
+}
+
+message LogClientEventsRequest {
+  repeated ClientLogEntry entries = 1;
+}
+
+message LogClientEventsResponse {}

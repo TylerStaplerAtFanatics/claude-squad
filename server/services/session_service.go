@@ -2588,3 +2588,43 @@ func (s *SessionService) GetTerminalSnapshot(
 		IsEmpty: strings.TrimSpace(content) == "",
 	}), nil
 }
+
+// LogClientEvents receives batched browser console log entries from the web UI.
+// Used for remote debugging of mobile browser sessions where DevTools are unavailable.
+// Never returns an error — malformed or oversized entries are silently discarded.
+func (s *SessionService) LogClientEvents(
+	_ context.Context,
+	req *connect.Request[sessionv1.LogClientEventsRequest],
+) (*connect.Response[sessionv1.LogClientEventsResponse], error) {
+	for _, entry := range req.Msg.GetEntries() {
+		logClientEntry(entry)
+	}
+	return connect.NewResponse(&sessionv1.LogClientEventsResponse{}), nil
+}
+
+// logClientEntry writes a single browser log entry to the server log.
+func logClientEntry(e *sessionv1.ClientLogEntry) {
+	msg := sanitizeClientLogField(e.GetMessage(), 200)
+	ua := sanitizeClientLogField(e.GetUserAgent(), 80)
+	sid := sanitizeClientLogField(e.GetSessionId(), 64)
+	lvl := sanitizeClientLogField(e.GetLevel(), 16)
+	url := sanitizeClientLogField(e.GetUrl(), 256)
+
+	logger := log.InfoLog
+	if lvl == "error" {
+		logger = log.ErrorLog
+	}
+	logger.Printf("[client-log] %s session=%s %s (url: %s ua: %s)", lvl, sid, msg, url, ua)
+}
+
+// sanitizeClientLogField strips control characters and truncates to maxLen runes.
+func sanitizeClientLogField(s string, maxLen int) string {
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
+	runes := []rune(s)
+	if len(runes) > maxLen {
+		return string(runes[:maxLen]) + "…"
+	}
+	return s
+}
