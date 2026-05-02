@@ -705,13 +705,17 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 					}
 				}
 
-				// Handle resize
+				// Handle resize — run in a goroutine so it never blocks input reading.
+				// Resize involves CM round-trips; doing it synchronously would stall
+				// all subsequent keystrokes until the resize completes.
 				if resize := incomingData.GetResize(); resize != nil {
 					cols := int(resize.Cols)
 					rows := int(resize.Rows)
-					if err := instance.SetWindowSize(cols, rows); err != nil {
-						log.ErrorLog.Printf("[streamViaControlMode] Failed to resize: %v", err)
-					}
+					go func() {
+						if err := instance.SetWindowSize(cols, rows); err != nil {
+							log.ErrorLog.Printf("[streamViaControlMode] Failed to resize: %v", err)
+						}
+					}()
 				}
 
 				// Note: CurrentPaneRequest is now handled in handshake (not in input loop)
