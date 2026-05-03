@@ -498,12 +498,6 @@ func (t *TmuxSession) sendCMCommand(ctx context.Context, args ...string) (string
 	return t.enqueueCMCommand(ctx, t.normPriSendCh, args...)
 }
 
-// sendCMCommandHighPri enqueues a high-priority command that is always processed
-// before any pending normal-priority commands. Used for interactive send-keys.
-func (t *TmuxSession) sendCMCommandHighPri(ctx context.Context, args ...string) (string, error) {
-	return t.enqueueCMCommand(ctx, t.highPriSendCh, args...)
-}
-
 // enqueueCMCommand is the shared implementation: builds the request, sends it to
 // the appropriate priority channel, then waits for the response or ctx cancellation.
 func (t *TmuxSession) enqueueCMCommand(ctx context.Context, ch chan cmSendReq, args ...string) (string, error) {
@@ -629,14 +623,31 @@ func (t *TmuxSession) UnsubscribeFromControlModeUpdates(subscriberID string) {
 // SendInputViaControlMode sends raw bytes to the active pane through the already-open
 // control mode connection. Uses the HIGH-PRIORITY queue so user keystrokes always
 // jump ahead of any queued background operations (capture-pane, resize, etc.).
+//
+// Fire-and-forget: enqueues the send-keys command and returns immediately without
+// waiting for the tmux %begin/%end ack. The ack is consumed by the reader goroutine
+// and discarded. This eliminates one CM round-trip from the interactive input path.
 func (t *TmuxSession) SendInputViaControlMode(ctx context.Context, data []byte) error {
 	if len(data) == 0 {
 		return nil
+	}
+	ch := t.highPriSendCh
+	if ch == nil {
+		return ErrControlModeNotRunning
 	}
 	args := []string{"send-keys", "-t", t.sanitizedName, "-H"}
 	for _, b := range data {
 		args = append(args, fmt.Sprintf("%02x", b))
 	}
-	_, err := t.sendCMCommandHighPri(ctx, args...)
-	return err
+	// resultCh is buffered(1): the reader goroutine delivers the ack into it and
+	// moves on; nobody reads it, and Go GCs it. Safe because all send sites use
+	// `select { case ch <- result: default: }` (non-blocking).
+	resultCh := make(chan cmdResult, 1)
+	req := cmSendReq{line: strings.Join(args, " "), resultCh: resultCh}
+	select {
+	case ch <- req:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

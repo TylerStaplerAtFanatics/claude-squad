@@ -45,7 +45,7 @@ endif
 		touch $(ASDF_STAMP); \
 	fi
 
-.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse build-tmux build-tmux-embed build-embedded clean-tmux init-submodules test-with-pinned-tmux
+.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service coverage-func coverage-gaps coverage-pkg coverage-refactor registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse build-tmux build-tmux-embed build-embedded clean-tmux init-submodules test-with-pinned-tmux
 
 # Default target
 help: ## Show this help message
@@ -268,19 +268,66 @@ proto-clean: ## Clean generated protocol buffer code
 	rm -rf web/src/gen
 
 # Testing targets
-test: ensure-tools proto-gen ## Run all tests
-	go test ./...
+test: ensure-tools proto-gen ## Run all tests (skips slow integration tests; use test-integration for full suite)
+	go test -short ./...
 
 test-verbose: ensure-tools proto-gen ## Run tests with verbose output
-	go test -v ./...
+	go test -short -v ./...
 
-test-coverage: ensure-tools proto-gen ## Run tests with coverage report
-	go test -cover ./... -coverprofile=coverage.out
+test-coverage: ensure-tools proto-gen ## Run tests with coverage report (HTML)
+	go test -short -cover ./... -coverprofile=coverage.out
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
+	@which open >/dev/null 2>&1 && open coverage.html || true
 
-test-race: ensure-tools proto-gen ## Run tests with race detector enabled
-	go test -race ./...
+coverage-func: ensure-tools proto-gen ## Show function-level coverage sorted by % (all non-100% functions)
+	@go test -short -coverprofile=coverage.out -covermode=atomic ./... 2>/dev/null
+	@echo ""
+	@echo "=== Function Coverage (sorted, lowest first) ==="
+	@go tool cover -func=coverage.out | grep -v "^total" | sort -t'%' -k1 -n | head -60
+	@echo ""
+	@go tool cover -func=coverage.out | grep "^total"
+
+coverage-gaps: ensure-tools proto-gen ## Show only functions with 0% coverage (completely untested)
+	@go test -short -coverprofile=coverage.out -covermode=atomic ./... 2>/dev/null
+	@echo ""
+	@echo "=== Untested Functions (0.0% coverage) ==="
+	@go tool cover -func=coverage.out | grep " 0.0%" | grep -v "_test.go"
+	@echo ""
+	@echo "=== Total ==="
+	@go tool cover -func=coverage.out | grep "^total"
+
+coverage-pkg: ensure-tools proto-gen ## Show per-package coverage summary sorted by % (lowest first)
+	@go test -short -coverprofile=coverage.out -covermode=atomic ./... 2>&1 | \
+		grep -E "^(ok|FAIL|\?)" | \
+		awk '{for(i=1;i<=NF;i++) if($$i ~ /coverage:/) {pct=$$i+0; print pct"% "$$1" "$$2}}' | \
+		sort -n
+	@echo ""
+	@go test -short -coverprofile=coverage.out -covermode=atomic ./... 2>/dev/null; \
+		go tool cover -func=coverage.out | grep "^total"
+
+coverage-refactor: ensure-tools proto-gen ## Show coverage for the 4 files targeted by the backend refactor
+	@go test -short -coverprofile=coverage.out -covermode=atomic ./... 2>/dev/null
+	@echo ""
+	@echo "=== session/instance.go ==="
+	@go tool cover -func=coverage.out | grep "session/instance.go" | sort -t'%' -k1 -n
+	@echo ""
+	@echo "=== server/services/session_service.go ==="
+	@go tool cover -func=coverage.out | grep "session_service.go" | sort -t'%' -k1 -n
+	@echo ""
+	@echo "=== session/storage.go ==="
+	@go tool cover -func=coverage.out | grep "session/storage.go" | sort -t'%' -k1 -n
+	@echo ""
+	@echo "=== session/review_queue_poller.go ==="
+	@go tool cover -func=coverage.out | grep "review_queue_poller.go" | sort -t'%' -k1 -n
+	@echo ""
+	@echo "=== server/adapters/review_queue_adapter.go ==="
+	@go tool cover -func=coverage.out | grep "review_queue_adapter.go" | sort -t'%' -k1 -n
+	@echo ""
+	@go tool cover -func=coverage.out | grep "^total"
+
+test-race: ensure-tools proto-gen ## Run tests with race detector enabled (skips slow integration tests)
+	go test -race -short ./...
 
 test-integration: ensure-tools proto-gen ## Run integration tests (requires real tmux)
 	go test -race -tags integration ./...

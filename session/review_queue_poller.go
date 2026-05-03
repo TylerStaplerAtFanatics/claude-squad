@@ -91,8 +91,7 @@ type ReviewQueuePoller struct {
 
 	// Backoff state: tracks consecutive poll errors to apply exponential delay.
 	consecutiveErrors int
-	// tickCount tracks poll loop iterations for reconciliation scheduling.
-	// Accessed concurrently (pollLoop writes, tests read), so must be atomic.
+	// tickCount counts poll loop iterations; atomic because pollLoop writes and tests read concurrently.
 	tickCount atomic.Int64
 }
 
@@ -838,6 +837,14 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 							context = "Uncommitted changes ready to commit"
 							log.InfoLog.Printf("[ReviewQueue] Session '%s': Uncommitted changes detected", inst.Title)
 						}
+					} else {
+						// Worktree is clean — if session was queued solely for uncommitted
+						// changes, remove it immediately so it doesn't persist through the
+						// rate-limiter window after a commit.
+						if existing, exists := rqp.queue.Get(inst.Title); exists && existing.Reason == ReasonUncommittedChanges {
+							log.InfoLog.Printf("[ReviewQueue] Session '%s': Changes committed - removing UncommittedChanges entry", inst.Title)
+							rqp.queue.Remove(inst.Title)
+						}
 					}
 				}
 			}
@@ -938,6 +945,14 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 						shouldAdd = true
 						context = "Uncommitted changes ready to commit"
 						log.InfoLog.Printf("[ReviewQueue] Session '%s': Uncommitted changes detected", inst.Title)
+					}
+				} else {
+					// Worktree is clean — if session was queued solely for uncommitted
+					// changes, remove it immediately so it doesn't persist through the
+					// rate-limiter window after a commit.
+					if existing, exists := rqp.queue.Get(inst.Title); exists && existing.Reason == ReasonUncommittedChanges {
+						log.InfoLog.Printf("[ReviewQueue] Session '%s': Changes committed - removing UncommittedChanges entry", inst.Title)
+						rqp.queue.Remove(inst.Title)
 					}
 				}
 			}
