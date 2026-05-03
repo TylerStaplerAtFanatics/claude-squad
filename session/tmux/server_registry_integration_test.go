@@ -4,6 +4,8 @@ package tmux_test
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"sync"
@@ -18,7 +20,8 @@ import (
 // cleanup that kills the isolated server when the test finishes.
 func newIsolatedSocket(t *testing.T) string {
 	t.Helper()
-	socket := "integration_" + t.Name()
+	// Embed PID so TestMain watchdog can reap this socket on SIGKILL.
+	socket := fmt.Sprintf("integration_%d_%s", os.Getpid(), t.Name())
 	// Replace characters that are invalid in tmux socket names.
 	safeSocket := ""
 	for _, c := range socket {

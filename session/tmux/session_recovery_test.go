@@ -209,7 +209,7 @@ func testSessionRecoveryWithRealTmux(t *testing.T) {
 
 	// Use an isolated tmux server socket so this test does not interfere with
 	// other packages that share the default tmux server when running `go test ./...`.
-	socketName := fmt.Sprintf("test_recovery_%d", time.Now().UnixNano())
+	socketName := fmt.Sprintf("test_recovery_%d_%d", os.Getpid(), time.Now().UnixNano())
 	t.Cleanup(func() {
 		killServerCtx, killServerCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer killServerCancel()

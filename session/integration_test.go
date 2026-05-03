@@ -3,29 +3,110 @@ package session
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+	"syscall"
+	"testing"
+	"time"
+
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/tmux"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
 // TestMain runs before all tests to set up the test environment
 func TestMain(m *testing.M) {
-	// Initialize the logger for tests with ERROR level to reduce noise
 	log.InitializeForTests(log.ERROR, log.ERROR)
 	defer log.Close()
 
-	// Run all tests
-	exitCode := m.Run()
+	reapLeakedTestServers()
+	startWatchdog(os.Getpid())
 
-	// Exit with the same code as the tests
-	os.Exit(exitCode)
+	os.Exit(m.Run())
+}
+
+// reapLeakedTestServers kills test_coldrestore_* tmux sockets from dead test
+// processes.  Sockets owned by a live PID (concurrent runner) are left alone.
+func reapLeakedTestServers() {
+	myPID := os.Getpid()
+	socketDir := fmt.Sprintf("/tmp/tmux-%d", os.Getuid())
+	entries, err := os.ReadDir(socketDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasPrefix(name, "test_coldrestore_") {
+			continue
+		}
+		ownerPID, ok := extractSessionTestSocketPID(name)
+		if ok {
+			if ownerPID == myPID {
+				continue
+			}
+			if isSessionTestProcessAlive(ownerPID) {
+				continue
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = exec.CommandContext(ctx, "tmux", "-L", name, "kill-server").Run()
+		cancel()
+	}
+}
+
+// extractSessionTestSocketPID finds the PID embedded in a test socket name.
+// PID range [2, 4194304) is distinct from nanosecond timestamps (>> pidMax).
+func extractSessionTestSocketPID(name string) (int, bool) {
+	const pidMax = 4194304
+	for _, part := range strings.Split(name, "_") {
+		n, err := strconv.Atoi(part)
+		if err == nil && n >= 2 && n < pidMax {
+			return n, true
+		}
+	}
+	return 0, false
+}
+
+func isSessionTestProcessAlive(pid int) bool {
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return p.Signal(syscall.Signal(0)) == nil
+}
+
+// startWatchdog spawns a detached shell process that kills test_coldrestore_*
+// sockets bearing ownerPID when that process exits (handles SIGKILL).
+func startWatchdog(ownerPID int) {
+	uid := os.Getuid()
+	scriptPath := fmt.Sprintf("/tmp/tmux-test-watchdog-session-%d.sh", ownerPID)
+	script := fmt.Sprintf(`#!/bin/sh
+SOCKDIR=/tmp/tmux-%d
+PID=%d
+while kill -0 "$PID" 2>/dev/null; do
+    sleep 1
+done
+if [ -d "$SOCKDIR" ]; then
+    for f in "$SOCKDIR"/test_coldrestore_*; do
+        [ -S "$f" ] || continue
+        name=$(basename "$f")
+        case "$name" in
+            *_${PID}_*) tmux -L "$name" kill-server 2>/dev/null; true ;;
+        esac
+    done
+fi
+rm -f "$0"
+`, uid, ownerPID)
+	if err := os.WriteFile(scriptPath, []byte(script), 0700); err != nil {
+		return
+	}
+	cmd := exec.CommandContext(context.Background(), "sh", scriptPath)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	_ = cmd.Start()
 }
 
 // Test utilities for waiting without static sleeps
