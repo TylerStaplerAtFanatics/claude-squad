@@ -35,6 +35,16 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Error caught by boundary:", error, errorInfo);
 
+    // ChunkLoadError means the browser has a stale build cached. Reload once to get fresh chunks.
+    if (error.name === "ChunkLoadError" || error.message.includes("Loading chunk")) {
+      const key = "chunkload_reload_attempted";
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, "1");
+        window.location.reload();
+        return;
+      }
+    }
+
     this.setState({
       errorInfo,
     });
