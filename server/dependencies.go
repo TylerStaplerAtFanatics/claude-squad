@@ -307,17 +307,13 @@ type CoreDeps struct {
 // BuildOptions carries optional overrides for BuildCoreDepsWithOptions.
 // The zero value uses all defaults (equivalent to calling BuildCoreDeps).
 type BuildOptions struct {
-	// CommandExecutor overrides the executor used for external command resolution
-	// (e.g. `claude --version`). nil = use the default timeout executor.
-	CommandExecutor config.CommandExecutor
 	// EntClient supplies a pre-opened *ent.Client, bypassing config-based DB path
 	// discovery and schema migration. nil = open from config as usual.
 	EntClient *ent.Client
 }
 
 // BuildCoreDepsWithOptions constructs Phase 1 dependencies with optional overrides.
-// Use BuildOptions to inject a pre-built EntClient (for tests) or a custom
-// CommandExecutor (for mocking external processes).
+// Use BuildOptions to inject a pre-built EntClient (for tests).
 func BuildCoreDepsWithOptions(opts BuildOptions) (*CoreDeps, error) {
 	var sessionService *services.SessionService
 	var err error

@@ -198,11 +198,6 @@ var (
 		PrimaryKey: []*schema.Column{ErrorEventsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "errorevent_fingerprint",
-				Unique:  false,
-				Columns: []*schema.Column{ErrorEventsColumns[1]},
-			},
-			{
 				Name:    "errorevent_last_seen",
 				Unique:  false,
 				Columns: []*schema.Column{ErrorEventsColumns[8]},

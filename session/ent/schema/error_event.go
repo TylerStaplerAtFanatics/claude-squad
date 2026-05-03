@@ -28,7 +28,6 @@ func (ErrorEvent) Fields() []ent.Field {
 // Indexes of the ErrorEvent.
 func (ErrorEvent) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("fingerprint"),
 		index.Fields("last_seen"),
 		index.Fields("acknowledged"),
 	}

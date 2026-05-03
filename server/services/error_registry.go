@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/tstapler/stapler-squad/log"
@@ -35,12 +36,15 @@ func (r *ErrorRegistry) Record(ctx context.Context, errVal error, procedure stri
 	msg := errVal.Error()
 	fingerprint := fingerprintFor(msg, procedure)
 	now := time.Now()
+	buf := make([]byte, 16384)
+	n := runtime.Stack(buf, false)
+	stackTrace := string(buf[:n])
 
 	if err := r.entClient.ErrorEvent.Create().
 		SetFingerprint(fingerprint).
 		SetErrorType("rpc_error").
 		SetMessage(msg).
-		SetStackTrace("").
+		SetStackTrace(stackTrace).
 		SetRPCProcedure(procedure).
 		SetOccurrenceCount(1).
 		SetFirstSeen(now).
