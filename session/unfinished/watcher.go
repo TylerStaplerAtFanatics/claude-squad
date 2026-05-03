@@ -182,7 +182,7 @@ func (w *WatchDirWatcher) fsnotifyLoop(ctx context.Context) {
 			if !ok {
 				return
 			}
-			log.DebugLog.Printf("[unfinished] fsnotify error: %v", err)
+			log.WarningLog.Printf("[unfinished] fsnotify error: %v", err)
 		}
 	}
 }

@@ -45,7 +45,7 @@ endif
 		touch $(ASDF_STAMP); \
 	fi
 
-.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse build-tmux build-tmux-embed build-embedded clean-tmux init-submodules test-with-pinned-tmux
+.PHONY: help build test benchmark install-tools lint lint-custom analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse build-tmux build-tmux-embed build-embedded clean-tmux init-submodules test-with-pinned-tmux
 
 # Default target
 help: ## Show this help message
@@ -313,7 +313,7 @@ install-tools: ensure-tools ## Install all development and analysis tools
 	@echo "All tools installed successfully!"
 
 # Code quality and analysis
-lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with comprehensive checks
+lint: ensure-tools proto-gen server/web/dist lint-custom ## Run golangci-lint with comprehensive checks
 	@GOBIN=$$(go env GOBIN); \
 	if [ -z "$$GOBIN" ]; then GOBIN=$$(go env GOPATH)/bin; fi; \
 	if ! which golangci-lint >/dev/null 2>&1; then \
@@ -321,6 +321,17 @@ lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with comprehen
 		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest; \
 	fi; \
 	golangci-lint run --enable=nilnil,staticcheck,ineffassign,govet
+
+HOTPOLLLOG_BIN := $(CURDIR)/bin/hotpolllog-lint
+
+lint-custom: $(HOTPOLLLOG_BIN) ## Run project-specific custom linters (hotpolllog: detect DebugLog in select-case hot loops)
+	@echo "Running custom lint: hotpolllog..."
+	@$(HOTPOLLLOG_BIN) ./...
+	@echo "hotpolllog: ok"
+
+$(HOTPOLLLOG_BIN):
+	@mkdir -p $(CURDIR)/bin
+	@cd tools/lint/hotpolllog && go build -o $(HOTPOLLLOG_BIN) ./cmd/hotpolllog
 
 lint-no-sleep-tests: ## ADR-003 audit: count time.Sleep calls in test files outside testutil/ (target: 0)
 	@violations=$$(grep -rn 'time\.Sleep(' --include='*_test.go' . \

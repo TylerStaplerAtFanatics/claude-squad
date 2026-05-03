@@ -277,7 +277,6 @@ func (rqp *ReviewQueuePoller) pollLoop() {
 		case <-actCh:
 			// Snap back to fast interval on external activity signal.
 			if interval != fastInterval {
-				log.DebugLog.Printf("[ReviewQueuePoller] Activity signal received — snapping to fast interval (%s)", fastInterval)
 				interval = fastInterval
 				if !timer.Stop() {
 					select {
@@ -308,9 +307,6 @@ func (rqp *ReviewQueuePoller) pollLoop() {
 
 			// Adaptive interval: back off when queue is empty and activity channel is wired.
 			if actCh != nil && len(rqp.queue.List()) == 0 {
-				if interval != slowInterval {
-					log.DebugLog.Printf("[ReviewQueuePoller] Queue empty — backing off to slow interval (%s)", slowInterval)
-				}
 				interval = slowInterval
 			} else {
 				interval = fastInterval
@@ -554,8 +550,6 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 			rqp.cacheMu.Unlock()
 
 			if lastActivity.Equal(lastSeen) {
-				log.DebugLog.Printf("[ReviewQueue] Session '%s': content cache hit (lastActivity=%s, %d bytes)",
-					inst.Title, lastActivity.Format("15:04:05.000"), len(cached))
 				return cached
 			}
 		}
@@ -571,15 +565,10 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 			tmuxName := inst.GetTmuxSessionName()
 			if currentActivity, ok := paneActivity[tmuxName]; ok {
 				if !currentActivity.IsZero() && currentActivity.Equal(lastSeenPane) {
-					log.DebugLog.Printf("[ReviewQueue] Session '%s': pane activity cache hit (activity=%s, %d bytes)",
-						inst.Title, currentActivity.Format("15:04:05.000"), len(cached))
 					return cached
 				}
 			}
 		} else if !lastCall.IsZero() && time.Since(lastCall) < previewCacheTTL {
-			// Fallback: TTL cache when list-panes unavailable.
-			log.DebugLog.Printf("[ReviewQueue] Session '%s': TTL cache hit (age=%s, %d bytes)",
-				inst.Title, time.Since(lastCall).Round(time.Millisecond), len(cached))
 			return cached
 		}
 	}
@@ -614,10 +603,6 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 // checkSession checks a single session and adds/removes from queue as needed.
 // paneActivity is the snapshot from batchPaneActivity(); nil falls back to TTL cache.
 func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[string]time.Time) {
-	if inst.LastMeaningfulOutput.IsZero() {
-		log.DebugLog.Printf("[ReviewQueue] Session '%s': LastMeaningfulOutput is zero — processing without output timestamp", inst.Title)
-	}
-
 	// Skip paused, stopped, or unstarted sessions
 	if !inst.Started() || inst.Paused() || inst.Status == Stopped {
 		return
