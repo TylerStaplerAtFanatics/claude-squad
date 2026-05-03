@@ -207,6 +207,7 @@ export function useSessionService(
           program: updates.program,
           tags: updates.tags ?? [],
           workingDir: updates.workingDir,
+          rateLimitEnabled: updates.rateLimitEnabled,
         });
 
         // Update in store
