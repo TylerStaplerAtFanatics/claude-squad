@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"io"
 	stdlog "log"
 	"sync"
@@ -10,13 +11,14 @@ import (
 // Use NewLogManager to create one; use the package-level functions (InfoLog, etc.) via
 // the defaultManager for zero-migration compatibility.
 type LogManager struct {
-	config     *LogConfig
-	infoLog    *stdlog.Logger
-	warnLog    *stdlog.Logger
-	errorLog   *stdlog.Logger
-	debugLog   *stdlog.Logger
-	logFile    io.WriteCloser
-	structured *StructuredLogger
+	config       *LogConfig
+	infoLog      *stdlog.Logger
+	warnLog      *stdlog.Logger
+	errorLog     *stdlog.Logger
+	debugLog     *stdlog.Logger
+	logFile      io.WriteCloser
+	structured   *StructuredLogger
+	asyncHandler *AsyncHandler
 
 	sessionsMu sync.RWMutex
 	sessions   map[string]*SessionLoggers
@@ -29,16 +31,18 @@ func newLogManager(
 	info, warn, errL, debug *stdlog.Logger,
 	logFile io.WriteCloser,
 	structured *StructuredLogger,
+	async *AsyncHandler,
 ) *LogManager {
 	return &LogManager{
-		config:     cfg,
-		infoLog:    info,
-		warnLog:    warn,
-		errorLog:   errL,
-		debugLog:   debug,
-		logFile:    logFile,
-		structured: structured,
-		sessions:   make(map[string]*SessionLoggers),
+		config:       cfg,
+		infoLog:      info,
+		warnLog:      warn,
+		errorLog:     errL,
+		debugLog:     debug,
+		logFile:      logFile,
+		structured:   structured,
+		asyncHandler: async,
+		sessions:     make(map[string]*SessionLoggers),
 	}
 }
 
@@ -102,6 +106,9 @@ func (m *LogManager) CloseSession(id string) {
 
 // Close flushes and closes the global log file and all session log files.
 func (m *LogManager) Close() {
+	if m.asyncHandler != nil {
+		_ = m.asyncHandler.Flush(context.Background())
+	}
 	if m.logFile != nil {
 		_ = m.logFile.Close()
 	}

@@ -613,6 +613,9 @@ func LoadConfigFromPath(path string) (*Config, error) {
 	if cfg.ConfigVersion == 0 {
 		cfg.ConfigVersion = 1
 	}
+	// Unmarshaling produces a zero Config with no executor; initialize it now
+	// so GetClaudeCommand / GetAvailablePrograms don't panic on nil executor.
+	cfg.executor = newTimeoutCommandExecutor(5 * time.Second)
 
 	return &cfg, nil
 }

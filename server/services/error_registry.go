@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/ent"
 	entErrorEvent "github.com/tstapler/stapler-squad/session/ent/errorevent"
 )
@@ -35,7 +36,7 @@ func (r *ErrorRegistry) Record(ctx context.Context, errVal error, procedure stri
 	fingerprint := fingerprintFor(msg, procedure)
 	now := time.Now()
 
-	_ = r.entClient.ErrorEvent.Create().
+	if err := r.entClient.ErrorEvent.Create().
 		SetFingerprint(fingerprint).
 		SetErrorType("rpc_error").
 		SetMessage(msg).
@@ -47,7 +48,9 @@ func (r *ErrorRegistry) Record(ctx context.Context, errVal error, procedure stri
 		OnConflictColumns(entErrorEvent.FieldFingerprint).
 		AddOccurrenceCount(1).
 		SetLastSeen(now).
-		Exec(ctx)
+		Exec(ctx); err != nil {
+		log.ErrorLog.Printf("ErrorRegistry.Record: failed to persist error event: %v", err)
+	}
 }
 
 // List returns error events ordered by last_seen desc.

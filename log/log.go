@@ -853,7 +853,7 @@ func initializeWithConfig(daemon bool, cfg *LogConfig) {
 	slog.SetDefault(slog.New(NewTraceIDHandler(asyncHandler)))
 
 	// Populate the default LogManager so package consumers can use it via dependency injection.
-	defaultManager = newLogManager(cfg, InfoLog, WarningLog, ErrorLog, DebugLog, globalLogFile, structuredLogger)
+	defaultManager = newLogManager(cfg, InfoLog, WarningLog, ErrorLog, DebugLog, globalLogFile, structuredLogger, asyncHandler)
 }
 
 func Close() {

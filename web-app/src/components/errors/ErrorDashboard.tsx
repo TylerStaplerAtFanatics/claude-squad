@@ -1,7 +1,7 @@
 "use client";
 // +feature: error-dashboard
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, Fragment } from "react";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { SessionService } from "@/gen/session/v1/session_pb";
@@ -133,7 +133,7 @@ export function ErrorDashboard() {
                 </tr>
               ) : (
                 displayedErrors.map((err) => (
-                  <>
+                  <Fragment key={err.fingerprint}>
                     <tr
                       key={err.fingerprint}
                       className={`${styles.tr} ${err.acknowledged ? styles.trAcknowledged : ""}`}
@@ -222,7 +222,7 @@ export function ErrorDashboard() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))
               )}
             </tbody>
