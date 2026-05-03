@@ -73,6 +73,39 @@ export const button = style({
   },
 });
 
+export const caDivider = style({
+  marginTop: "1.25rem",
+  borderTop: `1px solid ${vars.color.borderColor}`,
+  paddingTop: "1.25rem",
+  width: "100%",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: "0.5rem",
+});
+
+export const secondaryButton = style({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.4rem",
+  padding: "0.5rem 1rem",
+  background: "transparent",
+  color: vars.color.textSecondary,
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: "6px",
+  fontSize: "0.85rem",
+  fontWeight: 500,
+  cursor: "pointer",
+  textDecoration: "none",
+  transition: "border-color 0.15s, color 0.15s",
+  selectors: {
+    "&:hover": {
+      borderColor: vars.color.textMuted,
+      color: vars.color.textPrimary,
+    },
+  },
+});
+
 export const error = style({
   color: vars.color.error,
   fontSize: "0.85rem",

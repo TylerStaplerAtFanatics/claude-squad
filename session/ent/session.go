@@ -75,6 +75,14 @@ type Session struct {
 	InitialPrompt string `json:"initial_prompt,omitempty"`
 	// When true, runs claude in -p mode; session exits after task completes.
 	OneShot bool `json:"one_shot,omitempty"`
+	// LastUserResponse holds the value of the "last_user_response" field.
+	LastUserResponse *time.Time `json:"last_user_response,omitempty"`
+	// ProcessingGraceUntil holds the value of the "processing_grace_until" field.
+	ProcessingGraceUntil *time.Time `json:"processing_grace_until,omitempty"`
+	// LastPromptDetected holds the value of the "last_prompt_detected" field.
+	LastPromptDetected *time.Time `json:"last_prompt_detected,omitempty"`
+	// LastPromptSignature holds the value of the "last_prompt_signature" field.
+	LastPromptSignature string `json:"last_prompt_signature,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SessionQuery when eager-loading is set.
 	Edges            SessionEdges `json:"edges"`
@@ -161,9 +169,9 @@ func (*Session) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case session.FieldID, session.FieldStatus, session.FieldHeight, session.FieldWidth:
 			values[i] = new(sql.NullInt64)
-		case session.FieldTitle, session.FieldUUID, session.FieldPath, session.FieldWorkingDir, session.FieldBranch, session.FieldPrompt, session.FieldProgram, session.FieldExistingWorktree, session.FieldCategory, session.FieldSessionType, session.FieldTmuxPrefix, session.FieldLastOutputSignature, session.FieldMcpServerURL, session.FieldInitialPrompt:
+		case session.FieldTitle, session.FieldUUID, session.FieldPath, session.FieldWorkingDir, session.FieldBranch, session.FieldPrompt, session.FieldProgram, session.FieldExistingWorktree, session.FieldCategory, session.FieldSessionType, session.FieldTmuxPrefix, session.FieldLastOutputSignature, session.FieldMcpServerURL, session.FieldInitialPrompt, session.FieldLastPromptSignature:
 			values[i] = new(sql.NullString)
-		case session.FieldCreatedAt, session.FieldUpdatedAt, session.FieldLastTerminalUpdate, session.FieldLastMeaningfulOutput, session.FieldLastAddedToQueue, session.FieldLastViewed, session.FieldLastAcknowledged:
+		case session.FieldCreatedAt, session.FieldUpdatedAt, session.FieldLastTerminalUpdate, session.FieldLastMeaningfulOutput, session.FieldLastAddedToQueue, session.FieldLastViewed, session.FieldLastAcknowledged, session.FieldLastUserResponse, session.FieldProcessingGraceUntil, session.FieldLastPromptDetected:
 			values[i] = new(sql.NullTime)
 		case session.ForeignKeys[0]: // project_sessions
 			values[i] = new(sql.NullInt64)
@@ -355,6 +363,33 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.OneShot = value.Bool
 			}
+		case session.FieldLastUserResponse:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field last_user_response", values[i])
+			} else if value.Valid {
+				_m.LastUserResponse = new(time.Time)
+				*_m.LastUserResponse = value.Time
+			}
+		case session.FieldProcessingGraceUntil:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field processing_grace_until", values[i])
+			} else if value.Valid {
+				_m.ProcessingGraceUntil = new(time.Time)
+				*_m.ProcessingGraceUntil = value.Time
+			}
+		case session.FieldLastPromptDetected:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field last_prompt_detected", values[i])
+			} else if value.Valid {
+				_m.LastPromptDetected = new(time.Time)
+				*_m.LastPromptDetected = value.Time
+			}
+		case session.FieldLastPromptSignature:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field last_prompt_signature", values[i])
+			} else if value.Valid {
+				_m.LastPromptSignature = value.String
+			}
 		case session.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field project_sessions", value)
@@ -513,6 +548,24 @@ func (_m *Session) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("one_shot=")
 	builder.WriteString(fmt.Sprintf("%v", _m.OneShot))
+	builder.WriteString(", ")
+	if v := _m.LastUserResponse; v != nil {
+		builder.WriteString("last_user_response=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ProcessingGraceUntil; v != nil {
+		builder.WriteString("processing_grace_until=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.LastPromptDetected; v != nil {
+		builder.WriteString("last_prompt_detected=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("last_prompt_signature=")
+	builder.WriteString(_m.LastPromptSignature)
 	builder.WriteByte(')')
 	return builder.String()
 }

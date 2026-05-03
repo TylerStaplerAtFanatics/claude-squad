@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 func TestDetector_ProcessOutput_AnthropicRateLimit(t *testing.T) {
@@ -206,7 +208,10 @@ func TestScheduler_CancelRecovery(t *testing.T) {
 
 	scheduler.CancelRecovery()
 
-	time.Sleep(50 * time.Millisecond)
+	// Wait briefly to confirm callback does NOT execute after cancel
+	_ = wait.WaitForCondition(func() bool {
+		return executed.Load()
+	}, wait.WaitConfig{Timeout: 50 * time.Millisecond, PollInterval: 10 * time.Millisecond, Description: "post-cancel callback (should not fire)"})
 
 	if executed.Load() {
 		t.Error("expected recovery callback to NOT be executed after cancel")

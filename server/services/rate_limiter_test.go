@@ -2,7 +2,8 @@ package services
 
 import (
 	"testing"
-	"time"
+
+	"github.com/tstapler/stapler-squad/testutil"
 )
 
 func TestNotificationRateLimiter_Allow(t *testing.T) {
@@ -60,11 +61,10 @@ func TestNotificationRateLimiter_Recovery(t *testing.T) {
 		t.Error("Expected rate limiting after burst")
 	}
 
-	// Wait for recovery (10ms for 100/sec rate)
-	time.Sleep(15 * time.Millisecond)
-
-	// Should be allowed again
-	if !rl.Allow(sessionID) {
+	// Poll until the rate limiter recovers and allows a request.
+	if err := testutil.WaitForCondition(func() bool {
+		return rl.Allow(sessionID)
+	}, testutil.FastWaitConfig()); err != nil {
 		t.Error("Expected Allow() after rate limit recovery")
 	}
 }

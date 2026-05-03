@@ -45,7 +45,7 @@ endif
 		touch $(ASDF_STAMP); \
 	fi
 
-.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse build-tmux build-tmux-embed build-embedded clean-tmux init-submodules test-with-pinned-tmux vet-architecture vet-rpc-markers coverage-integration
+.PHONY: help build test benchmark install-tools lint lint-custom analyze nil-safety security format fmt-check check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service coverage-func coverage-gaps coverage-pkg coverage-refactor registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse build-tmux build-tmux-embed build-embedded clean-tmux init-submodules test-with-pinned-tmux vet-architecture vet-rpc-markers coverage-integration
 
 # Default target
 help: ## Show this help message
@@ -175,6 +175,7 @@ web-dev: build-all ## Build web UI and server, then restart (detects file change
 
 install: ensure-tools ## Install stapler-squad locally
 	go install .
+	mkdir -p ~/.local/bin
 	go build -o ~/.local/bin/ssq-hooks ./cmd/ssq-hooks/
 
 build-mux: ensure-tools ## Build the claude-mux PTY multiplexer binary
@@ -268,19 +269,66 @@ proto-clean: ## Clean generated protocol buffer code
 	rm -rf web/src/gen
 
 # Testing targets
-test: ensure-tools proto-gen ## Run all tests
-	go test ./...
+test: ensure-tools proto-gen ## Run all tests (skips slow integration tests; use test-integration for full suite)
+	go test -short ./...
 
 test-verbose: ensure-tools proto-gen ## Run tests with verbose output
-	go test -v ./...
+	go test -short -v ./...
 
-test-coverage: ensure-tools proto-gen ## Run tests with coverage report
-	go test -cover ./... -coverprofile=coverage.out
+test-coverage: ensure-tools proto-gen ## Run tests with coverage report (HTML)
+	go test -short -cover ./... -coverprofile=coverage.out
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
+	@which open >/dev/null 2>&1 && open coverage.html || true
 
-test-race: ensure-tools proto-gen ## Run tests with race detector enabled
-	go test -race ./...
+coverage-func: ensure-tools proto-gen ## Show function-level coverage sorted by % (all non-100% functions)
+	@go test -short -coverprofile=coverage.out -covermode=atomic ./... 2>/dev/null
+	@echo ""
+	@echo "=== Function Coverage (sorted, lowest first) ==="
+	@go tool cover -func=coverage.out | grep -v "^total" | sort -t'%' -k1 -n | head -60
+	@echo ""
+	@go tool cover -func=coverage.out | grep "^total"
+
+coverage-gaps: ensure-tools proto-gen ## Show only functions with 0% coverage (completely untested)
+	@go test -short -coverprofile=coverage.out -covermode=atomic ./... 2>/dev/null
+	@echo ""
+	@echo "=== Untested Functions (0.0% coverage) ==="
+	@go tool cover -func=coverage.out | grep " 0.0%" | grep -v "_test.go"
+	@echo ""
+	@echo "=== Total ==="
+	@go tool cover -func=coverage.out | grep "^total"
+
+coverage-pkg: ensure-tools proto-gen ## Show per-package coverage summary sorted by % (lowest first)
+	@go test -short -coverprofile=coverage.out -covermode=atomic ./... 2>&1 | \
+		grep -E "^(ok|FAIL|\?)" | \
+		awk '{for(i=1;i<=NF;i++) if($$i ~ /coverage:/) {pct=$$i+0; print pct"% "$$1" "$$2}}' | \
+		sort -n
+	@echo ""
+	@go test -short -coverprofile=coverage.out -covermode=atomic ./... 2>/dev/null; \
+		go tool cover -func=coverage.out | grep "^total"
+
+coverage-refactor: ensure-tools proto-gen ## Show coverage for the 4 files targeted by the backend refactor
+	@go test -short -coverprofile=coverage.out -covermode=atomic ./... 2>/dev/null
+	@echo ""
+	@echo "=== session/instance.go ==="
+	@go tool cover -func=coverage.out | grep "session/instance.go" | sort -t'%' -k1 -n
+	@echo ""
+	@echo "=== server/services/session_service.go ==="
+	@go tool cover -func=coverage.out | grep "session_service.go" | sort -t'%' -k1 -n
+	@echo ""
+	@echo "=== session/storage.go ==="
+	@go tool cover -func=coverage.out | grep "session/storage.go" | sort -t'%' -k1 -n
+	@echo ""
+	@echo "=== session/review_queue_poller.go ==="
+	@go tool cover -func=coverage.out | grep "review_queue_poller.go" | sort -t'%' -k1 -n
+	@echo ""
+	@echo "=== server/adapters/review_queue_adapter.go ==="
+	@go tool cover -func=coverage.out | grep "review_queue_adapter.go" | sort -t'%' -k1 -n
+	@echo ""
+	@go tool cover -func=coverage.out | grep "^total"
+
+test-race: ensure-tools proto-gen ## Run tests with race detector enabled (skips slow integration tests)
+	go test -race -short ./...
 
 test-integration: ensure-tools proto-gen ## Run integration tests (requires real tmux)
 	go test -race -tags integration ./...
@@ -353,7 +401,7 @@ vet-rpc-markers: registry-generate-backend ## Check that all RPC handlers have a
 		echo "✅ All RPC handlers have +api: markers."; \
 	fi
 
-lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with comprehensive checks
+lint: ensure-tools proto-gen server/web/dist lint-custom ## Run golangci-lint with comprehensive checks
 	@GOBIN=$$(go env GOBIN); \
 	if [ -z "$$GOBIN" ]; then GOBIN=$$(go env GOPATH)/bin; fi; \
 	if ! which golangci-lint >/dev/null 2>&1; then \
@@ -362,8 +410,40 @@ lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with comprehen
 	fi; \
 	golangci-lint run --enable=nilnil,staticcheck,ineffassign,govet
 
+HOTPOLLLOG_BIN := $(CURDIR)/bin/hotpolllog-lint
+
+lint-custom: $(HOTPOLLLOG_BIN) ## Run project-specific custom linters (hotpolllog: detect DebugLog in select-case hot loops)
+	@echo "Running custom lint: hotpolllog..."
+	@$(HOTPOLLLOG_BIN) ./...
+	@echo "hotpolllog: ok"
+
+$(HOTPOLLLOG_BIN):
+	@mkdir -p $(CURDIR)/bin
+	@cd tools/lint/hotpolllog && go build -o $(HOTPOLLLOG_BIN) ./cmd/hotpolllog
+
+lint-no-sleep-tests: ## ADR-003 audit: count time.Sleep calls in test files outside testutil/ (target: 0)
+	@violations=$$(grep -rn 'time\.Sleep(' --include='*_test.go' . \
+	  | grep -v 'vendor\|web-app\|third_party\|bin/\|testutil/' \
+	  | grep -v ':[[:space:]]*//' \
+	  | wc -l | tr -d ' '); \
+	echo "⏱  time.Sleep in test files (excluding testutil/): $$violations (target: 0, per ADR-003)"; \
+	if [ "$$violations" -gt 0 ]; then \
+	  grep -rn 'time\.Sleep(' --include='*_test.go' . | grep -v 'vendor\|web-app\|third_party\|bin/\|testutil/' | grep -v ':[[:space:]]*//' ; \
+	  exit 1; \
+	fi
+
 format: ensure-tools ## Format code with gofmt
 	go fmt ./...
+
+fmt-check: ## Verify all Go files are gofmt-formatted (non-destructive; exits 1 if any are not)
+	@UNFORMATTED=$$(gofmt -l . | grep -v vendor); \
+	if [ -n "$$UNFORMATTED" ]; then \
+		echo "The following files are not gofmt formatted:"; \
+		echo "$$UNFORMATTED"; \
+		echo "Fix with: gofmt -w ."; \
+		exit 1; \
+	fi
+	@echo "✅ All Go files are properly formatted"
 
 vet: ensure-tools proto-gen ## Run go vet with all analyzers
 	go vet ./...
@@ -431,7 +511,7 @@ dev-setup: install-tools ## Set up development environment
 	@echo "Development environment setup complete!"
 	@echo "Run 'make help' to see available commands"
 
-ci: build test test-race vet lint test-integration ## Continuous integration workflow
+ci: build test test-race vet lint test-integration fmt-check registry-generate ## Full CI pipeline: proto→web→build→tests→lint→fmt→registry
 
 # Quick development workflows
 quick-check: build test-coverage test-race lint ## Quick development validation

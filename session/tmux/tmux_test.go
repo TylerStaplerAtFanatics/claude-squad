@@ -208,7 +208,7 @@ func TestEnsureServerRunning_NoOp(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not available")
 	}
-	socketName := fmt.Sprintf("test_ensure_noop_%d", rand.Int63())
+	socketName := fmt.Sprintf("test_ensure_noop_%d_%d", os.Getpid(), rand.Int63())
 	t.Cleanup(func() {
 		killCtx, killCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer killCancel()
@@ -236,7 +236,7 @@ func TestEnsureServerRunning_StartsServer(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not available")
 	}
-	socketName := fmt.Sprintf("test_ensure_start_%d", rand.Int63())
+	socketName := fmt.Sprintf("test_ensure_start_%d_%d", os.Getpid(), rand.Int63())
 	t.Cleanup(func() {
 		killCtx2, killCancel2 := context.WithTimeout(context.Background(), 10*time.Second)
 		defer killCancel2()
@@ -268,7 +268,7 @@ func TestCreateKeepaliveSession(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not available")
 	}
-	socketName := fmt.Sprintf("test_keepalive_%d", rand.Int63())
+	socketName := fmt.Sprintf("test_keepalive_%d_%d", os.Getpid(), rand.Int63())
 	t.Cleanup(func() {
 		_ = exec.CommandContext(context.Background(), "tmux", "-L", socketName, "kill-server").Run()
 	})
@@ -299,7 +299,7 @@ func TestSetExitEmpty(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not available")
 	}
-	socketName := fmt.Sprintf("test_exit_empty_%d", rand.Int63())
+	socketName := fmt.Sprintf("test_exit_empty_%d_%d", os.Getpid(), rand.Int63())
 	t.Cleanup(func() {
 		_ = exec.CommandContext(context.Background(), "tmux", "-L", socketName, "kill-server").Run()
 	})

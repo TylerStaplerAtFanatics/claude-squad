@@ -293,6 +293,17 @@ func wireDepsIntoServer(srv *Server, deps *ServerDependencies, serverCtx context
 	// Register general ConnectRPC handler (unary calls)
 	path, handler := sessionv1connect.NewSessionServiceHandler(deps.SessionService, ConnectOptions(deps.ErrorRegistry)...)
 	apiPath := "/api" + path
+
+	// Register StreamingWSBridge for server-streaming Watch* RPCs so browsers use
+	// WebSocket instead of HTTP long-polling, avoiding the 6-connection-per-origin limit.
+	// Exact-path registration takes priority over the prefix-registered general handler.
+	wsBridge := services.NewStreamingWSBridge(handler)
+	watchSessionsPath := "/api" + sessionv1connect.SessionServiceWatchSessionsProcedure
+	watchReviewQueuePath := "/api" + sessionv1connect.SessionServiceWatchReviewQueueProcedure
+	srv.mux.Handle(watchSessionsPath, wsBridge.Handler("/api"))
+	srv.mux.Handle(watchReviewQueuePath, wsBridge.Handler("/api"))
+	log.InfoLog.Printf("Registered StreamingWSBridge for %s and %s", watchSessionsPath, watchReviewQueuePath)
+
 	srv.RegisterConnectHandler(apiPath, http.StripPrefix("/api", handler))
 
 	// Register UnfinishedWorkService handler.
@@ -344,7 +355,7 @@ func wireDepsIntoServer(srv *Server, deps *ServerDependencies, serverCtx context
 	log.InfoLog.Printf("Registered Claude Code hook receivers at /api/hooks/{stop,pre-tool-use,post-tool-use,prompt-submit}")
 
 	// Register session-aware image upload endpoint (multipart/form-data, saves to worktree).
-	sessionUploadHandler := services.NewSessionImageUploadHandler(deps.Storage)
+	sessionUploadHandler := services.NewSessionImageUploadHandler(deps.Storage, deps.ReviewQueuePoller)
 	srv.mux.HandleFunc("POST /api/v1/upload-image", sessionUploadHandler.HandleUpload)
 	log.InfoLog.Printf("Registered session image upload handler at POST /api/v1/upload-image")
 
@@ -354,7 +365,7 @@ func wireDepsIntoServer(srv *Server, deps *ServerDependencies, serverCtx context
 	mcpHTTPHandler := servermcp.NewHTTPHandler(deps.Storage, deps.SessionService, deps.ScrollbackManager)
 	srv.mux.Handle("/mcp", mcpHTTPHandler)
 	srv.mux.Handle("/mcp/", mcpHTTPHandler)
-	mcpURL := "http://localhost" + srv.addr + "/mcp"
+	mcpURL := "http://" + srv.addr + "/mcp"
 	deps.SessionService.SetMCPServerURL(mcpURL)
 	log.InfoLog.Printf("Registered MCP HTTP handler at /mcp (URL: %s)", mcpURL)
 
@@ -365,6 +376,11 @@ func wireDepsIntoServer(srv *Server, deps *ServerDependencies, serverCtx context
 	escapeCodeHandler := services.NewEscapeCodeHandler()
 	escapeCodeHandler.RegisterRoutes(srv.mux)
 	log.InfoLog.Printf("Registered Escape Code Analytics handlers at /api/debug/escape-codes/*")
+
+	// Register runtime log-level handler (used by the debug menu in the web UI)
+	logLevelHandler := services.NewLogLevelHandler()
+	logLevelHandler.RegisterRoutes(srv.mux)
+	log.InfoLog.Printf("Registered log-level handler at /api/debug/log-level")
 
 	// Register Circuit Breaker debug handler for observability
 	cbHandler := services.NewCircuitBreakerHandler()

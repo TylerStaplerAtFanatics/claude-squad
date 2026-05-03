@@ -564,7 +564,9 @@ func (s *SessionService) CreateSession(
 	if req.Msg.Title == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("title is required"))
 	}
-	if !req.Msg.OneOff && req.Msg.Path == "" {
+	if !req.Msg.OneOff &&
+		req.Msg.SessionType != sessionv1.SessionType_SESSION_TYPE_NEW_PROJECT &&
+		req.Msg.Path == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
 	}
 
@@ -642,6 +644,18 @@ func (s *SessionService) CreateSession(
 	// Determine session type - use explicit session_type if provided, otherwise infer from fields
 	sessionType := resolveSessionType(req.Msg, branch)
 
+	// For Directory mode: if path does not exist and create_if_missing is not set, return
+	// CodeNotFound so the frontend can show a confirmation dialog.
+	if sessionType == session.SessionTypeDirectory {
+		if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+			if !req.Msg.CreateIfMissing {
+				return nil, connect.NewError(connect.CodeNotFound,
+					fmt.Errorf("path does not exist: %s", resolvedPath))
+			}
+			// create_if_missing=true: fall through; setupFirstTimeWorktree handles creation
+		}
+	}
+
 	// Build instance options
 	instanceOpts := session.InstanceOptions{
 		Title:            req.Msg.Title,
@@ -659,6 +673,7 @@ func (s *SessionService) CreateSession(
 		OneShot:          req.Msg.OneShot,
 		ProjectID:        req.Msg.ProjectId,
 		MCPServerURL:     s.mcpServerURL,
+		CreateIfMissing:  req.Msg.CreateIfMissing,
 	}
 
 	// Add GitHub metadata if this was a GitHub URL
@@ -737,6 +752,8 @@ func resolveSessionType(msg *sessionv1.CreateSessionRequest, branch string) sess
 			st = session.SessionTypeNewWorktree
 		case sessionv1.SessionType_SESSION_TYPE_EXISTING_WORKTREE:
 			st = session.SessionTypeExistingWorktree
+		case sessionv1.SessionType_SESSION_TYPE_NEW_PROJECT:
+			st = session.SessionTypeNewProject
 		default:
 			st = session.SessionTypeDirectory
 		}
@@ -2614,6 +2631,7 @@ func (s *SessionService) GetTerminalSnapshot(
 	}), nil
 }
 
+// +api: session:log-client-events
 // LogClientEvents receives batched browser console log entries from the web UI.
 // Used for remote debugging of mobile browser sessions where DevTools are unavailable.
 // Never returns an error — malformed or oversized entries are silently discarded.

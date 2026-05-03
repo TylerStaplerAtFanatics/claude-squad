@@ -625,9 +625,24 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 					errChan <- fmt.Errorf("failed to send output: %w", err)
 					return
 				}
+			}
+		}
+	}()
 
-				log.DebugLog.Printf("[streamViaControlMode] Sent update (%d bytes) for session '%s'",
-					len(data), sessionID)
+	// resizeCh coalesces rapid resize events (e.g. window drags) so only the
+	// latest dimensions reach SetWindowSize. The channel holds at most one
+	// pending resize; the goroutine is tied to doneChan so it exits with the stream.
+	type resizeReq struct{ cols, rows int }
+	resizeCh := make(chan resizeReq, 1)
+	go func() {
+		for {
+			select {
+			case <-doneChan:
+				return
+			case r := <-resizeCh:
+				if err := instance.SetWindowSize(r.cols, r.rows); err != nil {
+					log.ErrorLog.Printf("[streamViaControlMode] Failed to resize: %v", err)
+				}
 			}
 		}
 	}()
@@ -705,12 +720,19 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 					}
 				}
 
-				// Handle resize
+				// Handle resize — send to coalescing worker so rapid window-drag events
+				// never stall input reading and don't pile up unbounded goroutines.
 				if resize := incomingData.GetResize(); resize != nil {
-					cols := int(resize.Cols)
-					rows := int(resize.Rows)
-					if err := instance.SetWindowSize(cols, rows); err != nil {
-						log.ErrorLog.Printf("[streamViaControlMode] Failed to resize: %v", err)
+					req := resizeReq{int(resize.Cols), int(resize.Rows)}
+					select {
+					case resizeCh <- req:
+					default:
+						// Worker is busy; drain stale value and replace with latest.
+						select {
+						case <-resizeCh:
+						default:
+						}
+						resizeCh <- req
 					}
 				}
 
@@ -898,9 +920,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 					errChan <- fmt.Errorf("failed to send output: %w", err)
 					return
 				}
-
-				log.DebugLog.Printf("[streamViaTmuxCapture] Sent output (%d bytes) for session '%s'",
-					len(content), sessionID)
 			}
 		}
 	}()
@@ -968,9 +987,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 					if err := sendInputToTmux(tmuxSessionName, input.Data); err != nil {
 						log.WarningLog.Printf("[streamViaTmuxCapture] Error sending input to tmux '%s': %v",
 							tmuxSessionName, err)
-					} else {
-						log.DebugLog.Printf("[streamViaTmuxCapture] Sent input (%d bytes) to tmux '%s'",
-							len(input.Data), tmuxSessionName)
 					}
 				}
 

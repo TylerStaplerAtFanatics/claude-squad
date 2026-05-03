@@ -100,11 +100,11 @@ export function useNotificationHistory(): UseNotificationHistoryReturn {
     }
   }, [offset]);
 
-  // Initial fetch on mount + poll every 15 seconds for new events
+  // Fetch history once on mount. New notifications arrive via the watchSessions
+  // stream and are added to local state by NotificationContext.addNotification,
+  // so periodic polling is not needed.
   useEffect(() => {
     fetchHistory(true);
-    const interval = setInterval(() => fetchHistory(true), 15_000);
-    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // newDispatchTestSession creates a TmuxSession wired to an in-memory pipe so that
@@ -67,8 +69,14 @@ func TestCMDispatch_SingleCommand(t *testing.T) {
 		resultCh <- body
 	}()
 
-	// Give the goroutine time to enqueue.
-	time.Sleep(10 * time.Millisecond)
+	// Wait for the goroutine to enqueue its command.
+	if err := wait.WaitForCondition(func() bool {
+		sess.controlModeSubMu.Lock()
+		defer sess.controlModeSubMu.Unlock()
+		return len(sess.pendingCmds) > 0
+	}, wait.WaitConfig{Timeout: 2 * time.Second, PollInterval: 5 * time.Millisecond, Description: "pending command enqueued"}); err != nil {
+		t.Fatalf("goroutine did not enqueue command: %v", err)
+	}
 
 	sess.processControlModeLine("%begin 1234 1 0")
 	sess.processControlModeLine("output-line")
@@ -193,7 +201,14 @@ func TestCMDispatch_ConcurrentSendCMCommand(t *testing.T) {
 		}()
 	}
 	startWg.Wait()
-	time.Sleep(20 * time.Millisecond)
+	// Wait for all n goroutines to enqueue their commands.
+	if err := wait.WaitForCondition(func() bool {
+		sess.controlModeSubMu.Lock()
+		defer sess.controlModeSubMu.Unlock()
+		return len(sess.pendingCmds) >= n
+	}, wait.WaitConfig{Timeout: 5 * time.Second, PollInterval: 5 * time.Millisecond, Description: fmt.Sprintf("all %d commands enqueued", n)}); err != nil {
+		t.Fatalf("goroutines did not enqueue %d commands: %v", n, err)
+	}
 
 	// Feed n responses — each goroutine gets one, FIFO.
 	for j := 0; j < n; j++ {
@@ -409,9 +424,13 @@ func TestCMFeatureFlag_OnUsesCMPath(t *testing.T) {
 		pr.Close()
 	}()
 
-	// Simulate CM response.
+	// Simulate CM response: wait until sendCMCommand has enqueued itself, then reply.
 	go func() {
-		time.Sleep(20 * time.Millisecond)
+		_ = wait.WaitForCondition(func() bool {
+			sess.controlModeSubMu.Lock()
+			defer sess.controlModeSubMu.Unlock()
+			return len(sess.pendingCmds) > 0
+		}, wait.WaitConfig{Timeout: 2 * time.Second, PollInterval: 5 * time.Millisecond, Description: "CM command enqueued"})
 		sess.processControlModeLine("%begin 1 1 0")
 		sess.processControlModeLine("220 50")
 		sess.processControlModeLine("%end 1 1 0")

@@ -1,5 +1,29 @@
 {
   "extends": ["next/core-web-vitals"],
+  "plugins": ["boundaries"],
+  "settings": {
+    "boundaries/elements": [
+      { "type": "app",        "pattern": "src/app/**" },
+      { "type": "layout",    "pattern": "src/components/layout/**" },
+      { "type": "providers", "pattern": "src/components/providers/**" },
+      { "type": "sessions",  "pattern": "src/components/sessions/**" },
+      { "type": "unfinished","pattern": "src/components/unfinished/**" },
+      { "type": "history",   "pattern": "src/components/history/**" },
+      { "type": "logs",      "pattern": "src/components/logs/**" },
+      { "type": "settings",  "pattern": "src/components/settings/**" },
+      { "type": "telemetry", "pattern": "src/components/telemetry/**" },
+      { "type": "ui",        "pattern": "src/components/ui/**" },
+      { "type": "shared",    "pattern": "src/components/shared/**" },
+      { "type": "lib",       "pattern": "src/lib/**" },
+      { "type": "gen",       "pattern": "src/gen/**" }
+    ],
+    "boundaries/ignore": [
+      "**/*.test.*",
+      "**/*.spec.*",
+      "src/lib/__tests__/**",
+      "src/lib/test-generators/**"
+    ]
+  },
   "rules": {
     "no-restricted-syntax": [
       "error",
@@ -10,6 +34,38 @@
       {
         "selector": "TemplateElement[value.raw=/\\b100vh\\b/]",
         "message": "Use var(--viewport-height) instead of '100vh' in template literals. See project_plans/ux-overhaul/."
+      }
+    ],
+    "boundaries/dependencies": [
+      "error",
+      {
+        "default": "disallow",
+        "rules": [
+          {
+            "from": "app",
+            "allow": ["layout", "providers", "sessions", "unfinished", "history", "logs", "settings", "telemetry", "ui", "shared", "lib", "gen"]
+          },
+          {
+            "from": "layout",
+            "allow": ["providers", "sessions", "unfinished", "history", "logs", "settings", "telemetry", "ui", "shared", "lib", "gen"]
+          },
+          {
+            "from": "providers",
+            "allow": ["ui", "shared", "lib", "gen"]
+          },
+          {
+            "from": ["sessions", "unfinished", "history", "logs", "settings", "telemetry"],
+            "allow": ["providers", "ui", "shared", "lib", "gen"]
+          },
+          { "from": "ui",     "allow": ["lib", "gen"] },
+          { "from": "shared", "allow": ["lib", "gen"] },
+          {
+            "from": "lib",
+            "allow": ["ui", "sessions", "gen"],
+            "_comment": "lib/contexts/ renders UI (NotificationContext→NotificationToast) and owns the omnibar (OmnibarContext→Omnibar). Both are intentional provider patterns."
+          },
+          { "from": "gen",    "allow": [] }
+        ]
       }
     ]
   },

@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/session"
+	"github.com/tstapler/stapler-squad/testutil"
 )
 
 // newTestHandler creates an ApprovalHandler wired with real in-memory dependencies
@@ -62,14 +63,14 @@ func TestApprovalFlow_Allow(t *testing.T) {
 	go func() {
 		// Poll until an approval appears in the store.
 		var approvalID string
-		for i := 0; i < 50; i++ {
-			time.Sleep(10 * time.Millisecond)
+		_ = testutil.WaitForCondition(func() bool {
 			approvals := store.ListAll()
 			if len(approvals) > 0 {
 				approvalID = approvals[0].ID
-				break
+				return true
 			}
-		}
+			return false
+		}, testutil.FastWaitConfig())
 		if approvalID == "" {
 			t.Errorf("approval never appeared in store")
 			return
@@ -97,18 +98,23 @@ func TestApprovalFlow_Deny(t *testing.T) {
 	h, store := newTestHandler(5 * time.Second)
 
 	go func() {
-		for i := 0; i < 50; i++ {
-			time.Sleep(10 * time.Millisecond)
+		var approvalID string
+		_ = testutil.WaitForCondition(func() bool {
 			approvals := store.ListAll()
 			if len(approvals) > 0 {
-				_ = store.Resolve(approvals[0].ID, ApprovalDecision{
-					Behavior: "deny",
-					Message:  "not permitted",
-				})
-				return
+				approvalID = approvals[0].ID
+				return true
 			}
+			return false
+		}, testutil.FastWaitConfig())
+		if approvalID == "" {
+			t.Errorf("approval never appeared in store")
+			return
 		}
-		t.Errorf("approval never appeared in store")
+		_ = store.Resolve(approvalID, ApprovalDecision{
+			Behavior: "deny",
+			Message:  "not permitted",
+		})
 	}()
 
 	resp, _ := postPermissionRequest(t, h, "test-session", "Write")
@@ -188,18 +194,22 @@ func TestApprovalFlow_SessionIDFromHeader(t *testing.T) {
 	h, store := newTestHandler(5 * time.Second)
 
 	go func() {
-		for i := 0; i < 50; i++ {
-			time.Sleep(10 * time.Millisecond)
+		var approval *PendingApproval
+		_ = testutil.WaitForCondition(func() bool {
 			approvals := store.ListAll()
 			if len(approvals) > 0 {
-				a := approvals[0]
-				if a.SessionID != "my-session" {
-					t.Errorf("expected sessionID=my-session, got %q", a.SessionID)
-				}
-				_ = store.Resolve(a.ID, ApprovalDecision{Behavior: "allow"})
-				return
+				approval = approvals[0]
+				return true
 			}
+			return false
+		}, testutil.FastWaitConfig())
+		if approval == nil {
+			return
 		}
+		if approval.SessionID != "my-session" {
+			t.Errorf("expected sessionID=my-session, got %q", approval.SessionID)
+		}
+		_ = store.Resolve(approval.ID, ApprovalDecision{Behavior: "allow"})
 	}()
 
 	postPermissionRequest(t, h, "my-session", "Read")

@@ -124,6 +124,10 @@ type Instance struct {
 	IsExpanded bool
 	// SessionType determines the session workflow (directory, new_worktree, existing_worktree)
 	SessionType SessionType
+	// CreateIfMissing: when SessionTypeDirectory, create the directory and run git init
+	// if the path does not exist. Set from the request's create_if_missing field.
+	// Not persisted — only relevant during initial session start.
+	CreateIfMissing bool `json:"-"`
 	// TmuxPrefix is the prefix to use for tmux session names
 	TmuxPrefix string
 	// TmuxServerSocket is the server socket name for tmux isolation (used with -L flag)
@@ -248,6 +252,11 @@ type Instance struct {
 	// startMu prevents concurrent calls to start() from racing during session setup.
 	// Held for the full duration of start(); callers that lose the race return early.
 	startMu sync.Mutex
+
+	// restartCount and recentRestartTimes track rapid restarts for storm detection.
+	restartCount       int64
+	recentRestartTimes []time.Time
+	restartMu          sync.Mutex
 
 	// lifecycleListeners receives EventStarted / EventExited notifications.
 	lifecycleListeners   []LifecycleListener
@@ -582,12 +591,16 @@ const (
 	SessionTypeNewWorktree SessionType = "new_worktree"
 	// SessionTypeExistingWorktree uses an existing git worktree
 	SessionTypeExistingWorktree SessionType = "existing_worktree"
+	// SessionTypeNewProject creates a new directory, initializes a git repo with an
+	// initial commit, and opens the session. The directory need not exist beforehand.
+	SessionTypeNewProject SessionType = "new_project"
 )
 
 // IsValid reports whether st is a recognized session type.
 func (st SessionType) IsValid() bool {
 	switch st {
-	case SessionTypeDirectory, SessionTypeNewWorktree, SessionTypeExistingWorktree:
+	case SessionTypeDirectory, SessionTypeNewWorktree, SessionTypeExistingWorktree,
+		SessionTypeNewProject:
 		return true
 	default:
 		return false
@@ -647,6 +660,10 @@ type InstanceOptions struct {
 	// --mcp-config '{"stapler-squad":{"type":"http","url":"<MCPServerURL>"}}' so the
 	// session can call back into stapler-squad without any file injection.
 	MCPServerURL string
+
+	// CreateIfMissing: when SessionTypeDirectory, create the directory and run git init
+	// if the path does not exist. Only set when the user has confirmed the action.
+	CreateIfMissing bool
 }
 
 func NewInstance(opts InstanceOptions) (*Instance, error) {
@@ -682,8 +699,8 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 		sessionType = SessionTypeDirectory
 	}
 	if !sessionType.IsValid() {
-		return nil, fmt.Errorf("invalid session type %q: must be one of %q, %q, %q",
-			sessionType, SessionTypeDirectory, SessionTypeNewWorktree, SessionTypeExistingWorktree)
+		return nil, fmt.Errorf("invalid session type %q: must be one of %q, %q, %q, %q",
+			sessionType, SessionTypeDirectory, SessionTypeNewWorktree, SessionTypeExistingWorktree, SessionTypeNewProject)
 	}
 
 	instance := &Instance{
@@ -725,6 +742,8 @@ func NewInstance(opts InstanceOptions) (*Instance, error) {
 		OneShot:      opts.OneShot,
 		ProjectID:    opts.ProjectID,
 		MCPServerURL: opts.MCPServerURL,
+		// Directory creation on missing path (R2 confirmation flow)
+		CreateIfMissing: opts.CreateIfMissing,
 	}
 
 	// Initialize TagManager backed by the Instance.Tags slice
@@ -928,7 +947,11 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	i.startMu.Lock()
 	defer i.startMu.Unlock()
 
-	log.InfoLog.Printf("Starting instance '%s' (firstTimeSetup: %v)", i.Title, firstTimeSetup)
+	log.InfoLog.Printf("Starting instance '%s' path=%q program=%q (firstTimeSetup: %v)", i.Title, i.Path, i.Program, firstTimeSetup)
+
+	if !firstTimeSetup {
+		i.trackRestartRate()
+	}
 
 	if i.Title == "" {
 		return fmt.Errorf("instance title cannot be empty")
@@ -1099,10 +1122,10 @@ func (i *Instance) buildLaunchCommand(claudeSessionID string) string {
 		mcpFlag := fmt.Sprintf(`--mcp-config '{"mcpServers":{"stapler-squad":{"type":"http","url":%q}}}'`, i.MCPServerURL)
 		program = program + " " + mcpFlag
 	}
-	if i.AutoYes {
+	if i.AutoYes && strings.Contains(program, "claude") {
 		program = program + " -y"
 	}
-	if i.Prompt != "" && claudeSessionID == "" {
+	if i.Prompt != "" && claudeSessionID == "" && strings.Contains(program, "claude") {
 		program = fmt.Sprintf("%s %q", program, i.Prompt)
 	}
 	return program
@@ -1162,8 +1185,23 @@ func (i *Instance) setupFirstTimeWorktree() error {
 		i.gitManager.SetWorktree(gitWorktree)
 		i.Branch = gitWorktree.GetBranchName()
 		log.InfoLog.Printf("Connected to existing worktree for instance '%s', branch: '%s'", i.Title, i.Branch)
+	case SessionTypeNewProject:
+		log.InfoLog.Printf("New project session for instance '%s' at '%s', initializing git repo", i.Title, i.Path)
+		if err := git.InitializeProjectDirectory(i.Path); err != nil {
+			return fmt.Errorf("new_project initialization failed: %w", err)
+		}
+		i.gitManager.SetWorktree(nil)
+		i.Branch = ""
+		log.InfoLog.Printf("New project initialized at '%s'", i.Path)
 	default: // SessionTypeDirectory and unknown types → no worktree
 		log.InfoLog.Printf("Directory session for instance '%s' at '%s' (no git worktree)", i.Title, i.Path)
+		if i.CreateIfMissing {
+			if _, err := os.Stat(i.Path); os.IsNotExist(err) {
+				if err := git.InitializeProjectDirectory(i.Path); err != nil {
+					return fmt.Errorf("failed to create directory for session: %w", err)
+				}
+			}
+		}
 		i.gitManager.SetWorktree(nil)
 		i.Branch = ""
 	}
@@ -1411,6 +1449,36 @@ func (i *Instance) HasGitWorktree() bool {
 
 func (i *Instance) Started() bool {
 	return i.started
+}
+
+// trackRestartRate records a restart timestamp and logs a warning when the
+// session has restarted more than 5 times in the last 5 minutes (crash loop).
+func (i *Instance) trackRestartRate() {
+	const window = 5 * time.Minute
+	const threshold = 5
+
+	now := time.Now()
+	i.restartMu.Lock()
+	defer i.restartMu.Unlock()
+
+	i.restartCount++
+
+	// Drop timestamps outside the window.
+	cutoff := now.Add(-window)
+	kept := i.recentRestartTimes[:0]
+	for _, t := range i.recentRestartTimes {
+		if t.After(cutoff) {
+			kept = append(kept, t)
+		}
+	}
+	i.recentRestartTimes = append(kept, now)
+
+	if int64(len(i.recentRestartTimes)) >= threshold {
+		log.WarningLog.Printf(
+			"[restart-storm] session '%s' has restarted %d times in the last %.0fs (total restarts: %d) — possible crash loop",
+			i.Title, len(i.recentRestartTimes), window.Seconds(), i.restartCount,
+		)
+	}
 }
 
 // TmuxSessionExists reports whether the underlying tmux session is currently alive.
@@ -1706,6 +1774,10 @@ func (i *Instance) Restart(preserveOutput bool) error {
 		worktreePath = i.ExistingWorktree
 	} else {
 		worktreePath = i.Path
+	}
+
+	if worktreePath == "" {
+		return fmt.Errorf("cannot restart session '%s': no working directory configured", i.Title)
 	}
 
 	program := i.buildLaunchCommand(claudeSessionID)

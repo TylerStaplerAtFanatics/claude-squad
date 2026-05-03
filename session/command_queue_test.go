@@ -601,7 +601,6 @@ func TestCommandQueue_ConcurrentMixedOperations(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < numOperations/2; i++ {
 			cq.Dequeue()
-			time.Sleep(1 * time.Millisecond)
 		}
 	}()
 
@@ -611,7 +610,6 @@ func TestCommandQueue_ConcurrentMixedOperations(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < numOperations; i++ {
 			cq.Peek()
-			time.Sleep(1 * time.Millisecond)
 		}
 	}()
 

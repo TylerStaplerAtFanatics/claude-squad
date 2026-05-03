@@ -2,13 +2,19 @@
 
 ## Priority Summary
 
-**P0** - Backend Architecture Story 6 (Task 6.1): ReviewQueuePoller maps keyed by Title not UUID — silent cache corruption on rename
-**P1** - BUG-013: xterm.js viewport jump on Claude repaints (High, 2-3h fix, confirmed root cause)
-**P1** - Backend Architecture Story 6 (Tasks 6.2, 6.3): InstanceReader interface injection + domain error types
-**P2** - Backend Architecture Stories 1-5 (InstanceStore abstraction leak, BuildRuntimeDeps, Repository split, GitHubPRStatus, mega-functions)
-**P2** - Backend Architecture Story 7: ReviewQueuePoller decomposition (TerminalContentCache, TmuxReconciler, LastActivity authority)
-**P2** - Backend Architecture Story 8: Transport-agnostic TerminalSession interface (replace SessionStreamer; EnsureConnectable; eliminate 42 tmux leakage points from server layer)
-**P3** - BUG-010: tmux prompt detection (High, needs investigation) / BUG-012: testutil failures (Medium)
+> **Note**: This file is a historical record. For the current task index see [docs/tasks/TODO.md](docs/tasks/TODO.md).
+> Last synced: 2026-05-02
+
+**P1** - Backend Architecture Stories 6.1-6.3: UUID keying in ReviewQueuePoller, InstanceReader interface, domain error types
+**P2** - Backend Architecture Stories 1-5, 7, 8: InstanceStore leak, BuildRuntimeDeps, Repository split, TerminalSession interface
+**P2** - Session Defaults Task 4.4: DirectoryRulesManager component (blocks web build on settings/defaults branch)
+**P2** - History Page Revamp: Ready for implementation (docs/tasks/history-page-revamp.md)
+**P3** - Mobile UX Task 3.4: iOS auto-zoom fix for xterm textarea (only remaining mobile item)
+**P3** - Rate Limit Story 5 + UX: Config/disable toggle and UX improvements pending
+
+**Recent Completions (2026-05-02)**:
+- Mobile toolbar overflow menu — secondary buttons collapse to ··· on mobile (ef342b6)
+- Browser console log streaming to server via LogClientEvents RPC (efac73ab)
 
 **Recent Completions (2026-04-22)**:
 - UUID persistence fix (session not found after restart — uuid field added to ent schema)
@@ -17,12 +23,10 @@
 **Recent Completions (2026-04-20)**:
 - Tmux Session Registry (T1-T6 all merged) — fork throttling eliminated
 - System Service Autostart (Stories 1-4 complete) — systemd + LaunchAgent + ssq-hooks
-- Session zombie/race-condition hardening (fix(session): 8fdb63d, a4fc2e6)
-- Full launch command tracking per session (feat: 3f20d89)
-- Terminal Jank Stories 1 & 2 — ED3 filter, clear-prefix removal, xterm 6.0, quiescence detector, snapshot cache
 - BUG-013 FIXED — xterm.js viewport jump on Claude repaints (EscapeSequenceParser.ts)
+- BUG-010, BUG-012 FIXED — tmux registry contamination and testutil failures
 
-**Bug Status**: Fixed: BUG-001..003, BUG-009, BUG-010, BUG-012, BUG-013 | Open-Low (review-queue gaps): GAP-001..004
+**Bug Status (2026-05-02)**: Fixed: BUG-001..003, BUG-009..017 | Open-Medium: BUG-018 (gob heap), BUG-020 (vcs mutex), BUG-021 (gh auth mutex) | Open-Low: BUG-019 (flate pool), GAP-001..004
 
 ---
 

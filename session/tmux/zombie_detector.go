@@ -109,14 +109,13 @@ func StartZombieWatcher(ctx context.Context, interval time.Duration, warnFn func
 					}
 				}
 
-				if len(zombies) > 0 {
-					now := time.Now()
-					checkPressure(now)
-				}
-
-				// Immediately reap on detection rather than waiting for the
-				// background reaper's next 60s tick.
+				// Only call checkPressure when new zombies were recorded — the ring
+				// buffer tracks them; firing on stable (already-reported) zombies
+				// produces repeated alerts for a constant non-growing zombie set.
 				if newZombies > 0 {
+					checkPressure(time.Now())
+
+					// Immediately reap rather than waiting for the 60s background tick.
 					if n := reapZombieChildren(); n > 0 {
 						warnFn("[zombie-reaper] reaped %d zombie child(ren) on detection", n)
 					}

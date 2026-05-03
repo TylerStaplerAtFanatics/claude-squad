@@ -1,7 +1,9 @@
 package session
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -18,10 +20,19 @@ func checkTmuxAvailable(t *testing.T) {
 	}
 }
 
-// coldRestoreSocket returns a unique tmux server socket name for cold-restore tests.
+// coldRestoreSocket returns a unique tmux server socket name for cold-restore
+// tests and registers a t.Cleanup that kills the isolated server on test exit.
+// The PID is embedded in the name so TestMain's PID-aware sweep can reap this
+// socket on the next run if the current run was killed with SIGKILL.
 func coldRestoreSocket(t *testing.T) string {
 	t.Helper()
-	return fmt.Sprintf("test_coldrestore_%d_%s", time.Now().UnixNano(), t.Name())
+	name := fmt.Sprintf("test_coldrestore_%d_%d", os.Getpid(), time.Now().UnixNano())
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = exec.CommandContext(ctx, "tmux", "-L", name, "kill-server").Run()
+	})
+	return name
 }
 
 // TestColdRestore_WithUUID verifies that when the tmux session is dead and a
@@ -30,6 +41,9 @@ func coldRestoreSocket(t *testing.T) string {
 // unit level in claude_command_builder_test.go; this test verifies the lifecycle
 // (dead tmux → HasClaudeSession=true → Running).
 func TestColdRestore_WithUUID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that starts real tmux sessions")
+	}
 	checkTmuxAvailable(t)
 
 	title := fmt.Sprintf("test-cold-%d", time.Now().UnixNano())
@@ -85,6 +99,9 @@ func TestColdRestore_WithUUID(t *testing.T) {
 // there is no Claude conversation UUID, Start(false) still creates a fresh tmux
 // session and the instance transitions to Running.
 func TestColdRestore_WithoutUUID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that starts real tmux sessions")
+	}
 	checkTmuxAvailable(t)
 
 	title := fmt.Sprintf("test-cold-%d", time.Now().UnixNano())
@@ -126,6 +143,9 @@ func TestColdRestore_WithoutUUID(t *testing.T) {
 // TestHotRestore_ExistingSession verifies that when the tmux session is already
 // alive, Start(false) attaches to it (hot restore) rather than creating a new one.
 func TestHotRestore_ExistingSession(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test that starts real tmux sessions")
+	}
 	checkTmuxAvailable(t)
 
 	title := fmt.Sprintf("test-hot-%d", time.Now().UnixNano())

@@ -265,6 +265,10 @@ var (
 		{Name: "mcp_server_url", Type: field.TypeString, Nullable: true},
 		{Name: "initial_prompt", Type: field.TypeString, Nullable: true},
 		{Name: "one_shot", Type: field.TypeBool, Default: false},
+		{Name: "last_user_response", Type: field.TypeTime, Nullable: true},
+		{Name: "processing_grace_until", Type: field.TypeTime, Nullable: true},
+		{Name: "last_prompt_detected", Type: field.TypeTime, Nullable: true},
+		{Name: "last_prompt_signature", Type: field.TypeString, Nullable: true},
 		{Name: "project_sessions", Type: field.TypeInt, Nullable: true},
 	}
 	// SessionsTable holds the schema information for the "sessions" table.
@@ -275,7 +279,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "sessions_projects_sessions",
-				Columns:    []*schema.Column{SessionsColumns[28]},
+				Columns:    []*schema.Column{SessionsColumns[32]},
 				RefColumns: []*schema.Column{ProjectsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},

@@ -3,12 +3,14 @@ package session
 import (
 	"context"
 	"fmt"
-	"github.com/tstapler/stapler-squad/session/git"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/session/git"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // TestReviewQueue_UncommittedChangesDetection verifies that uncommitted changes are detected
@@ -334,8 +336,14 @@ func TestReviewQueue_UncommittedChanges_Integration(t *testing.T) {
 	poller.Start(ctx)
 	defer poller.Stop()
 
-	// Wait for initial check
-	time.Sleep(150 * time.Millisecond)
+	// Wait for poller to start running
+	startCfg := wait.FastWaitConfig()
+	startCfg.Description = "poller running"
+	if err := wait.WaitForCondition(func() bool {
+		return poller.IsRunning()
+	}, startCfg); err != nil {
+		t.Fatalf("poller failed to start: %v", err)
+	}
 
 	// Verify initially clean (not in queue)
 	if queue.Has(instance.Title) {
@@ -352,7 +360,13 @@ func TestReviewQueue_UncommittedChanges_Integration(t *testing.T) {
 	worktree.InvalidateDirtyCache()
 
 	// Wait for poller to detect changes
-	time.Sleep(300 * time.Millisecond)
+	detectCfg := wait.DefaultWaitConfig()
+	detectCfg.Description = "uncommitted changes detected"
+	if err := wait.WaitForCondition(func() bool {
+		return queue.Has(instance.Title)
+	}, detectCfg); err != nil {
+		t.Fatalf("poller failed to detect uncommitted changes: %v", err)
+	}
 
 	// Verify detected and added to queue
 	if !queue.Has(instance.Title) {
@@ -373,8 +387,18 @@ func TestReviewQueue_UncommittedChanges_Integration(t *testing.T) {
 		t.Fatalf("Failed to commit changes: %v", err)
 	}
 
-	// Wait for poller to detect committed state
-	time.Sleep(300 * time.Millisecond)
+	// Wait for poller to detect committed state (queue entry removed or reason changed)
+	committedCfg := wait.DefaultWaitConfig()
+	committedCfg.Description = "committed state detected"
+	if err := wait.WaitForCondition(func() bool {
+		if !queue.Has(instance.Title) {
+			return true
+		}
+		updatedItem, _ := queue.Get(instance.Title)
+		return updatedItem.Reason != ReasonUncommittedChanges
+	}, committedCfg); err != nil {
+		t.Fatalf("poller failed to detect committed state: %v", err)
+	}
 
 	// Verify removed from queue (or reason changed)
 	if queue.Has(instance.Title) {

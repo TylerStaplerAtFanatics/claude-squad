@@ -17,11 +17,10 @@ This file serves as a lightweight index of all feature plans in `docs/tasks/`.
 | [Circuit Breaker Executor](circuit-breaker-executor.md) | Draft | 4 stories | Medium |
 | [Frontend Quick Wins](frontend-quick-wins.md) | Draft | 5 atomic tasks | Low |
 | [Backlog Pipeline](worktrees/feat/backlog-pipeline-planning/docs/tasks/backlog-pipeline.md) | Planning - Phase 3 Complete | TBD | High |
-| [Mobile UX Improvements](mobile-ux-improvements.md) | Ready for Implementation | 3 stories, 11 tasks | Medium |
+| [Mobile UX Improvements](mobile-ux-improvements.md) | Partially Implemented (Stories 1-3 done; Task 3.4 iOS auto-zoom fix pending) | 3 stories, 11 tasks | Medium |
 | [Session Defaults & Profiles](session-defaults.md) | 10/11 Tasks Complete — Task 4.4 Blocking Build | 4 stories, 11 tasks | High |
 | [AskUserQuestion Rich UI](askuserquestion-ui.md) | Draft | 3 stories | Low |
 | [History Page Revamp](history-page-revamp.md) | Ready for Implementation | 5 stories, 13 tasks | High |
-| [System Service Auto-Start](system-service-autostart.md) | Draft | 4 stories, 12 tasks | Medium |
 
 ## Completed Plans
 
@@ -33,9 +32,12 @@ This file serves as a lightweight index of all feature plans in `docs/tasks/`.
 | [Web UI Enhancements](web-ui-enhancements.md) | Implemented | - |
 | [Session Rename/Restart](session-rename-restart.md) | Implemented | - |
 | [Full Text Search History](full-text-search-history.md) | Implemented | - |
+| [System Service Auto-Start](completed/system-service-autostart.md) | Implemented (Stories 1-4) | 2026-04-20 |
+| [Rate Limit Detection](detect-and-address-rate-limits.md) | Implemented (core Stories 1-4; Story 5 config pending) | 2026-04 |
 | claude-mux build/install + from-source installer | Implemented (6518db9) | 2026-04 |
 | Classifier: AskUserQuestion escalation + path expansion | Implemented (65b8c8e, 627c3af) | 2026-04 |
 | Fork compatibility (dynamic repo owner) | Implemented (a1b0ed6) | 2026-04 |
+| Mobile overflow menu | Implemented (ef342b6) | 2026-05-02 |
 
 ## Reference Plans
 
@@ -52,19 +54,29 @@ This file serves as a lightweight index of all feature plans in `docs/tasks/`.
 | [SQLite Schema Normalization](sqlite-schema-normalization.md) | Reference |
 | [Session Restart Functionality](session-restart-functionality.md) | Reference |
 | [Fix Test Failures](fix-test-failures.md) | Reference |
+| [Rate Limit Detection](detect-and-address-rate-limits.md) | Reference (core implemented; Story 5 + UX pending) |
+| [Rate Limit UX Improvements](rate-limit-ux-improvements.md) | Backlog (all tasks pending) |
 
 ## Open Bugs
 
 | Bug | Severity | Status | Notes |
 |-----|----------|--------|-------|
 | [review-queue-gaps](../bugs/open/review-queue-gaps.md) | Low | Open | GAP-001/003/004 remain; BUG-001/002/003 fixed same session |
-| [BUG-010](../bugs/open/BUG-010-tmux-banner-prompt-detection.md) | High | Investigating | tmux prompt detection in tests; test-infra only |
-| [BUG-012](../bugs/open/BUG-012-testutil-package-failures.md) | Medium | Investigating | testutil package test infrastructure |
+| [BUG-018](../bugs/open/BUG-018-gob-session-persistence-memory-hotspot.md) | Medium | Open | Gob encoding 35MB heap allocation; consider protobuf migration |
+| [BUG-019](../bugs/open/BUG-019-flate-writer-not-pooled.md) | Low | Open | flate writer not pooled; 12MB resident + 18% CPU |
+| [BUG-020](../bugs/open/BUG-020-vcs-status-diff-mutex-contention.md) | Medium | Open | VCS status diff mutex contention |
+| [BUG-021](../bugs/open/BUG-021-check-gh-auth-mutex-contention.md) | Medium | Open | gh auth check mutex contention |
+
+## Fixed Bugs (recently)
+
+BUG-010 (tmux global registry contamination), BUG-012 (testutil package failures), BUG-013 (xterm.js viewport jump), BUG-015 (EventBus goroutine leak), BUG-016 (WebSocket flate writer), BUG-017 (SQLite eager load 25MB startup) — all fixed, see `docs/bugs/fixed/`.
 
 ## Notes
 
 - Session Defaults feature (branch: claude-squad-session-default-configuration) is 10/11 tasks complete as of 2026-04-13.
   The only remaining task is Task 4.4 (DirectoryRulesManager component). The web build is blocked until this is created.
   `web-app/src/app/settings/defaults/page.tsx` imports `DirectoryRulesManager` which does not yet exist.
-- No critical bugs blocking active feature work (BUG-010 and BUG-012 are test-infrastructure issues only).
+- No critical bugs blocking active feature work.
+- Mobile UX Stories 1-3 implemented (viewport, safe-area, 100dvh, ViewportProvider, toolbar overflow menu, keyboard toggle). Task 3.4 (iOS auto-zoom fix for xterm textarea) remains pending.
+- Rate Limit Detection core is implemented (`session/detection/ratelimit/`). Story 5 (config/disable toggle) and UX improvements in `rate-limit-ux-improvements.md` remain pending.
 - BUG-008, BUG-009, BUG-011 referenced a `ui/` Go package (TUI era) that no longer exists. Move to `docs/bugs/obsolete/` when that directory is created.

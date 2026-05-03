@@ -100,7 +100,7 @@ func fixtureStore(t *testing.T) (*fakeInstanceStore, string) {
 	t.Helper()
 	dir := t.TempDir()
 	inst := &session.Instance{}
-	inst.ID = "session-123"
+	inst.UUID = "session-123"
 	inst.Title = "test-session"
 	inst.Path = dir
 	return &fakeInstanceStore{instances: []*session.Instance{inst}}, dir
@@ -110,7 +110,7 @@ func fixtureStore(t *testing.T) (*fakeInstanceStore, string) {
 
 func TestSessionImageUpload_JPEG_Success(t *testing.T) {
 	store, dir := fixtureStore(t)
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	req := buildUploadRequest(t, "session-123", "photo.jpg", jpegMagic())
 	rr := httptest.NewRecorder()
@@ -144,7 +144,7 @@ func TestSessionImageUpload_JPEG_Success(t *testing.T) {
 
 func TestSessionImageUpload_PNG_Success(t *testing.T) {
 	store, dir := fixtureStore(t)
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	req := buildUploadRequest(t, "session-123", "image.png", pngMagic())
 	rr := httptest.NewRecorder()
@@ -170,7 +170,7 @@ func TestSessionImageUpload_PNG_Success(t *testing.T) {
 
 func TestSessionImageUpload_WebP_Success(t *testing.T) {
 	store, dir := fixtureStore(t)
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	req := buildUploadRequest(t, "session-123", "img.webp", webPMagic())
 	rr := httptest.NewRecorder()
@@ -194,7 +194,7 @@ func TestSessionImageUpload_WebP_Success(t *testing.T) {
 
 func TestSessionImageUpload_OversizedFile(t *testing.T) {
 	store, _ := fixtureStore(t)
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	// Build a file clearly over the 10 MB file limit (MaxBytesReader adds 64 KB
 	// overhead allowance for multipart boundaries/headers, so the file must
@@ -218,7 +218,7 @@ func TestSessionImageUpload_OversizedFile(t *testing.T) {
 
 func TestSessionImageUpload_InvalidMIMEType(t *testing.T) {
 	store, _ := fixtureStore(t)
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	req := buildUploadRequest(t, "session-123", "page.html", []byte("<html>hello</html>"))
 	rr := httptest.NewRecorder()
@@ -236,7 +236,7 @@ func TestSessionImageUpload_InvalidMIMEType(t *testing.T) {
 
 func TestSessionImageUpload_EmptyFile(t *testing.T) {
 	store, _ := fixtureStore(t)
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	req := buildUploadRequest(t, "session-123", "empty.jpg", []byte{})
 	rr := httptest.NewRecorder()
@@ -251,7 +251,7 @@ func TestSessionImageUpload_EmptyFile(t *testing.T) {
 
 func TestSessionImageUpload_SessionNotFound(t *testing.T) {
 	store, _ := fixtureStore(t)
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	req := buildUploadRequest(t, "nonexistent-id-xyz", "photo.jpg", jpegMagic())
 	rr := httptest.NewRecorder()
@@ -269,7 +269,7 @@ func TestSessionImageUpload_SessionNotFound(t *testing.T) {
 
 func TestSessionImageUpload_MissingSessionID(t *testing.T) {
 	store, _ := fixtureStore(t)
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	// Build a request with only the file field.
 	var buf bytes.Buffer
@@ -295,7 +295,7 @@ func TestSessionImageUpload_MissingSessionID(t *testing.T) {
 
 func TestSessionImageUpload_MissingFileField(t *testing.T) {
 	store, _ := fixtureStore(t)
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	req := buildUploadRequestNoFile(t, "session-123")
 	rr := httptest.NewRecorder()
@@ -313,7 +313,7 @@ func TestSessionImageUpload_MissingFileField(t *testing.T) {
 
 func TestSessionImageUpload_PathTraversalFilename(t *testing.T) {
 	store, dir := fixtureStore(t)
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	req := buildUploadRequest(t, "session-123", "../../etc/passwd", jpegMagic())
 	rr := httptest.NewRecorder()
@@ -341,11 +341,11 @@ func TestSessionImageUpload_PathTraversalFilename(t *testing.T) {
 
 func TestSessionImageUpload_SessionNoPath(t *testing.T) {
 	inst := &session.Instance{}
-	inst.ID = "session-nopath"
+	inst.UUID = "session-nopath"
 	inst.Title = "no-path-session"
 	inst.Path = ""
 	store := &fakeInstanceStore{instances: []*session.Instance{inst}}
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	req := buildUploadRequest(t, "session-nopath", "photo.jpg", jpegMagic())
 	rr := httptest.NewRecorder()
@@ -363,11 +363,11 @@ func TestSessionImageUpload_SessionNoPath(t *testing.T) {
 
 func TestSessionImageUpload_SessionPathMissingOnDisk(t *testing.T) {
 	inst := &session.Instance{}
-	inst.ID = "session-badpath"
+	inst.UUID = "session-badpath"
 	inst.Title = "bad-path-session"
 	inst.Path = "/tmp/nonexistent-stapler-test-dir-xyz"
 	store := &fakeInstanceStore{instances: []*session.Instance{inst}}
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	req := buildUploadRequest(t, "session-badpath", "photo.jpg", jpegMagic())
 	rr := httptest.NewRecorder()
@@ -385,7 +385,7 @@ func TestSessionImageUpload_SessionPathMissingOnDisk(t *testing.T) {
 
 func TestSessionImageUpload_ConcurrentUploads(t *testing.T) {
 	store, _ := fixtureStore(t)
-	h := NewSessionImageUploadHandler(store)
+	h := NewSessionImageUploadHandler(store, nil)
 
 	// Build requests before spawning goroutines — t.Fatal is not safe inside goroutines.
 	reqs := []*http.Request{

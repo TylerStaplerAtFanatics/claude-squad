@@ -364,6 +364,20 @@ func (r *EntRepository) Update(ctx context.Context, data InstanceData) error {
 	if !data.LastAcknowledged.IsZero() {
 		sessionUpdate.SetLastAcknowledged(data.LastAcknowledged)
 	}
+	if !data.LastUserResponse.IsZero() {
+		sessionUpdate.SetLastUserResponse(data.LastUserResponse)
+	}
+	if !data.ProcessingGraceUntil.IsZero() {
+		sessionUpdate.SetProcessingGraceUntil(data.ProcessingGraceUntil)
+	} else {
+		sessionUpdate.ClearProcessingGraceUntil()
+	}
+	if !data.LastPromptDetected.IsZero() {
+		sessionUpdate.SetLastPromptDetected(data.LastPromptDetected)
+	}
+	if data.LastPromptSignature != "" {
+		sessionUpdate.SetLastPromptSignature(data.LastPromptSignature)
+	}
 	if data.MCPServerURL != "" {
 		sessionUpdate.SetMcpServerURL(data.MCPServerURL)
 	}
@@ -719,6 +733,37 @@ func (r *EntRepository) ListByTag(ctx context.Context, tagName string) ([]Instan
 	return result, nil
 }
 
+// UpdateReviewQueueState efficiently updates only the review-queue interaction fields
+// for a session, avoiding the full read-modify-write cycle of updateFieldInRepo.
+func (r *EntRepository) UpdateReviewQueueState(ctx context.Context, title string, lastUserResponse, processingGraceUntil, lastPromptDetected time.Time, lastPromptSignature string) error {
+	sess, err := r.client.Session.Query().Where(session.Title(title)).Only(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to find session: %w", err)
+	}
+
+	update := r.client.Session.UpdateOne(sess).SetUpdatedAt(time.Now())
+
+	if !lastUserResponse.IsZero() {
+		update.SetLastUserResponse(lastUserResponse)
+	}
+	if !processingGraceUntil.IsZero() {
+		update.SetProcessingGraceUntil(processingGraceUntil)
+	} else {
+		update.ClearProcessingGraceUntil()
+	}
+	if !lastPromptDetected.IsZero() {
+		update.SetLastPromptDetected(lastPromptDetected)
+	}
+	if lastPromptSignature != "" {
+		update.SetLastPromptSignature(lastPromptSignature)
+	}
+
+	if err := update.Exec(ctx); err != nil {
+		return fmt.Errorf("failed to update review queue state: %w", err)
+	}
+	return nil
+}
+
 // UpdateTimestamps efficiently updates only timestamp fields for a session
 func (r *EntRepository) UpdateTimestamps(ctx context.Context, title string, lastTerminalUpdate, lastMeaningfulOutput time.Time, lastOutputSignature string) error {
 	// Find session by title
@@ -745,6 +790,57 @@ func (r *EntRepository) UpdateTimestamps(ctx context.Context, title string, last
 		return fmt.Errorf("failed to update timestamps: %w", err)
 	}
 
+	return nil
+}
+
+// UpdateLastAddedToQueue sets only the last_added_to_queue field for a session,
+// issuing a single UPDATE WHERE title=? without a prior SELECT.
+func (r *EntRepository) UpdateLastAddedToQueue(ctx context.Context, title string, t time.Time) error {
+	n, err := r.client.Session.Update().
+		Where(session.Title(title)).
+		SetLastAddedToQueue(t).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update last_added_to_queue: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("session not found: %s", title)
+	}
+	return nil
+}
+
+// UpdateLastAcknowledged sets only the last_acknowledged field for a session,
+// issuing a single UPDATE WHERE title=? without a prior SELECT.
+func (r *EntRepository) UpdateLastAcknowledged(ctx context.Context, title string, t time.Time) error {
+	n, err := r.client.Session.Update().
+		Where(session.Title(title)).
+		SetLastAcknowledged(t).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update last_acknowledged: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("session not found: %s", title)
+	}
+	return nil
+}
+
+// UpdateLastViewed sets only the last_viewed field for a session,
+// issuing a single UPDATE WHERE title=? without a prior SELECT.
+func (r *EntRepository) UpdateLastViewed(ctx context.Context, title string, t time.Time) error {
+	n, err := r.client.Session.Update().
+		Where(session.Title(title)).
+		SetLastViewed(t).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update last_viewed: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("session not found: %s", title)
+	}
 	return nil
 }
 
@@ -806,6 +902,16 @@ func (r *EntRepository) sessionToInstanceData(sess *ent.Session) *InstanceData {
 	if sess.LastAcknowledged != nil {
 		data.LastAcknowledged = *sess.LastAcknowledged
 	}
+	if sess.LastUserResponse != nil {
+		data.LastUserResponse = *sess.LastUserResponse
+	}
+	if sess.ProcessingGraceUntil != nil {
+		data.ProcessingGraceUntil = *sess.ProcessingGraceUntil
+	}
+	if sess.LastPromptDetected != nil {
+		data.LastPromptDetected = *sess.LastPromptDetected
+	}
+	data.LastPromptSignature = sess.LastPromptSignature
 
 	// Set session type
 	if sess.SessionType != "" {

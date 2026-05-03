@@ -13,6 +13,7 @@ import { create } from "@bufbuild/protobuf";
 import { getApiBaseUrl, createAuthInterceptor } from "@/lib/config";
 import { routes } from "@/lib/routes";
 import { CommitPushModal } from "./CommitPushModal";
+import { WorktreeDiffModal } from "./WorktreeDiffModal";
 import * as styles from "./UnfinishedItemDetail.css";
 
 interface UnfinishedItemDetailProps {
@@ -29,6 +30,7 @@ export function UnfinishedItemDetail({ worktree }: UnfinishedItemDetailProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(false);
   const [showCommitModal, setShowCommitModal] = useState(false);
+  const [showDiffModal, setShowDiffModal] = useState(false);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -149,6 +151,9 @@ export function UnfinishedItemDetail({ worktree }: UnfinishedItemDetailProps) {
             </div>
           )}
         </div>
+        <button className={styles.btn} onClick={() => setShowDiffModal(true)}>
+          View Diff
+        </button>
         <button className={styles.btn} onClick={() => setShowCommitModal(true)}>
           Commit &amp; Push
         </button>
@@ -177,6 +182,14 @@ export function UnfinishedItemDetail({ worktree }: UnfinishedItemDetailProps) {
         <div className={styles.summaryBox}>{aiSummary}</div>
       )}
 
+      {showDiffModal && (
+        <WorktreeDiffModal
+          repoPath={worktree.repoPath}
+          branch={worktree.branch}
+          repoName={worktree.repoName || worktree.branch}
+          onClose={() => setShowDiffModal(false)}
+        />
+      )}
       {/* Commit & Push modal */}
       {showCommitModal && (
         <CommitPushModal
