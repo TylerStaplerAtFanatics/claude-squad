@@ -18,7 +18,7 @@ import (
 
 // runtimeLevel is the global minimum log level, adjustable at runtime without restart.
 // Both the file and console streams honour this value via levelFilterWriter.
-var runtimeLevel atomic.Int32
+var runtimeLevel atomic.Int32 //nolint:gochecknoglobals
 
 func init() {
 	runtimeLevel.Store(int32(INFO))
