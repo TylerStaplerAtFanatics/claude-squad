@@ -109,7 +109,7 @@ type TmuxSession struct {
 	controlModeCmd         *exec.Cmd              // tmux -C attach process
 	controlModeStdout      io.ReadCloser          // stdout pipe for control mode notifications
 	controlModeStdin       io.WriteCloser         // stdin pipe for control mode commands
-	controlModeDone        chan struct{}           // Signal channel for control mode termination
+	controlModeDone        chan struct{}          // Signal channel for control mode termination
 	controlModeSubscribers map[string]chan []byte // WebSocket clients subscribed to control mode updates
 	controlModeSubMu       sync.RWMutex           // Protects controlModeSubscribers, controlModeExited, and pendingCmds
 	controlModeExited      bool                   // True after readControlModeOutput exits; new subscribers get pre-closed channel
@@ -119,15 +119,14 @@ type TmuxSession struct {
 	// requests (interactive user input) always jump ahead of low-priority ones
 	// (background polling, resize, capture-pane). The goroutine drains highPriSendCh
 	// before touching normPriSendCh.
-	highPriSendCh chan cmSendReq   // user send-keys — processed before normPriSendCh
-	normPriSendCh chan cmSendReq   // background commands (polling, resize, capture-pane)
+	highPriSendCh  chan cmSendReq   // user send-keys — processed before normPriSendCh
+	normPriSendCh  chan cmSendReq   // background commands (polling, resize, capture-pane)
 	cmSenderExited chan struct{}    // closed when runCMSender exits; lets StopControlMode know stdin is safe to close
-	cmdSendMu     sync.Mutex       // guards stdin-close in StopControlMode vs sender goroutine writes
-	pendingCmds   []chan cmdResult // FIFO of pending response channels; protected by controlModeSubMu
-	cmdBodyBuf    strings.Builder  // body accumulator between %begin and %end; reader goroutine only
-	curCmdCh      chan cmdResult   // current in-flight response channel; reader goroutine only
-	inCmdResp     bool             // true while inside a %begin/%end block; reader goroutine only
-
+	cmdSendMu      sync.Mutex       // guards stdin-close in StopControlMode vs sender goroutine writes
+	pendingCmds    []chan cmdResult // FIFO of pending response channels; protected by controlModeSubMu
+	cmdBodyBuf     strings.Builder  // body accumulator between %begin and %end; reader goroutine only
+	curCmdCh       chan cmdResult   // current in-flight response channel; reader goroutine only
+	inCmdResp      bool             // true while inside a %begin/%end block; reader goroutine only
 
 	// Exit detection: fired when the session exits unexpectedly (not via StopControlMode).
 	// onExit is called at most once per TmuxSession lifetime (guarded by onExitOnce).

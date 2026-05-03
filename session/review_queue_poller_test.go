@@ -571,11 +571,11 @@ func TestReviewQueuePoller_AcknowledgedSession_ResurfacesAfterNewOutput(t *testi
 // caused the bug and asserts the corrected condition applies universally.
 func TestReviewQueuePoller_AcknowledgmentSnooze_ConditionLogic(t *testing.T) {
 	cases := []struct {
-		name              string
-		shouldAdd         bool
-		priority          Priority
+		name               string
+		shouldAdd          bool
+		priority           Priority
 		isControllerActive bool
-		wantOldBypassSkip bool // true = old code SKIPPED the snooze (the bug)
+		wantOldBypassSkip  bool // true = old code SKIPPED the snooze (the bug)
 	}{
 		{
 			name:               "input-required medium-priority active-controller (the bug scenario)",

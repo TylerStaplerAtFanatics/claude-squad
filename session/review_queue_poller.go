@@ -73,11 +73,11 @@ type ReviewQueuePoller struct {
 	// `tmux list-panes -a` call (fetched once per checkSessions tick) is the change
 	// signal. A capture-pane subprocess is spawned only when that timestamp advances.
 	// A 30s TTL acts as a safety fallback when list-panes is unavailable.
-	cacheMu               sync.Mutex
-	lastSeenActivity      map[string]time.Time // per-session: last IdleDetector.lastActivity seen
-	lastSeenPaneActivity  map[string]time.Time // per-session: last #{pane_last_activity} seen
-	cachedContent         map[string]string    // per-session: content from last Preview() call
-	lastPreviewTime       map[string]time.Time // per-session: fallback TTL timestamp
+	cacheMu              sync.Mutex
+	lastSeenActivity     map[string]time.Time // per-session: last IdleDetector.lastActivity seen
+	lastSeenPaneActivity map[string]time.Time // per-session: last #{pane_last_activity} seen
+	cachedContent        map[string]string    // per-session: content from last Preview() call
+	lastPreviewTime      map[string]time.Time // per-session: fallback TTL timestamp
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -105,16 +105,16 @@ func NewReviewQueuePoller(queue *ReviewQueue, statusManager *InstanceStatusManag
 // The storage parameter is optional (can be nil) but required for persisting LastAddedToQueue timestamps.
 func NewReviewQueuePollerWithConfig(queue *ReviewQueue, statusManager *InstanceStatusManager, storage *Storage, config ReviewQueuePollerConfig) *ReviewQueuePoller {
 	return &ReviewQueuePoller{
-		queue:                 queue,
-		statusManager:         statusManager,
-		storage:               storage,
-		instances:             make([]*Instance, 0),
-		config:                config,
-		statusDetector:        detection.NewStatusDetector(),
-		lastSeenActivity:      make(map[string]time.Time),
-		lastSeenPaneActivity:  make(map[string]time.Time),
-		cachedContent:         make(map[string]string),
-		lastPreviewTime:       make(map[string]time.Time),
+		queue:                queue,
+		statusManager:        statusManager,
+		storage:              storage,
+		instances:            make([]*Instance, 0),
+		config:               config,
+		statusDetector:       detection.NewStatusDetector(),
+		lastSeenActivity:     make(map[string]time.Time),
+		lastSeenPaneActivity: make(map[string]time.Time),
+		cachedContent:        make(map[string]string),
+		lastPreviewTime:      make(map[string]time.Time),
 	}
 }
 
