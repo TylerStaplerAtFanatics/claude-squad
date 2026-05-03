@@ -349,7 +349,6 @@ format: ensure-tools ## Format code with gofmt
 
 vet: ensure-tools proto-gen ## Run go vet with all analyzers
 	go vet ./...
-	go vet -nilness ./...
 
 # Nil safety analysis
 nil-safety: ensure-tools ## Run comprehensive nil safety analysis

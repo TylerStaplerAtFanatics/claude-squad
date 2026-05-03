@@ -35,6 +35,12 @@ interface UseSessionServiceOptions {
   /** When false, suppresses all API calls (e.g. while auth is loading). Defaults to true. */
   enabled?: boolean;
   onNotification?: (notification: NotificationEvent) => void;
+  /**
+   * Called after a stream disconnect-and-reconnect (after the reconciling
+   * listSessions call). Use this to re-fetch data that may have been missed
+   * during the gap (e.g. notification history).
+   */
+  onReconnect?: () => void;
 }
 
 interface UseSessionServiceReturn {
@@ -69,7 +75,9 @@ interface UseSessionServiceReturn {
 export function useSessionService(
   options: UseSessionServiceOptions = {}
 ): UseSessionServiceReturn {
-  const { baseUrl = getApiBaseUrl(), autoWatch = false, enabled = true, onNotification } = options;
+  const { baseUrl = getApiBaseUrl(), autoWatch = false, enabled = true, onNotification, onReconnect } = options;
+  const onReconnectRef = useRef(onReconnect);
+  useEffect(() => { onReconnectRef.current = onReconnect; }, [onReconnect]);
   const onNotificationRef = useRef(onNotification);
 
   // Keep ref updated for callback in streaming loop
@@ -509,6 +517,7 @@ export function useSessionService(
                 dispatch(setSessions(response.sessions));
               } catch { /* best-effort */ }
             }
+            onReconnectRef.current?.();
             await new Promise(r => setTimeout(r, reconnectDelayRef.current));
             reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30_000);
             startStream();
@@ -527,6 +536,7 @@ export function useSessionService(
                 dispatch(setSessions(response.sessions));
               } catch { /* best-effort */ }
             }
+            onReconnectRef.current?.();
             await new Promise(r => setTimeout(r, reconnectDelayRef.current));
             reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30_000);
             startStream();
