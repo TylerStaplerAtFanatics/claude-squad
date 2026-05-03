@@ -95,14 +95,6 @@ func isTestSocketName(name string) bool {
 	return false
 }
 
-// killTestServer kills a tmux server by socket name, tolerating failures
-// (server may already be gone). Intended for use in t.Cleanup registrations.
-func killTestServer(socketName string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = exec.CommandContext(ctx, "tmux", "-L", socketName, "kill-server").Run()
-}
-
 // startWatchdog spawns a detached shell process that polls ownerPID and kills
 // all test-prefixed tmux sockets bearing that PID when the process exits.
 // The watchdog runs in its own process group so it survives SIGKILL to the
@@ -131,7 +123,7 @@ rm -f "$0"
 	if err := os.WriteFile(scriptPath, []byte(script), 0700); err != nil {
 		return // best-effort; normal t.Cleanup handles the happy path
 	}
-	cmd := exec.Command("sh", scriptPath)
+	cmd := exec.CommandContext(context.Background(), "sh", scriptPath)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // own process group → survives SIGKILL to test binary
 	_ = cmd.Start()
 }
