@@ -97,6 +97,7 @@ function HomeContent() {
     resumeSession,
     renameSession,
     restartSession,
+    clearConversationState,
     createCheckpoint,
     listCheckpoints,
     forkSession,
@@ -482,6 +483,7 @@ function HomeContent() {
             onForkFromCheckpoint={forkSession}
             onRunOneShot={handleRunOneShot}
             onSetRateLimitEnabled={handleSetRateLimitEnabled}
+            onClearConversationState={clearConversationState}
           />
         )}
       </main>
