@@ -13,6 +13,7 @@ import { CheckpointProto } from "@/gen/session/v1/types_pb";
 import { useSessionService } from "@/lib/hooks/useSessionService";
 import { useSessionNotifications } from "@/lib/hooks/useSessionNotifications";
 import { useAuth } from "@/lib/contexts/AuthContext";
+import { useNotifications } from "@/lib/contexts/NotificationContext";
 import { getApiBaseUrl } from "@/lib/config";
 import type { ConnectionState } from "@/lib/store/sessionsSlice";
 
@@ -53,6 +54,7 @@ const SessionServiceContext = createContext<SessionServiceContextValue | null>(n
  */
 export function GlobalSessionServiceProvider({ children }: { children: React.ReactNode }) {
   const { authEnabled, authenticated, loading: authLoading } = useAuth();
+  const { refreshHistory } = useNotifications();
   const router = useRouter();
 
   // Navigate to the session detail when user clicks "View" on a toast.
@@ -71,6 +73,7 @@ export function GlobalSessionServiceProvider({ children }: { children: React.Rea
     autoWatch: true,
     enabled: !authLoading && (!authEnabled || authenticated),
     onNotification: handleNotification,
+    onReconnect: refreshHistory,
   });
 
   return (

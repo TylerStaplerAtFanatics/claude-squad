@@ -407,7 +407,6 @@ fmt-check: ## Verify all Go files are gofmt-formatted (non-destructive; exits 1 
 
 vet: ensure-tools proto-gen ## Run go vet with all analyzers
 	go vet ./...
-	go vet -nilness ./...
 
 # Nil safety analysis
 nil-safety: ensure-tools ## Run comprehensive nil safety analysis

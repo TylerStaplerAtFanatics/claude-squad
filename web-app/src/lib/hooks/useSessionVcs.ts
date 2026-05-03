@@ -5,6 +5,8 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { SessionService } from "@/gen/session/v1/session_pb";
 import { VCSStatus } from "@/gen/session/v1/types_pb";
+import { useAppSelector } from "@/lib/store";
+import { selectAllSessions } from "@/lib/store/sessionsSlice";
 
 /** Parsed diff stats returned by getSessionDiff. */
 export interface SessionDiff {
@@ -30,8 +32,6 @@ export interface SessionVcsState {
   refresh: () => void;
 }
 
-/** Poll VCS status every 10 seconds — same cadence as the old VcsPanel used. */
-const VCS_POLL_MS = 10_000;
 
 /**
  * Single source of truth for a session's VCS status and diff data.
@@ -105,13 +105,29 @@ export function useSessionVcs(sessionId: string, baseUrl: string): SessionVcsSta
     fetchDiff();
   }, [fetchStatus, fetchDiff]);
 
-  // VCS status: initial fetch + polling.
+  // Watch session state from the Redux store so VCS data re-fetches whenever
+  // the session is updated by the server-pushed watchSessions stream, instead
+  // of polling on a fixed interval.
+  const sessionStatus = useAppSelector((state) =>
+    selectAllSessions(state).find((s) => s.id === sessionId)?.status
+  );
+  const sessionUpdatedAt = useAppSelector((state) => {
+    const s = selectAllSessions(state).find((s) => s.id === sessionId);
+    return s?.updatedAt?.seconds ?? null;
+  });
+
+  // VCS status: re-fetch on mount and whenever the session changes in Redux.
+  // Event-driven is the primary trigger; the 60s fallback catches git commits
+  // that happen mid-session without changing the session's status field.
   useEffect(() => {
     setStatusLoading(true);
     fetchStatus();
-    const interval = setInterval(fetchStatus, VCS_POLL_MS);
-    return () => clearInterval(interval);
-  }, [fetchStatus]);
+    const fallback = setInterval(() => {
+      if (!document.hidden) fetchStatus();
+    }, 60_000);
+    return () => clearInterval(fallback);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchStatus, sessionStatus, sessionUpdatedAt]);
 
   // Diff: fetch once on mount; consumers call refreshDiff() when needed.
   useEffect(() => {
