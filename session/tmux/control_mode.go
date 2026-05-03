@@ -492,7 +492,7 @@ func (t *TmuxSession) runCMSender(doneCh <-chan struct{}, stdin io.WriteCloser) 
 
 // sendCMCommand enqueues a normal-priority command and waits for its response.
 // Background operations (capture-pane, resize, display-message) use this path.
-// User input uses sendCMCommandHighPri so it always jumps ahead in the queue.
+// User input calls SendInputViaControlMode which enqueues directly to highPriSendCh.
 func (t *TmuxSession) sendCMCommand(ctx context.Context, args ...string) (string, error) {
 	return t.enqueueCMCommand(ctx, t.normPriSendCh, args...)
 }

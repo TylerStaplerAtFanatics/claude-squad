@@ -1,8 +1,8 @@
 {
-  "id": "history:list",
+  "id": "LogClientEvents",
   "type": "backend",
   "service": "SessionService",
-  "method": "ListClaudeHistory",
+  "method": "LogClientEvents",
   "protoFile": "proto/session/v1/session.proto",
   "markerFound": false,
   "tested": false,

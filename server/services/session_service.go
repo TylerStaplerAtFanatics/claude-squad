@@ -2589,6 +2589,7 @@ func (s *SessionService) GetTerminalSnapshot(
 	}), nil
 }
 
+// +api: session:log-client-events
 // LogClientEvents receives batched browser console log entries from the web UI.
 // Used for remote debugging of mobile browser sessions where DevTools are unavailable.
 // Never returns an error — malformed or oversized entries are silently discarded.
