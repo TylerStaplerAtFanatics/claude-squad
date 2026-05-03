@@ -52,6 +52,11 @@ type Repository interface {
 	// This is optimized for frequent updates from WebSocket terminal streaming
 	UpdateTimestamps(ctx context.Context, title string, lastTerminalUpdate, lastMeaningfulOutput time.Time, lastOutputSignature string) error
 
+	// UpdateReviewQueueState efficiently updates the review-queue interaction fields
+	// (LastUserResponse, ProcessingGraceUntil, LastPromptDetected, LastPromptSignature)
+	// without the read-modify-write overhead of a full Get+Update cycle.
+	UpdateReviewQueueState(ctx context.Context, title string, lastUserResponse, processingGraceUntil, lastPromptDetected time.Time, lastPromptSignature string) error
+
 	// Close performs cleanup and releases resources
 	Close() error
 

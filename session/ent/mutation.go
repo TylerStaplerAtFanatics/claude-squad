@@ -5648,6 +5648,10 @@ type SessionMutation struct {
 	mcp_server_url         *string
 	initial_prompt         *string
 	one_shot               *bool
+	last_user_response     *time.Time
+	processing_grace_until *time.Time
+	last_prompt_detected   *time.Time
+	last_prompt_signature  *string
 	clearedFields          map[string]struct{}
 	worktree               *int
 	clearedworktree        bool
@@ -7031,6 +7035,202 @@ func (m *SessionMutation) ResetOneShot() {
 	m.one_shot = nil
 }
 
+// SetLastUserResponse sets the "last_user_response" field.
+func (m *SessionMutation) SetLastUserResponse(t time.Time) {
+	m.last_user_response = &t
+}
+
+// LastUserResponse returns the value of the "last_user_response" field in the mutation.
+func (m *SessionMutation) LastUserResponse() (r time.Time, exists bool) {
+	v := m.last_user_response
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastUserResponse returns the old "last_user_response" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldLastUserResponse(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastUserResponse is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastUserResponse requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastUserResponse: %w", err)
+	}
+	return oldValue.LastUserResponse, nil
+}
+
+// ClearLastUserResponse clears the value of the "last_user_response" field.
+func (m *SessionMutation) ClearLastUserResponse() {
+	m.last_user_response = nil
+	m.clearedFields[session.FieldLastUserResponse] = struct{}{}
+}
+
+// LastUserResponseCleared returns if the "last_user_response" field was cleared in this mutation.
+func (m *SessionMutation) LastUserResponseCleared() bool {
+	_, ok := m.clearedFields[session.FieldLastUserResponse]
+	return ok
+}
+
+// ResetLastUserResponse resets all changes to the "last_user_response" field.
+func (m *SessionMutation) ResetLastUserResponse() {
+	m.last_user_response = nil
+	delete(m.clearedFields, session.FieldLastUserResponse)
+}
+
+// SetProcessingGraceUntil sets the "processing_grace_until" field.
+func (m *SessionMutation) SetProcessingGraceUntil(t time.Time) {
+	m.processing_grace_until = &t
+}
+
+// ProcessingGraceUntil returns the value of the "processing_grace_until" field in the mutation.
+func (m *SessionMutation) ProcessingGraceUntil() (r time.Time, exists bool) {
+	v := m.processing_grace_until
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcessingGraceUntil returns the old "processing_grace_until" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldProcessingGraceUntil(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcessingGraceUntil is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcessingGraceUntil requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcessingGraceUntil: %w", err)
+	}
+	return oldValue.ProcessingGraceUntil, nil
+}
+
+// ClearProcessingGraceUntil clears the value of the "processing_grace_until" field.
+func (m *SessionMutation) ClearProcessingGraceUntil() {
+	m.processing_grace_until = nil
+	m.clearedFields[session.FieldProcessingGraceUntil] = struct{}{}
+}
+
+// ProcessingGraceUntilCleared returns if the "processing_grace_until" field was cleared in this mutation.
+func (m *SessionMutation) ProcessingGraceUntilCleared() bool {
+	_, ok := m.clearedFields[session.FieldProcessingGraceUntil]
+	return ok
+}
+
+// ResetProcessingGraceUntil resets all changes to the "processing_grace_until" field.
+func (m *SessionMutation) ResetProcessingGraceUntil() {
+	m.processing_grace_until = nil
+	delete(m.clearedFields, session.FieldProcessingGraceUntil)
+}
+
+// SetLastPromptDetected sets the "last_prompt_detected" field.
+func (m *SessionMutation) SetLastPromptDetected(t time.Time) {
+	m.last_prompt_detected = &t
+}
+
+// LastPromptDetected returns the value of the "last_prompt_detected" field in the mutation.
+func (m *SessionMutation) LastPromptDetected() (r time.Time, exists bool) {
+	v := m.last_prompt_detected
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastPromptDetected returns the old "last_prompt_detected" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldLastPromptDetected(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastPromptDetected is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastPromptDetected requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastPromptDetected: %w", err)
+	}
+	return oldValue.LastPromptDetected, nil
+}
+
+// ClearLastPromptDetected clears the value of the "last_prompt_detected" field.
+func (m *SessionMutation) ClearLastPromptDetected() {
+	m.last_prompt_detected = nil
+	m.clearedFields[session.FieldLastPromptDetected] = struct{}{}
+}
+
+// LastPromptDetectedCleared returns if the "last_prompt_detected" field was cleared in this mutation.
+func (m *SessionMutation) LastPromptDetectedCleared() bool {
+	_, ok := m.clearedFields[session.FieldLastPromptDetected]
+	return ok
+}
+
+// ResetLastPromptDetected resets all changes to the "last_prompt_detected" field.
+func (m *SessionMutation) ResetLastPromptDetected() {
+	m.last_prompt_detected = nil
+	delete(m.clearedFields, session.FieldLastPromptDetected)
+}
+
+// SetLastPromptSignature sets the "last_prompt_signature" field.
+func (m *SessionMutation) SetLastPromptSignature(s string) {
+	m.last_prompt_signature = &s
+}
+
+// LastPromptSignature returns the value of the "last_prompt_signature" field in the mutation.
+func (m *SessionMutation) LastPromptSignature() (r string, exists bool) {
+	v := m.last_prompt_signature
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastPromptSignature returns the old "last_prompt_signature" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldLastPromptSignature(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastPromptSignature is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastPromptSignature requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastPromptSignature: %w", err)
+	}
+	return oldValue.LastPromptSignature, nil
+}
+
+// ClearLastPromptSignature clears the value of the "last_prompt_signature" field.
+func (m *SessionMutation) ClearLastPromptSignature() {
+	m.last_prompt_signature = nil
+	m.clearedFields[session.FieldLastPromptSignature] = struct{}{}
+}
+
+// LastPromptSignatureCleared returns if the "last_prompt_signature" field was cleared in this mutation.
+func (m *SessionMutation) LastPromptSignatureCleared() bool {
+	_, ok := m.clearedFields[session.FieldLastPromptSignature]
+	return ok
+}
+
+// ResetLastPromptSignature resets all changes to the "last_prompt_signature" field.
+func (m *SessionMutation) ResetLastPromptSignature() {
+	m.last_prompt_signature = nil
+	delete(m.clearedFields, session.FieldLastPromptSignature)
+}
+
 // SetWorktreeID sets the "worktree" edge to the Worktree entity by id.
 func (m *SessionMutation) SetWorktreeID(id int) {
 	m.worktree = &id
@@ -7275,7 +7475,7 @@ func (m *SessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SessionMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 31)
 	if m.title != nil {
 		fields = append(fields, session.FieldTitle)
 	}
@@ -7357,6 +7557,18 @@ func (m *SessionMutation) Fields() []string {
 	if m.one_shot != nil {
 		fields = append(fields, session.FieldOneShot)
 	}
+	if m.last_user_response != nil {
+		fields = append(fields, session.FieldLastUserResponse)
+	}
+	if m.processing_grace_until != nil {
+		fields = append(fields, session.FieldProcessingGraceUntil)
+	}
+	if m.last_prompt_detected != nil {
+		fields = append(fields, session.FieldLastPromptDetected)
+	}
+	if m.last_prompt_signature != nil {
+		fields = append(fields, session.FieldLastPromptSignature)
+	}
 	return fields
 }
 
@@ -7419,6 +7631,14 @@ func (m *SessionMutation) Field(name string) (ent.Value, bool) {
 		return m.InitialPrompt()
 	case session.FieldOneShot:
 		return m.OneShot()
+	case session.FieldLastUserResponse:
+		return m.LastUserResponse()
+	case session.FieldProcessingGraceUntil:
+		return m.ProcessingGraceUntil()
+	case session.FieldLastPromptDetected:
+		return m.LastPromptDetected()
+	case session.FieldLastPromptSignature:
+		return m.LastPromptSignature()
 	}
 	return nil, false
 }
@@ -7482,6 +7702,14 @@ func (m *SessionMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldInitialPrompt(ctx)
 	case session.FieldOneShot:
 		return m.OldOneShot(ctx)
+	case session.FieldLastUserResponse:
+		return m.OldLastUserResponse(ctx)
+	case session.FieldProcessingGraceUntil:
+		return m.OldProcessingGraceUntil(ctx)
+	case session.FieldLastPromptDetected:
+		return m.OldLastPromptDetected(ctx)
+	case session.FieldLastPromptSignature:
+		return m.OldLastPromptSignature(ctx)
 	}
 	return nil, fmt.Errorf("unknown Session field %s", name)
 }
@@ -7680,6 +7908,34 @@ func (m *SessionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetOneShot(v)
 		return nil
+	case session.FieldLastUserResponse:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastUserResponse(v)
+		return nil
+	case session.FieldProcessingGraceUntil:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcessingGraceUntil(v)
+		return nil
+	case session.FieldLastPromptDetected:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastPromptDetected(v)
+		return nil
+	case session.FieldLastPromptSignature:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastPromptSignature(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Session field %s", name)
 }
@@ -7803,6 +8059,18 @@ func (m *SessionMutation) ClearedFields() []string {
 	if m.FieldCleared(session.FieldInitialPrompt) {
 		fields = append(fields, session.FieldInitialPrompt)
 	}
+	if m.FieldCleared(session.FieldLastUserResponse) {
+		fields = append(fields, session.FieldLastUserResponse)
+	}
+	if m.FieldCleared(session.FieldProcessingGraceUntil) {
+		fields = append(fields, session.FieldProcessingGraceUntil)
+	}
+	if m.FieldCleared(session.FieldLastPromptDetected) {
+		fields = append(fields, session.FieldLastPromptDetected)
+	}
+	if m.FieldCleared(session.FieldLastPromptSignature) {
+		fields = append(fields, session.FieldLastPromptSignature)
+	}
 	return fields
 }
 
@@ -7870,6 +8138,18 @@ func (m *SessionMutation) ClearField(name string) error {
 		return nil
 	case session.FieldInitialPrompt:
 		m.ClearInitialPrompt()
+		return nil
+	case session.FieldLastUserResponse:
+		m.ClearLastUserResponse()
+		return nil
+	case session.FieldProcessingGraceUntil:
+		m.ClearProcessingGraceUntil()
+		return nil
+	case session.FieldLastPromptDetected:
+		m.ClearLastPromptDetected()
+		return nil
+	case session.FieldLastPromptSignature:
+		m.ClearLastPromptSignature()
 		return nil
 	}
 	return fmt.Errorf("unknown Session nullable field %s", name)
@@ -7959,6 +8239,18 @@ func (m *SessionMutation) ResetField(name string) error {
 		return nil
 	case session.FieldOneShot:
 		m.ResetOneShot()
+		return nil
+	case session.FieldLastUserResponse:
+		m.ResetLastUserResponse()
+		return nil
+	case session.FieldProcessingGraceUntil:
+		m.ResetProcessingGraceUntil()
+		return nil
+	case session.FieldLastPromptDetected:
+		m.ResetLastPromptDetected()
+		return nil
+	case session.FieldLastPromptSignature:
+		m.ResetLastPromptSignature()
 		return nil
 	}
 	return fmt.Errorf("unknown Session field %s", name)

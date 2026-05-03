@@ -308,9 +308,10 @@ func (s *Storage) UpdateInstanceLastAddedToQueue(title string, lastAddedToQueue 
 	return s.updateFieldInRepo(title, func(d *InstanceData) { d.LastAddedToQueue = lastAddedToQueue })
 }
 
-// UpdateInstanceLastUserResponse updates just the LastUserResponse timestamp for a specific instance.
+// UpdateInstanceLastUserResponse persists the LastUserResponse timestamp for a session.
+// Uses a direct UPDATE (no read round-trip) via UpdateReviewQueueState.
 func (s *Storage) UpdateInstanceLastUserResponse(title string, lastUserResponse time.Time) error {
-	return s.updateFieldInRepo(title, func(d *InstanceData) { d.LastUserResponse = lastUserResponse })
+	return s.repo.UpdateReviewQueueState(context.Background(), title, lastUserResponse, time.Time{}, time.Time{}, "")
 }
 
 // UpdateInstanceAcknowledged sets the LastAcknowledged timestamp to now for a specific instance.
@@ -320,9 +321,10 @@ func (s *Storage) UpdateInstanceAcknowledged(title string) error {
 	return s.updateFieldInRepo(title, func(d *InstanceData) { d.LastAcknowledged = now })
 }
 
-// UpdateInstanceProcessingGrace updates just the ProcessingGraceUntil timestamp for a specific instance.
+// UpdateInstanceProcessingGrace persists the ProcessingGraceUntil timestamp.
+// Uses a direct UPDATE (no read round-trip) via UpdateReviewQueueState.
 func (s *Storage) UpdateInstanceProcessingGrace(title string, processingGraceUntil time.Time) error {
-	return s.updateFieldInRepo(title, func(d *InstanceData) { d.ProcessingGraceUntil = processingGraceUntil })
+	return s.repo.UpdateReviewQueueState(context.Background(), title, time.Time{}, processingGraceUntil, time.Time{}, "")
 }
 
 // UpdateInstancePRStatus updates the PR status fields for a specific instance.

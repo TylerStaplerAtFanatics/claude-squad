@@ -518,6 +518,86 @@ func (_u *SessionUpdate) SetNillableOneShot(v *bool) *SessionUpdate {
 	return _u
 }
 
+// SetLastUserResponse sets the "last_user_response" field.
+func (_u *SessionUpdate) SetLastUserResponse(v time.Time) *SessionUpdate {
+	_u.mutation.SetLastUserResponse(v)
+	return _u
+}
+
+// SetNillableLastUserResponse sets the "last_user_response" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableLastUserResponse(v *time.Time) *SessionUpdate {
+	if v != nil {
+		_u.SetLastUserResponse(*v)
+	}
+	return _u
+}
+
+// ClearLastUserResponse clears the value of the "last_user_response" field.
+func (_u *SessionUpdate) ClearLastUserResponse() *SessionUpdate {
+	_u.mutation.ClearLastUserResponse()
+	return _u
+}
+
+// SetProcessingGraceUntil sets the "processing_grace_until" field.
+func (_u *SessionUpdate) SetProcessingGraceUntil(v time.Time) *SessionUpdate {
+	_u.mutation.SetProcessingGraceUntil(v)
+	return _u
+}
+
+// SetNillableProcessingGraceUntil sets the "processing_grace_until" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableProcessingGraceUntil(v *time.Time) *SessionUpdate {
+	if v != nil {
+		_u.SetProcessingGraceUntil(*v)
+	}
+	return _u
+}
+
+// ClearProcessingGraceUntil clears the value of the "processing_grace_until" field.
+func (_u *SessionUpdate) ClearProcessingGraceUntil() *SessionUpdate {
+	_u.mutation.ClearProcessingGraceUntil()
+	return _u
+}
+
+// SetLastPromptDetected sets the "last_prompt_detected" field.
+func (_u *SessionUpdate) SetLastPromptDetected(v time.Time) *SessionUpdate {
+	_u.mutation.SetLastPromptDetected(v)
+	return _u
+}
+
+// SetNillableLastPromptDetected sets the "last_prompt_detected" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableLastPromptDetected(v *time.Time) *SessionUpdate {
+	if v != nil {
+		_u.SetLastPromptDetected(*v)
+	}
+	return _u
+}
+
+// ClearLastPromptDetected clears the value of the "last_prompt_detected" field.
+func (_u *SessionUpdate) ClearLastPromptDetected() *SessionUpdate {
+	_u.mutation.ClearLastPromptDetected()
+	return _u
+}
+
+// SetLastPromptSignature sets the "last_prompt_signature" field.
+func (_u *SessionUpdate) SetLastPromptSignature(v string) *SessionUpdate {
+	_u.mutation.SetLastPromptSignature(v)
+	return _u
+}
+
+// SetNillableLastPromptSignature sets the "last_prompt_signature" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableLastPromptSignature(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetLastPromptSignature(*v)
+	}
+	return _u
+}
+
+// ClearLastPromptSignature clears the value of the "last_prompt_signature" field.
+func (_u *SessionUpdate) ClearLastPromptSignature() *SessionUpdate {
+	_u.mutation.ClearLastPromptSignature()
+	return _u
+}
+
 // SetWorktreeID sets the "worktree" edge to the Worktree entity by ID.
 func (_u *SessionUpdate) SetWorktreeID(id int) *SessionUpdate {
 	_u.mutation.SetWorktreeID(id)
@@ -867,6 +947,30 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.OneShot(); ok {
 		_spec.SetField(session.FieldOneShot, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.LastUserResponse(); ok {
+		_spec.SetField(session.FieldLastUserResponse, field.TypeTime, value)
+	}
+	if _u.mutation.LastUserResponseCleared() {
+		_spec.ClearField(session.FieldLastUserResponse, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ProcessingGraceUntil(); ok {
+		_spec.SetField(session.FieldProcessingGraceUntil, field.TypeTime, value)
+	}
+	if _u.mutation.ProcessingGraceUntilCleared() {
+		_spec.ClearField(session.FieldProcessingGraceUntil, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LastPromptDetected(); ok {
+		_spec.SetField(session.FieldLastPromptDetected, field.TypeTime, value)
+	}
+	if _u.mutation.LastPromptDetectedCleared() {
+		_spec.ClearField(session.FieldLastPromptDetected, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LastPromptSignature(); ok {
+		_spec.SetField(session.FieldLastPromptSignature, field.TypeString, value)
+	}
+	if _u.mutation.LastPromptSignatureCleared() {
+		_spec.ClearField(session.FieldLastPromptSignature, field.TypeString)
 	}
 	if _u.mutation.WorktreeCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1534,6 +1638,86 @@ func (_u *SessionUpdateOne) SetNillableOneShot(v *bool) *SessionUpdateOne {
 	return _u
 }
 
+// SetLastUserResponse sets the "last_user_response" field.
+func (_u *SessionUpdateOne) SetLastUserResponse(v time.Time) *SessionUpdateOne {
+	_u.mutation.SetLastUserResponse(v)
+	return _u
+}
+
+// SetNillableLastUserResponse sets the "last_user_response" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableLastUserResponse(v *time.Time) *SessionUpdateOne {
+	if v != nil {
+		_u.SetLastUserResponse(*v)
+	}
+	return _u
+}
+
+// ClearLastUserResponse clears the value of the "last_user_response" field.
+func (_u *SessionUpdateOne) ClearLastUserResponse() *SessionUpdateOne {
+	_u.mutation.ClearLastUserResponse()
+	return _u
+}
+
+// SetProcessingGraceUntil sets the "processing_grace_until" field.
+func (_u *SessionUpdateOne) SetProcessingGraceUntil(v time.Time) *SessionUpdateOne {
+	_u.mutation.SetProcessingGraceUntil(v)
+	return _u
+}
+
+// SetNillableProcessingGraceUntil sets the "processing_grace_until" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableProcessingGraceUntil(v *time.Time) *SessionUpdateOne {
+	if v != nil {
+		_u.SetProcessingGraceUntil(*v)
+	}
+	return _u
+}
+
+// ClearProcessingGraceUntil clears the value of the "processing_grace_until" field.
+func (_u *SessionUpdateOne) ClearProcessingGraceUntil() *SessionUpdateOne {
+	_u.mutation.ClearProcessingGraceUntil()
+	return _u
+}
+
+// SetLastPromptDetected sets the "last_prompt_detected" field.
+func (_u *SessionUpdateOne) SetLastPromptDetected(v time.Time) *SessionUpdateOne {
+	_u.mutation.SetLastPromptDetected(v)
+	return _u
+}
+
+// SetNillableLastPromptDetected sets the "last_prompt_detected" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableLastPromptDetected(v *time.Time) *SessionUpdateOne {
+	if v != nil {
+		_u.SetLastPromptDetected(*v)
+	}
+	return _u
+}
+
+// ClearLastPromptDetected clears the value of the "last_prompt_detected" field.
+func (_u *SessionUpdateOne) ClearLastPromptDetected() *SessionUpdateOne {
+	_u.mutation.ClearLastPromptDetected()
+	return _u
+}
+
+// SetLastPromptSignature sets the "last_prompt_signature" field.
+func (_u *SessionUpdateOne) SetLastPromptSignature(v string) *SessionUpdateOne {
+	_u.mutation.SetLastPromptSignature(v)
+	return _u
+}
+
+// SetNillableLastPromptSignature sets the "last_prompt_signature" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableLastPromptSignature(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetLastPromptSignature(*v)
+	}
+	return _u
+}
+
+// ClearLastPromptSignature clears the value of the "last_prompt_signature" field.
+func (_u *SessionUpdateOne) ClearLastPromptSignature() *SessionUpdateOne {
+	_u.mutation.ClearLastPromptSignature()
+	return _u
+}
+
 // SetWorktreeID sets the "worktree" edge to the Worktree entity by ID.
 func (_u *SessionUpdateOne) SetWorktreeID(id int) *SessionUpdateOne {
 	_u.mutation.SetWorktreeID(id)
@@ -1913,6 +2097,30 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 	}
 	if value, ok := _u.mutation.OneShot(); ok {
 		_spec.SetField(session.FieldOneShot, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.LastUserResponse(); ok {
+		_spec.SetField(session.FieldLastUserResponse, field.TypeTime, value)
+	}
+	if _u.mutation.LastUserResponseCleared() {
+		_spec.ClearField(session.FieldLastUserResponse, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ProcessingGraceUntil(); ok {
+		_spec.SetField(session.FieldProcessingGraceUntil, field.TypeTime, value)
+	}
+	if _u.mutation.ProcessingGraceUntilCleared() {
+		_spec.ClearField(session.FieldProcessingGraceUntil, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LastPromptDetected(); ok {
+		_spec.SetField(session.FieldLastPromptDetected, field.TypeTime, value)
+	}
+	if _u.mutation.LastPromptDetectedCleared() {
+		_spec.ClearField(session.FieldLastPromptDetected, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LastPromptSignature(); ok {
+		_spec.SetField(session.FieldLastPromptSignature, field.TypeString, value)
+	}
+	if _u.mutation.LastPromptSignatureCleared() {
+		_spec.ClearField(session.FieldLastPromptSignature, field.TypeString)
 	}
 	if _u.mutation.WorktreeCleared() {
 		edge := &sqlgraph.EdgeSpec{
