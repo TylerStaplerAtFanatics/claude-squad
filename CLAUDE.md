@@ -972,15 +972,18 @@ make all          # Complete workflow: clean + build + test + analyze
 Run `make ci` to execute the same workflow CI runs — the definitive pre-push check.
 
 ```bash
-make ci           # Full CI pipeline: proto check → web build → Go build → tests → lint
+make ci           # Full CI pipeline: proto check → web build → Go build → tests → lint → fmt → registry
 ```
 
 `make ci` covers:
-1. Verifies proto-generated files are up to date (no uncommitted regeneration needed)
-2. Builds the Next.js web UI (`npm run build` in `web-app/`)
-3. Builds the Go binary
-4. Runs all Go tests (`go test ./...`) — requires `tmux` on PATH (install via `brew install tmux` or `apt-get install tmux`)
-5. Runs `golangci-lint`
+1. Generates proto-derived files and builds the Next.js web UI
+2. Builds the Go binary
+3. Runs all Go tests with `-short` flag — requires `tmux` on PATH (install via `brew install tmux` or `apt-get install tmux`)
+4. Runs Go tests with race detector (`-race -short`)
+5. Runs `go vet` + nilness analyzer
+6. Runs `golangci-lint` + project-custom linters (`hotpolllog`, `lint-no-sleep-tests`)
+7. Verifies all Go files are `gofmt`-formatted (`fmt-check`)
+8. Regenerates the feature registry (`registry-generate`) to keep it in sync with source
 
 For reproducible tmux tests across machines, use `make test-with-pinned-tmux` instead (requires `make build-tmux` first).
 
