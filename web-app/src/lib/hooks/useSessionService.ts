@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-web";
+import { createWatchTransport } from "@/lib/transport/watch-ws-transport";
 import { SessionService } from "@/gen/session/v1/session_pb";
 import { Session, SessionStatus, NotificationPriority } from "@/gen/session/v1/types_pb";
 import {
@@ -92,9 +92,9 @@ export function useSessionService(
   // Timestamp of last received stream event, used to detect staleness
   const lastEventTimeRef = useRef<number | null>(null);
 
-  // Initialize ConnectRPC client
+  // Initialize ConnectRPC client — uses HTTP for unary, WebSocket for streaming Watch* RPCs
   useEffect(() => {
-    const transport = createConnectTransport({
+    const transport = createWatchTransport({
       baseUrl,
       interceptors: [createAuthInterceptor(), createRpcTimingInterceptor()],
     });

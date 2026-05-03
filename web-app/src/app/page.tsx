@@ -11,19 +11,16 @@ import { SessionWizard } from "@/components/sessions/SessionWizard";
 import { ResumeSessionModal } from "@/components/sessions/ResumeSessionModal";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { KeyboardHints } from "@/components/ui/KeyboardHint";
-import { useSessionService } from "@/lib/hooks/useSessionService";
-import { useSessionNotifications } from "@/lib/hooks/useSessionNotifications";
+import { useSessionServiceContext } from "@/lib/contexts/SessionServiceContext";
 import { useKeyboard } from "@/lib/hooks/useKeyboard";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useOmnibar } from "@/lib/contexts/OmnibarContext";
-import { getApiBaseUrl } from "@/lib/config";
 import { SessionFormData } from "@/lib/validation/sessionSchema";
 import * as styles from "./page.css";
 
 function HomeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { authEnabled, authenticated, loading: authLoading } = useAuth();
   const { openInCreationMode } = useOmnibar();
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [activeTab, setActiveTab] = useState<SessionDetailTab>("info");
@@ -90,15 +87,6 @@ function HomeContent() {
   const isValidTab = (tab: string | null): tab is SessionDetailTab =>
     tab !== null && validTabs.includes(tab as SessionDetailTab);
 
-  // Notification handler for session events
-  const handleNotification = useSessionNotifications({
-    enableAudio: true,
-    onViewSession: (sessionId) => {
-      // Store the session ID to navigate to; we'll resolve it when sessions are available
-      setPendingSessionId(sessionId);
-    },
-  });
-
   const {
     sessions,
     loading,
@@ -116,12 +104,7 @@ function HomeContent() {
     listSessions,
     updateSession,
     getSession,
-  } = useSessionService({
-    baseUrl: getApiBaseUrl(),
-    autoWatch: true,
-    enabled: !authLoading && (!authEnabled || authenticated),
-    onNotification: handleNotification,
-  });
+  } = useSessionServiceContext();
 
   // Helper function to find a session by ID with fuzzy matching for external sessions
   // This handles multiple matching scenarios:
