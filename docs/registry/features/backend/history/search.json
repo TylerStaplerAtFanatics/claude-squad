@@ -1,0 +1,12 @@
+{
+  "id": "history:search",
+  "type": "backend",
+  "service": "SessionService",
+  "method": "SearchClaudeHistory",
+  "protoFile": "proto/session/v1/session.proto",
+  "markerFound": true,
+  "handlerFile": "server/services/session_service.go",
+  "tested": false,
+  "testIds": [],
+  "lastModified": "2026-05-02T18:54:29.248784855-07:00"
+}

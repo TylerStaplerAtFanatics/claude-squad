@@ -18,8 +18,10 @@ make restart-web    # Build web UI and restart server (ALWAYS use this)
                     # IMPORTANT: Do NOT pipe or redirect make restart-web output (e.g. | tail -20) as it will block forever.
                     #            Run it plain: make restart-web
 
-# Deploy to production (macOS LaunchAgent / Linux systemd)
-make install-service    # Build + install as system service, auto-starts on login
+# Deploy / install (ALWAYS use this — builds binary + installs system service)
+make install-service    # Builds web UI + Go binary, installs as system service (systemd on Linux,
+                        # LaunchAgent on macOS), enables auto-start on login.
+                        # This is the one-stop command for production deployment.
 make uninstall-service  # Remove the service and disable auto-start
 
 # Enable profiling for web server (to diagnose lock-ups)

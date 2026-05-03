@@ -193,6 +193,57 @@ export const devOnly = style({
   },
 });
 
+// Secondary actions group — inline on desktop, hidden on mobile (actions in overflow row instead)
+export const secondaryGroup = style({
+  display: "flex",
+  gap: "0.5rem",
+  "@media": {
+    "screen and (max-width: 768px)": {
+      display: "none",
+    },
+  },
+});
+
+// "More ▾" trigger — only visible on mobile, hidden on desktop
+export const mobileMoreButton = style({
+  display: "none",
+  "@media": {
+    "screen and (max-width: 768px)": {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: "var(--min-touch-target, 44px)",
+      minHeight: "var(--min-touch-target, 44px)",
+      whiteSpace: "nowrap",
+    },
+  },
+});
+
+// Active state for the More button when overflow is open
+export const mobileMoreActive = style({
+  background: "#505050 !important",
+  borderColor: "#6e6e6e !important",
+});
+
+// Overflow row — rendered below the toolbar when More is open; never shown on desktop
+export const mobileOverflowRow = style({
+  display: "none",
+  "@media": {
+    "screen and (max-width: 768px)": {
+      display: "flex",
+      gap: "0.25rem",
+      padding: "0.3rem 0.75rem 0.4rem",
+      background: "#252526",
+      borderBottom: "1px solid #3e3e42",
+      overflowX: "auto",
+      WebkitOverflowScrolling: "touch" as "auto",
+      scrollbarWidth: "none",
+      msOverflowStyle: "none",
+      flexShrink: 0,
+    },
+  },
+});
+
 // Always visible — keyboard toggle and mouse mode toggle are useful on all screen sizes.
 export const mobileKeyboardToggle = style({
   display: "inline-flex",

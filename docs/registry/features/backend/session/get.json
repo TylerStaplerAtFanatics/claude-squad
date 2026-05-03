@@ -1,0 +1,14 @@
+{
+  "id": "session:get",
+  "type": "backend",
+  "service": "SessionService",
+  "method": "GetSession",
+  "protoFile": "proto/session/v1/session.proto",
+  "markerFound": false,
+  "tested": true,
+  "testIds": [
+    "TestGetSession_MissingID",
+    "TestGetSession_UnknownID"
+  ],
+  "lastModified": "2026-05-02T18:54:29.248784855-07:00"
+}

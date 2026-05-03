@@ -175,6 +175,8 @@ web-dev: build-all ## Build web UI and server, then restart (detects file change
 
 install: ensure-tools ## Install stapler-squad locally
 	go install .
+	mkdir -p ~/.local/bin
+	go build -o ~/.local/bin/ssq-hooks ./cmd/ssq-hooks/
 
 build-mux: ensure-tools ## Build the claude-mux PTY multiplexer binary
 	@echo "Building claude-mux..."

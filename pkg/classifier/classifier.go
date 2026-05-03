@@ -1074,6 +1074,26 @@ func SeedRules() []Rule {
 			Source:    "seed",
 		},
 		{
+			// git config write flags modify repository or global settings. The allow rule at 100
+			// includes "config" as a subcommand for read operations (--get, --list, bare reads).
+			// This escalate fires first for any invocation that uses a write flag.
+			ID:       "seed-escalate-git-config-write",
+			Name:     "Escalate git config write operations",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs:      []string{"git"},
+				Subcommands:   []string{"config"},
+				RequiredFlags: []string{"--unset", "--unset-all", "--add", "--replace-all", "--remove-section", "--rename-section"},
+			},
+			Decision:    Escalate,
+			RiskLevel:   RiskMedium,
+			Reason:      "git config with write flags modifies repository or global settings and should be reviewed.",
+			Alternative: "Use git config --get or git config --list to inspect the current value first.",
+			Priority:    500,
+			Enabled:     true,
+			Source:      "seed",
+		},
+		{
 			// git filter-repo and filter-branch rewrite history, potentially discarding commits
 			// and making backups mandatory. These must fire at 500 to override the git allow rules.
 			ID:       "seed-escalate-git-filter-history",
@@ -1232,7 +1252,7 @@ func SeedRules() []Rule {
 					"fetch", "tag", "describe", "rev-parse", "ls-files",
 					"shortlog", "blame", "stash", "worktree",
 					// Additional read-only plumbing and inspection subcommands.
-					"merge-base", "ls-tree", "grep", "check-ignore",
+					"merge-base", "merge-tree", "ls-tree", "grep", "check-ignore",
 					"diff-tree", "cat-file", "for-each-ref", "count-objects",
 					// Configuration and remote inspection.
 					"config", "ls-remote",
@@ -1310,7 +1330,7 @@ func SeedRules() []Rule {
 				Programs: []string{"git"},
 				Subcommands: []string{
 					"add", "commit", "checkout", "switch", "stash", "pull",
-					"merge", "rebase", "restore", "reset",
+					"merge", "rebase", "restore", "reset", "clone",
 					// Additional standard workflow subcommands.
 					"cherry-pick", "rm", "apply", "mv", "submodule",
 				},
@@ -1342,7 +1362,7 @@ func SeedRules() []Rule {
 			ToolName: "Bash",
 			Criteria: &CommandCriteria{
 				Programs:    []string{"go"},
-				Subcommands: []string{"build", "test", "run", "fmt", "vet", "mod", "list", "env", "version", "clean", "generate", "tool", "install", "get", "work"},
+				Subcommands: []string{"build", "test", "run", "fmt", "vet", "mod", "list", "env", "version", "clean", "generate", "tool", "install", "get", "work", "doc"},
 			},
 			Decision:  AutoAllow,
 			RiskLevel: RiskLow,
@@ -1951,18 +1971,20 @@ func SeedRules() []Rule {
 			Source:    "seed",
 		},
 		{
-			// pacman read-only: -Q (query installed packages) and -F (file database query)
-			// are information-only operations. All other modes (-S install, -R remove,
-			// -U upgrade, -D database write) are caught by seed-escalate-pacman at 50.
+			// pacman read-only: -Q (query installed packages), -F (file database query),
+			// and -Ss/-Si (sync database search/info) are information-only operations.
+			// All other -S modes (-S install, -Su upgrade, -Sy sync) and -R/-U/-D are
+			// caught by seed-escalate-pacman at 50.
 			//
-			// Matches any -Q variant (-Qs, -Qi, -Ql, -Qo, -Qe, -Qm, etc.) and -F variants.
+			// Matches any -Q variant (-Qs, -Qi, -Ql, etc.), -F variants, and the two
+			// safe -S sub-modes: -Ss (search) and -Si (show package info).
 			ID:             "seed-allow-bash-pacman-query",
 			Name:           "Allow pacman read-only query operations",
 			ToolName:       "Bash",
-			CommandPattern: regexp.MustCompile(`^pacman\s+(-Q[a-zA-Z]*\b|--query\b|-F[a-zA-Z]*\b|--files\b|-[Vh]\b|--version\b|--help\b)`),
+			CommandPattern: regexp.MustCompile(`^pacman\s+(-Q[a-zA-Z]*\b|--query\b|-F[a-zA-Z]*\b|--files\b|-[Vh]\b|--version\b|--help\b|-Ss\b|-Si\b)`),
 			Decision:       AutoAllow,
 			RiskLevel:      RiskLow,
-			Reason:         "pacman -Q and -F operations query installed packages without modifying them.",
+			Reason:         "pacman -Q, -F, -Ss, and -Si operations query packages without modifying them.",
 			Priority:       100,
 			Enabled:        true,
 			Source:         "seed",
@@ -2004,6 +2026,24 @@ func SeedRules() []Rule {
 			RiskLevel:   RiskMedium,
 			Reason:      "rm deletes files permanently. Confirm the target path before proceeding.",
 			Alternative: "Move the file to /tmp first if you want a recoverable deletion.",
+			Priority:    50,
+			Enabled:     true,
+			Source:      "seed",
+		},
+		{
+			// pkill/killall send signals to processes matched by name or pattern.
+			// A broad pattern (pkill -f "gradle") can inadvertently kill unrelated processes.
+			// `kill` is excluded: PID-targeted signals are safe and common in scripts.
+			ID:       "seed-escalate-pkill",
+			Name:     "Escalate pkill/killall (process termination by name)",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs: []string{"pkill", "killall"},
+			},
+			Decision:    Escalate,
+			RiskLevel:   RiskMedium,
+			Reason:      "pkill/killall terminates processes by name and can accidentally affect unrelated processes.",
+			Alternative: "Use 'pgrep <name>' to preview which PIDs would be affected before killing.",
 			Priority:    50,
 			Enabled:     true,
 			Source:      "seed",

@@ -37,11 +37,15 @@ export class ErrorBoundary extends Component<Props, State> {
 
     // ChunkLoadError means the browser has a stale build cached. Reload once to get fresh chunks.
     if (error.name === "ChunkLoadError" || error.message.includes("Loading chunk")) {
-      const key = "chunkload_reload_attempted";
-      if (!sessionStorage.getItem(key)) {
-        sessionStorage.setItem(key, "1");
-        window.location.reload();
-        return;
+      try {
+        const key = "chunkload_reload_attempted";
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, "1");
+          window.location.reload();
+          return;
+        }
+      } catch {
+        // sessionStorage unavailable (e.g. SecurityError in hardened contexts) — fall through to error UI
       }
     }
 

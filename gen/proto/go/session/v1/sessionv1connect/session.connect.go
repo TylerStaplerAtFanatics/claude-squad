@@ -249,6 +249,9 @@ const (
 	// SessionServiceGetTerminalSnapshotProcedure is the fully-qualified name of the SessionService's
 	// GetTerminalSnapshot RPC.
 	SessionServiceGetTerminalSnapshotProcedure = "/session.v1.SessionService/GetTerminalSnapshot"
+	// SessionServiceLogClientEventsProcedure is the fully-qualified name of the SessionService's
+	// LogClientEvents RPC.
+	SessionServiceLogClientEventsProcedure = "/session.v1.SessionService/LogClientEvents"
 )
 
 // SessionServiceClient is a client for the session.v1.SessionService service.
@@ -433,6 +436,10 @@ type SessionServiceClient interface {
 	// GetTerminalSnapshot returns the last N lines of terminal output for a session
 	// without requiring an active stream. Suitable for session card previews.
 	GetTerminalSnapshot(context.Context, *connect.Request[v1.GetTerminalSnapshotRequest]) (*connect.Response[v1.GetTerminalSnapshotResponse], error)
+	// LogClientEvents receives batched browser console log entries from the web UI.
+	// Used for remote debugging of mobile browser sessions where DevTools are unavailable.
+	// Always returns an empty response; malformed entries are silently discarded.
+	LogClientEvents(context.Context, *connect.Request[v1.LogClientEventsRequest]) (*connect.Response[v1.LogClientEventsResponse], error)
 }
 
 // NewSessionServiceClient constructs a client for the session.v1.SessionService service. By
@@ -884,6 +891,12 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("GetTerminalSnapshot")),
 			connect.WithClientOptions(opts...),
 		),
+		logClientEvents: connect.NewClient[v1.LogClientEventsRequest, v1.LogClientEventsResponse](
+			httpClient,
+			baseURL+SessionServiceLogClientEventsProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("LogClientEvents")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -962,6 +975,7 @@ type sessionServiceClient struct {
 	assignSessionsToProject  *connect.Client[v1.AssignSessionsToProjectRequest, v1.AssignSessionsToProjectResponse]
 	listBranches             *connect.Client[v1.ListBranchesRequest, v1.ListBranchesResponse]
 	getTerminalSnapshot      *connect.Client[v1.GetTerminalSnapshotRequest, v1.GetTerminalSnapshotResponse]
+	logClientEvents          *connect.Client[v1.LogClientEventsRequest, v1.LogClientEventsResponse]
 }
 
 // ListSessions calls session.v1.SessionService.ListSessions.
@@ -1329,6 +1343,11 @@ func (c *sessionServiceClient) GetTerminalSnapshot(ctx context.Context, req *con
 	return c.getTerminalSnapshot.CallUnary(ctx, req)
 }
 
+// LogClientEvents calls session.v1.SessionService.LogClientEvents.
+func (c *sessionServiceClient) LogClientEvents(ctx context.Context, req *connect.Request[v1.LogClientEventsRequest]) (*connect.Response[v1.LogClientEventsResponse], error) {
+	return c.logClientEvents.CallUnary(ctx, req)
+}
+
 // SessionServiceHandler is an implementation of the session.v1.SessionService service.
 type SessionServiceHandler interface {
 	// ListSessions returns all sessions with optional filtering.
@@ -1511,6 +1530,10 @@ type SessionServiceHandler interface {
 	// GetTerminalSnapshot returns the last N lines of terminal output for a session
 	// without requiring an active stream. Suitable for session card previews.
 	GetTerminalSnapshot(context.Context, *connect.Request[v1.GetTerminalSnapshotRequest]) (*connect.Response[v1.GetTerminalSnapshotResponse], error)
+	// LogClientEvents receives batched browser console log entries from the web UI.
+	// Used for remote debugging of mobile browser sessions where DevTools are unavailable.
+	// Always returns an empty response; malformed entries are silently discarded.
+	LogClientEvents(context.Context, *connect.Request[v1.LogClientEventsRequest]) (*connect.Response[v1.LogClientEventsResponse], error)
 }
 
 // NewSessionServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1958,6 +1981,12 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("GetTerminalSnapshot")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceLogClientEventsHandler := connect.NewUnaryHandler(
+		SessionServiceLogClientEventsProcedure,
+		svc.LogClientEvents,
+		connect.WithSchema(sessionServiceMethods.ByName("LogClientEvents")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/session.v1.SessionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SessionServiceListSessionsProcedure:
@@ -2106,6 +2135,8 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceListBranchesHandler.ServeHTTP(w, r)
 		case SessionServiceGetTerminalSnapshotProcedure:
 			sessionServiceGetTerminalSnapshotHandler.ServeHTTP(w, r)
+		case SessionServiceLogClientEventsProcedure:
+			sessionServiceLogClientEventsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2405,4 +2436,8 @@ func (UnimplementedSessionServiceHandler) ListBranches(context.Context, *connect
 
 func (UnimplementedSessionServiceHandler) GetTerminalSnapshot(context.Context, *connect.Request[v1.GetTerminalSnapshotRequest]) (*connect.Response[v1.GetTerminalSnapshotResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.SessionService.GetTerminalSnapshot is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) LogClientEvents(context.Context, *connect.Request[v1.LogClientEventsRequest]) (*connect.Response[v1.LogClientEventsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.SessionService.LogClientEvents is not implemented"))
 }

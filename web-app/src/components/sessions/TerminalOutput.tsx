@@ -29,6 +29,7 @@ const ALT_KEY_MAP: Record<string, string> = {
   '\x1b[6~': '\x1b[6;3~', // Alt+PgDn
 };
 import { useTerminalStream } from "@/lib/hooks/useTerminalStream";
+import { useBrowserLogStream } from "@/lib/hooks/useBrowserLogStream";
 import { XtermTerminal, type XtermTerminalHandle } from "./XtermTerminal";
 import { TerminalStreamManager } from "@/lib/terminal/TerminalStreamManager";
 import { getCachedDimensions, saveDimensions } from "@/lib/terminal/TerminalDimensionCache";
@@ -146,6 +147,14 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     return false;
   });
 
+  // Remote log streaming state — persisted in localStorage
+  const [logStreamEnabled, setLogStreamEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("stapler-squad-remote-debug") === "true";
+    }
+    return false;
+  });
+
   // Sticky modifier keys — CTRL and ALT arm on first tap, fire+clear on the next key.
   // Mutually exclusive: arming one disarms the other.
   const [ctrlActive, setCtrlActive] = useState(false);
@@ -197,6 +206,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
       return true;
     }
   });
+  const [mobileOverflowOpen, setMobileOverflowOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -336,6 +346,9 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     enablePredictiveEcho: true,
     onEchoAck: handleEchoAck,
   });
+
+  // Remote browser log streaming for mobile debugging
+  useBrowserLogStream({ enabled: logStreamEnabled, sessionId, baseUrl });
 
   // Update sendFlowControl ref when available + sync it into TerminalStreamManager
   useEffect(() => {
@@ -757,6 +770,18 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
     }
   }, [debugMode]);
 
+  const handleToggleLogStream = useCallback(() => {
+    const next = !logStreamEnabled;
+    setLogStreamEnabled(next);
+    if (typeof window !== "undefined") {
+      if (next) {
+        localStorage.setItem("stapler-squad-remote-debug", "true");
+      } else {
+        localStorage.removeItem("stapler-squad-remote-debug");
+      }
+    }
+  }, [logStreamEnabled]);
+
   const handleCopyOutput = () => {
     const selectedText = xtermRef.current?.terminal?.getSelection();
     if (selectedText) {
@@ -997,6 +1022,15 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
                 🛠️ {debugMode ? 'Debug ON' : 'Debug'}
               </button>
               <button
+                className={`${styles.toolbarButton} ${logStreamEnabled ? styles.debugActive : ''}`}
+                onClick={handleToggleLogStream}
+                title={logStreamEnabled ? "Stop forwarding console logs to server" : "Forward console logs to server (Remote Debug)"}
+                aria-label={logStreamEnabled ? "Disable remote log streaming" : "Enable remote log streaming"}
+                style={logStreamEnabled ? { backgroundColor: '#2a4', color: 'white', fontWeight: 'bold' } : {}}
+              >
+                📡 {logStreamEnabled ? 'Log Stream ON' : 'Log Stream'}
+              </button>
+              <button
                 className={`${styles.toolbarButton} ${styles.devOnly}`}
                 onClick={() => {
                   if (isRecording) {
@@ -1026,15 +1060,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
                 <option value="state">🔄 State Sync</option>
                 <option value="hybrid">🔬 Hybrid</option>
               </select>
-              <button
-                className={styles.toolbarButton}
-                onClick={handleManualResize}
-                title="Resize terminal to fit container"
-                aria-label="Resize terminal"
-              >
-                ↔️ Resize
-              </button>
-              {/* Mobile-primary buttons first so they're always visible at 375px */}
+              {/* Primary mobile buttons — always visible in the toolbar row */}
               <button
                 className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle}`}
                 onClick={toggleMobileKeyboard}
@@ -1043,14 +1069,6 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
                 title={isKeyboardVisible ? "Hide mobile keyboard" : "Show mobile keyboard"}
               >
                 ⌨️ {isKeyboardVisible ? 'Hide Keys' : 'Show Keys'}
-              </button>
-              <button
-                className={`${styles.toolbarButton} ${styles.mobileKeyboardToggle} ${mouseMode === 'any' ? styles.mouseModeActive : ''}`}
-                onClick={toggleMouseMode}
-                aria-label={mouseMode === 'none' ? 'Enable mouse mode for terminal apps (vim, tmux)' : 'Disable mouse mode — enables text selection'}
-                title={mouseMode === 'none' ? 'Mouse OFF — tap to enable for vim/tmux' : 'Mouse ON — tap to disable, enables selection'}
-              >
-                🖱️ {mouseMode === 'none' ? 'Mouse' : 'Mouse ON'}
               </button>
               <button
                 className={styles.toolbarButton}
@@ -1078,34 +1096,108 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
               >
                 {isUploading ? "⏳ Uploading..." : uploadError ? `⚠️ ${uploadError}` : "📷 Image"}
               </button>
+              {/* Secondary actions — inline on desktop, hidden on mobile (shown in overflow row) */}
+              <div className={styles.secondaryGroup} data-testid="toolbar-secondary">
+                <button
+                  className={`${styles.toolbarButton} ${mouseMode === 'any' ? styles.mouseModeActive : ''}`}
+                  onClick={toggleMouseMode}
+                  aria-label={mouseMode === 'none' ? 'Enable mouse mode for terminal apps (vim, tmux)' : 'Disable mouse mode — enables text selection'}
+                  title={mouseMode === 'none' ? 'Mouse OFF — tap to enable for vim/tmux' : 'Mouse ON — tap to disable, enables selection'}
+                >
+                  🖱️ {mouseMode === 'none' ? 'Mouse' : 'Mouse ON'}
+                </button>
+                <button
+                  className={styles.toolbarButton}
+                  onClick={handleCopyOutput}
+                  title="Copy selected terminal text to clipboard"
+                  aria-label="Copy terminal output to clipboard"
+                >
+                  📋 Copy
+                </button>
+                <button
+                  className={styles.toolbarButton}
+                  onClick={handleScrollToBottom}
+                  title="Scroll to bottom"
+                  aria-label="Scroll to bottom"
+                >
+                  ↓ Bottom
+                </button>
+                <button
+                  className={styles.toolbarButton}
+                  onClick={handleManualResize}
+                  title="Resize terminal to fit container"
+                  aria-label="Resize terminal"
+                >
+                  ↔️ Resize
+                </button>
+                <button
+                  className={styles.toolbarButton}
+                  onClick={handleClear}
+                  title="Clear terminal"
+                  aria-label="Clear terminal"
+                >
+                  🗑️ Clear
+                </button>
+              </div>
+              {/* More ▾ trigger — only visible on mobile, opens overflow row below toolbar */}
               <button
-                className={styles.toolbarButton}
-                onClick={handleCopyOutput}
-                title="Copy selected terminal text to clipboard"
-                aria-label="Copy terminal output to clipboard"
+                className={`${styles.toolbarButton} ${styles.mobileMoreButton} ${mobileOverflowOpen ? styles.mobileMoreActive : ''}`}
+                onClick={() => setMobileOverflowOpen(o => !o)}
+                aria-label={mobileOverflowOpen ? 'Close more tools' : 'More tools'}
+                aria-expanded={mobileOverflowOpen}
+                data-testid="toolbar-more-button"
               >
-                📋 Copy
-              </button>
-              <button
-                className={styles.toolbarButton}
-                onClick={handleScrollToBottom}
-                title="Scroll to bottom"
-                aria-label="Scroll to bottom"
-              >
-                ↓ Bottom
-              </button>
-              <button
-                className={styles.toolbarButton}
-                onClick={handleClear}
-                title="Clear terminal"
-                aria-label="Clear terminal"
-              >
-                🗑️ Clear
+                {mobileOverflowOpen ? '✕ Less' : 'More ▾'}
               </button>
             </div>
           )}
         </div>
       </div>
+      {/* Mobile overflow row — appears below toolbar when More is open; hidden on desktop */}
+      {mobileOverflowOpen && toolbarExpanded && (
+        <div className={styles.mobileOverflowRow} data-testid="toolbar-overflow-row">
+          <button
+            className={`${styles.toolbarButton} ${mouseMode === 'any' ? styles.mouseModeActive : ''}`}
+            onClick={() => { toggleMouseMode(); setMobileOverflowOpen(false); }}
+            aria-label={mouseMode === 'none' ? 'Enable mouse mode' : 'Disable mouse mode'}
+            title={mouseMode === 'none' ? 'Mouse OFF — tap to enable for vim/tmux' : 'Mouse ON — tap to disable, enables selection'}
+          >
+            🖱️ {mouseMode === 'none' ? 'Mouse' : 'Mouse ON'}
+          </button>
+          <button
+            className={styles.toolbarButton}
+            onClick={() => { handleCopyOutput(); setMobileOverflowOpen(false); }}
+            title="Copy selected terminal text to clipboard"
+            aria-label="Copy terminal output to clipboard"
+          >
+            📋 Copy
+          </button>
+          <button
+            className={styles.toolbarButton}
+            onClick={() => { handleScrollToBottom(); setMobileOverflowOpen(false); }}
+            title="Scroll to bottom"
+            aria-label="Scroll to bottom"
+          >
+            ↓ Bottom
+          </button>
+          <button
+            className={styles.toolbarButton}
+            onClick={() => { handleManualResize(); setMobileOverflowOpen(false); }}
+            title="Resize terminal to fit container"
+            aria-label="Resize terminal"
+          >
+            ↔️ Resize
+          </button>
+          <button
+            className={styles.toolbarButton}
+            onClick={() => { handleClear(); setMobileOverflowOpen(false); }}
+            title="Clear terminal"
+            aria-label="Clear terminal"
+          >
+            🗑️ Clear
+          </button>
+        </div>
+      )}
       <div className={styles.terminal} ref={terminalContainerRef}>
         {isVisible !== false && isLoadingInitialContent && (
           <div className={styles.loadingOverlay}>
