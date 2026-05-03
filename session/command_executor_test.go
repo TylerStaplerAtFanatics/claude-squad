@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tstapler/stapler-squad/session/detection"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 func TestNewCommandExecutor(t *testing.T) {
@@ -102,8 +103,12 @@ func TestCommandExecutor_StartAndStop(t *testing.T) {
 		t.Error("Executor should be executing after Start()")
 	}
 
-	// Give it time to start
-	time.Sleep(50 * time.Millisecond)
+	// Wait for executor to be fully running before stopping
+	if err := wait.WaitForCondition(func() bool {
+		return executor.IsExecuting()
+	}, wait.FastWaitConfig()); err != nil {
+		t.Fatalf("executor did not become executing: %v", err)
+	}
 
 	// Stop executor
 	if err := executor.Stop(); err != nil {
@@ -192,22 +197,25 @@ func TestCommandExecutor_ExecuteSimpleCommand(t *testing.T) {
 	}
 	queue.Enqueue(cmd)
 
-	// Simulate response from PTY
-	go func() {
-		time.Sleep(100 * time.Millisecond)
+	// Simulate response from PTY after a short delay
+	time.AfterFunc(100*time.Millisecond, func() {
 		writer.Write([]byte("test\n$ "))
-	}()
+	})
 
-	// Wait for execution
-	time.Sleep(1 * time.Second)
+	// Wait for execution result
+	cfg := wait.DefaultWaitConfig()
+	cfg.Description = "execution result"
+	if err := wait.WaitForCondition(func() bool {
+		resultMu.Lock()
+		defer resultMu.Unlock()
+		return executionResult != nil
+	}, cfg); err != nil {
+		t.Fatalf("No execution result received: %v", err)
+	}
 
 	// Check result
 	resultMu.Lock()
 	defer resultMu.Unlock()
-
-	if executionResult == nil {
-		t.Fatal("No execution result received")
-	}
 
 	if executionResult.Command.ID != cmd.ID {
 		t.Errorf("Result command ID = %q, expected %q", executionResult.Command.ID, cmd.ID)
@@ -319,11 +327,10 @@ func TestCommandExecutor_ExecuteImmediate(t *testing.T) {
 	executor.Start(ctx)
 	defer executor.Stop()
 
-	// Simulate response
-	go func() {
-		time.Sleep(100 * time.Millisecond)
+	// Simulate response after a short delay
+	time.AfterFunc(100*time.Millisecond, func() {
 		writer.Write([]byte("immediate response\n$ "))
-	}()
+	})
 
 	cmd := &Command{
 		ID:       "immediate-cmd",
@@ -413,15 +420,19 @@ func TestCommandExecutor_Timeout(t *testing.T) {
 	}
 	queue.Enqueue(cmd)
 
-	// Wait for timeout
-	time.Sleep(500 * time.Millisecond)
+	// Wait for timeout result
+	cfg := wait.DefaultWaitConfig()
+	cfg.Description = "timeout result"
+	if err := wait.WaitForCondition(func() bool {
+		resultMu.Lock()
+		defer resultMu.Unlock()
+		return executionResult != nil
+	}, cfg); err != nil {
+		t.Fatalf("No execution result received: %v", err)
+	}
 
 	resultMu.Lock()
 	defer resultMu.Unlock()
-
-	if executionResult == nil {
-		t.Fatal("No execution result received")
-	}
 
 	if executionResult.Error == nil {
 		t.Error("Expected timeout error")
@@ -536,22 +547,23 @@ func TestCommandExecutor_StatusDetection(t *testing.T) {
 	}
 	queue.Enqueue(cmd)
 
-	// Simulate processing then ready status
-	go func() {
-		time.Sleep(100 * time.Millisecond)
+	// Simulate processing then ready status with staggered writes
+	time.AfterFunc(100*time.Millisecond, func() {
 		writer.Write([]byte("Processing...\n"))
-		time.Sleep(200 * time.Millisecond)
+	})
+	time.AfterFunc(300*time.Millisecond, func() {
 		writer.Write([]byte("$ "))
-	}()
+	})
 
-	// Wait for execution
-	time.Sleep(1 * time.Second)
-
-	resultMu.Lock()
-	defer resultMu.Unlock()
-
-	if executionResult == nil {
-		t.Fatal("No execution result received")
+	// Wait for execution result
+	cfg := wait.DefaultWaitConfig()
+	cfg.Description = "status detection result"
+	if err := wait.WaitForCondition(func() bool {
+		resultMu.Lock()
+		defer resultMu.Unlock()
+		return executionResult != nil
+	}, cfg); err != nil {
+		t.Fatalf("No execution result received: %v", err)
 	}
 
 	// The test completes successfully even without status changes due to mock PTY limitations
@@ -603,12 +615,24 @@ func TestCommandExecutor_ContextCancellation(t *testing.T) {
 
 	executor.Start(ctx)
 
-	// Cancel context
-	time.Sleep(100 * time.Millisecond)
+	// Wait for executor to be running before cancelling
+	runningCfg := wait.FastWaitConfig()
+	runningCfg.Description = "executor running before cancel"
+	if err := wait.WaitForCondition(func() bool {
+		return executor.IsExecuting()
+	}, runningCfg); err != nil {
+		t.Logf("executor did not become executing before cancel (may be ok): %v", err)
+	}
 	cancel()
 
-	// Should stop gracefully
-	time.Sleep(200 * time.Millisecond)
+	// Wait for executor to stop after context cancellation
+	stoppedCfg := wait.DefaultWaitConfig()
+	stoppedCfg.Description = "executor stopped after cancel"
+	if err := wait.WaitForCondition(func() bool {
+		return !executor.IsExecuting()
+	}, stoppedCfg); err != nil {
+		t.Logf("executor did not stop after context cancel (may already be stopped): %v", err)
+	}
 
 	// Should be able to stop without error (may already be stopped due to context cancellation)
 	_ = executor.Stop()
@@ -638,10 +662,11 @@ func Benchmark_CommandExecutor_Execution(b *testing.B) {
 	executor.Start(ctx)
 	defer executor.Stop()
 
-	// Simulate responses
+	// Simulate responses using a ticker
 	go func() {
-		for {
-			time.Sleep(50 * time.Millisecond)
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+		for range ticker.C {
 			writer.Write([]byte("output\n$ "))
 		}
 	}()

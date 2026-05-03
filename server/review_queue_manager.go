@@ -415,8 +415,7 @@ func (rqm *ReactiveQueueManager) publishToClients(event *sessionv1.ReviewQueueEv
 			case <-client.ctx.Done():
 				// Client disconnected
 			default:
-				// Channel full, drop event (could log this)
-				log.DebugLog.Printf("[ReactiveQueueManager] Dropped event for client %s (channel full)", client.id)
+				// Channel full, drop event
 			}
 		}
 	}

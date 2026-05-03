@@ -25,8 +25,8 @@ type cmdResult struct {
 
 // cmSendReq is an outgoing command queued for the priority sender goroutine.
 type cmSendReq struct {
-	line     string          // full tmux command line (e.g. "send-keys -t sess -H 61")
-	resultCh chan cmdResult  // buffered(1) channel for the response
+	line     string         // full tmux command line (e.g. "send-keys -t sess -H 61")
+	resultCh chan cmdResult // buffered(1) channel for the response
 }
 
 var (
@@ -43,7 +43,6 @@ var cmCommandsEnabled atomic.Bool
 func init() {
 	cmCommandsEnabled.Store(os.Getenv("STAPLER_SQUAD_CM_COMMANDS") != "false")
 }
-
 
 // StartControlMode begins streaming terminal output via tmux control mode (-C flag).
 // This is the proper way to get real-time terminal output from tmux, replacing pipe-pane + FIFO.

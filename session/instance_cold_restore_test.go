@@ -1,7 +1,9 @@
 package session
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -18,10 +20,19 @@ func checkTmuxAvailable(t *testing.T) {
 	}
 }
 
-// coldRestoreSocket returns a unique tmux server socket name for cold-restore tests.
+// coldRestoreSocket returns a unique tmux server socket name for cold-restore
+// tests and registers a t.Cleanup that kills the isolated server on test exit.
+// The PID is embedded in the name so TestMain's PID-aware sweep can reap this
+// socket on the next run if the current run was killed with SIGKILL.
 func coldRestoreSocket(t *testing.T) string {
 	t.Helper()
-	return fmt.Sprintf("test_coldrestore_%d_%s", time.Now().UnixNano(), t.Name())
+	name := fmt.Sprintf("test_coldrestore_%d_%d", os.Getpid(), time.Now().UnixNano())
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = exec.CommandContext(ctx, "tmux", "-L", name, "kill-server").Run()
+	})
+	return name
 }
 
 // TestColdRestore_WithUUID verifies that when the tmux session is dead and a

@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 func TestHistoryFileWatcher_FiresOnJSONLCreate(t *testing.T) {
@@ -29,9 +30,6 @@ func TestHistoryFileWatcher_FiresOnJSONLCreate(t *testing.T) {
 
 	err := watcher.Start(ctx)
 	require.NoError(t, err)
-
-	// Give the watcher time to start
-	time.Sleep(50 * time.Millisecond)
 
 	// Create a JSONL file
 	jsonlPath := filepath.Join(tmpDir, "550e8400-e29b-41d4-a716-446655440000.jsonl")
@@ -68,15 +66,17 @@ func TestHistoryFileWatcher_DoesNotFireOnNonJSONL(t *testing.T) {
 	err := watcher.Start(ctx)
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
-
 	// Create a non-JSONL file
 	txtPath := filepath.Join(tmpDir, "somefile.txt")
 	err = os.WriteFile(txtPath, []byte("hello"), 0600)
 	require.NoError(t, err)
 
 	// Wait briefly to ensure callback is NOT fired
-	time.Sleep(200 * time.Millisecond)
+	_ = wait.WaitForCondition(func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(received) > 0
+	}, wait.WaitConfig{Timeout: 200 * time.Millisecond, PollInterval: 20 * time.Millisecond, Description: "non-jsonl callback (should not fire)"})
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -100,8 +100,6 @@ func TestHistoryFileWatcher_FiresOnRename(t *testing.T) {
 
 	err := watcher.Start(ctx)
 	require.NoError(t, err)
-
-	time.Sleep(50 * time.Millisecond)
 
 	// Create a temp file then rename it to .jsonl
 	tmpFile := filepath.Join(tmpDir, "tempfile.tmp")
@@ -150,19 +148,19 @@ func TestHistoryFileWatcher_ContextCancellationStopsWatcher(t *testing.T) {
 	err := watcher.Start(ctx)
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
-
 	// Cancel the context
 	cancel()
-
-	// Give it time to stop
-	time.Sleep(100 * time.Millisecond)
 
 	// Create a file after cancellation — should NOT trigger callback
 	jsonlPath := filepath.Join(tmpDir, "550e8400-e29b-41d4-a716-446655440000.jsonl")
 	_ = os.WriteFile(jsonlPath, []byte(`{}`), 0600)
 
-	time.Sleep(200 * time.Millisecond)
+	// Wait briefly to ensure callback is NOT fired
+	_ = wait.WaitForCondition(func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return callbackCount > 0
+	}, wait.WaitConfig{Timeout: 200 * time.Millisecond, PollInterval: 20 * time.Millisecond, Description: "post-cancel callback (should not fire)"})
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -187,15 +185,17 @@ func TestHistoryFileWatcher_FiltersAgentJSONL(t *testing.T) {
 	err := watcher.Start(ctx)
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
-
 	// Create an agent JSONL file — should be filtered out
 	agentPath := filepath.Join(tmpDir, "agent-abc123.jsonl")
 	err = os.WriteFile(agentPath, []byte(`{}`), 0600)
 	require.NoError(t, err)
 
 	// Wait briefly to ensure callback is NOT fired
-	time.Sleep(200 * time.Millisecond)
+	_ = wait.WaitForCondition(func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(received) > 0
+	}, wait.WaitConfig{Timeout: 200 * time.Millisecond, PollInterval: 20 * time.Millisecond, Description: "agent-jsonl callback (should not fire)"})
 
 	mu.Lock()
 	defer mu.Unlock()

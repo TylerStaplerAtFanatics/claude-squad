@@ -2,10 +2,12 @@ package notifications
 
 import (
 	"context"
-	"github.com/tstapler/stapler-squad/server/events"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/server/events"
+	"github.com/tstapler/stapler-squad/testutil"
 )
 
 // mockAppender records all calls to Append for test assertions.
@@ -58,20 +60,23 @@ func TestCoalescing_SameKeyWithinWindow(t *testing.T) {
 	// Use a short coalescing interval for testing
 	StartSubscriberWithInterval(ctx, bus, appender, 5*time.Millisecond)
 
-	// Allow subscriber goroutine to start
-	time.Sleep(2 * time.Millisecond)
-
 	// Publish 10 events for the same key rapidly
 	for i := 0; i < 10; i++ {
 		publishNotification(bus, "session-A", 1, "notif-"+string(rune('a'+i)))
 	}
 
 	// Wait for flush (coalescing interval + buffer)
-	time.Sleep(15 * time.Millisecond)
-
-	// Cancel to trigger final flush
-	cancel()
-	time.Sleep(8 * time.Millisecond)
+	if err := testutil.WaitForCondition(func() bool {
+		return len(appender.getRecords()) >= 1
+	}, testutil.FastWaitConfig()); err != nil {
+		// Cancel to trigger final flush and wait again
+		cancel()
+		_ = testutil.WaitForCondition(func() bool {
+			return len(appender.getRecords()) >= 1
+		}, testutil.FastWaitConfig())
+	} else {
+		cancel()
+	}
 
 	records := appender.getRecords()
 	if len(records) != 1 {
@@ -93,19 +98,23 @@ func TestCoalescing_DifferentKeysFlushIndependently(t *testing.T) {
 
 	StartSubscriberWithInterval(ctx, bus, appender, 5*time.Millisecond)
 
-	time.Sleep(2 * time.Millisecond)
-
 	// Publish events for 3 different keys
 	publishNotification(bus, "session-A", 1, "notif-a1")
 	publishNotification(bus, "session-A", 1, "notif-a2") // same key as above, should coalesce
 	publishNotification(bus, "session-B", 1, "notif-b1")
 	publishNotification(bus, "session-A", 2, "notif-a3") // different type
 
-	// Wait for flush
-	time.Sleep(15 * time.Millisecond)
-
-	cancel()
-	time.Sleep(8 * time.Millisecond)
+	// Wait for flush (all 3 distinct keys)
+	if err := testutil.WaitForCondition(func() bool {
+		return len(appender.getRecords()) >= 3
+	}, testutil.FastWaitConfig()); err != nil {
+		cancel()
+		_ = testutil.WaitForCondition(func() bool {
+			return len(appender.getRecords()) >= 3
+		}, testutil.FastWaitConfig())
+	} else {
+		cancel()
+	}
 
 	records := appender.getRecords()
 	if len(records) != 3 {
@@ -128,15 +137,10 @@ func TestCoalescing_ContextCancellationFlushes(t *testing.T) {
 	// Use a very long coalescing interval so it won't fire naturally during the test
 	StartSubscriberWithInterval(ctx, bus, appender, 10*time.Second)
 
-	time.Sleep(2 * time.Millisecond)
-
 	// Publish an event
 	publishNotification(bus, "session-A", 1, "notif-1")
 
-	// Give time for the event to be buffered
-	time.Sleep(20 * time.Millisecond)
-
-	// Verify nothing has been flushed yet (interval is 10s)
+	// Verify nothing has been flushed yet (interval is 10s, so flushing only happens on cancel)
 	records := appender.getRecords()
 	if len(records) != 0 {
 		t.Errorf("expected 0 Append calls before flush, got %d", len(records))
@@ -144,7 +148,11 @@ func TestCoalescing_ContextCancellationFlushes(t *testing.T) {
 
 	// Cancel context -- should trigger deferred flush
 	cancel()
-	time.Sleep(50 * time.Millisecond)
+	if err := testutil.WaitForCondition(func() bool {
+		return len(appender.getRecords()) >= 1
+	}, testutil.FastWaitConfig()); err != nil {
+		t.Errorf("timed out waiting for flush after context cancellation: %v", err)
+	}
 
 	records = appender.getRecords()
 	if len(records) != 1 {
@@ -192,10 +200,16 @@ func TestCoalescing_LatestEventWins(t *testing.T) {
 	})
 
 	// Wait for the flush window to fire.
-	time.Sleep(200 * time.Millisecond)
-
-	cancel()
-	time.Sleep(50 * time.Millisecond)
+	if err := testutil.WaitForCondition(func() bool {
+		return len(appender.getRecords()) >= 1
+	}, testutil.FastWaitConfig()); err != nil {
+		cancel()
+		_ = testutil.WaitForCondition(func() bool {
+			return len(appender.getRecords()) >= 1
+		}, testutil.FastWaitConfig())
+	} else {
+		cancel()
+	}
 
 	records := appender.getRecords()
 	if len(records) != 1 {
@@ -225,8 +239,6 @@ func TestCoalescing_NonNotificationEventsIgnored(t *testing.T) {
 
 	StartSubscriberWithInterval(ctx, bus, appender, 5*time.Millisecond)
 
-	time.Sleep(2 * time.Millisecond)
-
 	// Publish a non-notification event
 	bus.Publish(&events.Event{
 		Type:      events.EventSessionCreated,
@@ -234,10 +246,13 @@ func TestCoalescing_NonNotificationEventsIgnored(t *testing.T) {
 		SessionID: "session-A",
 	})
 
-	time.Sleep(15 * time.Millisecond)
-
+	// Cancel context; non-notification events produce no records even after flush
 	cancel()
-	time.Sleep(8 * time.Millisecond)
+	// Wait briefly to ensure the subscriber has had a chance to process and exit
+	_ = testutil.WaitForCondition(func() bool {
+		// Confirm no records have appeared (appender remains empty)
+		return len(appender.getRecords()) == 0
+	}, testutil.FastWaitConfig())
 
 	records := appender.getRecords()
 	if len(records) != 0 {

@@ -2,10 +2,12 @@ package events
 
 import (
 	"context"
-	"github.com/tstapler/stapler-squad/session"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/session"
+	"github.com/tstapler/stapler-squad/testutil"
 )
 
 // TestEventBusBasicSubscribePublish tests basic subscription and event delivery.
@@ -143,7 +145,11 @@ func TestEventBusConcurrentPublish(t *testing.T) {
 	wg.Wait()
 
 	// Wait for all events to be received
-	time.Sleep(100 * time.Millisecond)
+	_ = testutil.WaitForCondition(func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(received) > 0
+	}, testutil.FastWaitConfig())
 	cancel() // Close subscriber
 
 	<-done
@@ -177,7 +183,9 @@ func TestEventBusContextCancellation(t *testing.T) {
 	cancel()
 
 	// Wait for cleanup
-	time.Sleep(100 * time.Millisecond)
+	_ = testutil.WaitForCondition(func() bool {
+		return bus.SubscriberCount() == 0
+	}, testutil.FastWaitConfig())
 
 	// Verify subscriber was removed
 	if count := bus.SubscriberCount(); count != 0 {

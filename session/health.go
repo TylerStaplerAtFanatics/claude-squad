@@ -221,7 +221,6 @@ func (h *SessionHealthChecker) ScheduledHealthCheck(interval time.Duration, stop
 				log.ErrorLog.Printf("Scheduled health check failed: %v", err)
 			}
 		case <-stopChan:
-			log.DebugLog.Printf("Stopping scheduled health checks")
 			return
 		}
 	}

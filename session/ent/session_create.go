@@ -373,6 +373,62 @@ func (_c *SessionCreate) SetNillableOneShot(v *bool) *SessionCreate {
 	return _c
 }
 
+// SetLastUserResponse sets the "last_user_response" field.
+func (_c *SessionCreate) SetLastUserResponse(v time.Time) *SessionCreate {
+	_c.mutation.SetLastUserResponse(v)
+	return _c
+}
+
+// SetNillableLastUserResponse sets the "last_user_response" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableLastUserResponse(v *time.Time) *SessionCreate {
+	if v != nil {
+		_c.SetLastUserResponse(*v)
+	}
+	return _c
+}
+
+// SetProcessingGraceUntil sets the "processing_grace_until" field.
+func (_c *SessionCreate) SetProcessingGraceUntil(v time.Time) *SessionCreate {
+	_c.mutation.SetProcessingGraceUntil(v)
+	return _c
+}
+
+// SetNillableProcessingGraceUntil sets the "processing_grace_until" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableProcessingGraceUntil(v *time.Time) *SessionCreate {
+	if v != nil {
+		_c.SetProcessingGraceUntil(*v)
+	}
+	return _c
+}
+
+// SetLastPromptDetected sets the "last_prompt_detected" field.
+func (_c *SessionCreate) SetLastPromptDetected(v time.Time) *SessionCreate {
+	_c.mutation.SetLastPromptDetected(v)
+	return _c
+}
+
+// SetNillableLastPromptDetected sets the "last_prompt_detected" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableLastPromptDetected(v *time.Time) *SessionCreate {
+	if v != nil {
+		_c.SetLastPromptDetected(*v)
+	}
+	return _c
+}
+
+// SetLastPromptSignature sets the "last_prompt_signature" field.
+func (_c *SessionCreate) SetLastPromptSignature(v string) *SessionCreate {
+	_c.mutation.SetLastPromptSignature(v)
+	return _c
+}
+
+// SetNillableLastPromptSignature sets the "last_prompt_signature" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableLastPromptSignature(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetLastPromptSignature(*v)
+	}
+	return _c
+}
+
 // SetWorktreeID sets the "worktree" edge to the Worktree entity by ID.
 func (_c *SessionCreate) SetWorktreeID(id int) *SessionCreate {
 	_c.mutation.SetWorktreeID(id)
@@ -703,6 +759,22 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.OneShot(); ok {
 		_spec.SetField(session.FieldOneShot, field.TypeBool, value)
 		_node.OneShot = value
+	}
+	if value, ok := _c.mutation.LastUserResponse(); ok {
+		_spec.SetField(session.FieldLastUserResponse, field.TypeTime, value)
+		_node.LastUserResponse = &value
+	}
+	if value, ok := _c.mutation.ProcessingGraceUntil(); ok {
+		_spec.SetField(session.FieldProcessingGraceUntil, field.TypeTime, value)
+		_node.ProcessingGraceUntil = &value
+	}
+	if value, ok := _c.mutation.LastPromptDetected(); ok {
+		_spec.SetField(session.FieldLastPromptDetected, field.TypeTime, value)
+		_node.LastPromptDetected = &value
+	}
+	if value, ok := _c.mutation.LastPromptSignature(); ok {
+		_spec.SetField(session.FieldLastPromptSignature, field.TypeString, value)
+		_node.LastPromptSignature = value
 	}
 	if nodes := _c.mutation.WorktreeIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1275,6 +1347,78 @@ func (u *SessionUpsert) UpdateOneShot() *SessionUpsert {
 	return u
 }
 
+// SetLastUserResponse sets the "last_user_response" field.
+func (u *SessionUpsert) SetLastUserResponse(v time.Time) *SessionUpsert {
+	u.Set(session.FieldLastUserResponse, v)
+	return u
+}
+
+// UpdateLastUserResponse sets the "last_user_response" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateLastUserResponse() *SessionUpsert {
+	u.SetExcluded(session.FieldLastUserResponse)
+	return u
+}
+
+// ClearLastUserResponse clears the value of the "last_user_response" field.
+func (u *SessionUpsert) ClearLastUserResponse() *SessionUpsert {
+	u.SetNull(session.FieldLastUserResponse)
+	return u
+}
+
+// SetProcessingGraceUntil sets the "processing_grace_until" field.
+func (u *SessionUpsert) SetProcessingGraceUntil(v time.Time) *SessionUpsert {
+	u.Set(session.FieldProcessingGraceUntil, v)
+	return u
+}
+
+// UpdateProcessingGraceUntil sets the "processing_grace_until" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateProcessingGraceUntil() *SessionUpsert {
+	u.SetExcluded(session.FieldProcessingGraceUntil)
+	return u
+}
+
+// ClearProcessingGraceUntil clears the value of the "processing_grace_until" field.
+func (u *SessionUpsert) ClearProcessingGraceUntil() *SessionUpsert {
+	u.SetNull(session.FieldProcessingGraceUntil)
+	return u
+}
+
+// SetLastPromptDetected sets the "last_prompt_detected" field.
+func (u *SessionUpsert) SetLastPromptDetected(v time.Time) *SessionUpsert {
+	u.Set(session.FieldLastPromptDetected, v)
+	return u
+}
+
+// UpdateLastPromptDetected sets the "last_prompt_detected" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateLastPromptDetected() *SessionUpsert {
+	u.SetExcluded(session.FieldLastPromptDetected)
+	return u
+}
+
+// ClearLastPromptDetected clears the value of the "last_prompt_detected" field.
+func (u *SessionUpsert) ClearLastPromptDetected() *SessionUpsert {
+	u.SetNull(session.FieldLastPromptDetected)
+	return u
+}
+
+// SetLastPromptSignature sets the "last_prompt_signature" field.
+func (u *SessionUpsert) SetLastPromptSignature(v string) *SessionUpsert {
+	u.Set(session.FieldLastPromptSignature, v)
+	return u
+}
+
+// UpdateLastPromptSignature sets the "last_prompt_signature" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateLastPromptSignature() *SessionUpsert {
+	u.SetExcluded(session.FieldLastPromptSignature)
+	return u
+}
+
+// ClearLastPromptSignature clears the value of the "last_prompt_signature" field.
+func (u *SessionUpsert) ClearLastPromptSignature() *SessionUpsert {
+	u.SetNull(session.FieldLastPromptSignature)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -1828,6 +1972,90 @@ func (u *SessionUpsertOne) SetOneShot(v bool) *SessionUpsertOne {
 func (u *SessionUpsertOne) UpdateOneShot() *SessionUpsertOne {
 	return u.Update(func(s *SessionUpsert) {
 		s.UpdateOneShot()
+	})
+}
+
+// SetLastUserResponse sets the "last_user_response" field.
+func (u *SessionUpsertOne) SetLastUserResponse(v time.Time) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastUserResponse(v)
+	})
+}
+
+// UpdateLastUserResponse sets the "last_user_response" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateLastUserResponse() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastUserResponse()
+	})
+}
+
+// ClearLastUserResponse clears the value of the "last_user_response" field.
+func (u *SessionUpsertOne) ClearLastUserResponse() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastUserResponse()
+	})
+}
+
+// SetProcessingGraceUntil sets the "processing_grace_until" field.
+func (u *SessionUpsertOne) SetProcessingGraceUntil(v time.Time) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetProcessingGraceUntil(v)
+	})
+}
+
+// UpdateProcessingGraceUntil sets the "processing_grace_until" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateProcessingGraceUntil() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateProcessingGraceUntil()
+	})
+}
+
+// ClearProcessingGraceUntil clears the value of the "processing_grace_until" field.
+func (u *SessionUpsertOne) ClearProcessingGraceUntil() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearProcessingGraceUntil()
+	})
+}
+
+// SetLastPromptDetected sets the "last_prompt_detected" field.
+func (u *SessionUpsertOne) SetLastPromptDetected(v time.Time) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastPromptDetected(v)
+	})
+}
+
+// UpdateLastPromptDetected sets the "last_prompt_detected" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateLastPromptDetected() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastPromptDetected()
+	})
+}
+
+// ClearLastPromptDetected clears the value of the "last_prompt_detected" field.
+func (u *SessionUpsertOne) ClearLastPromptDetected() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastPromptDetected()
+	})
+}
+
+// SetLastPromptSignature sets the "last_prompt_signature" field.
+func (u *SessionUpsertOne) SetLastPromptSignature(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastPromptSignature(v)
+	})
+}
+
+// UpdateLastPromptSignature sets the "last_prompt_signature" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateLastPromptSignature() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastPromptSignature()
+	})
+}
+
+// ClearLastPromptSignature clears the value of the "last_prompt_signature" field.
+func (u *SessionUpsertOne) ClearLastPromptSignature() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastPromptSignature()
 	})
 }
 
@@ -2550,6 +2778,90 @@ func (u *SessionUpsertBulk) SetOneShot(v bool) *SessionUpsertBulk {
 func (u *SessionUpsertBulk) UpdateOneShot() *SessionUpsertBulk {
 	return u.Update(func(s *SessionUpsert) {
 		s.UpdateOneShot()
+	})
+}
+
+// SetLastUserResponse sets the "last_user_response" field.
+func (u *SessionUpsertBulk) SetLastUserResponse(v time.Time) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastUserResponse(v)
+	})
+}
+
+// UpdateLastUserResponse sets the "last_user_response" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateLastUserResponse() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastUserResponse()
+	})
+}
+
+// ClearLastUserResponse clears the value of the "last_user_response" field.
+func (u *SessionUpsertBulk) ClearLastUserResponse() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastUserResponse()
+	})
+}
+
+// SetProcessingGraceUntil sets the "processing_grace_until" field.
+func (u *SessionUpsertBulk) SetProcessingGraceUntil(v time.Time) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetProcessingGraceUntil(v)
+	})
+}
+
+// UpdateProcessingGraceUntil sets the "processing_grace_until" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateProcessingGraceUntil() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateProcessingGraceUntil()
+	})
+}
+
+// ClearProcessingGraceUntil clears the value of the "processing_grace_until" field.
+func (u *SessionUpsertBulk) ClearProcessingGraceUntil() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearProcessingGraceUntil()
+	})
+}
+
+// SetLastPromptDetected sets the "last_prompt_detected" field.
+func (u *SessionUpsertBulk) SetLastPromptDetected(v time.Time) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastPromptDetected(v)
+	})
+}
+
+// UpdateLastPromptDetected sets the "last_prompt_detected" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateLastPromptDetected() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastPromptDetected()
+	})
+}
+
+// ClearLastPromptDetected clears the value of the "last_prompt_detected" field.
+func (u *SessionUpsertBulk) ClearLastPromptDetected() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastPromptDetected()
+	})
+}
+
+// SetLastPromptSignature sets the "last_prompt_signature" field.
+func (u *SessionUpsertBulk) SetLastPromptSignature(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetLastPromptSignature(v)
+	})
+}
+
+// UpdateLastPromptSignature sets the "last_prompt_signature" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateLastPromptSignature() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateLastPromptSignature()
+	})
+}
+
+// ClearLastPromptSignature clears the value of the "last_prompt_signature" field.
+func (u *SessionUpsertBulk) ClearLastPromptSignature() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearLastPromptSignature()
 	})
 }
 

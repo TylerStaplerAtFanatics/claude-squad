@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 func TestEntryIDStability(t *testing.T) {
@@ -47,8 +49,11 @@ func TestRingBufferEviction(t *testing.T) {
 	}
 
 	// The oldest entry: prompt-0 (added first, never re-used).
-	// Sleep a tiny bit to ensure the 501st entry has a strictly newer LastUsed.
-	time.Sleep(2 * time.Millisecond)
+	// Wait until time has advanced past the fill loop so the overflow entry has strictly newer LastUsed.
+	afterFill := time.Now()
+	_ = wait.WaitForCondition(func() bool {
+		return time.Now().After(afterFill.Add(time.Millisecond))
+	}, wait.FastWaitConfig())
 	_, err = store.RecordUsage("prompt-overflow")
 	if err != nil {
 		t.Fatalf("RecordUsage(overflow): %v", err)

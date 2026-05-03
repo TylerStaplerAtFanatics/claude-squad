@@ -190,6 +190,26 @@ func OneShot(v bool) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldOneShot, v))
 }
 
+// LastUserResponse applies equality check predicate on the "last_user_response" field. It's identical to LastUserResponseEQ.
+func LastUserResponse(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldLastUserResponse, v))
+}
+
+// ProcessingGraceUntil applies equality check predicate on the "processing_grace_until" field. It's identical to ProcessingGraceUntilEQ.
+func ProcessingGraceUntil(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldProcessingGraceUntil, v))
+}
+
+// LastPromptDetected applies equality check predicate on the "last_prompt_detected" field. It's identical to LastPromptDetectedEQ.
+func LastPromptDetected(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldLastPromptDetected, v))
+}
+
+// LastPromptSignature applies equality check predicate on the "last_prompt_signature" field. It's identical to LastPromptSignatureEQ.
+func LastPromptSignature(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldLastPromptSignature, v))
+}
+
 // TitleEQ applies the EQ predicate on the "title" field.
 func TitleEQ(v string) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldTitle, v))
@@ -1708,6 +1728,231 @@ func OneShotEQ(v bool) predicate.Session {
 // OneShotNEQ applies the NEQ predicate on the "one_shot" field.
 func OneShotNEQ(v bool) predicate.Session {
 	return predicate.Session(sql.FieldNEQ(FieldOneShot, v))
+}
+
+// LastUserResponseEQ applies the EQ predicate on the "last_user_response" field.
+func LastUserResponseEQ(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldLastUserResponse, v))
+}
+
+// LastUserResponseNEQ applies the NEQ predicate on the "last_user_response" field.
+func LastUserResponseNEQ(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldLastUserResponse, v))
+}
+
+// LastUserResponseIn applies the In predicate on the "last_user_response" field.
+func LastUserResponseIn(vs ...time.Time) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldLastUserResponse, vs...))
+}
+
+// LastUserResponseNotIn applies the NotIn predicate on the "last_user_response" field.
+func LastUserResponseNotIn(vs ...time.Time) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldLastUserResponse, vs...))
+}
+
+// LastUserResponseGT applies the GT predicate on the "last_user_response" field.
+func LastUserResponseGT(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldLastUserResponse, v))
+}
+
+// LastUserResponseGTE applies the GTE predicate on the "last_user_response" field.
+func LastUserResponseGTE(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldLastUserResponse, v))
+}
+
+// LastUserResponseLT applies the LT predicate on the "last_user_response" field.
+func LastUserResponseLT(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldLastUserResponse, v))
+}
+
+// LastUserResponseLTE applies the LTE predicate on the "last_user_response" field.
+func LastUserResponseLTE(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldLastUserResponse, v))
+}
+
+// LastUserResponseIsNil applies the IsNil predicate on the "last_user_response" field.
+func LastUserResponseIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldLastUserResponse))
+}
+
+// LastUserResponseNotNil applies the NotNil predicate on the "last_user_response" field.
+func LastUserResponseNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldLastUserResponse))
+}
+
+// ProcessingGraceUntilEQ applies the EQ predicate on the "processing_grace_until" field.
+func ProcessingGraceUntilEQ(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldProcessingGraceUntil, v))
+}
+
+// ProcessingGraceUntilNEQ applies the NEQ predicate on the "processing_grace_until" field.
+func ProcessingGraceUntilNEQ(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldProcessingGraceUntil, v))
+}
+
+// ProcessingGraceUntilIn applies the In predicate on the "processing_grace_until" field.
+func ProcessingGraceUntilIn(vs ...time.Time) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldProcessingGraceUntil, vs...))
+}
+
+// ProcessingGraceUntilNotIn applies the NotIn predicate on the "processing_grace_until" field.
+func ProcessingGraceUntilNotIn(vs ...time.Time) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldProcessingGraceUntil, vs...))
+}
+
+// ProcessingGraceUntilGT applies the GT predicate on the "processing_grace_until" field.
+func ProcessingGraceUntilGT(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldProcessingGraceUntil, v))
+}
+
+// ProcessingGraceUntilGTE applies the GTE predicate on the "processing_grace_until" field.
+func ProcessingGraceUntilGTE(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldProcessingGraceUntil, v))
+}
+
+// ProcessingGraceUntilLT applies the LT predicate on the "processing_grace_until" field.
+func ProcessingGraceUntilLT(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldProcessingGraceUntil, v))
+}
+
+// ProcessingGraceUntilLTE applies the LTE predicate on the "processing_grace_until" field.
+func ProcessingGraceUntilLTE(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldProcessingGraceUntil, v))
+}
+
+// ProcessingGraceUntilIsNil applies the IsNil predicate on the "processing_grace_until" field.
+func ProcessingGraceUntilIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldProcessingGraceUntil))
+}
+
+// ProcessingGraceUntilNotNil applies the NotNil predicate on the "processing_grace_until" field.
+func ProcessingGraceUntilNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldProcessingGraceUntil))
+}
+
+// LastPromptDetectedEQ applies the EQ predicate on the "last_prompt_detected" field.
+func LastPromptDetectedEQ(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldLastPromptDetected, v))
+}
+
+// LastPromptDetectedNEQ applies the NEQ predicate on the "last_prompt_detected" field.
+func LastPromptDetectedNEQ(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldLastPromptDetected, v))
+}
+
+// LastPromptDetectedIn applies the In predicate on the "last_prompt_detected" field.
+func LastPromptDetectedIn(vs ...time.Time) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldLastPromptDetected, vs...))
+}
+
+// LastPromptDetectedNotIn applies the NotIn predicate on the "last_prompt_detected" field.
+func LastPromptDetectedNotIn(vs ...time.Time) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldLastPromptDetected, vs...))
+}
+
+// LastPromptDetectedGT applies the GT predicate on the "last_prompt_detected" field.
+func LastPromptDetectedGT(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldLastPromptDetected, v))
+}
+
+// LastPromptDetectedGTE applies the GTE predicate on the "last_prompt_detected" field.
+func LastPromptDetectedGTE(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldLastPromptDetected, v))
+}
+
+// LastPromptDetectedLT applies the LT predicate on the "last_prompt_detected" field.
+func LastPromptDetectedLT(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldLastPromptDetected, v))
+}
+
+// LastPromptDetectedLTE applies the LTE predicate on the "last_prompt_detected" field.
+func LastPromptDetectedLTE(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldLastPromptDetected, v))
+}
+
+// LastPromptDetectedIsNil applies the IsNil predicate on the "last_prompt_detected" field.
+func LastPromptDetectedIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldLastPromptDetected))
+}
+
+// LastPromptDetectedNotNil applies the NotNil predicate on the "last_prompt_detected" field.
+func LastPromptDetectedNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldLastPromptDetected))
+}
+
+// LastPromptSignatureEQ applies the EQ predicate on the "last_prompt_signature" field.
+func LastPromptSignatureEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldLastPromptSignature, v))
+}
+
+// LastPromptSignatureNEQ applies the NEQ predicate on the "last_prompt_signature" field.
+func LastPromptSignatureNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldLastPromptSignature, v))
+}
+
+// LastPromptSignatureIn applies the In predicate on the "last_prompt_signature" field.
+func LastPromptSignatureIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldLastPromptSignature, vs...))
+}
+
+// LastPromptSignatureNotIn applies the NotIn predicate on the "last_prompt_signature" field.
+func LastPromptSignatureNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldLastPromptSignature, vs...))
+}
+
+// LastPromptSignatureGT applies the GT predicate on the "last_prompt_signature" field.
+func LastPromptSignatureGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldLastPromptSignature, v))
+}
+
+// LastPromptSignatureGTE applies the GTE predicate on the "last_prompt_signature" field.
+func LastPromptSignatureGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldLastPromptSignature, v))
+}
+
+// LastPromptSignatureLT applies the LT predicate on the "last_prompt_signature" field.
+func LastPromptSignatureLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldLastPromptSignature, v))
+}
+
+// LastPromptSignatureLTE applies the LTE predicate on the "last_prompt_signature" field.
+func LastPromptSignatureLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldLastPromptSignature, v))
+}
+
+// LastPromptSignatureContains applies the Contains predicate on the "last_prompt_signature" field.
+func LastPromptSignatureContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldLastPromptSignature, v))
+}
+
+// LastPromptSignatureHasPrefix applies the HasPrefix predicate on the "last_prompt_signature" field.
+func LastPromptSignatureHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldLastPromptSignature, v))
+}
+
+// LastPromptSignatureHasSuffix applies the HasSuffix predicate on the "last_prompt_signature" field.
+func LastPromptSignatureHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldLastPromptSignature, v))
+}
+
+// LastPromptSignatureIsNil applies the IsNil predicate on the "last_prompt_signature" field.
+func LastPromptSignatureIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldLastPromptSignature))
+}
+
+// LastPromptSignatureNotNil applies the NotNil predicate on the "last_prompt_signature" field.
+func LastPromptSignatureNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldLastPromptSignature))
+}
+
+// LastPromptSignatureEqualFold applies the EqualFold predicate on the "last_prompt_signature" field.
+func LastPromptSignatureEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldLastPromptSignature, v))
+}
+
+// LastPromptSignatureContainsFold applies the ContainsFold predicate on the "last_prompt_signature" field.
+func LastPromptSignatureContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldLastPromptSignature, v))
 }
 
 // HasWorktree applies the HasEdge predicate on the "worktree" edge.

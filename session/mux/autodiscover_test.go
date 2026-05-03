@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 func TestAutoDiscoveryCreation(t *testing.T) {
@@ -71,10 +73,7 @@ func TestAutoDiscoveryStartStop(t *testing.T) {
 		t.Fatalf("Failed to start auto-discovery: %v", err)
 	}
 
-	// Let it run briefly
-	time.Sleep(100 * time.Millisecond)
-
-	// Cancel context
+	// Let it run briefly then cancel
 	cancel()
 
 	// Wait for shutdown
@@ -151,8 +150,10 @@ func TestAutoDiscoveryCallbacks(t *testing.T) {
 		t.Fatalf("Failed to start: %v", err)
 	}
 
-	// Initial scan should happen
-	time.Sleep(200 * time.Millisecond)
+	// Initial scan should happen; callback is optional (no sessions may exist)
+	_ = wait.WaitForCondition(func() bool {
+		return callbackCalled
+	}, wait.WaitConfig{Timeout: 2 * time.Second, PollInterval: 50 * time.Millisecond, Description: "callback"})
 
 	// Callback might not be called if no sessions exist, that's OK
 	t.Logf("Callback called: %v", callbackCalled)

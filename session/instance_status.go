@@ -74,10 +74,6 @@ func (ism *InstanceStatusManager) GetStatus(instance *Instance) InstanceStatusIn
 	controller, exists := ism.controllers[instance.Title]
 	ism.mu.RUnlock()
 
-	// Debug logging to diagnose controller detection issue
-	log.DebugLog.Printf("[GetStatus] Session '%s': exists=%v, controller!=nil=%v, IsStarted=%v",
-		instance.Title, exists, controller != nil, exists && controller != nil && controller.IsStarted())
-
 	info := InstanceStatusInfo{
 		BasicStatus:        instance.Status,
 		IsControllerActive: exists && controller != nil && controller.IsStarted(),

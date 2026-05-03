@@ -9,10 +9,36 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 )
+
+// runtimeLevel is the global minimum log level, adjustable at runtime without restart.
+// Both the file and console streams honour this value via levelFilterWriter.
+var runtimeLevel atomic.Int32
+
+func init() {
+	runtimeLevel.Store(int32(INFO))
+}
+
+// SetRuntimeLevel changes the minimum log level for all output streams immediately.
+// Safe to call from any goroutine. Takes effect on the next log call.
+func SetRuntimeLevel(level LogLevel) {
+	runtimeLevel.Store(int32(level))
+}
+
+// GetRuntimeLevel returns the current minimum log level.
+func GetRuntimeLevel() LogLevel {
+	return LogLevel(runtimeLevel.Load())
+}
+
+// IsDebugEnabled returns true when the runtime level is DEBUG.
+// Use this to gate expensive format-string construction before calling DebugLog.Printf.
+func IsDebugEnabled() bool {
+	return LogLevel(runtimeLevel.Load()) <= DEBUG
+}
 
 // getInstanceIdentifier returns a unique identifier for this process instance
 // This helps differentiate log messages when multiple instances are running
@@ -127,11 +153,13 @@ func DefaultLogConfig() *LogConfig {
 		StructuredLogs: false, // Default to traditional logging
 		PrettyLogs:     false, // Default to compact JSON
 
-		// Dual-stream defaults (production settings)
+		// Dual-stream defaults (production settings).
+		// Debug logging is disabled by default; enable via SetRuntimeLevel(DEBUG)
+		// or the debug menu in the web UI.
 		ConsoleEnabled: true,
-		ConsoleLevel:   INFO, // Show INFO and above on console
+		ConsoleLevel:   INFO,
 		FileEnabled:    true,
-		FileLevel:      DEBUG, // Log everything to file
+		FileLevel:      INFO,
 	}
 }
 
@@ -534,29 +562,30 @@ func FatalS(message string, fields ...map[string]interface{}) {
 	}
 }
 
-// levelFilterWriter wraps an io.Writer and filters out logs below a certain level
+// levelFilterWriter wraps an io.Writer and filters out logs below the runtime level.
+// The static initialLevel is the level of the log messages that flow through this
+// writer (e.g. DEBUG for DebugLog, INFO for InfoLog). On each Write it checks whether
+// the global runtimeLevel allows that level through.
 type levelFilterWriter struct {
-	writer   io.Writer
-	level    LogLevel
-	logLevel LogLevel // The level of logs this writer should handle
+	writer       io.Writer
+	messageLevel LogLevel // the level of the messages routed through this writer (static)
 }
 
-// Write implements io.Writer interface with level filtering
+// Write passes the log line through only when the global runtime level allows it.
 func (w *levelFilterWriter) Write(p []byte) (n int, err error) {
-	// Only write if the log level is at or above the configured level
-	if w.logLevel >= w.level {
+	if w.messageLevel >= LogLevel(runtimeLevel.Load()) {
 		return w.writer.Write(p)
 	}
-	// Pretend we wrote the data but discard it
 	return len(p), nil
 }
 
-// newLevelFilterWriter creates a writer that only passes through logs at or above the specified level
-func newLevelFilterWriter(writer io.Writer, minLevel LogLevel, logLevel LogLevel) io.Writer {
+// newLevelFilterWriter creates a writer that only passes through messages at or above
+// the global runtime level. minLevel is ignored — kept for API compatibility during
+// the transition; the runtime atomic is the single source of truth.
+func newLevelFilterWriter(writer io.Writer, _ LogLevel, logLevel LogLevel) io.Writer {
 	return &levelFilterWriter{
-		writer:   writer,
-		level:    minLevel,
-		logLevel: logLevel,
+		writer:       writer,
+		messageLevel: logLevel,
 	}
 }
 
@@ -694,6 +723,13 @@ func initializeWithConfig(daemon bool, cfg *LogConfig) {
 		}
 		logFilePath = logFileName
 	}
+
+	// Seed the runtime level from config (takes the lower/more-verbose of file and console).
+	configLevel := cfg.FileLevel
+	if cfg.ConsoleLevel < configLevel {
+		configLevel = cfg.ConsoleLevel
+	}
+	runtimeLevel.Store(int32(configLevel))
 
 	// Set log format to include timestamp and file/line number
 	log.SetFlags(log.LstdFlags | log.Lshortfile)

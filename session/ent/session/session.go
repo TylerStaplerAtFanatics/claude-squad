@@ -68,6 +68,14 @@ const (
 	FieldInitialPrompt = "initial_prompt"
 	// FieldOneShot holds the string denoting the one_shot field in the database.
 	FieldOneShot = "one_shot"
+	// FieldLastUserResponse holds the string denoting the last_user_response field in the database.
+	FieldLastUserResponse = "last_user_response"
+	// FieldProcessingGraceUntil holds the string denoting the processing_grace_until field in the database.
+	FieldProcessingGraceUntil = "processing_grace_until"
+	// FieldLastPromptDetected holds the string denoting the last_prompt_detected field in the database.
+	FieldLastPromptDetected = "last_prompt_detected"
+	// FieldLastPromptSignature holds the string denoting the last_prompt_signature field in the database.
+	FieldLastPromptSignature = "last_prompt_signature"
 	// EdgeWorktree holds the string denoting the worktree edge name in mutations.
 	EdgeWorktree = "worktree"
 	// EdgeDiffStats holds the string denoting the diff_stats edge name in mutations.
@@ -145,6 +153,10 @@ var Columns = []string{
 	FieldMcpServerURL,
 	FieldInitialPrompt,
 	FieldOneShot,
+	FieldLastUserResponse,
+	FieldProcessingGraceUntil,
+	FieldLastPromptDetected,
+	FieldLastPromptSignature,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "sessions"
@@ -338,6 +350,26 @@ func ByInitialPrompt(opts ...sql.OrderTermOption) OrderOption {
 // ByOneShot orders the results by the one_shot field.
 func ByOneShot(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOneShot, opts...).ToFunc()
+}
+
+// ByLastUserResponse orders the results by the last_user_response field.
+func ByLastUserResponse(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastUserResponse, opts...).ToFunc()
+}
+
+// ByProcessingGraceUntil orders the results by the processing_grace_until field.
+func ByProcessingGraceUntil(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProcessingGraceUntil, opts...).ToFunc()
+}
+
+// ByLastPromptDetected orders the results by the last_prompt_detected field.
+func ByLastPromptDetected(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastPromptDetected, opts...).ToFunc()
+}
+
+// ByLastPromptSignature orders the results by the last_prompt_signature field.
+func ByLastPromptSignature(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastPromptSignature, opts...).ToFunc()
 }
 
 // ByWorktreeField orders the results by worktree field.

@@ -4,6 +4,8 @@ package tmux_test
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"sync"
@@ -11,13 +13,15 @@ import (
 	"time"
 
 	"github.com/tstapler/stapler-squad/session/tmux"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // newIsolatedSocket returns a unique tmux socket name for the test and registers
 // cleanup that kills the isolated server when the test finishes.
 func newIsolatedSocket(t *testing.T) string {
 	t.Helper()
-	socket := "integration_" + t.Name()
+	// Embed PID so TestMain watchdog can reap this socket on SIGKILL.
+	socket := fmt.Sprintf("integration_%d_%s", os.Getpid(), t.Name())
 	// Replace characters that are invalid in tmux socket names.
 	safeSocket := ""
 	for _, c := range socket {
@@ -62,18 +66,13 @@ func startIsolatedRegistry(t *testing.T) (*tmux.TmuxServerRegistry, string) {
 	return registry, socket
 }
 
-// pollUntil polls fn every 5 ms until it returns true or the deadline expires.
-// It calls t.Fatal with msg if the deadline is exceeded.
+// pollUntil polls fn until it returns true or the timeout expires.
+// It calls t.Fatal with msg if the timeout is exceeded.
 func pollUntil(t *testing.T, timeout time.Duration, msg string, fn func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if fn() {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
+	if err := wait.WaitForCondition(fn, wait.WaitConfig{Timeout: timeout, PollInterval: 5 * time.Millisecond, Description: msg}); err != nil {
+		t.Fatal(msg)
 	}
-	t.Fatal(msg)
 }
 
 // Test 1: Registry starts and becomes healthy within 2 seconds.

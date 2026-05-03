@@ -73,11 +73,11 @@ type ReviewQueuePoller struct {
 	// `tmux list-panes -a` call (fetched once per checkSessions tick) is the change
 	// signal. A capture-pane subprocess is spawned only when that timestamp advances.
 	// A 30s TTL acts as a safety fallback when list-panes is unavailable.
-	cacheMu               sync.Mutex
-	lastSeenActivity      map[string]time.Time // per-session: last IdleDetector.lastActivity seen
-	lastSeenPaneActivity  map[string]time.Time // per-session: last #{pane_last_activity} seen
-	cachedContent         map[string]string    // per-session: content from last Preview() call
-	lastPreviewTime       map[string]time.Time // per-session: fallback TTL timestamp
+	cacheMu              sync.Mutex
+	lastSeenActivity     map[string]time.Time // per-session: last IdleDetector.lastActivity seen
+	lastSeenPaneActivity map[string]time.Time // per-session: last #{pane_last_activity} seen
+	cachedContent        map[string]string    // per-session: content from last Preview() call
+	lastPreviewTime      map[string]time.Time // per-session: fallback TTL timestamp
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -105,16 +105,16 @@ func NewReviewQueuePoller(queue *ReviewQueue, statusManager *InstanceStatusManag
 // The storage parameter is optional (can be nil) but required for persisting LastAddedToQueue timestamps.
 func NewReviewQueuePollerWithConfig(queue *ReviewQueue, statusManager *InstanceStatusManager, storage *Storage, config ReviewQueuePollerConfig) *ReviewQueuePoller {
 	return &ReviewQueuePoller{
-		queue:                 queue,
-		statusManager:         statusManager,
-		storage:               storage,
-		instances:             make([]*Instance, 0),
-		config:                config,
-		statusDetector:        detection.NewStatusDetector(),
-		lastSeenActivity:      make(map[string]time.Time),
-		lastSeenPaneActivity:  make(map[string]time.Time),
-		cachedContent:         make(map[string]string),
-		lastPreviewTime:       make(map[string]time.Time),
+		queue:                queue,
+		statusManager:        statusManager,
+		storage:              storage,
+		instances:            make([]*Instance, 0),
+		config:               config,
+		statusDetector:       detection.NewStatusDetector(),
+		lastSeenActivity:     make(map[string]time.Time),
+		lastSeenPaneActivity: make(map[string]time.Time),
+		cachedContent:        make(map[string]string),
+		lastPreviewTime:      make(map[string]time.Time),
 	}
 }
 
@@ -276,7 +276,6 @@ func (rqp *ReviewQueuePoller) pollLoop() {
 		case <-actCh:
 			// Snap back to fast interval on external activity signal.
 			if interval != fastInterval {
-				log.DebugLog.Printf("[ReviewQueuePoller] Activity signal received — snapping to fast interval (%s)", fastInterval)
 				interval = fastInterval
 				if !timer.Stop() {
 					select {
@@ -307,9 +306,6 @@ func (rqp *ReviewQueuePoller) pollLoop() {
 
 			// Adaptive interval: back off when queue is empty and activity channel is wired.
 			if actCh != nil && len(rqp.queue.List()) == 0 {
-				if interval != slowInterval {
-					log.DebugLog.Printf("[ReviewQueuePoller] Queue empty — backing off to slow interval (%s)", slowInterval)
-				}
 				interval = slowInterval
 			} else {
 				interval = fastInterval
@@ -553,8 +549,6 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 			rqp.cacheMu.Unlock()
 
 			if lastActivity.Equal(lastSeen) {
-				log.DebugLog.Printf("[ReviewQueue] Session '%s': content cache hit (lastActivity=%s, %d bytes)",
-					inst.Title, lastActivity.Format("15:04:05.000"), len(cached))
 				return cached
 			}
 		}
@@ -570,15 +564,10 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 			tmuxName := inst.GetTmuxSessionName()
 			if currentActivity, ok := paneActivity[tmuxName]; ok {
 				if !currentActivity.IsZero() && currentActivity.Equal(lastSeenPane) {
-					log.DebugLog.Printf("[ReviewQueue] Session '%s': pane activity cache hit (activity=%s, %d bytes)",
-						inst.Title, currentActivity.Format("15:04:05.000"), len(cached))
 					return cached
 				}
 			}
 		} else if !lastCall.IsZero() && time.Since(lastCall) < previewCacheTTL {
-			// Fallback: TTL cache when list-panes unavailable.
-			log.DebugLog.Printf("[ReviewQueue] Session '%s': TTL cache hit (age=%s, %d bytes)",
-				inst.Title, time.Since(lastCall).Round(time.Millisecond), len(cached))
 			return cached
 		}
 	}
@@ -613,10 +602,6 @@ func (rqp *ReviewQueuePoller) getContent(inst *Instance, statusInfo InstanceStat
 // checkSession checks a single session and adds/removes from queue as needed.
 // paneActivity is the snapshot from batchPaneActivity(); nil falls back to TTL cache.
 func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[string]time.Time) {
-	if inst.LastMeaningfulOutput.IsZero() {
-		log.DebugLog.Printf("[ReviewQueue] Session '%s': LastMeaningfulOutput is zero — processing without output timestamp", inst.Title)
-	}
-
 	// Skip paused, stopped, or unstarted sessions
 	if !inst.Started() || inst.Paused() || inst.Status == Stopped {
 		return

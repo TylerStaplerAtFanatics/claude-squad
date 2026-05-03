@@ -84,6 +84,18 @@ func (Session) Fields() []ent.Field {
 		field.Bool("one_shot").
 			Default(false).
 			Comment("When true, runs claude in -p mode; session exits after task completes."),
+		// Review-queue interaction state — persisted so these survive restarts.
+		field.Time("last_user_response").
+			Optional().
+			Nillable(),
+		field.Time("processing_grace_until").
+			Optional().
+			Nillable(),
+		field.Time("last_prompt_detected").
+			Optional().
+			Nillable(),
+		field.String("last_prompt_signature").
+			Optional(),
 	}
 }
 

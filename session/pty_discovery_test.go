@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/tstapler/stapler-squad/session/tmux"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // fakeSessionLister is a test double for tmux.SessionLister.
@@ -345,17 +346,18 @@ func TestPTYDiscovery_StartStop(t *testing.T) {
 	// Start monitoring
 	pd.Start()
 
-	// Give it a moment to start
-	time.Sleep(100 * time.Millisecond)
-
 	// Stop monitoring
 	pd.Stop()
 
-	// Verify stop channel is closed
-	select {
-	case <-pd.stopCh:
-		// Good, channel is closed
-	case <-time.After(100 * time.Millisecond):
+	// Verify stop channel is closed by polling
+	if err := wait.WaitForCondition(func() bool {
+		select {
+		case <-pd.stopCh:
+			return true
+		default:
+			return false
+		}
+	}, wait.FastWaitConfig()); err != nil {
 		t.Error("Stop did not close stopCh")
 	}
 }

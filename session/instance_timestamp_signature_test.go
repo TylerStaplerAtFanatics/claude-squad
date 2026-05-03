@@ -1,9 +1,11 @@
 package session
 
 import (
-	"github.com/tstapler/stapler-squad/session/tmux"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/session/tmux"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // TestUpdateTerminalTimestamps_SignatureBasedPreservation verifies that timestamps
@@ -40,9 +42,6 @@ func TestUpdateTerminalTimestamps_SignatureBasedPreservation(t *testing.T) {
 		t.Fatal("Signature should be set after first update")
 	}
 
-	// Wait a bit to ensure timestamps would differ if updated
-	time.Sleep(50 * time.Millisecond)
-
 	// Test 1: Update with SAME content - timestamp should NOT change
 	instance.UpdateTerminalTimestamps(unchangedContent, false)
 
@@ -58,12 +57,15 @@ func TestUpdateTerminalTimestamps_SignatureBasedPreservation(t *testing.T) {
 			firstSignature, instance.LastOutputSignature)
 	}
 
-	// Wait again
-	time.Sleep(50 * time.Millisecond)
-
 	// Test 2: Update with DIFFERENT content - timestamp SHOULD change
 	changedContent := "Hello, world!\nThis is CHANGED terminal content\nNew stuff here!"
 	instance.UpdateTerminalTimestamps(changedContent, false)
+
+	if err := wait.WaitForCondition(func() bool {
+		return instance.LastMeaningfulOutput.After(firstUpdateTime)
+	}, wait.FastWaitConfig()); err != nil {
+		t.Error("LastMeaningfulOutput should be updated when content changes")
+	}
 
 	if !instance.LastMeaningfulOutput.After(firstUpdateTime) {
 		t.Error("LastMeaningfulOutput should be updated when content changes")
@@ -106,9 +108,6 @@ func TestPreview_PreservesHistoricalTimestamps(t *testing.T) {
 	// Verify timestamp was set
 	initialTimestamp := instance.LastMeaningfulOutput
 
-	// Wait to ensure timestamps would differ if updated
-	time.Sleep(50 * time.Millisecond)
-
 	// Simulate app restart + Preview() call with SAME content
 	// (This is what happens in review_queue_poller.go refreshAllSessionsInQueue)
 	instance.UpdateTerminalTimestamps(existingContent, false)
@@ -150,8 +149,6 @@ func TestForceUpdate_SignatureChangeDetection(t *testing.T) {
 	initialTimestamp := instance.LastMeaningfulOutput
 	initialSignature := instance.LastOutputSignature
 
-	time.Sleep(50 * time.Millisecond)
-
 	// Test 1: forceUpdate=true with SAME content should NOT update timestamp
 	// (signature checking is still active in forceUpdate path)
 	instance.UpdateTerminalTimestamps(initialContent, true)
@@ -164,11 +161,15 @@ func TestForceUpdate_SignatureChangeDetection(t *testing.T) {
 		t.Error("Signature should remain unchanged")
 	}
 
-	time.Sleep(50 * time.Millisecond)
-
 	// Test 2: forceUpdate=true with DIFFERENT content SHOULD update timestamp
 	changedContent := "Changed terminal content"
 	instance.UpdateTerminalTimestamps(changedContent, true)
+
+	if err := wait.WaitForCondition(func() bool {
+		return instance.LastMeaningfulOutput.After(initialTimestamp)
+	}, wait.FastWaitConfig()); err != nil {
+		t.Error("forceUpdate=true should update timestamp when content changes")
+	}
 
 	if !instance.LastMeaningfulOutput.After(initialTimestamp) {
 		t.Error("forceUpdate=true should update timestamp when content changes")

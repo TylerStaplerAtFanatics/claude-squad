@@ -55,6 +55,7 @@ interface DebugMenuProps {
 
 export function DebugMenu({ isOpen, onClose }: DebugMenuProps) {
   const [terminalDebug, setTerminalDebug] = useState(false);
+  const [serverDebugLog, setServerDebugLog] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [notificationPermission, setNotificationPermission] = useState<
     NotificationPermission | "unsupported"
@@ -77,7 +78,7 @@ export function DebugMenu({ isOpen, onClose }: DebugMenuProps) {
     clientRef.current = createClient(SessionService, transport);
   }, []);
 
-  // Load initial state from localStorage
+  // Load initial state from localStorage and server
   useEffect(() => {
     if (typeof window !== "undefined") {
       const terminalValue = localStorage.getItem("debug-terminal") === "true";
@@ -93,7 +94,34 @@ export function DebugMenu({ isOpen, onClose }: DebugMenuProps) {
         setNotificationPermission("unsupported");
       }
     }
+
+    // Fetch current server log level
+    if (isOpen) {
+      fetch("/api/debug/log-level")
+        .then((r) => r.json())
+        .then((data: { level: string }) => {
+          setServerDebugLog(data.level === "DEBUG");
+        })
+        .catch(() => {/* ignore — server may not be running with debug endpoint */});
+    }
   }, [isOpen]);
+
+  const handleServerDebugLogToggle = async () => {
+    const newLevel = serverDebugLog ? "INFO" : "DEBUG";
+    try {
+      const response = await fetch("/api/debug/log-level", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level: newLevel }),
+      });
+      if (response.ok) {
+        setServerDebugLog(!serverDebugLog);
+        console.log(`Server log level set to ${newLevel}`);
+      }
+    } catch (err) {
+      console.error("Failed to set server log level:", err);
+    }
+  };
 
   const handleTerminalDebugToggle = () => {
     const newValue = !terminalDebug;
@@ -221,6 +249,23 @@ export function DebugMenu({ isOpen, onClose }: DebugMenuProps) {
 
           <div className={section}>
             <h3 className={sectionTitle}>Logging</h3>
+
+            <label className={toggleRow}>
+              <div className={toggleLabel}>
+                <span className={toggleName}>Server Debug Logging</span>
+                <span className={toggleDescription}>
+                  Enable verbose DEBUG logs on the server (persists until restart)
+                </span>
+              </div>
+              <button
+                className={`${toggle} ${serverDebugLog ? toggleOn : ""}`}
+                onClick={handleServerDebugLogToggle}
+                role="switch"
+                aria-checked={serverDebugLog}
+              >
+                <span className={toggleSlider} />
+              </button>
+            </label>
 
             <label className={toggleRow}>
               <div className={toggleLabel}>

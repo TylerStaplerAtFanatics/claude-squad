@@ -5,6 +5,7 @@ import (
 	"time"
 
 	gitignore "github.com/go-git/go-git/v5/plumbing/format/gitignore"
+	"github.com/tstapler/stapler-squad/testutil"
 )
 
 func makePatterns(lines ...string) []gitignore.Pattern {
@@ -35,11 +36,11 @@ func TestGitignoreCache_MissOnTTLExpiry(t *testing.T) {
 	c := NewGitignoreCache(10, ttl)
 	c.Put("root:/some/dir", makePatterns("*.log"), time.Now())
 
-	// Wait for TTL to expire.
-	time.Sleep(ttl + 5*time.Millisecond)
-
-	_, ok := c.Get("root:/some/dir")
-	if ok {
+	// Poll until the TTL has expired and Get returns a miss.
+	if err := testutil.WaitForCondition(func() bool {
+		_, ok := c.Get("root:/some/dir")
+		return !ok
+	}, testutil.FastWaitConfig()); err != nil {
 		t.Fatal("expected cache miss after TTL expiry, got hit")
 	}
 }
@@ -52,8 +53,8 @@ func TestGitignoreCache_Eviction(t *testing.T) {
 	for i := 0; i < maxSize; i++ {
 		key := string(rune('a'+i)) + ":/dir"
 		c.Put(key, makePatterns("*.tmp"), time.Now())
-		// Small sleep so cachedAt timestamps are strictly ordered.
-		time.Sleep(1 * time.Millisecond)
+		// Small delay so cachedAt timestamps are strictly ordered.
+		<-time.After(1 * time.Millisecond)
 	}
 
 	// Verify all entries are present.

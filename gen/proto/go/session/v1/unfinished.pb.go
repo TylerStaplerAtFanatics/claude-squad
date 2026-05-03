@@ -1016,6 +1016,110 @@ func (x *UpdateUnfinishedWorkConfigResponse) GetConfig() *UnfinishedWorkConfig {
 	return nil
 }
 
+type GetWorktreeDiffRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RepoPath      string                 `protobuf:"bytes,1,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
+	Branch        string                 `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWorktreeDiffRequest) Reset() {
+	*x = GetWorktreeDiffRequest{}
+	mi := &file_session_v1_unfinished_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWorktreeDiffRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWorktreeDiffRequest) ProtoMessage() {}
+
+func (x *GetWorktreeDiffRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_session_v1_unfinished_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWorktreeDiffRequest.ProtoReflect.Descriptor instead.
+func (*GetWorktreeDiffRequest) Descriptor() ([]byte, []int) {
+	return file_session_v1_unfinished_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *GetWorktreeDiffRequest) GetRepoPath() string {
+	if x != nil {
+		return x.RepoPath
+	}
+	return ""
+}
+
+func (x *GetWorktreeDiffRequest) GetBranch() string {
+	if x != nil {
+		return x.Branch
+	}
+	return ""
+}
+
+type GetWorktreeDiffResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DiffStats     *DiffStats             `protobuf:"bytes,1,opt,name=diff_stats,json=diffStats,proto3" json:"diff_stats,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWorktreeDiffResponse) Reset() {
+	*x = GetWorktreeDiffResponse{}
+	mi := &file_session_v1_unfinished_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWorktreeDiffResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWorktreeDiffResponse) ProtoMessage() {}
+
+func (x *GetWorktreeDiffResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_session_v1_unfinished_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWorktreeDiffResponse.ProtoReflect.Descriptor instead.
+func (*GetWorktreeDiffResponse) Descriptor() ([]byte, []int) {
+	return file_session_v1_unfinished_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetWorktreeDiffResponse) GetDiffStats() *DiffStats {
+	if x != nil {
+		return x.DiffStats
+	}
+	return nil
+}
+
+func (x *GetWorktreeDiffResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 var File_session_v1_unfinished_proto protoreflect.FileDescriptor
 
 const file_session_v1_unfinished_proto_rawDesc = "" +
@@ -1069,7 +1173,14 @@ const file_session_v1_unfinished_proto_rawDesc = "" +
 	"!UpdateUnfinishedWorkConfigRequest\x128\n" +
 	"\x06config\x18\x01 \x01(\v2 .session.v1.UnfinishedWorkConfigR\x06config\"^\n" +
 	"\"UpdateUnfinishedWorkConfigResponse\x128\n" +
-	"\x06config\x18\x01 \x01(\v2 .session.v1.UnfinishedWorkConfigR\x06config2\xa6\b\n" +
+	"\x06config\x18\x01 \x01(\v2 .session.v1.UnfinishedWorkConfigR\x06config\"M\n" +
+	"\x16GetWorktreeDiffRequest\x12\x1b\n" +
+	"\trepo_path\x18\x01 \x01(\tR\brepoPath\x12\x16\n" +
+	"\x06branch\x18\x02 \x01(\tR\x06branch\"e\n" +
+	"\x17GetWorktreeDiffResponse\x124\n" +
+	"\n" +
+	"diff_stats\x18\x01 \x01(\v2\x15.session.v1.DiffStatsR\tdiffStats\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error2\x84\t\n" +
 	"\x15UnfinishedWorkService\x12e\n" +
 	"\x12ListUnfinishedWork\x12%.session.v1.ListUnfinishedWorkRequest\x1a&.session.v1.ListUnfinishedWorkResponse\"\x00\x12b\n" +
 	"\x13WatchUnfinishedWork\x12&.session.v1.WatchUnfinishedWorkRequest\x1a\x1f.session.v1.UnfinishedWorkEvent\"\x000\x01\x12e\n" +
@@ -1078,6 +1189,7 @@ const file_session_v1_unfinished_proto_rawDesc = "" +
 	"\x11UndismissWorktree\x12$.session.v1.UndismissWorktreeRequest\x1a%.session.v1.UndismissWorktreeResponse\"\x00\x12Y\n" +
 	"\x0eSnoozeWorktree\x12!.session.v1.SnoozeWorktreeRequest\x1a\".session.v1.SnoozeWorktreeResponse\"\x00\x12k\n" +
 	"\x14GetWorktreeAISummary\x12'.session.v1.GetWorktreeAISummaryRequest\x1a(.session.v1.GetWorktreeAISummaryResponse\"\x00\x12\\\n" +
+	"\x0fGetWorktreeDiff\x12\".session.v1.GetWorktreeDiffRequest\x1a#.session.v1.GetWorktreeDiffResponse\"\x00\x12\\\n" +
 	"\x0fQuickCommitPush\x12\".session.v1.QuickCommitPushRequest\x1a#.session.v1.QuickCommitPushResponse\"\x00\x12t\n" +
 	"\x17GetUnfinishedWorkConfig\x12*.session.v1.GetUnfinishedWorkConfigRequest\x1a+.session.v1.GetUnfinishedWorkConfigResponse\"\x00\x12}\n" +
 	"\x1aUpdateUnfinishedWorkConfig\x12-.session.v1.UpdateUnfinishedWorkConfigRequest\x1a..session.v1.UpdateUnfinishedWorkConfigResponse\"\x00B\xaf\x01\n" +
@@ -1097,7 +1209,7 @@ func file_session_v1_unfinished_proto_rawDescGZIP() []byte {
 	return file_session_v1_unfinished_proto_rawDescData
 }
 
-var file_session_v1_unfinished_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_session_v1_unfinished_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_session_v1_unfinished_proto_goTypes = []any{
 	(*ListUnfinishedWorkRequest)(nil),          // 0: session.v1.ListUnfinishedWorkRequest
 	(*ListUnfinishedWorkResponse)(nil),         // 1: session.v1.ListUnfinishedWorkResponse
@@ -1120,46 +1232,52 @@ var file_session_v1_unfinished_proto_goTypes = []any{
 	(*GetUnfinishedWorkConfigResponse)(nil),    // 18: session.v1.GetUnfinishedWorkConfigResponse
 	(*UpdateUnfinishedWorkConfigRequest)(nil),  // 19: session.v1.UpdateUnfinishedWorkConfigRequest
 	(*UpdateUnfinishedWorkConfigResponse)(nil), // 20: session.v1.UpdateUnfinishedWorkConfigResponse
-	(*UnfinishedWorktree)(nil),                 // 21: session.v1.UnfinishedWorktree
-	(*timestamppb.Timestamp)(nil),              // 22: google.protobuf.Timestamp
-	(*UnfinishedWorkConfig)(nil),               // 23: session.v1.UnfinishedWorkConfig
+	(*GetWorktreeDiffRequest)(nil),             // 21: session.v1.GetWorktreeDiffRequest
+	(*GetWorktreeDiffResponse)(nil),            // 22: session.v1.GetWorktreeDiffResponse
+	(*UnfinishedWorktree)(nil),                 // 23: session.v1.UnfinishedWorktree
+	(*timestamppb.Timestamp)(nil),              // 24: google.protobuf.Timestamp
+	(*UnfinishedWorkConfig)(nil),               // 25: session.v1.UnfinishedWorkConfig
+	(*DiffStats)(nil),                          // 26: session.v1.DiffStats
 }
 var file_session_v1_unfinished_proto_depIdxs = []int32{
-	21, // 0: session.v1.ListUnfinishedWorkResponse.worktrees:type_name -> session.v1.UnfinishedWorktree
-	22, // 1: session.v1.ListUnfinishedWorkResponse.last_scan:type_name -> google.protobuf.Timestamp
-	21, // 2: session.v1.UnfinishedWorkEvent.worktree_updated:type_name -> session.v1.UnfinishedWorktree
-	21, // 3: session.v1.UnfinishedWorkEvent.worktree_removed:type_name -> session.v1.UnfinishedWorktree
+	23, // 0: session.v1.ListUnfinishedWorkResponse.worktrees:type_name -> session.v1.UnfinishedWorktree
+	24, // 1: session.v1.ListUnfinishedWorkResponse.last_scan:type_name -> google.protobuf.Timestamp
+	23, // 2: session.v1.UnfinishedWorkEvent.worktree_updated:type_name -> session.v1.UnfinishedWorktree
+	23, // 3: session.v1.UnfinishedWorkEvent.worktree_removed:type_name -> session.v1.UnfinishedWorktree
 	4,  // 4: session.v1.UnfinishedWorkEvent.scan_completed:type_name -> session.v1.ScanCompleted
-	22, // 5: session.v1.ScanCompleted.completed_at:type_name -> google.protobuf.Timestamp
-	22, // 6: session.v1.ScanUnfinishedWorkResponse.scan_started_at:type_name -> google.protobuf.Timestamp
-	23, // 7: session.v1.GetUnfinishedWorkConfigResponse.config:type_name -> session.v1.UnfinishedWorkConfig
-	23, // 8: session.v1.UpdateUnfinishedWorkConfigRequest.config:type_name -> session.v1.UnfinishedWorkConfig
-	23, // 9: session.v1.UpdateUnfinishedWorkConfigResponse.config:type_name -> session.v1.UnfinishedWorkConfig
-	0,  // 10: session.v1.UnfinishedWorkService.ListUnfinishedWork:input_type -> session.v1.ListUnfinishedWorkRequest
-	2,  // 11: session.v1.UnfinishedWorkService.WatchUnfinishedWork:input_type -> session.v1.WatchUnfinishedWorkRequest
-	5,  // 12: session.v1.UnfinishedWorkService.ScanUnfinishedWork:input_type -> session.v1.ScanUnfinishedWorkRequest
-	7,  // 13: session.v1.UnfinishedWorkService.DismissWorktree:input_type -> session.v1.DismissWorktreeRequest
-	9,  // 14: session.v1.UnfinishedWorkService.UndismissWorktree:input_type -> session.v1.UndismissWorktreeRequest
-	11, // 15: session.v1.UnfinishedWorkService.SnoozeWorktree:input_type -> session.v1.SnoozeWorktreeRequest
-	13, // 16: session.v1.UnfinishedWorkService.GetWorktreeAISummary:input_type -> session.v1.GetWorktreeAISummaryRequest
-	15, // 17: session.v1.UnfinishedWorkService.QuickCommitPush:input_type -> session.v1.QuickCommitPushRequest
-	17, // 18: session.v1.UnfinishedWorkService.GetUnfinishedWorkConfig:input_type -> session.v1.GetUnfinishedWorkConfigRequest
-	19, // 19: session.v1.UnfinishedWorkService.UpdateUnfinishedWorkConfig:input_type -> session.v1.UpdateUnfinishedWorkConfigRequest
-	1,  // 20: session.v1.UnfinishedWorkService.ListUnfinishedWork:output_type -> session.v1.ListUnfinishedWorkResponse
-	3,  // 21: session.v1.UnfinishedWorkService.WatchUnfinishedWork:output_type -> session.v1.UnfinishedWorkEvent
-	6,  // 22: session.v1.UnfinishedWorkService.ScanUnfinishedWork:output_type -> session.v1.ScanUnfinishedWorkResponse
-	8,  // 23: session.v1.UnfinishedWorkService.DismissWorktree:output_type -> session.v1.DismissWorktreeResponse
-	10, // 24: session.v1.UnfinishedWorkService.UndismissWorktree:output_type -> session.v1.UndismissWorktreeResponse
-	12, // 25: session.v1.UnfinishedWorkService.SnoozeWorktree:output_type -> session.v1.SnoozeWorktreeResponse
-	14, // 26: session.v1.UnfinishedWorkService.GetWorktreeAISummary:output_type -> session.v1.GetWorktreeAISummaryResponse
-	16, // 27: session.v1.UnfinishedWorkService.QuickCommitPush:output_type -> session.v1.QuickCommitPushResponse
-	18, // 28: session.v1.UnfinishedWorkService.GetUnfinishedWorkConfig:output_type -> session.v1.GetUnfinishedWorkConfigResponse
-	20, // 29: session.v1.UnfinishedWorkService.UpdateUnfinishedWorkConfig:output_type -> session.v1.UpdateUnfinishedWorkConfigResponse
-	20, // [20:30] is the sub-list for method output_type
-	10, // [10:20] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	24, // 5: session.v1.ScanCompleted.completed_at:type_name -> google.protobuf.Timestamp
+	24, // 6: session.v1.ScanUnfinishedWorkResponse.scan_started_at:type_name -> google.protobuf.Timestamp
+	25, // 7: session.v1.GetUnfinishedWorkConfigResponse.config:type_name -> session.v1.UnfinishedWorkConfig
+	25, // 8: session.v1.UpdateUnfinishedWorkConfigRequest.config:type_name -> session.v1.UnfinishedWorkConfig
+	25, // 9: session.v1.UpdateUnfinishedWorkConfigResponse.config:type_name -> session.v1.UnfinishedWorkConfig
+	26, // 10: session.v1.GetWorktreeDiffResponse.diff_stats:type_name -> session.v1.DiffStats
+	0,  // 11: session.v1.UnfinishedWorkService.ListUnfinishedWork:input_type -> session.v1.ListUnfinishedWorkRequest
+	2,  // 12: session.v1.UnfinishedWorkService.WatchUnfinishedWork:input_type -> session.v1.WatchUnfinishedWorkRequest
+	5,  // 13: session.v1.UnfinishedWorkService.ScanUnfinishedWork:input_type -> session.v1.ScanUnfinishedWorkRequest
+	7,  // 14: session.v1.UnfinishedWorkService.DismissWorktree:input_type -> session.v1.DismissWorktreeRequest
+	9,  // 15: session.v1.UnfinishedWorkService.UndismissWorktree:input_type -> session.v1.UndismissWorktreeRequest
+	11, // 16: session.v1.UnfinishedWorkService.SnoozeWorktree:input_type -> session.v1.SnoozeWorktreeRequest
+	13, // 17: session.v1.UnfinishedWorkService.GetWorktreeAISummary:input_type -> session.v1.GetWorktreeAISummaryRequest
+	21, // 18: session.v1.UnfinishedWorkService.GetWorktreeDiff:input_type -> session.v1.GetWorktreeDiffRequest
+	15, // 19: session.v1.UnfinishedWorkService.QuickCommitPush:input_type -> session.v1.QuickCommitPushRequest
+	17, // 20: session.v1.UnfinishedWorkService.GetUnfinishedWorkConfig:input_type -> session.v1.GetUnfinishedWorkConfigRequest
+	19, // 21: session.v1.UnfinishedWorkService.UpdateUnfinishedWorkConfig:input_type -> session.v1.UpdateUnfinishedWorkConfigRequest
+	1,  // 22: session.v1.UnfinishedWorkService.ListUnfinishedWork:output_type -> session.v1.ListUnfinishedWorkResponse
+	3,  // 23: session.v1.UnfinishedWorkService.WatchUnfinishedWork:output_type -> session.v1.UnfinishedWorkEvent
+	6,  // 24: session.v1.UnfinishedWorkService.ScanUnfinishedWork:output_type -> session.v1.ScanUnfinishedWorkResponse
+	8,  // 25: session.v1.UnfinishedWorkService.DismissWorktree:output_type -> session.v1.DismissWorktreeResponse
+	10, // 26: session.v1.UnfinishedWorkService.UndismissWorktree:output_type -> session.v1.UndismissWorktreeResponse
+	12, // 27: session.v1.UnfinishedWorkService.SnoozeWorktree:output_type -> session.v1.SnoozeWorktreeResponse
+	14, // 28: session.v1.UnfinishedWorkService.GetWorktreeAISummary:output_type -> session.v1.GetWorktreeAISummaryResponse
+	22, // 29: session.v1.UnfinishedWorkService.GetWorktreeDiff:output_type -> session.v1.GetWorktreeDiffResponse
+	16, // 30: session.v1.UnfinishedWorkService.QuickCommitPush:output_type -> session.v1.QuickCommitPushResponse
+	18, // 31: session.v1.UnfinishedWorkService.GetUnfinishedWorkConfig:output_type -> session.v1.GetUnfinishedWorkConfigResponse
+	20, // 32: session.v1.UnfinishedWorkService.UpdateUnfinishedWorkConfig:output_type -> session.v1.UpdateUnfinishedWorkConfigResponse
+	22, // [22:33] is the sub-list for method output_type
+	11, // [11:22] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_session_v1_unfinished_proto_init() }
@@ -1179,7 +1297,7 @@ func file_session_v1_unfinished_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_session_v1_unfinished_proto_rawDesc), len(file_session_v1_unfinished_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

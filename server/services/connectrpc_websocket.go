@@ -625,9 +625,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 					errChan <- fmt.Errorf("failed to send output: %w", err)
 					return
 				}
-
-				log.DebugLog.Printf("[streamViaControlMode] Sent update (%d bytes) for session '%s'",
-					len(data), sessionID)
 			}
 		}
 	}()
@@ -923,9 +920,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 					errChan <- fmt.Errorf("failed to send output: %w", err)
 					return
 				}
-
-				log.DebugLog.Printf("[streamViaTmuxCapture] Sent output (%d bytes) for session '%s'",
-					len(content), sessionID)
 			}
 		}
 	}()
@@ -993,9 +987,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 					if err := sendInputToTmux(tmuxSessionName, input.Data); err != nil {
 						log.WarningLog.Printf("[streamViaTmuxCapture] Error sending input to tmux '%s': %v",
 							tmuxSessionName, err)
-					} else {
-						log.DebugLog.Printf("[streamViaTmuxCapture] Sent input (%d bytes) to tmux '%s'",
-							len(input.Data), tmuxSessionName)
 					}
 				}
 

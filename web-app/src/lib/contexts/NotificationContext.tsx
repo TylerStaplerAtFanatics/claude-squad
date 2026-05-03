@@ -42,6 +42,8 @@ interface NotificationContextValue {
   historyLoading: boolean;
   historyHasMore: boolean;
   loadMoreHistory: () => Promise<void>;
+  /** Re-fetch the full notification history from the server (e.g. after a stream reconnect). */
+  refreshHistory: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -265,6 +267,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         historyLoading: history.loading,
         historyHasMore: history.hasMore,
         loadMoreHistory: history.loadMore,
+        refreshHistory: history.refresh,
       }}
     >
       {children}

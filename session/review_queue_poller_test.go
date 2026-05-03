@@ -50,8 +50,6 @@ func TestReviewQueuePoller_PreservesTimestampWhenStatusUnchanged(t *testing.T) {
 
 	// Simulate multiple poll cycles with unchanged status
 	for i := 0; i < 5; i++ {
-		time.Sleep(50 * time.Millisecond)
-
 		// Simulate poller checking and re-adding with same status
 		// This is what the fixed poller does
 		detectedAt := time.Now()
@@ -93,7 +91,6 @@ func TestReviewQueuePoller_PreservesTimestampWhenStatusUnchanged(t *testing.T) {
 		finalItem.DetectedAt.Format(time.RFC3339))
 
 	// Now simulate a status change
-	time.Sleep(100 * time.Millisecond)
 	newReason := ReasonApprovalPending
 	newPriority := PriorityHigh
 	newContext := "Waiting for approval to proceed"
@@ -160,9 +157,6 @@ func TestReviewQueuePoller_ContextChangeUpdatesTimestamp(t *testing.T) {
 		Context:     "Idle for 5 minutes",
 	}
 	queue.Add(item1)
-
-	// Wait a bit to ensure time difference
-	time.Sleep(100 * time.Millisecond)
 
 	// Update with same reason/priority but different context
 	item2 := &ReviewItem{
@@ -577,11 +571,11 @@ func TestReviewQueuePoller_AcknowledgedSession_ResurfacesAfterNewOutput(t *testi
 // caused the bug and asserts the corrected condition applies universally.
 func TestReviewQueuePoller_AcknowledgmentSnooze_ConditionLogic(t *testing.T) {
 	cases := []struct {
-		name              string
-		shouldAdd         bool
-		priority          Priority
+		name               string
+		shouldAdd          bool
+		priority           Priority
 		isControllerActive bool
-		wantOldBypassSkip bool // true = old code SKIPPED the snooze (the bug)
+		wantOldBypassSkip  bool // true = old code SKIPPED the snooze (the bug)
 	}{
 		{
 			name:               "input-required medium-priority active-controller (the bug scenario)",

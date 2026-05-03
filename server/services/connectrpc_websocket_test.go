@@ -362,7 +362,7 @@ func TestWaitForQuiescenceReturnsOnTimeout(t *testing.T) {
 				case updates <- struct{}{}:
 				default:
 				}
-				time.Sleep(time.Millisecond)
+				<-time.After(time.Millisecond)
 			}
 		}
 	}()
@@ -409,7 +409,7 @@ func TestWaitForQuiescenceResetsTimerOnUpdates(t *testing.T) {
 	// Send 3 updates 100ms apart; each should reset the 200ms quiet timer.
 	go func() {
 		for i := 0; i < 3; i++ {
-			time.Sleep(updateInterval)
+			<-time.After(updateInterval)
 			updates <- struct{}{}
 		}
 	}()

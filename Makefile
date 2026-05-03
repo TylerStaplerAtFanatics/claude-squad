@@ -45,7 +45,7 @@ endif
 		touch $(ASDF_STAMP); \
 	fi
 
-.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service coverage-func coverage-gaps coverage-pkg coverage-refactor registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse build-tmux build-tmux-embed build-embedded clean-tmux init-submodules test-with-pinned-tmux
+.PHONY: help build test benchmark install-tools lint lint-custom analyze nil-safety security format fmt-check check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service coverage-func coverage-gaps coverage-pkg coverage-refactor registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse build-tmux build-tmux-embed build-embedded clean-tmux init-submodules test-with-pinned-tmux
 
 # Default target
 help: ## Show this help message
@@ -361,7 +361,7 @@ install-tools: ensure-tools ## Install all development and analysis tools
 	@echo "All tools installed successfully!"
 
 # Code quality and analysis
-lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with comprehensive checks
+lint: ensure-tools proto-gen server/web/dist lint-custom ## Run golangci-lint with comprehensive checks
 	@GOBIN=$$(go env GOBIN); \
 	if [ -z "$$GOBIN" ]; then GOBIN=$$(go env GOPATH)/bin; fi; \
 	if ! which golangci-lint >/dev/null 2>&1; then \
@@ -370,12 +370,43 @@ lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with comprehen
 	fi; \
 	golangci-lint run --enable=nilnil,staticcheck,ineffassign,govet
 
+HOTPOLLLOG_BIN := $(CURDIR)/bin/hotpolllog-lint
+
+lint-custom: $(HOTPOLLLOG_BIN) ## Run project-specific custom linters (hotpolllog: detect DebugLog in select-case hot loops)
+	@echo "Running custom lint: hotpolllog..."
+	@$(HOTPOLLLOG_BIN) ./...
+	@echo "hotpolllog: ok"
+
+$(HOTPOLLLOG_BIN):
+	@mkdir -p $(CURDIR)/bin
+	@cd tools/lint/hotpolllog && go build -o $(HOTPOLLLOG_BIN) ./cmd/hotpolllog
+
+lint-no-sleep-tests: ## ADR-003 audit: count time.Sleep calls in test files outside testutil/ (target: 0)
+	@violations=$$(grep -rn 'time\.Sleep(' --include='*_test.go' . \
+	  | grep -v 'vendor\|web-app\|third_party\|bin/\|testutil/' \
+	  | grep -v ':[[:space:]]*//' \
+	  | wc -l | tr -d ' '); \
+	echo "⏱  time.Sleep in test files (excluding testutil/): $$violations (target: 0, per ADR-003)"; \
+	if [ "$$violations" -gt 0 ]; then \
+	  grep -rn 'time\.Sleep(' --include='*_test.go' . | grep -v 'vendor\|web-app\|third_party\|bin/\|testutil/' | grep -v ':[[:space:]]*//' ; \
+	  exit 1; \
+	fi
+
 format: ensure-tools ## Format code with gofmt
 	go fmt ./...
 
+fmt-check: ## Verify all Go files are gofmt-formatted (non-destructive; exits 1 if any are not)
+	@UNFORMATTED=$$(gofmt -l . | grep -v vendor); \
+	if [ -n "$$UNFORMATTED" ]; then \
+		echo "The following files are not gofmt formatted:"; \
+		echo "$$UNFORMATTED"; \
+		echo "Fix with: gofmt -w ."; \
+		exit 1; \
+	fi
+	@echo "✅ All Go files are properly formatted"
+
 vet: ensure-tools proto-gen ## Run go vet with all analyzers
 	go vet ./...
-	go vet -nilness ./...
 
 # Nil safety analysis
 nil-safety: ensure-tools ## Run comprehensive nil safety analysis
@@ -440,7 +471,7 @@ dev-setup: install-tools ## Set up development environment
 	@echo "Development environment setup complete!"
 	@echo "Run 'make help' to see available commands"
 
-ci: build test test-race vet lint test-integration ## Continuous integration workflow
+ci: build test test-race vet lint test-integration fmt-check registry-generate ## Full CI pipeline: proto→web→build→tests→lint→fmt→registry
 
 # Quick development workflows
 quick-check: build test-coverage test-race lint ## Quick development validation

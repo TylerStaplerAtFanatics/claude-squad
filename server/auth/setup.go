@@ -161,7 +161,7 @@ func (s *SetupManager) WatchFile(ctx context.Context, path string) {
 				// file is already present by the time we process the event.
 				_ = watcher.Add(path)
 				if loadErr := s.LoadFromFile(path); loadErr != nil {
-					log.DebugLog.Printf("auth: reload setup token during rename: %v", loadErr)
+					log.WarningLog.Printf("auth: reload setup token during rename: %v", loadErr)
 				}
 			}
 		case err, ok := <-watcher.Errors:

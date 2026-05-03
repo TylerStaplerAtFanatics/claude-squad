@@ -82,7 +82,6 @@ func TestNoOpLockConcurrent(t *testing.T) {
 
 			acquired <- ok
 			if ok && handle != nil {
-				time.Sleep(10 * time.Millisecond)
 				handle.Release()
 			}
 		}()

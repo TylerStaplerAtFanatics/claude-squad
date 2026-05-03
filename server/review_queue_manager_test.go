@@ -10,6 +10,7 @@ import (
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/session"
+	"github.com/tstapler/stapler-squad/testutil"
 )
 
 // TestReactiveQueueManagerIntegration tests the full reactive queue workflow
@@ -48,7 +49,11 @@ func TestReactiveQueueManagerIntegration(t *testing.T) {
 	go reactiveQueueMgr.Start(ctx)
 
 	// Wait for manager to initialize
-	time.Sleep(50 * time.Millisecond)
+	if err := testutil.WaitForCondition(func() bool {
+		return reviewQueuePoller.IsRunning()
+	}, testutil.FastWaitConfig()); err != nil {
+		t.Fatalf("manager failed to initialize: %v", err)
+	}
 
 	// Test 1: Add stream client
 	clientCtx, clientCancel := context.WithCancel(context.Background())
@@ -126,17 +131,11 @@ func TestReactiveQueueManagerIntegration(t *testing.T) {
 		"",
 	))
 
-	// Wait for event processing
-	time.Sleep(50 * time.Millisecond)
-
 	// Test 5: Publish session acknowledged event
 	eventBus.Publish(events.NewSessionAcknowledgedEvent(
 		"test-session-1",
 		"user_acknowledged",
 	))
-
-	// Wait for event processing
-	time.Sleep(50 * time.Millisecond)
 
 	// Test 6: Remove stream client (channel will be closed asynchronously)
 	reactiveQueueMgr.RemoveStreamClient(clientID)
@@ -259,7 +258,11 @@ func TestReactiveQueueManagerMultipleClients(t *testing.T) {
 	defer cancel()
 	go reactiveQueueMgr.Start(ctx)
 
-	time.Sleep(50 * time.Millisecond)
+	if err := testutil.WaitForCondition(func() bool {
+		return reviewQueuePoller.IsRunning()
+	}, testutil.FastWaitConfig()); err != nil {
+		t.Fatalf("manager failed to initialize: %v", err)
+	}
 
 	// Add 3 clients
 	numClients := 3
@@ -354,7 +357,11 @@ func TestReactiveQueueManagerFiltering(t *testing.T) {
 	defer cancel()
 	go reactiveQueueMgr.Start(ctx)
 
-	time.Sleep(50 * time.Millisecond)
+	if err := testutil.WaitForCondition(func() bool {
+		return reviewQueuePoller.IsRunning()
+	}, testutil.FastWaitConfig()); err != nil {
+		t.Fatalf("manager failed to initialize: %v", err)
+	}
 
 	// Add client with priority filter (only HIGH priority)
 	clientCtx, clientCancel := context.WithCancel(context.Background())
@@ -437,7 +444,11 @@ func TestReactiveQueueManagerEventTypes(t *testing.T) {
 	defer cancel()
 	go reactiveQueueMgr.Start(ctx)
 
-	time.Sleep(50 * time.Millisecond)
+	if err := testutil.WaitForCondition(func() bool {
+		return reviewQueuePoller.IsRunning()
+	}, testutil.FastWaitConfig()); err != nil {
+		t.Fatalf("manager failed to initialize: %v", err)
+	}
 
 	clientCtx, clientCancel := context.WithCancel(context.Background())
 	defer clientCancel()
@@ -523,7 +534,11 @@ func BenchmarkReactiveQueueManagerThroughput(b *testing.B) {
 	defer cancel()
 	go reactiveQueueMgr.Start(ctx)
 
-	time.Sleep(50 * time.Millisecond)
+	if err := testutil.WaitForCondition(func() bool {
+		return reviewQueuePoller.IsRunning()
+	}, testutil.FastWaitConfig()); err != nil {
+		b.Fatalf("manager failed to initialize: %v", err)
+	}
 
 	clientCtx, clientCancel := context.WithCancel(context.Background())
 	defer clientCancel()

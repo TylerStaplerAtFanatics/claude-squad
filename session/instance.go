@@ -249,6 +249,11 @@ type Instance struct {
 	// Held for the full duration of start(); callers that lose the race return early.
 	startMu sync.Mutex
 
+	// restartCount and recentRestartTimes track rapid restarts for storm detection.
+	restartCount       int64
+	recentRestartTimes []time.Time
+	restartMu          sync.Mutex
+
 	// lifecycleListeners receives EventStarted / EventExited notifications.
 	lifecycleListeners   []LifecycleListener
 	lifecycleListenersMu sync.Mutex
@@ -928,7 +933,11 @@ func (i *Instance) start(firstTimeSetup bool, setupCleanup bool, cleanup *tmux.C
 	i.startMu.Lock()
 	defer i.startMu.Unlock()
 
-	log.InfoLog.Printf("Starting instance '%s' (firstTimeSetup: %v)", i.Title, firstTimeSetup)
+	log.InfoLog.Printf("Starting instance '%s' path=%q program=%q (firstTimeSetup: %v)", i.Title, i.Path, i.Program, firstTimeSetup)
+
+	if !firstTimeSetup {
+		i.trackRestartRate()
+	}
 
 	if i.Title == "" {
 		return fmt.Errorf("instance title cannot be empty")
@@ -1411,6 +1420,36 @@ func (i *Instance) HasGitWorktree() bool {
 
 func (i *Instance) Started() bool {
 	return i.started
+}
+
+// trackRestartRate records a restart timestamp and logs a warning when the
+// session has restarted more than 5 times in the last 5 minutes (crash loop).
+func (i *Instance) trackRestartRate() {
+	const window = 5 * time.Minute
+	const threshold = 5
+
+	now := time.Now()
+	i.restartMu.Lock()
+	defer i.restartMu.Unlock()
+
+	i.restartCount++
+
+	// Drop timestamps outside the window.
+	cutoff := now.Add(-window)
+	kept := i.recentRestartTimes[:0]
+	for _, t := range i.recentRestartTimes {
+		if t.After(cutoff) {
+			kept = append(kept, t)
+		}
+	}
+	i.recentRestartTimes = append(kept, now)
+
+	if int64(len(i.recentRestartTimes)) >= threshold {
+		log.WarningLog.Printf(
+			"[restart-storm] session '%s' has restarted %d times in the last %.0fs (total restarts: %d) — possible crash loop",
+			i.Title, len(i.recentRestartTimes), window.Seconds(), i.restartCount,
+		)
+	}
 }
 
 // TmuxSessionExists reports whether the underlying tmux session is currently alive.

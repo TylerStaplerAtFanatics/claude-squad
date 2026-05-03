@@ -30,6 +30,10 @@ service UnfinishedWorkService {
   // GetWorktreeAISummary generates (or returns cached) an AI summary for a worktree.
   rpc GetWorktreeAISummary(GetWorktreeAISummaryRequest) returns (GetWorktreeAISummaryResponse) {}
 
+  // GetWorktreeDiff returns the full git diff for an unfinished worktree without
+  // requiring an open session. Compares the worktree against the remote default branch.
+  rpc GetWorktreeDiff(GetWorktreeDiffRequest) returns (GetWorktreeDiffResponse) {}
+
   // QuickCommitPush stages all changes, commits, and pushes in one operation.
   rpc QuickCommitPush(QuickCommitPushRequest) returns (QuickCommitPushResponse) {}
 
@@ -93,3 +97,12 @@ message UpdateUnfinishedWorkConfigRequest {
   UnfinishedWorkConfig config = 1;
 }
 message UpdateUnfinishedWorkConfigResponse { UnfinishedWorkConfig config = 1; }
+
+message GetWorktreeDiffRequest {
+  string repo_path = 1;
+  string branch    = 2;
+}
+message GetWorktreeDiffResponse {
+  DiffStats diff_stats = 1;
+  string    error      = 2;
+}

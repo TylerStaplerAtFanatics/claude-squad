@@ -53,6 +53,10 @@ build/
 # Scanner build artifacts
 tools/scanner/cmd
 tools/scanner/backend/cmd/scanner
+
+# Custom lint tool binaries
+bin/hotpolllog-lint
+tools/lint/hotpolllog/hotpolllog
 coverage.html
 
 # Monolithic registry files — generated aggregates, not source of truth.

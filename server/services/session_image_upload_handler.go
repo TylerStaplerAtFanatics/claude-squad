@@ -20,15 +20,23 @@ const (
 	sessionUploadFileMode = 0o600
 )
 
+// instanceFinder resolves a session by ID without restarting sessions.
+// Implemented by ReviewQueuePoller.
+type instanceFinder interface {
+	FindInstance(sessionID string) *session.Instance
+}
+
 // SessionImageUploadHandler saves uploaded images to a session's uploads/ directory
 // and returns the absolute path so the terminal process can reference the file.
 type SessionImageUploadHandler struct {
 	storage session.InstanceStore
+	finder  instanceFinder // preferred: in-memory lookup via poller
 }
 
 // NewSessionImageUploadHandler creates a new handler backed by the given InstanceStore.
-func NewSessionImageUploadHandler(storage session.InstanceStore) *SessionImageUploadHandler {
-	return &SessionImageUploadHandler{storage: storage}
+// Pass the ReviewQueuePoller as finder to avoid the LoadInstances() restart side-effect.
+func NewSessionImageUploadHandler(storage session.InstanceStore, finder instanceFinder) *SessionImageUploadHandler {
+	return &SessionImageUploadHandler{storage: storage, finder: finder}
 }
 
 // sessionImageUploadResponse is the JSON returned on success.
@@ -145,22 +153,29 @@ func (h *SessionImageUploadHandler) HandleUpload(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Resolve session path via InstanceStore.
-	instances, err := h.storage.LoadInstances()
-	if err != nil {
-		log.ErrorLog.Printf("[SessionImageUpload] LoadInstances: %v", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-
+	// Resolve session using live in-memory state when available (avoids restarting
+	// all sessions as a side-effect of LoadInstances → FromInstanceData → Start).
 	var inst *session.Instance
-	for _, i := range instances {
-		if i.ID == sessionID {
-			inst = i
-			break
+	if h.finder != nil {
+		inst = h.finder.FindInstance(sessionID)
+	}
+	if inst == nil {
+		// Fallback: storage scan (also covers the no-poller test path).
+		instances, err := h.storage.LoadInstances()
+		if err != nil {
+			log.ErrorLog.Printf("[SessionImageUpload] LoadInstances: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		for _, i := range instances {
+			if i.MatchesID(sessionID) {
+				inst = i
+				break
+			}
 		}
 	}
 	if inst == nil {
+		log.ErrorLog.Printf("[SessionImageUpload] session not found: %q", sessionID)
 		http.Error(w, "session not found", http.StatusNotFound)
 		return
 	}

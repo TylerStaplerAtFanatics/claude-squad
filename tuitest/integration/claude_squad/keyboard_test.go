@@ -14,6 +14,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // min returns the minimum of two integers
@@ -73,8 +74,14 @@ func NewStaplerSquadTester(t *testing.T, timeout time.Duration) (*StaplerSquadTe
 	// Start output capture
 	go tester.captureOutput()
 
-	// Wait for startup - longer delay for TUI initialization
-	time.Sleep(5 * time.Second)
+	// Wait for startup - poll until TUI produces initial output
+	if wait.WaitForCondition(func() bool {
+		tester.outputMux.Lock()
+		defer tester.outputMux.Unlock()
+		return tester.output.Len() > 0
+	}, wait.WaitConfig{Timeout: 30 * time.Second, PollInterval: 100 * time.Millisecond, Description: "initial TUI output"}) != nil {
+		t.Logf("Warning: TUI produced no output within startup timeout")
+	}
 
 	// Log initial output for debugging
 	initialOutput := tester.GetOutput()
@@ -141,24 +148,46 @@ func (c *StaplerSquadTester) SendKey(key string) error {
 		}
 	}
 
+	prevLen := func() int {
+		c.outputMux.Lock()
+		defer c.outputMux.Unlock()
+		return c.output.Len()
+	}()
+
 	_, err := c.pty.Write(keyBytes)
 	if err != nil {
 		return fmt.Errorf("failed to send key %s: %w", key, err)
 	}
 
-	// Small delay for processing
-	time.Sleep(50 * time.Millisecond)
+	// Wait briefly for the UI to process the keypress.
+	_ = wait.WaitForCondition(func() bool {
+		c.outputMux.Lock()
+		defer c.outputMux.Unlock()
+		return c.output.Len() > prevLen
+	}, wait.WaitConfig{Timeout: 2 * time.Second, PollInterval: 50 * time.Millisecond, Description: "keypress output"})
 	return nil
 }
 
 // SendText sends a string to stapler-squad
 func (c *StaplerSquadTester) SendText(text string) error {
 	c.t.Logf("Sending text: %s", text)
+	prevLen := func() int {
+		c.outputMux.Lock()
+		defer c.outputMux.Unlock()
+		return c.output.Len()
+	}()
+
 	_, err := c.pty.WriteString(text)
 	if err != nil {
 		return fmt.Errorf("failed to send text: %w", err)
 	}
-	time.Sleep(100 * time.Millisecond)
+
+	// Wait briefly for the UI to echo the text.
+	_ = wait.WaitForCondition(func() bool {
+		c.outputMux.Lock()
+		defer c.outputMux.Unlock()
+		return c.output.Len() > prevLen
+	}, wait.WaitConfig{Timeout: 2 * time.Second, PollInterval: 50 * time.Millisecond, Description: "text echo output"})
 	return nil
 }
 
@@ -217,47 +246,44 @@ func (c *StaplerSquadTester) SearchInSnapshots(text string) []string {
 // WaitForTextWithSnapshots waits for text, taking snapshots during the wait
 func (c *StaplerSquadTester) WaitForTextWithSnapshots(text string, timeout time.Duration) error {
 	c.t.Logf("Waiting for text: %s", text)
-	deadline := time.Now().Add(timeout)
 	lastSnapshotTime := time.Now()
 
-	for time.Now().Before(deadline) {
+	err := wait.WaitForCondition(func() bool {
 		output := c.GetOutput()
 		if strings.Contains(output, text) {
 			c.t.Logf("Found expected text: %s", text)
 			c.TakeSnapshot(fmt.Sprintf("found-%s", strings.ReplaceAll(text, " ", "-")))
-			return nil
+			return true
 		}
-
 		// Take periodic snapshots during wait
 		if time.Since(lastSnapshotTime) > 2*time.Second {
 			c.TakeSnapshot(fmt.Sprintf("waiting-for-%s", strings.ReplaceAll(text, " ", "-")))
 			lastSnapshotTime = time.Now()
 		}
-
-		time.Sleep(100 * time.Millisecond)
+		return false
+	}, wait.WaitConfig{Timeout: timeout, PollInterval: 100 * time.Millisecond, Description: fmt.Sprintf("text %q", text)})
+	if err != nil {
+		c.TakeSnapshot(fmt.Sprintf("timeout-%s", strings.ReplaceAll(text, " ", "-")))
+		return fmt.Errorf("timeout waiting for text '%s'. Check snapshots in %s", text, c.snapshotDir)
 	}
-
-	// Take final snapshot on timeout
-	c.TakeSnapshot(fmt.Sprintf("timeout-%s", strings.ReplaceAll(text, " ", "-")))
-	return fmt.Errorf("timeout waiting for text '%s'. Check snapshots in %s", text, c.snapshotDir)
+	return nil
 }
 
 // WaitForText waits for specific text to appear in output
 func (c *StaplerSquadTester) WaitForText(text string, timeout time.Duration) error {
 	c.t.Logf("Waiting for text: %s", text)
-	deadline := time.Now().Add(timeout)
-
-	for time.Now().Before(deadline) {
+	if err := wait.WaitForCondition(func() bool {
 		output := c.GetOutput()
 		if strings.Contains(output, text) {
 			c.t.Logf("Found expected text: %s", text)
-			return nil
+			return true
 		}
-		time.Sleep(100 * time.Millisecond)
+		return false
+	}, wait.WaitConfig{Timeout: timeout, PollInterval: 100 * time.Millisecond, Description: fmt.Sprintf("text %q", text)}); err != nil {
+		output := c.GetOutput()
+		return fmt.Errorf("timeout waiting for text '%s'. Current output: %s", text, output)
 	}
-
-	output := c.GetOutput()
-	return fmt.Errorf("timeout waiting for text '%s'. Current output: %s", text, output)
+	return nil
 }
 
 // AssertTextPresent asserts that text is present in output
@@ -284,7 +310,10 @@ func (c *StaplerSquadTester) Close() error {
 	// Try graceful shutdown
 	if c.cmd.Process != nil {
 		c.cmd.Process.Signal(syscall.SIGTERM)
-		time.Sleep(500 * time.Millisecond)
+		// Wait for the process to exit after SIGTERM.
+		_ = wait.WaitForCondition(func() bool {
+			return c.cmd.ProcessState != nil
+		}, wait.WaitConfig{Timeout: 10 * time.Second, PollInterval: 100 * time.Millisecond, Description: "process exit"})
 	}
 
 	// Force kill if needed
@@ -466,8 +495,7 @@ func TestNewSessionDialog(t *testing.T) {
 		err := tester.SendKey("escape")
 		require.NoError(t, err)
 
-		// Verify we're back to main screen
-		time.Sleep(500 * time.Millisecond)
+		// Verify we're back to main screen; SendKey already polls for output change.
 		err = tester.SendKey("down") // Should work on main session list
 		assert.NoError(t, err, "Should return to main session list")
 
@@ -483,8 +511,16 @@ func TestNewSessionDialog(t *testing.T) {
 		err := tester.SendKey("n")
 		require.NoError(t, err)
 
-		// Give it time to process
-		time.Sleep(1 * time.Second)
+		// SendKey already polls for initial output; wait for a dialog indicator.
+		_ = wait.WaitForCondition(func() bool {
+			output := tester.GetOutput()
+			for _, indicator := range []string{"session", "Session", "create", "Create", "path", "Path"} {
+				if strings.Contains(output, indicator) {
+					return true
+				}
+			}
+			return false
+		}, wait.WaitConfig{Timeout: 30 * time.Second, PollInterval: 200 * time.Millisecond, Description: "dialog indicator"})
 		tester.TakeSnapshot("after-n-key")
 
 		// Step 2: Navigate through any dialogs or prompts that appear
@@ -516,7 +552,7 @@ func TestNewSessionDialog(t *testing.T) {
 			// Try Enter to proceed
 			err = tester.SendKey("enter")
 			require.NoError(t, err)
-			time.Sleep(500 * time.Millisecond)
+			// SendKey already polls for output change.
 			tester.TakeSnapshot("after-enter")
 
 			// Check if anything changed
@@ -532,7 +568,7 @@ func TestNewSessionDialog(t *testing.T) {
 
 		err = tester.SendText(testPath)
 		require.NoError(t, err)
-		time.Sleep(500 * time.Millisecond)
+		// SendText already polls for output change.
 		tester.TakeSnapshot("after-path-input")
 
 		// Step 4: Try to confirm/submit
@@ -540,8 +576,14 @@ func TestNewSessionDialog(t *testing.T) {
 		err = tester.SendKey("enter")
 		require.NoError(t, err)
 
-		// Give session creation time (this could take several seconds)
-		time.Sleep(5 * time.Second)
+		// Wait for session creation indicators to appear.
+		_ = wait.WaitForCondition(func() bool {
+			output := tester.GetOutput()
+			return strings.Contains(output, testPath) ||
+				strings.Contains(output, "tui-test-session") ||
+				strings.Contains(output, "claude") ||
+				strings.Contains(output, "Claude")
+		}, wait.WaitConfig{Timeout: 30 * time.Second, PollInterval: 200 * time.Millisecond, Description: "session creation"})
 		tester.TakeSnapshot("after-session-creation-attempt")
 
 		// Step 5: Check if we successfully created a session
@@ -557,11 +599,9 @@ func TestNewSessionDialog(t *testing.T) {
 			t.Log("⚠ Session creation unclear - check snapshots for details")
 		}
 
-		// Cancel/cleanup any remaining dialogs
+		// Cancel/cleanup any remaining dialogs; SendKey already polls for output change.
 		err = tester.SendKey("escape")
-		if err == nil {
-			time.Sleep(500 * time.Millisecond)
-		}
+		_ = err // ignore error during cleanup
 
 		tester.TakeSnapshot("final-cleanup")
 		t.Log("✓ Complete session creation flow tested")

@@ -245,7 +245,6 @@ func TestTimeoutExecutor_ProcessCleanup(t *testing.T) {
 
 	// Process should be killed - verify it doesn't show up in process list
 	// This is best-effort verification since the process might already be reaped
-	time.Sleep(50 * time.Millisecond)
 
 	// If we can check the process, verify it's not running
 	// (In practice, after timeout and kill, the process should be gone)

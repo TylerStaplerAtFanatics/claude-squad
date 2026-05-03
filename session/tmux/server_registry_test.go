@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // newTestRegistry creates a registry whose event loop is driven by a fake pipe
@@ -83,17 +84,12 @@ func (sp *syncPipe) Close() error {
 	return nil
 }
 
-// waitFor polls fn until it returns true or the deadline is exceeded.
+// waitFor polls fn until it returns true or 2 seconds elapse.
 func waitFor(t *testing.T, fn func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if fn() {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
+	if err := wait.WaitForCondition(fn, wait.WaitConfig{Timeout: 2 * time.Second, PollInterval: 5 * time.Millisecond, Description: "condition"}); err != nil {
+		t.Fatal("condition not met within deadline")
 	}
-	t.Fatal("condition not met within deadline")
 }
 
 // --- Tests ---
@@ -143,9 +139,8 @@ func TestRegistry_EventParsing_UnknownEvents_NoPanel(t *testing.T) {
 	feed("%end 1234 1")
 	feed("%output $0 hello")
 	feed("%unrecognised-event foo bar baz")
-	// Give the event loop time to process.
-	time.Sleep(20 * time.Millisecond)
-	// Registry should still be alive.
+	// Wait for the event loop to process the lines; registry must remain healthy.
+	waitFor(t, func() bool { return r.IsHealthy() })
 	require.True(t, r.IsHealthy())
 }
 

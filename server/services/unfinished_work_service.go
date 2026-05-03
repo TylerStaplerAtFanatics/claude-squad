@@ -394,6 +394,67 @@ func (s *UnfinishedWorkService) QuickCommitPush(
 	}), nil
 }
 
+// GetWorktreeDiff returns the full unified git diff for an unfinished worktree.
+// It compares the working tree against the remote default branch so the caller
+// can display the diff without opening a session.
+func (s *UnfinishedWorkService) GetWorktreeDiff(
+	_ context.Context,
+	req *connect.Request[sessionv1.GetWorktreeDiffRequest],
+) (*connect.Response[sessionv1.GetWorktreeDiffResponse], error) {
+	r, ok := s.scanner.GetResultByKey(req.Msg.RepoPath, req.Msg.Branch)
+	if !ok {
+		return nil, connect.NewError(connect.CodeNotFound,
+			fmt.Errorf("worktree not found: %s|%s", req.Msg.RepoPath, req.Msg.Branch))
+	}
+
+	// Resolve the remote default branch for this repo.
+	defaultBranch := s.scanner.ResolveDefaultBranch(req.Msg.RepoPath)
+
+	// Build the diff range. Three-dot syntax gives changes since the merge-base,
+	// which is what "commits ahead" corresponds to. We also include unstaged changes
+	// by running two commands and concatenating.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var diffContent strings.Builder
+
+	if defaultBranch != "" {
+		// Committed changes ahead of the remote default branch.
+		committedCmd := exec.CommandContext(ctx, "git", "-C", r.WorktreePath,
+			"diff", defaultBranch+"...HEAD")
+		committedOut, err := committedCmd.Output()
+		if err == nil {
+			diffContent.Write(committedOut)
+		}
+	}
+
+	// Uncommitted (staged + unstaged) changes on top of HEAD.
+	uncommittedCmd := exec.CommandContext(ctx, "git", "-C", r.WorktreePath,
+		"diff", "HEAD")
+	uncommittedOut, err := uncommittedCmd.Output()
+	if err == nil && len(uncommittedOut) > 0 {
+		diffContent.Write(uncommittedOut)
+	}
+
+	content := diffContent.String()
+	var added, removed int
+	for _, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
+			added++
+		} else if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
+			removed++
+		}
+	}
+
+	return connect.NewResponse(&sessionv1.GetWorktreeDiffResponse{
+		DiffStats: &sessionv1.DiffStats{
+			Content: content,
+			Added:   int32(added),
+			Removed: int32(removed),
+		},
+	}), nil
+}
+
 // GetUnfinishedWorkConfig returns the current source configuration.
 func (s *UnfinishedWorkService) GetUnfinishedWorkConfig(
 	_ context.Context,
