@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/session"
 )
@@ -198,13 +199,14 @@ func TestSubscriberExitsOnContextCancel(t *testing.T) {
 	before := runtime.NumGoroutine()
 	StartDeliverySubscriber(ctx, bus, []Notifier{n})
 
-	time.Sleep(10 * time.Millisecond)
-	assert.Greater(t, runtime.NumGoroutine(), before)
+	require.Eventually(t, func() bool {
+		return runtime.NumGoroutine() > before
+	}, 500*time.Millisecond, 5*time.Millisecond, "subscriber goroutine should start")
 
 	cancel()
-	time.Sleep(50 * time.Millisecond)
-	assert.LessOrEqual(t, runtime.NumGoroutine(), before+1,
-		"subscriber goroutine should exit after context cancel")
+	assert.Eventually(t, func() bool {
+		return runtime.NumGoroutine() <= before+1
+	}, 500*time.Millisecond, 5*time.Millisecond, "subscriber goroutine should exit after context cancel")
 }
 
 // IT-2.1 — APPROVAL_NEEDED at LOW priority triggers delivery [R5]

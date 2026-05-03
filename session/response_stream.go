@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/tstapler/stapler-squad/log"
-	"github.com/tstapler/stapler-squad/server/analytics"
+	"github.com/tstapler/stapler-squad/pkg/analytics"
 	"io"
 	"strings"
 	"sync"

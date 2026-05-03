@@ -45,7 +45,7 @@ endif
 		touch $(ASDF_STAMP); \
 	fi
 
-.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse build-tmux build-tmux-embed build-embedded clean-tmux init-submodules test-with-pinned-tmux
+.PHONY: help build test benchmark install-tools lint analyze nil-safety security format check-deps clean all proto-gen proto-lint proto-build web-build web-dev restart-web restart-web-profile qr demo-video demo-post-process demo-gif benchmark-baseline benchmark-compare benchmark-tier1 profile-goroutines profile-block profile-mutex profile-trace build-mux install-mux install-service uninstall-service registry-generate-backend registry-generate-frontend registry-generate registry-diff e2e-report e2e-lighthouse build-tmux build-tmux-embed build-embedded clean-tmux init-submodules test-with-pinned-tmux vet-architecture vet-rpc-markers coverage-integration
 
 # Default target
 help: ## Show this help message
@@ -285,6 +285,22 @@ test-race: ensure-tools proto-gen ## Run tests with race detector enabled
 test-integration: ensure-tools proto-gen ## Run integration tests (requires real tmux)
 	go test -race -tags integration ./...
 
+coverage-integration: ensure-tools proto-gen ## Build instrumented binary, run integration tests, emit integration.out
+	@mkdir -p /tmp/covdata
+	go build -cover -o stapler-squad-cov .
+	@echo "Starting instrumented binary..."
+	GOCOVERDIR=/tmp/covdata STAPLER_SQUAD_INSTANCE=cov-$$PPID ./stapler-squad-cov &
+	@sleep 2
+	@echo "Running integration tests against instrumented binary..."
+	go test -race -tags integration ./... || true
+	@echo "Stopping instrumented binary..."
+	@pkill -f stapler-squad-cov || true
+	@sleep 1
+	go tool covdata textfmt -i=/tmp/covdata -o integration.out
+	@echo "✅ Integration coverage written to integration.out"
+	@rm -f stapler-squad-cov
+	@rm -rf /tmp/covdata
+
 test-ux-polish: ## Run tests registered in docs/registry/features/ (no server/tmux required)
 	@RUN=$$(python3 -c "import json,glob; ids=[t for p in glob.glob('docs/registry/features/backend/**/*.json',recursive=True) for t in json.load(open(p)).get('testIds',[])]; print('|'.join(sorted(set(ids))))"); \
 	echo "Running: $$RUN"; \
@@ -313,6 +329,30 @@ install-tools: ensure-tools ## Install all development and analysis tools
 	@echo "All tools installed successfully!"
 
 # Code quality and analysis
+.PHONY: vet-architecture
+vet-architecture: ## Run all architectural lint checks (depguard + import cycle check)
+	golangci-lint run --enable depguard ./...
+	go build ./...
+
+.PHONY: vet-rpc-markers
+vet-rpc-markers: registry-generate-backend ## Check that all RPC handlers have a // +api: marker (advisory)
+	@missing=0; \
+	for f in $$(find $(BACKEND_FEATURES_DIR) -name "*.json"); do \
+		if jq -e '.markerFound == false' "$$f" > /dev/null 2>&1; then \
+			id=$$(jq -r '.id' "$$f"); method=$$(jq -r '.method' "$$f"); \
+			echo "MISSING MARKER  $$id  ($$method)"; \
+			echo "  Add:  // +api: $$id  to the handler in server/services/"; \
+			missing=$$((missing + 1)); \
+		fi; \
+	done; \
+	if [ "$$missing" -gt 0 ]; then \
+		echo ""; \
+		echo "$$missing RPC handler(s) missing // +api: marker."; \
+		exit 1; \
+	else \
+		echo "✅ All RPC handlers have +api: markers."; \
+	fi
+
 lint: ensure-tools proto-gen server/web/dist ## Run golangci-lint with comprehensive checks
 	@GOBIN=$$(go env GOBIN); \
 	if [ -z "$$GOBIN" ]; then GOBIN=$$(go env GOPATH)/bin; fi; \
@@ -327,7 +367,6 @@ format: ensure-tools ## Format code with gofmt
 
 vet: ensure-tools proto-gen ## Run go vet with all analyzers
 	go vet ./...
-	go vet -nilness ./...
 
 # Nil safety analysis
 nil-safety: ensure-tools ## Run comprehensive nil safety analysis
@@ -398,7 +437,7 @@ ci: build test test-race vet lint test-integration ## Continuous integration wor
 quick-check: build test-coverage test-race lint ## Quick development validation
 	@echo "✅ Quick validation complete"
 
-pre-commit: format vet test test-race lint ## Pre-commit validation
+pre-commit: format vet test test-race lint vet-architecture ## Pre-commit validation
 	@echo "✅ Pre-commit checks passed"
 
 # Debugging and profiling

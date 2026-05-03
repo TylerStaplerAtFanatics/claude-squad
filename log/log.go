@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,6 +77,9 @@ func ParseLogLevel(level string) LogLevel {
 	}
 }
 
+// Shim loggers for zero-migration compatibility — populated by LogManager.
+//
+//nolint:gochecknoglobals
 var (
 	WarningLog *log.Logger
 	InfoLog    *log.Logger
@@ -91,6 +95,11 @@ var (
 
 	// Structured logger
 	structuredLogger *StructuredLogger
+
+	// defaultManager is the LogManager that wraps the package-level globals.
+	// It is populated by initializeWithConfig and used by GetSessionLoggers and Close
+	// so callers can inject it for zero-migration compatibility.
+	defaultManager *LogManager
 )
 
 // LogConfig holds logging configuration
@@ -136,7 +145,7 @@ func DefaultLogConfig() *LogConfig {
 }
 
 // Default log directory and filename
-var logFileName = filepath.Join(os.TempDir(), "staplersquad.log")
+var logFileName = filepath.Join(os.TempDir(), "staplersquad.log") //nolint:gochecknoglobals
 
 // StructuredLogEntry represents a structured log entry
 type StructuredLogEntry struct {
@@ -350,13 +359,17 @@ func GetSessionLogFilePath(cfg *LogConfig, sessionID string) (string, error) {
 	return filepath.Join(logDir, fmt.Sprintf("session_%s.log", safeSessionID)), nil
 }
 
-var (
+var ( //nolint:gochecknoglobals
 	// ErrSessionLogsDisabled is returned when session logs are disabled in config
 	ErrSessionLogsDisabled = fmt.Errorf("session logs disabled in config")
 )
 
 // GetSessionLoggers creates or retrieves loggers for a specific session
 func GetSessionLoggers(sessionID string) (*SessionLoggers, error) {
+	if defaultManager != nil {
+		return defaultManager.ForSession(sessionID)
+	}
+
 	sessionMutex.RLock()
 	// Check if we already have loggers for this session
 	if loggers, exists := sessionLoggers[sessionID]; exists {
@@ -454,7 +467,7 @@ func LogForSession(sessionID, level, format string, v ...interface{}) {
 	}
 }
 
-var globalLogFile io.WriteCloser
+var globalLogFile io.WriteCloser //nolint:gochecknoglobals
 
 // SessionLoggers holds the loggers for a specific session
 type SessionLoggers struct {
@@ -793,9 +806,26 @@ func initializeWithConfig(daemon bool, cfg *LogConfig) {
 
 	// Store the log file path for Close() to report
 	logFileName = logFilePath
+
+	// Install async slog bridge so log.Printf calls route through slog.
+	// Handler ordering: TraceIDHandler (outermost, captures trace IDs at call time)
+	// → AsyncHandler → JSONHandler (innermost, writes to combinedWriter).
+	// TraceIDHandler is a no-op identity handler until E2-S2 adds the real implementation.
+	jsonHandler := slog.NewJSONHandler(combinedWriter, &slog.HandlerOptions{Level: slog.LevelDebug})
+	asyncHandler := NewAsyncHandler(jsonHandler, defaultAsyncBufSize)
+	asyncHandler.StartDrain()
+	slog.SetDefault(slog.New(NewTraceIDHandler(asyncHandler)))
+
+	// Populate the default LogManager so package consumers can use it via dependency injection.
+	defaultManager = newLogManager(cfg, InfoLog, WarningLog, ErrorLog, DebugLog, globalLogFile, structuredLogger)
 }
 
 func Close() {
+	if defaultManager != nil {
+		defaultManager.Close()
+		return
+	}
+
 	// Close global log file
 	if globalLogFile != nil {
 		_ = globalLogFile.Close()
