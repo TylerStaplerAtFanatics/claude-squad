@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 func TestNewApprovalDetector(t *testing.T) {
@@ -335,7 +337,6 @@ func TestApprovalDetector_Subscribe(t *testing.T) {
 
 	// Trigger detection
 	go func() {
-		time.Sleep(50 * time.Millisecond)
 		detector.Detect(`Execute command: "test"`)
 	}()
 
@@ -533,10 +534,11 @@ func TestGenerateApprovalID(t *testing.T) {
 		t.Error("generateApprovalID() returned empty string")
 	}
 
-	time.Sleep(1 * time.Millisecond)
-
-	id2 := generateApprovalID()
-	if id1 == id2 {
+	var id2 string
+	if err := wait.WaitForCondition(func() bool {
+		id2 = generateApprovalID()
+		return id2 != id1
+	}, wait.FastWaitConfig()); err != nil {
 		t.Error("generateApprovalID() should generate unique IDs")
 	}
 }

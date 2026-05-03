@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tstapler/stapler-squad/executor"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // TestSessionRecoveryWorkflowEnd2End tests the complete session recovery workflow
@@ -228,8 +229,10 @@ func testSessionRecoveryWithRealTmux(t *testing.T) {
 	err = session.RestoreWithWorkDir(worktreeDir)
 	require.NoError(t, err)
 
-	// Give tmux time to start
-	time.Sleep(500 * time.Millisecond)
+	// Wait for tmux session to start.
+	if err := wait.WaitForCondition(session.DoesSessionExist, wait.WaitConfig{Timeout: 10 * time.Second, PollInterval: 100 * time.Millisecond, Description: "tmux session start"}); err != nil {
+		t.Fatal("session did not start within timeout")
+	}
 
 	// Verify session exists
 	require.True(t, session.DoesSessionExist(), "Session should exist after restore")

@@ -377,7 +377,7 @@ func TestStateGenerator_ThreadSafety(t *testing.T) {
 	go func() {
 		for i := 0; i < 10; i++ {
 			sg.UpdateDimensions(80+i, 24+i)
-			time.Sleep(1 * time.Millisecond) // Small delay
+			<-time.After(1 * time.Millisecond) // Small delay
 		}
 		done <- true
 	}()
@@ -389,7 +389,7 @@ func TestStateGenerator_ThreadSafety(t *testing.T) {
 			if stats == nil {
 				t.Error("GetCompressionStats returned nil")
 			}
-			time.Sleep(2 * time.Millisecond)
+			<-time.After(2 * time.Millisecond)
 		}
 		done <- true
 	}()

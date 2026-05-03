@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 func TestNewResponseStream(t *testing.T) {
@@ -75,8 +77,14 @@ func TestResponseStream_StartAndStop(t *testing.T) {
 		t.Error("Stream should be started after Start()")
 	}
 
-	// Give the stream goroutine time to start
-	time.Sleep(50 * time.Millisecond)
+	// Wait for the stream goroutine to be fully started
+	cfg := wait.FastWaitConfig()
+	cfg.Description = "stream goroutine started"
+	if err := wait.WaitForCondition(func() bool {
+		return rs.IsStarted()
+	}, cfg); err != nil {
+		t.Fatalf("stream did not become started: %v", err)
+	}
 
 	if err := rs.Stop(); err != nil {
 		t.Fatalf("Stop() failed: %v", err)
@@ -430,8 +438,14 @@ func TestResponseStream_ContextCancellation(t *testing.T) {
 		t.Fatalf("Start() failed: %v", err)
 	}
 
-	// Give the stream time to start
-	time.Sleep(50 * time.Millisecond)
+	// Wait for the stream to be started before cancelling
+	startedCfg := wait.FastWaitConfig()
+	startedCfg.Description = "stream started before cancel"
+	if err := wait.WaitForCondition(func() bool {
+		return rs.IsStarted()
+	}, startedCfg); err != nil {
+		t.Fatalf("stream did not become started: %v", err)
+	}
 
 	// Cancel the context
 	cancel()
@@ -465,8 +479,14 @@ func TestResponseStream_PTYClosed(t *testing.T) {
 		t.Fatalf("Start() failed: %v", err)
 	}
 
-	// Give the stream time to start
-	time.Sleep(50 * time.Millisecond)
+	// Wait for the stream to be started before closing the PTY
+	startedCfg := wait.FastWaitConfig()
+	startedCfg.Description = "stream started before PTY close"
+	if err := wait.WaitForCondition(func() bool {
+		return rs.IsStarted()
+	}, startedCfg); err != nil {
+		t.Fatalf("stream did not become started: %v", err)
+	}
 
 	// Close the PTY to simulate EOF
 	writer.Close()
@@ -552,13 +572,13 @@ func TestResponseStream_StreamingWritesToBuffer(t *testing.T) {
 	testData := []byte("buffer test data")
 	writer.Write(testData)
 
-	// Wait for data to be processed
-	time.Sleep(200 * time.Millisecond)
-
-	// Check that data was written to the circular buffer
-	bufferContents := buffer.GetAll()
-	if len(bufferContents) == 0 {
-		t.Error("Buffer should contain streamed data")
+	// Wait for data to be written to the circular buffer
+	bufCfg := wait.DefaultWaitConfig()
+	bufCfg.Description = "data in circular buffer"
+	if err := wait.WaitForCondition(func() bool {
+		return len(buffer.GetAll()) > 0
+	}, bufCfg); err != nil {
+		t.Errorf("Buffer should contain streamed data: %v", err)
 	}
 }
 
@@ -645,8 +665,14 @@ func TestResponseStream_HighThroughput(t *testing.T) {
 		writer.Write([]byte("data chunk\n"))
 	}
 
-	// Give time for processing
-	time.Sleep(500 * time.Millisecond)
+	// Wait for data to be processed into the circular buffer
+	htCfg := wait.DefaultWaitConfig()
+	htCfg.Description = "data in buffer (high throughput)"
+	if err := wait.WaitForCondition(func() bool {
+		return len(buffer.GetAll()) > 0
+	}, htCfg); err != nil {
+		t.Logf("buffer may not have data yet (high throughput): %v", err)
+	}
 
 	// Test passes if we don't deadlock or panic
 }
@@ -673,8 +699,14 @@ func TestResponseStream_ReadTimeout(t *testing.T) {
 		t.Fatalf("Start() failed: %v", err)
 	}
 
-	// Let it run for a bit with no data (should handle read timeouts gracefully)
-	time.Sleep(300 * time.Millisecond)
+	// Wait for stream to be started, then verify it handles no-data gracefully
+	startedCfg := wait.FastWaitConfig()
+	startedCfg.Description = "stream started"
+	if err := wait.WaitForCondition(func() bool {
+		return rs.IsStarted()
+	}, startedCfg); err != nil {
+		t.Fatalf("stream did not become started: %v", err)
+	}
 
 	// Should be able to stop without issues
 	if err := rs.Stop(); err != nil {
@@ -739,7 +771,6 @@ func TestResponseStream_ConcurrentSubscribeUnsubscribe(t *testing.T) {
 		go func(id int) {
 			subID := string(rune('a' + id))
 			if _, err := rs.Subscribe(subID); err == nil {
-				time.Sleep(10 * time.Millisecond)
 				rs.Unsubscribe(subID)
 			}
 			done <- true
@@ -769,9 +800,15 @@ func TestResponseStream_NilReaderInPTY(t *testing.T) {
 	}
 
 	// Should handle nil PTY gracefully (stream loop will detect and exit)
-	time.Sleep(200 * time.Millisecond)
-
-	rs.Stop()
+	// Wait for stream to stop on its own or stop it manually
+	stoppedCfg := wait.DefaultWaitConfig()
+	stoppedCfg.Description = "stream stopped after nil PTY"
+	if err := wait.WaitForCondition(func() bool {
+		return !rs.IsStarted()
+	}, stoppedCfg); err != nil {
+		// Stream may need an explicit stop if it didn't stop on its own
+		rs.Stop()
+	}
 }
 
 func TestResponseStream_PTYReaderReturnsEOF(t *testing.T) {

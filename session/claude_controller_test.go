@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tstapler/stapler-squad/session/detection"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 func TestNewClaudeController(t *testing.T) {
@@ -404,11 +405,11 @@ func TestGenerateCommandID(t *testing.T) {
 		t.Error("generateCommandID() returned empty string")
 	}
 
-	// Wait a bit to ensure different timestamp
-	time.Sleep(1 * time.Millisecond)
-
-	id2 := generateCommandID()
-	if id1 == id2 {
+	var id2 string
+	if err := wait.WaitForCondition(func() bool {
+		id2 = generateCommandID()
+		return id2 != id1
+	}, wait.FastWaitConfig()); err != nil {
 		t.Error("generateCommandID() should generate unique IDs")
 	}
 }

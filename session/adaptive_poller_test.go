@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // newTestPoller creates a ReviewQueuePoller with a minimal configuration suitable for
@@ -46,20 +48,21 @@ func TestAdaptivePoller_BackoffToIdleInterval(t *testing.T) {
 	defer poller.Stop()
 
 	// Wait for the first tick to actually land, with a generous timeout.
-	// A fixed sleep risks failing if goroutine scheduling delays the first timer fire.
-	firstTickDeadline := time.Now().Add(500 * time.Millisecond)
-	for poller.tickCount.Load() == 0 && time.Now().Before(firstTickDeadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	if poller.tickCount.Load() == 0 {
-		t.Fatal("timed out waiting for the first poll tick to fire")
+	cfg := wait.DefaultWaitConfig()
+	cfg.Timeout = 500 * time.Millisecond
+	cfg.PollInterval = 5 * time.Millisecond
+	cfg.Description = "first poll tick"
+	if err := wait.WaitForCondition(func() bool {
+		return poller.tickCount.Load() > 0
+	}, cfg); err != nil {
+		t.Fatalf("timed out waiting for the first poll tick to fire: %v", err)
 	}
 	firstTickCount := poller.tickCount.Load()
 
 	// The queue is empty and the activity channel is wired, so the loop should have
 	// backed off to slowInterval. After another fastInterval + margin, the tick count
 	// must NOT have increased (the next tick won't fire for ~slowInterval more).
-	time.Sleep(fastInterval + 20*time.Millisecond)
+	<-time.After(fastInterval + 20*time.Millisecond)
 	tickAfterFast := poller.tickCount.Load()
 
 	if tickAfterFast != firstTickCount {
@@ -91,15 +94,32 @@ func TestAdaptivePoller_SnapOnApprovalResponse(t *testing.T) {
 	defer poller.Stop()
 
 	// Wait for the first tick (fast interval) and the backoff to kick in.
-	time.Sleep(fastInterval*2 + 20*time.Millisecond)
+	firstTickCfg := wait.DefaultWaitConfig()
+	firstTickCfg.Timeout = 500 * time.Millisecond
+	firstTickCfg.PollInterval = 5 * time.Millisecond
+	firstTickCfg.Description = "first tick before signal"
+	if err := wait.WaitForCondition(func() bool {
+		return poller.tickCount.Load() > 0
+	}, firstTickCfg); err != nil {
+		t.Fatalf("timed out waiting for first tick: %v", err)
+	}
 	tickBeforeSignal := poller.tickCount.Load()
 
 	// The loop is now on slowInterval; record the time and send the activity signal.
 	signalTime := time.Now()
 	actCh <- struct{}{}
 
-	// Wait fastInterval + generous margin for the snap-to-fast to fire another tick.
-	time.Sleep(fastInterval*3 + 50*time.Millisecond)
+	// Wait for an additional tick to fire after the activity signal snaps back to fast interval.
+	// Use slowInterval as the timeout — the snap must fire before the slow interval elapses.
+	snapCfg := wait.DefaultWaitConfig()
+	snapCfg.Timeout = slowInterval
+	snapCfg.PollInterval = 5 * time.Millisecond
+	snapCfg.Description = "snap-to-fast tick after activity signal"
+	if err := wait.WaitForCondition(func() bool {
+		return poller.tickCount.Load() > tickBeforeSignal
+	}, snapCfg); err != nil {
+		t.Fatalf("timed out waiting for snap tick: %v", err)
+	}
 	tickAfterSignal := poller.tickCount.Load()
 	elapsed := time.Since(signalTime)
 

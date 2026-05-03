@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/session"
+	"github.com/tstapler/stapler-squad/testutil"
 )
 
 // UT-2.x — shouldNotify table [R4, R5]
@@ -140,7 +142,10 @@ func TestDeduplicationWindow(t *testing.T) {
 	}
 	bus.Publish(event)
 	bus.Publish(event) // same tag, within 2s
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the first delivery, then confirm no second delivery follows
+	require.NoError(t, testutil.WaitForCondition(func() bool {
+		return n.CallCount() >= 1
+	}, testutil.FastWaitConfig()))
 	assert.Equal(t, 1, n.CallCount(), "duplicate within 2s window must be suppressed")
 }
 
@@ -161,7 +166,9 @@ func TestStartDeliverySubscriberCallsAllNotifiers(t *testing.T) {
 		NotificationMessage:  "Body",
 	})
 
-	time.Sleep(50 * time.Millisecond)
+	require.NoError(t, testutil.WaitForCondition(func() bool {
+		return n1.CallCount() >= 1 && n2.CallCount() >= 1
+	}, testutil.FastWaitConfig()))
 	assert.Equal(t, 1, n1.CallCount(), "n1 must receive notification")
 	assert.Equal(t, 1, n2.CallCount(), "n2 must receive notification")
 }
@@ -184,7 +191,9 @@ func TestDeliverySubscriberContinuesOnNotifierError(t *testing.T) {
 		NotificationMessage:  "Body",
 	})
 
-	time.Sleep(50 * time.Millisecond)
+	require.NoError(t, testutil.WaitForCondition(func() bool {
+		return success.CallCount() >= 1
+	}, testutil.FastWaitConfig()))
 	assert.Equal(t, 1, success.CallCount(), "success notifier must still receive despite first notifier error")
 }
 
@@ -198,11 +207,15 @@ func TestSubscriberExitsOnContextCancel(t *testing.T) {
 	before := runtime.NumGoroutine()
 	StartDeliverySubscriber(ctx, bus, []Notifier{n})
 
-	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, testutil.WaitForCondition(func() bool {
+		return runtime.NumGoroutine() > before
+	}, testutil.FastWaitConfig()))
 	assert.Greater(t, runtime.NumGoroutine(), before)
 
 	cancel()
-	time.Sleep(50 * time.Millisecond)
+	require.NoError(t, testutil.WaitForCondition(func() bool {
+		return runtime.NumGoroutine() <= before+1
+	}, testutil.FastWaitConfig()))
 	assert.LessOrEqual(t, runtime.NumGoroutine(), before+1,
 		"subscriber goroutine should exit after context cancel")
 }
@@ -224,7 +237,9 @@ func TestApprovalAtLowPriorityTriggersPush(t *testing.T) {
 		NotificationMessage:  "Please review",
 	})
 
-	time.Sleep(50 * time.Millisecond)
+	require.NoError(t, testutil.WaitForCondition(func() bool {
+		return n.CallCount() >= 1
+	}, testutil.FastWaitConfig()))
 	assert.Equal(t, 1, n.CallCount(), "APPROVAL_NEEDED must trigger push at LOW priority")
 }
 
@@ -245,7 +260,9 @@ func TestUrgentPriorityTriggersPush(t *testing.T) {
 		NotificationMessage:  "Critical issue",
 	})
 
-	time.Sleep(50 * time.Millisecond)
+	require.NoError(t, testutil.WaitForCondition(func() bool {
+		return n.CallCount() >= 1
+	}, testutil.FastWaitConfig()))
 	assert.Equal(t, 1, n.CallCount(), "URGENT priority must trigger push")
 }
 

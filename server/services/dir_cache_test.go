@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tstapler/stapler-squad/testutil"
 )
 
 // newReqCtx returns a background context for use in test RPC calls.
@@ -96,8 +97,11 @@ func TestDirCache_MissOnTTLExpiry(t *testing.T) {
 	cache := NewDirCache(16, 1*time.Millisecond)
 	cache.Put(dir, entries, info.ModTime())
 
-	// Wait long enough for the TTL to expire.
-	time.Sleep(5 * time.Millisecond)
+	// Poll until the TTL has expired and Get returns a miss.
+	require.NoError(t, testutil.WaitForCondition(func() bool {
+		_, ok := cache.Get(dir)
+		return !ok
+	}, testutil.FastWaitConfig()))
 
 	got, ok := cache.Get(dir)
 	assert.False(t, ok, "expected cache miss after TTL expiry")

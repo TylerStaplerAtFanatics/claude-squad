@@ -269,8 +269,9 @@ func TestMultiplexer_InputIsolation(t *testing.T) {
 		c1c.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		DecodeMessage(c1c) // discard metadata
 		// Send input, then close.
+		// net.Pipe is synchronous: Write blocks until handleClient reads it,
+		// so no sleep is needed between sends.
 		c1c.Write(encodedInput)
-		time.Sleep(20 * time.Millisecond)
 		c1c.Write(encodedClose)
 	}()
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // ---- ParseAllWorktrees ---------------------------------------------------
@@ -200,8 +201,13 @@ func TestWorktreeCacheTTL(t *testing.T) {
 	require.True(t, ok, "should have fresh entry")
 	assert.Equal(t, "main", got.Branch)
 
-	// Wait for TTL to expire.
-	time.Sleep(40 * time.Millisecond)
+	// Wait for TTL to expire by polling until Get() returns false.
+	if err := wait.WaitForCondition(func() bool {
+		_, stillFresh := c.Get()
+		return !stillFresh
+	}, wait.WaitConfig{Timeout: 500 * time.Millisecond, PollInterval: 10 * time.Millisecond, Description: "cache TTL expiry"}); err != nil {
+		t.Fatal("cache entry did not expire within timeout")
+	}
 	_, ok = c.Get()
 	assert.False(t, ok, "should be expired")
 }

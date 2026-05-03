@@ -12,6 +12,7 @@ import (
 
 	"github.com/tstapler/stapler-squad/session/git"
 	"github.com/tstapler/stapler-squad/session/tmux"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // TestSessionStartInWorktreeWithMCP exercises the full path:
@@ -69,13 +70,26 @@ func TestSessionStartInWorktreeWithMCP(t *testing.T) {
 		}
 	}()
 
-	// Give claude a moment to start and print any errors.
-	time.Sleep(2 * time.Second)
+	// Wait for claude to start and produce output.
+	var output string
+	if err := wait.WaitForConditionWithError(func() (bool, error) {
+		var capErr error
+		output, capErr = inst.CapturePaneContent()
+		if capErr != nil {
+			return false, capErr
+		}
+		return output != "", nil
+	}, wait.WaitConfig{Timeout: 10 * time.Second, PollInterval: 200 * time.Millisecond, Description: "claude startup output"}); err != nil {
+		t.Logf("warning: claude did not produce output within timeout: %v", err)
+	}
 
-	// Capture terminal output.
-	output, err := inst.CapturePaneContent()
+	// Re-capture the final terminal output.
+	finalOutput, err := inst.CapturePaneContent()
 	if err != nil {
 		t.Fatalf("CapturePaneContent: %v", err)
+	}
+	if finalOutput != "" {
+		output = finalOutput
 	}
 
 	// The MCP schema error would appear immediately if the JSON format is wrong.
@@ -182,9 +196,12 @@ func TestRestartFromPausedUsesWorktreeDir(t *testing.T) {
 		t.Errorf("worktree %q does not exist after restart: %v", newWorktreePath, err)
 	}
 
-	// Pane should be in the worktree, not home.
-	time.Sleep(500 * time.Millisecond)
-	paneDir := tmuxPaneDir(t, "sstest_integration-test-restart")
+	// Pane should be in the worktree, not home — poll until tmux reports the pane dir.
+	var paneDir string
+	_ = wait.WaitForCondition(func() bool {
+		paneDir = tmuxPaneDir(t, "sstest_integration-test-restart")
+		return paneDir != ""
+	}, wait.WaitConfig{Timeout: 5 * time.Second, PollInterval: 100 * time.Millisecond, Description: "tmux pane dir after restart"})
 	home, _ := os.UserHomeDir()
 	if paneDir == home {
 		t.Errorf("restarted session is in home dir, want worktree %q", newWorktreePath)

@@ -1,9 +1,11 @@
 package session
 
 import (
-	"github.com/tstapler/stapler-squad/session/tmux"
 	"testing"
 	"time"
+
+	"github.com/tstapler/stapler-squad/session/tmux"
+	"github.com/tstapler/stapler-squad/testutil/wait"
 )
 
 // TestInstance_UpdateTerminalTimestamps verifies that terminal timestamps are updated correctly
@@ -28,14 +30,18 @@ func TestInstance_UpdateTerminalTimestamps(t *testing.T) {
 	initialTerminalUpdate := instance.LastTerminalUpdate
 	initialMeaningfulOutput := instance.LastMeaningfulOutput
 
-	// Wait a bit to ensure timestamps can differ
-	time.Sleep(10 * time.Millisecond)
-
 	// Test 1: Update with meaningful content (non-banner)
 	meaningfulContent := "Hello, world!\nThis is actual output\nError: something happened"
 	instance.UpdateTerminalTimestamps(meaningfulContent, false)
 
-	// Both timestamps should be updated
+	// Both timestamps should be updated - poll until they advance
+	if err := wait.WaitForCondition(func() bool {
+		return instance.LastTerminalUpdate.After(initialTerminalUpdate) &&
+			instance.LastMeaningfulOutput.After(initialMeaningfulOutput)
+	}, wait.FastWaitConfig()); err != nil {
+		t.Error("Timestamps should be updated after meaningful content")
+	}
+
 	if !instance.LastTerminalUpdate.After(initialTerminalUpdate) {
 		t.Error("LastTerminalUpdate should be updated after meaningful content")
 	}
@@ -47,13 +53,17 @@ func TestInstance_UpdateTerminalTimestamps(t *testing.T) {
 	beforeBannerTerminalUpdate := instance.LastTerminalUpdate
 	beforeBannerMeaningfulOutput := instance.LastMeaningfulOutput
 
-	time.Sleep(10 * time.Millisecond)
-
 	// Test 2: Update with banner-only content
 	bannerOnlyContent := "14:23 5-Jan-24\n[session] 0:bash* \"localhost\" 14:23 5-Jan-24"
 	instance.UpdateTerminalTimestamps(bannerOnlyContent, false)
 
-	// LastTerminalUpdate should be updated (any output)
+	// LastTerminalUpdate should be updated - poll until it advances
+	if err := wait.WaitForCondition(func() bool {
+		return instance.LastTerminalUpdate.After(beforeBannerTerminalUpdate)
+	}, wait.FastWaitConfig()); err != nil {
+		t.Error("LastTerminalUpdate should be updated even for banner-only content")
+	}
+
 	if !instance.LastTerminalUpdate.After(beforeBannerTerminalUpdate) {
 		t.Error("LastTerminalUpdate should be updated even for banner-only content")
 	}
@@ -74,7 +84,6 @@ func TestInstance_UpdateTerminalTimestamps(t *testing.T) {
 	// Test 4: Empty content should not update anything
 	beforeEmptyTerminalUpdate := instance.LastTerminalUpdate
 	beforeEmptyMeaningfulOutput := instance.LastMeaningfulOutput
-	time.Sleep(10 * time.Millisecond)
 
 	instance.UpdateTerminalTimestamps("", false)
 
@@ -119,7 +128,6 @@ func TestInstance_GetTimeSinceMethods(t *testing.T) {
 	mockTmux := tmux.NewTmuxSession("test2", "claude")
 	instance.SetTmuxSession(mockTmux)
 
-	time.Sleep(50 * time.Millisecond)
 	instance.UpdateTerminalTimestamps("meaningful output here", false)
 
 	// Time since should be very small (just updated)
