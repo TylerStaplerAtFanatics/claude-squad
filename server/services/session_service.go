@@ -2757,6 +2757,7 @@ func (s *SessionService) wireRateLimitCallbacks(inst *session.Instance) {
 	)
 }
 
+
 // logClientEntry writes a single browser log entry to the server log.
 func logClientEntry(e *sessionv1.ClientLogEntry) {
 	msg := sanitizeClientLogField(e.GetMessage(), 200)

@@ -251,8 +251,14 @@ func sessionDefaultsToProto(cfg *config.Config) *sessionv1.SessionDefaultsConfig
 		EnvVars:        sd.EnvVars,
 		CliFlags:       sd.CLIFlags,
 		Profiles:       make(map[string]*sessionv1.ProfileDefaultsProto),
-		DirectoryRules: make([]*sessionv1.DirectoryRuleProto, 0, len(sd.DirectoryRules)),
-		OneOffBaseDir:  cfg.OneOffBaseDir,
+		DirectoryRules:   make([]*sessionv1.DirectoryRuleProto, 0, len(sd.DirectoryRules)),
+		OneOffBaseDir: cfg.OneOffBaseDir,
+	}
+	// Use resolved defaults so the frontend receives ~/Projects rather than "" when unset.
+	if resolvedNewProjectDir, err := cfg.NewProjectBaseDirOrDefault(); err == nil {
+		proto.NewProjectBaseDir = resolvedNewProjectDir
+	} else {
+		proto.NewProjectBaseDir = cfg.NewProjectBaseDir
 	}
 	// Use resolved defaults so the frontend receives ~/Projects rather than "" when unset.
 	if resolvedNewProjectDir, err := cfg.NewProjectBaseDirOrDefault(); err == nil {
