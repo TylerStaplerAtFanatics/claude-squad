@@ -62,6 +62,7 @@ interface UseSessionServiceReturn {
   resumeSession: (id: string, updates?: { title?: string; tags?: string[] }) => Promise<Session | null>;
   renameSession: (id: string, newTitle: string) => Promise<boolean>;
   restartSession: (id: string) => Promise<boolean>;
+  clearConversationState: (id: string) => Promise<boolean>;
   acknowledgeSession: (id: string) => Promise<boolean>;
   createCheckpoint: (sessionId: string, label: string) => Promise<boolean>;
   listCheckpoints: (sessionId: string) => Promise<import("@/gen/session/v1/types_pb").CheckpointProto[]>;
@@ -170,6 +171,7 @@ export function useSessionService(
           existingWorktree: request.existingWorktree,
           sessionType: request.sessionType,
           oneOff: request.oneOff ?? false,
+          createIfMissing: request.createIfMissing ?? false,
         });
 
         // Add to store (with duplicate check handled by entity adapter upsertOne)
@@ -206,6 +208,7 @@ export function useSessionService(
           program: updates.program,
           tags: updates.tags ?? [],
           workingDir: updates.workingDir,
+          rateLimitEnabled: updates.rateLimitEnabled,
         });
 
         // Update in store
@@ -313,6 +316,24 @@ export function useSessionService(
         return response.success;
       } catch (err) {
         dispatch(setError(err instanceof Error ? err.message : "Failed to restart session"));
+        return false;
+      }
+    },
+    [dispatch]
+  );
+
+  // Clear the stored Claude conversation UUID so next resume starts fresh
+  const clearConversationState = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (!clientRef.current) return false;
+
+      dispatch(setError(null));
+
+      try {
+        const response = await clientRef.current.clearConversationState({ id });
+        return response.success;
+      } catch (err) {
+        dispatch(setError(err instanceof Error ? err.message : "Failed to clear conversation state"));
         return false;
       }
     },
@@ -611,6 +632,7 @@ export function useSessionService(
     resumeSession,
     renameSession,
     restartSession,
+    clearConversationState,
     acknowledgeSession,
     createCheckpoint,
     listCheckpoints,

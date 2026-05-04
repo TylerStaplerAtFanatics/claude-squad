@@ -133,6 +133,13 @@ message Session {
   // Indicates if session is experiencing rate limiting from LLM provider
   RateLimitState rate_limit_state = 40;
 
+  // When the rate limit is expected to reset (populated when rate_limit_state == WAITING).
+  google.protobuf.Timestamp rate_limit_reset_time = 46;
+
+  // Whether automatic rate limit recovery is enabled for this session.
+  // Defaults to true. Set to false to disable auto-resume for this session.
+  bool rate_limit_enabled = 47;
+
   // Path to the Claude Code JSONL history file for this session.
   // Populated by HistoryLinker once the session's open files are detected.
   // Used to pass --resume <uuid> when reattaching after server restart.
@@ -151,6 +158,9 @@ message Session {
   // Full launch command as passed to tmux on session start, including injected flags
   // (e.g. --resume <id>, --mcp-server ..., -y, initial prompt). Empty for external sessions.
   string launch_command = 45;
+
+  // Active-work state for review queue filtering. Populated from IdleDetector state.
+  WorkingState working_state = 50;
 }
 
 // SessionStatus represents the current state of a session.
@@ -182,6 +192,8 @@ enum SessionType {
   SESSION_TYPE_NEW_WORKTREE = 2;
   // Reuse existing git worktree.
   SESSION_TYPE_EXISTING_WORKTREE = 3;
+  // Create a directory, run git init, and start a session in the new repo.
+  SESSION_TYPE_NEW_PROJECT = 4;
 }
 
 // InstanceType indicates whether a session is managed by claude-squad or external.
@@ -191,6 +203,21 @@ enum InstanceType {
   INSTANCE_TYPE_MANAGED = 1;
   // Session discovered externally (e.g., via claude-mux) with limited interaction.
   INSTANCE_TYPE_EXTERNAL = 2;
+}
+
+// WorkingState represents the active-work status of a session for review queue filtering.
+// Populated from IdleDetector state; allows frontend to distinguish sessions that are
+// actively working from those waiting for user attention.
+enum WorkingState {
+  WORKING_STATE_UNSPECIFIED = 0;
+  // Session is actively generating output (Claude producing tokens, interrupt available).
+  WORKING_STATE_ACTIVE = 1;
+  // Session is running a tool (Bash, Edit, etc.) with no interrupt visible.
+  WORKING_STATE_PROCESSING = 2;
+  // Session is at the idle prompt, ready for user input.
+  WORKING_STATE_IDLE = 3;
+  // Session has been silent beyond the idle threshold (may be stuck or waiting).
+  WORKING_STATE_WAITING = 4;
 }
 
 // RateLimitState indicates whether the session is experiencing rate limiting.
@@ -370,6 +397,9 @@ message ReviewItem {
   // True if the session's branch has diverged from the base branch (main/master).
   // Populated by RunOneShot pre-check; shows warning badge in review queue UI.
   bool branch_diverged_from_base = 19;
+
+  // Active-work state for review queue filtering. Populated from IdleDetector state.
+  WorkingState working_state = 20;
 }
 
 // Priority levels for review queue items (highest to lowest urgency).

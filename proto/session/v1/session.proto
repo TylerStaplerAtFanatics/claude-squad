@@ -185,6 +185,12 @@ service SessionService {
   // based on the checkpoint's recorded state.
   rpc ForkSession(ForkSessionRequest) returns (ForkSessionResponse) {}
 
+  // ClearConversationState removes the stored Claude conversation UUID from a session
+  // so that the next Resume starts a fresh conversation instead of attempting --resume
+  // with a stale or path-mismatched UUID. Useful when a session is stuck in a crash
+  // loop with "No conversation found" errors.
+  rpc ClearConversationState(ClearConversationStateRequest) returns (ClearConversationStateResponse) {}
+
   // File Viewer RPCs
 
   // ListFiles returns the immediate children of a directory in a session's worktree.
@@ -265,6 +271,17 @@ service SessionService {
   // Used for remote debugging of mobile browser sessions where DevTools are unavailable.
   // Always returns an empty response; malformed entries are silently discarded.
   rpc LogClientEvents(LogClientEventsRequest) returns (LogClientEventsResponse) {}
+
+  // Error Registry RPCs (E2-S5)
+
+  // ListErrors returns persisted RPC error events ordered by last_seen descending.
+  // Unacknowledged errors are returned by default; set include_acknowledged=true
+  // to include all events.
+  rpc ListErrors(ListErrorsRequest) returns (ListErrorsResponse) {}
+
+  // AcknowledgeError marks an error event as acknowledged so it no longer appears
+  // in the default (unacknowledged) listing.
+  rpc AcknowledgeError(AcknowledgeErrorRequest) returns (AcknowledgeErrorResponse) {}
 }
 
 // ListSessionsRequest allows filtering sessions by various criteria.
@@ -352,6 +369,11 @@ message CreateSessionRequest {
 
   // Optional: Associate session with a project ID.
   string project_id = 17;
+
+  // Optional: When session_type is DIRECTORY and the path does not exist,
+  // setting this to true will create the directory and initialize a git repo.
+  // The backend returns CodeNotFound when path is missing and this is false.
+  bool create_if_missing = 18;
 }
 
 message CreateSessionResponse {
@@ -380,6 +402,9 @@ message UpdateSessionRequest {
 
   // Update working directory. Empty string clears the override (uses workspace root).
   optional string working_dir = 7;
+
+  // Update whether rate limit auto-resume is enabled for this session.
+  optional bool rate_limit_enabled = 8;
 }
 
 message UpdateSessionResponse {
@@ -1427,6 +1452,8 @@ message SessionDefaultsConfig {
   map<string, ProfileDefaultsProto> profiles = 6;
   repeated DirectoryRuleProto directory_rules = 7;
   string one_off_base_dir = 8;
+  // Base directory where new project folders are created. Defaults to ~/Projects.
+  string new_project_base_dir = 9;
 }
 
 // GetSessionDefaults
@@ -1466,6 +1493,8 @@ message UpdateGlobalDefaultsRequest {
   map<string, string> env_vars = 4;
   string cli_flags = 5;
   string one_off_base_dir = 6;
+  // Base directory where new project folders are created. Defaults to ~/Projects.
+  string new_project_base_dir = 7;
 }
 
 message UpdateGlobalDefaultsResponse {
@@ -1722,3 +1751,47 @@ message LogClientEventsRequest {
 }
 
 message LogClientEventsResponse {}
+
+// ============================================================================
+// E2-S5: Error Registry Messages
+// ============================================================================
+
+message ListErrorsRequest {
+  // When true, acknowledged error events are included in the response.
+  bool include_acknowledged = 1;
+}
+
+// ErrorEventRecord is the wire representation of a persisted RPC error.
+message ErrorEventRecord {
+  string fingerprint = 1;
+  string error_type = 2;
+  string message = 3;
+  string stack_trace = 4;
+  string rpc_procedure = 5;
+  int32 occurrence_count = 6;
+  google.protobuf.Timestamp first_seen = 7;
+  google.protobuf.Timestamp last_seen = 8;
+  bool acknowledged = 9;
+}
+
+message ListErrorsResponse {
+  repeated ErrorEventRecord errors = 1;
+}
+
+message AcknowledgeErrorRequest {
+  string fingerprint = 1;
+}
+
+message AcknowledgeErrorResponse {}
+
+// ClearConversationStateRequest identifies the session whose conversation UUID should be cleared.
+message ClearConversationStateRequest {
+  // Session identifier (title or stable UUID).
+  string id = 1;
+}
+
+// ClearConversationStateResponse reports whether the state was cleared.
+message ClearConversationStateResponse {
+  bool success = 1;
+  string message = 2;
+}

@@ -91,6 +91,20 @@ func NewEntRepository(opts ...RepositoryOption) (*EntRepository, error) {
 	return repo, nil
 }
 
+// NewEntRepositoryFromClient wraps a pre-existing *ent.Client in an EntRepository.
+// The caller is responsible for running schema migration on the client beforehand.
+// Use this when you need to share an already-opened client across subsystems
+// (e.g. injecting a test client or reusing an existing connection).
+func NewEntRepositoryFromClient(client *ent.Client) *EntRepository {
+	return &EntRepository{client: client}
+}
+
+// GetEntClient returns the underlying *ent.Client so callers (e.g. ErrorRegistry)
+// can operate on entities not managed by the Repository interface.
+func (r *EntRepository) GetEntClient() *ent.Client {
+	return r.client
+}
+
 // Create inserts a new session into the database
 func (r *EntRepository) Create(ctx context.Context, data InstanceData) error {
 	// Start transaction
@@ -776,6 +790,57 @@ func (r *EntRepository) UpdateTimestamps(ctx context.Context, title string, last
 		return fmt.Errorf("failed to update timestamps: %w", err)
 	}
 
+	return nil
+}
+
+// UpdateLastAddedToQueue sets only the last_added_to_queue field for a session,
+// issuing a single UPDATE WHERE title=? without a prior SELECT.
+func (r *EntRepository) UpdateLastAddedToQueue(ctx context.Context, title string, t time.Time) error {
+	n, err := r.client.Session.Update().
+		Where(session.Title(title)).
+		SetLastAddedToQueue(t).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update last_added_to_queue: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("session not found: %s", title)
+	}
+	return nil
+}
+
+// UpdateLastAcknowledged sets only the last_acknowledged field for a session,
+// issuing a single UPDATE WHERE title=? without a prior SELECT.
+func (r *EntRepository) UpdateLastAcknowledged(ctx context.Context, title string, t time.Time) error {
+	n, err := r.client.Session.Update().
+		Where(session.Title(title)).
+		SetLastAcknowledged(t).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update last_acknowledged: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("session not found: %s", title)
+	}
+	return nil
+}
+
+// UpdateLastViewed sets only the last_viewed field for a session,
+// issuing a single UPDATE WHERE title=? without a prior SELECT.
+func (r *EntRepository) UpdateLastViewed(ctx context.Context, title string, t time.Time) error {
+	n, err := r.client.Session.Update().
+		Where(session.Title(title)).
+		SetLastViewed(t).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update last_viewed: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("session not found: %s", title)
+	}
 	return nil
 }
 

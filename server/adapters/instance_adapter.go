@@ -3,6 +3,8 @@ package adapters
 import (
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/session"
+	"github.com/tstapler/stapler-squad/session/detection"
+	"github.com/tstapler/stapler-squad/session/detection/ratelimit"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -87,7 +89,32 @@ func InstanceToProto(inst *session.Instance) *sessionv1.Session {
 	// History file linkage — path to the Claude JSONL conversation file.
 	protoSession.HistoryFilePath = inst.HistoryFilePath
 
+	// Rate limit state propagation.
+	protoSession.RateLimitState = rateLimitStateToProto(ratelimit.RateLimitState(inst.GetRateLimitState()))
+	if t := inst.GetRateLimitResetTime(); !t.IsZero() {
+		protoSession.RateLimitResetTime = timestamppb.New(t)
+	}
+	protoSession.RateLimitEnabled = inst.IsRateLimitEnabled()
+
 	return protoSession
+}
+
+// rateLimitStateToProto converts a ratelimit.RateLimitState to proto RateLimitState enum.
+func rateLimitStateToProto(state ratelimit.RateLimitState) sessionv1.RateLimitState {
+	switch state {
+	case ratelimit.StateNone:
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_NONE
+	case ratelimit.StateWaiting:
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_WAITING
+	case ratelimit.StateRecovering:
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_RECOVERING
+	case ratelimit.StateRecovered:
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_RECOVERED
+	case ratelimit.StateFailed:
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_FAILED
+	default:
+		return sessionv1.RateLimitState_RATE_LIMIT_STATE_NONE
+	}
 }
 
 // StatusToProto converts session.Status to proto SessionStatus enum.
@@ -199,6 +226,40 @@ func instanceTypeToProto(instanceType session.InstanceType) sessionv1.InstanceTy
 		return sessionv1.InstanceType_INSTANCE_TYPE_EXTERNAL
 	default:
 		return sessionv1.InstanceType_INSTANCE_TYPE_UNSPECIFIED
+	}
+}
+
+// MapIdleStateToWorkingState converts a detection.IdleState to the proto WorkingState enum.
+// Prefer MapDetectedStatusToWorkingState when a ClaudeStatus is available, as it can
+// produce WORKING_STATE_PROCESSING which IdleState alone cannot distinguish from ACTIVE.
+func MapIdleStateToWorkingState(s detection.IdleState) sessionv1.WorkingState {
+	switch s {
+	case detection.IdleStateActive:
+		return sessionv1.WorkingState_WORKING_STATE_ACTIVE
+	case detection.IdleStateWaiting:
+		return sessionv1.WorkingState_WORKING_STATE_IDLE
+	case detection.IdleStateTimeout:
+		return sessionv1.WorkingState_WORKING_STATE_WAITING
+	default:
+		return sessionv1.WorkingState_WORKING_STATE_UNSPECIFIED
+	}
+}
+
+// MapDetectedStatusToWorkingState converts a detection.DetectedStatus to the proto
+// WorkingState enum. It is more precise than MapIdleStateToWorkingState because
+// DetectedStatus distinguishes StatusActive from StatusProcessing.
+func MapDetectedStatusToWorkingState(s detection.DetectedStatus) sessionv1.WorkingState {
+	switch s {
+	case detection.StatusActive:
+		return sessionv1.WorkingState_WORKING_STATE_ACTIVE
+	case detection.StatusProcessing:
+		return sessionv1.WorkingState_WORKING_STATE_PROCESSING
+	case detection.StatusIdle, detection.StatusReady:
+		return sessionv1.WorkingState_WORKING_STATE_IDLE
+	case detection.StatusNeedsApproval, detection.StatusInputRequired:
+		return sessionv1.WorkingState_WORKING_STATE_WAITING
+	default:
+		return sessionv1.WorkingState_WORKING_STATE_UNSPECIFIED
 	}
 }
 

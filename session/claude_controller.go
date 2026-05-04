@@ -42,11 +42,18 @@ type idleCacheEntry struct {
 	state    detection.IdleState
 }
 
-// statusDetectionTailBytes is the number of bytes from the end of the terminal
-// content passed to the status/idle detectors. Status indicators (◇ Ready,
-// esc to interrupt, Thinking…) always appear near the current cursor position,
-// so scanning the full scrollback buffer is wasteful.
+// statusDetectionTailBytes is the number of bytes taken from the tail of the
+// terminal content before line-based detection. This bounds the scope passed to
+// filterTmuxMetadata and the line splitter.
 const statusDetectionTailBytes = 4096
+
+// statusDetectionLinesWindow is the number of trailing lines examined by
+// DetectWithContextFromLines. Status indicators (◇ Ready, esc to interrupt,
+// Thinking…, ? for shortcuts) always appear within the last few lines of the
+// terminal, so restricting the window prevents stale scrollback content — e.g.
+// an "esc to interrupt" from a previous turn — from overriding a fresh idle
+// prompt on the last line.
+const statusDetectionLinesWindow = 15
 
 // ClaudeController provides a high-level API for controlling Claude instances.
 // It orchestrates all the underlying components (queue, executor, history, streams).
@@ -208,8 +215,13 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 	// Drive idle detector from PTY events so lastActivity reflects actual output time.
 	// This replaces polling-only updates: lastActivity now resets on every PTY read,
 	// giving accurate idle duration even when active patterns persist in old scrollback.
+	// Also notify the rate limit handler so it processes output immediately rather than
+	// waiting for the 500ms polling interval.
 	cc.responseStream.SetOnOutput(func() {
 		cc.idleDetector.RecordActivity()
+		if cc.rateLimitHandler != nil {
+			cc.rateLimitHandler.NotifyOutput()
+		}
 	})
 
 	// Wire PTY-EOF callback so the owning Instance can transition state when the
@@ -490,7 +502,13 @@ func (cc *ClaudeController) GetCurrentStatus() (detection.DetectedStatus, string
 	}
 
 	filtered, _ := filterTmuxMetadata(tail)
-	status, desc := cc.statusDetector.DetectWithContext([]byte(filtered))
+
+	// Line-based reverse scan: process from the most recent line backwards.
+	// This ensures a fresh idle prompt on the last line ("? for shortcuts",
+	// "> ") beats a stale "esc to interrupt" that is still within the window
+	// from an earlier turn.
+	lines := lastNLines(filtered, statusDetectionLinesWindow)
+	status, desc := cc.statusDetector.DetectWithContextFromLines(lines)
 
 	cc.statusCache = statusCacheEntry{tailHash: h, status: status, desc: desc}
 	return status, desc
@@ -534,6 +552,16 @@ func filterTmuxMetadata(content string) (string, int) {
 	}
 
 	return sb.String(), removedCount
+}
+
+// lastNLines returns the last n lines of s as a slice.
+// If s has fewer than n lines, all lines are returned.
+func lastNLines(s string, n int) []string {
+	lines := strings.Split(s, "\n")
+	if len(lines) <= n {
+		return lines
+	}
+	return lines[len(lines)-n:]
 }
 
 // tailContent returns the last n bytes of s, snapped forward to the next
@@ -756,6 +784,26 @@ func (cc *ClaudeController) GetExitContent() []byte {
 		return nil
 	}
 	return cc.responseStream.GetExitTail()
+}
+
+// GetRateLimitResetTime returns the reset time from the rate limit handler.
+// Returns zero time if no handler is active or no reset time is known.
+func (cc *ClaudeController) GetRateLimitResetTime() time.Time {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	if cc.rateLimitHandler != nil {
+		return cc.rateLimitHandler.GetResetTime()
+	}
+	return time.Time{}
+}
+
+// GetRateLimitHandler returns the rate limit PTY consumer (for callback wiring).
+// Returns nil if the controller has not been started yet.
+func (cc *ClaudeController) GetRateLimitHandler() *ratelimit.PTYConsumer {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	return cc.rateLimitHandler
 }
 
 // SetRateLimitEnabled enables or disables rate limit detection.

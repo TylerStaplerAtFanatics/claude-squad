@@ -180,6 +180,9 @@ const (
 	// SessionServiceForkSessionProcedure is the fully-qualified name of the SessionService's
 	// ForkSession RPC.
 	SessionServiceForkSessionProcedure = "/session.v1.SessionService/ForkSession"
+	// SessionServiceClearConversationStateProcedure is the fully-qualified name of the SessionService's
+	// ClearConversationState RPC.
+	SessionServiceClearConversationStateProcedure = "/session.v1.SessionService/ClearConversationState"
 	// SessionServiceListFilesProcedure is the fully-qualified name of the SessionService's ListFiles
 	// RPC.
 	SessionServiceListFilesProcedure = "/session.v1.SessionService/ListFiles"
@@ -252,6 +255,12 @@ const (
 	// SessionServiceLogClientEventsProcedure is the fully-qualified name of the SessionService's
 	// LogClientEvents RPC.
 	SessionServiceLogClientEventsProcedure = "/session.v1.SessionService/LogClientEvents"
+	// SessionServiceListErrorsProcedure is the fully-qualified name of the SessionService's ListErrors
+	// RPC.
+	SessionServiceListErrorsProcedure = "/session.v1.SessionService/ListErrors"
+	// SessionServiceAcknowledgeErrorProcedure is the fully-qualified name of the SessionService's
+	// AcknowledgeError RPC.
+	SessionServiceAcknowledgeErrorProcedure = "/session.v1.SessionService/AcknowledgeError"
 )
 
 // SessionServiceClient is a client for the session.v1.SessionService service.
@@ -384,6 +393,11 @@ type SessionServiceClient interface {
 	// The fork receives truncated scrollback, conversation history, and a git worktree
 	// based on the checkpoint's recorded state.
 	ForkSession(context.Context, *connect.Request[v1.ForkSessionRequest]) (*connect.Response[v1.ForkSessionResponse], error)
+	// ClearConversationState removes the stored Claude conversation UUID from a session
+	// so that the next Resume starts a fresh conversation instead of attempting --resume
+	// with a stale or path-mismatched UUID. Useful when a session is stuck in a crash
+	// loop with "No conversation found" errors.
+	ClearConversationState(context.Context, *connect.Request[v1.ClearConversationStateRequest]) (*connect.Response[v1.ClearConversationStateResponse], error)
 	// ListFiles returns the immediate children of a directory in a session's worktree.
 	// Directories are returned first, then files, both alphabetically sorted.
 	// Gitignored entries are excluded unless include_ignored is true.
@@ -440,6 +454,13 @@ type SessionServiceClient interface {
 	// Used for remote debugging of mobile browser sessions where DevTools are unavailable.
 	// Always returns an empty response; malformed entries are silently discarded.
 	LogClientEvents(context.Context, *connect.Request[v1.LogClientEventsRequest]) (*connect.Response[v1.LogClientEventsResponse], error)
+	// ListErrors returns persisted RPC error events ordered by last_seen descending.
+	// Unacknowledged errors are returned by default; set include_acknowledged=true
+	// to include all events.
+	ListErrors(context.Context, *connect.Request[v1.ListErrorsRequest]) (*connect.Response[v1.ListErrorsResponse], error)
+	// AcknowledgeError marks an error event as acknowledged so it no longer appears
+	// in the default (unacknowledged) listing.
+	AcknowledgeError(context.Context, *connect.Request[v1.AcknowledgeErrorRequest]) (*connect.Response[v1.AcknowledgeErrorResponse], error)
 }
 
 // NewSessionServiceClient constructs a client for the session.v1.SessionService service. By
@@ -753,6 +774,12 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("ForkSession")),
 			connect.WithClientOptions(opts...),
 		),
+		clearConversationState: connect.NewClient[v1.ClearConversationStateRequest, v1.ClearConversationStateResponse](
+			httpClient,
+			baseURL+SessionServiceClearConversationStateProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("ClearConversationState")),
+			connect.WithClientOptions(opts...),
+		),
 		listFiles: connect.NewClient[v1.ListFilesRequest, v1.ListFilesResponse](
 			httpClient,
 			baseURL+SessionServiceListFilesProcedure,
@@ -897,6 +924,18 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("LogClientEvents")),
 			connect.WithClientOptions(opts...),
 		),
+		listErrors: connect.NewClient[v1.ListErrorsRequest, v1.ListErrorsResponse](
+			httpClient,
+			baseURL+SessionServiceListErrorsProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("ListErrors")),
+			connect.WithClientOptions(opts...),
+		),
+		acknowledgeError: connect.NewClient[v1.AcknowledgeErrorRequest, v1.AcknowledgeErrorResponse](
+			httpClient,
+			baseURL+SessionServiceAcknowledgeErrorProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("AcknowledgeError")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -952,6 +991,7 @@ type sessionServiceClient struct {
 	createCheckpoint         *connect.Client[v1.CreateCheckpointRequest, v1.CreateCheckpointResponse]
 	listCheckpoints          *connect.Client[v1.ListCheckpointsRequest, v1.ListCheckpointsResponse]
 	forkSession              *connect.Client[v1.ForkSessionRequest, v1.ForkSessionResponse]
+	clearConversationState   *connect.Client[v1.ClearConversationStateRequest, v1.ClearConversationStateResponse]
 	listFiles                *connect.Client[v1.ListFilesRequest, v1.ListFilesResponse]
 	getFileContent           *connect.Client[v1.GetFileContentRequest, v1.GetFileContentResponse]
 	searchFiles              *connect.Client[v1.SearchFilesRequest, v1.SearchFilesResponse]
@@ -976,6 +1016,8 @@ type sessionServiceClient struct {
 	listBranches             *connect.Client[v1.ListBranchesRequest, v1.ListBranchesResponse]
 	getTerminalSnapshot      *connect.Client[v1.GetTerminalSnapshotRequest, v1.GetTerminalSnapshotResponse]
 	logClientEvents          *connect.Client[v1.LogClientEventsRequest, v1.LogClientEventsResponse]
+	listErrors               *connect.Client[v1.ListErrorsRequest, v1.ListErrorsResponse]
+	acknowledgeError         *connect.Client[v1.AcknowledgeErrorRequest, v1.AcknowledgeErrorResponse]
 }
 
 // ListSessions calls session.v1.SessionService.ListSessions.
@@ -1228,6 +1270,11 @@ func (c *sessionServiceClient) ForkSession(ctx context.Context, req *connect.Req
 	return c.forkSession.CallUnary(ctx, req)
 }
 
+// ClearConversationState calls session.v1.SessionService.ClearConversationState.
+func (c *sessionServiceClient) ClearConversationState(ctx context.Context, req *connect.Request[v1.ClearConversationStateRequest]) (*connect.Response[v1.ClearConversationStateResponse], error) {
+	return c.clearConversationState.CallUnary(ctx, req)
+}
+
 // ListFiles calls session.v1.SessionService.ListFiles.
 func (c *sessionServiceClient) ListFiles(ctx context.Context, req *connect.Request[v1.ListFilesRequest]) (*connect.Response[v1.ListFilesResponse], error) {
 	return c.listFiles.CallUnary(ctx, req)
@@ -1346,6 +1393,16 @@ func (c *sessionServiceClient) GetTerminalSnapshot(ctx context.Context, req *con
 // LogClientEvents calls session.v1.SessionService.LogClientEvents.
 func (c *sessionServiceClient) LogClientEvents(ctx context.Context, req *connect.Request[v1.LogClientEventsRequest]) (*connect.Response[v1.LogClientEventsResponse], error) {
 	return c.logClientEvents.CallUnary(ctx, req)
+}
+
+// ListErrors calls session.v1.SessionService.ListErrors.
+func (c *sessionServiceClient) ListErrors(ctx context.Context, req *connect.Request[v1.ListErrorsRequest]) (*connect.Response[v1.ListErrorsResponse], error) {
+	return c.listErrors.CallUnary(ctx, req)
+}
+
+// AcknowledgeError calls session.v1.SessionService.AcknowledgeError.
+func (c *sessionServiceClient) AcknowledgeError(ctx context.Context, req *connect.Request[v1.AcknowledgeErrorRequest]) (*connect.Response[v1.AcknowledgeErrorResponse], error) {
+	return c.acknowledgeError.CallUnary(ctx, req)
 }
 
 // SessionServiceHandler is an implementation of the session.v1.SessionService service.
@@ -1478,6 +1535,11 @@ type SessionServiceHandler interface {
 	// The fork receives truncated scrollback, conversation history, and a git worktree
 	// based on the checkpoint's recorded state.
 	ForkSession(context.Context, *connect.Request[v1.ForkSessionRequest]) (*connect.Response[v1.ForkSessionResponse], error)
+	// ClearConversationState removes the stored Claude conversation UUID from a session
+	// so that the next Resume starts a fresh conversation instead of attempting --resume
+	// with a stale or path-mismatched UUID. Useful when a session is stuck in a crash
+	// loop with "No conversation found" errors.
+	ClearConversationState(context.Context, *connect.Request[v1.ClearConversationStateRequest]) (*connect.Response[v1.ClearConversationStateResponse], error)
 	// ListFiles returns the immediate children of a directory in a session's worktree.
 	// Directories are returned first, then files, both alphabetically sorted.
 	// Gitignored entries are excluded unless include_ignored is true.
@@ -1534,6 +1596,13 @@ type SessionServiceHandler interface {
 	// Used for remote debugging of mobile browser sessions where DevTools are unavailable.
 	// Always returns an empty response; malformed entries are silently discarded.
 	LogClientEvents(context.Context, *connect.Request[v1.LogClientEventsRequest]) (*connect.Response[v1.LogClientEventsResponse], error)
+	// ListErrors returns persisted RPC error events ordered by last_seen descending.
+	// Unacknowledged errors are returned by default; set include_acknowledged=true
+	// to include all events.
+	ListErrors(context.Context, *connect.Request[v1.ListErrorsRequest]) (*connect.Response[v1.ListErrorsResponse], error)
+	// AcknowledgeError marks an error event as acknowledged so it no longer appears
+	// in the default (unacknowledged) listing.
+	AcknowledgeError(context.Context, *connect.Request[v1.AcknowledgeErrorRequest]) (*connect.Response[v1.AcknowledgeErrorResponse], error)
 }
 
 // NewSessionServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1843,6 +1912,12 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("ForkSession")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceClearConversationStateHandler := connect.NewUnaryHandler(
+		SessionServiceClearConversationStateProcedure,
+		svc.ClearConversationState,
+		connect.WithSchema(sessionServiceMethods.ByName("ClearConversationState")),
+		connect.WithHandlerOptions(opts...),
+	)
 	sessionServiceListFilesHandler := connect.NewUnaryHandler(
 		SessionServiceListFilesProcedure,
 		svc.ListFiles,
@@ -1987,6 +2062,18 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("LogClientEvents")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceListErrorsHandler := connect.NewUnaryHandler(
+		SessionServiceListErrorsProcedure,
+		svc.ListErrors,
+		connect.WithSchema(sessionServiceMethods.ByName("ListErrors")),
+		connect.WithHandlerOptions(opts...),
+	)
+	sessionServiceAcknowledgeErrorHandler := connect.NewUnaryHandler(
+		SessionServiceAcknowledgeErrorProcedure,
+		svc.AcknowledgeError,
+		connect.WithSchema(sessionServiceMethods.ByName("AcknowledgeError")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/session.v1.SessionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SessionServiceListSessionsProcedure:
@@ -2089,6 +2176,8 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceListCheckpointsHandler.ServeHTTP(w, r)
 		case SessionServiceForkSessionProcedure:
 			sessionServiceForkSessionHandler.ServeHTTP(w, r)
+		case SessionServiceClearConversationStateProcedure:
+			sessionServiceClearConversationStateHandler.ServeHTTP(w, r)
 		case SessionServiceListFilesProcedure:
 			sessionServiceListFilesHandler.ServeHTTP(w, r)
 		case SessionServiceGetFileContentProcedure:
@@ -2137,6 +2226,10 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceGetTerminalSnapshotHandler.ServeHTTP(w, r)
 		case SessionServiceLogClientEventsProcedure:
 			sessionServiceLogClientEventsHandler.ServeHTTP(w, r)
+		case SessionServiceListErrorsProcedure:
+			sessionServiceListErrorsHandler.ServeHTTP(w, r)
+		case SessionServiceAcknowledgeErrorProcedure:
+			sessionServiceAcknowledgeErrorHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2346,6 +2439,10 @@ func (UnimplementedSessionServiceHandler) ForkSession(context.Context, *connect.
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.SessionService.ForkSession is not implemented"))
 }
 
+func (UnimplementedSessionServiceHandler) ClearConversationState(context.Context, *connect.Request[v1.ClearConversationStateRequest]) (*connect.Response[v1.ClearConversationStateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.SessionService.ClearConversationState is not implemented"))
+}
+
 func (UnimplementedSessionServiceHandler) ListFiles(context.Context, *connect.Request[v1.ListFilesRequest]) (*connect.Response[v1.ListFilesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.SessionService.ListFiles is not implemented"))
 }
@@ -2440,4 +2537,12 @@ func (UnimplementedSessionServiceHandler) GetTerminalSnapshot(context.Context, *
 
 func (UnimplementedSessionServiceHandler) LogClientEvents(context.Context, *connect.Request[v1.LogClientEventsRequest]) (*connect.Response[v1.LogClientEventsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.SessionService.LogClientEvents is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) ListErrors(context.Context, *connect.Request[v1.ListErrorsRequest]) (*connect.Response[v1.ListErrorsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.SessionService.ListErrors is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) AcknowledgeError(context.Context, *connect.Request[v1.AcknowledgeErrorRequest]) (*connect.Response[v1.AcknowledgeErrorResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.SessionService.AcknowledgeError is not implemented"))
 }
