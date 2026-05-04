@@ -1,4 +1,5 @@
 package claude_squad
+import "github.com/linkdata/deadlock"
 
 import (
 	"fmt"
@@ -31,7 +32,7 @@ type StaplerSquadTester struct {
 	cmd         *exec.Cmd
 	pty         *os.File
 	output      strings.Builder
-	outputMux   sync.Mutex
+	outputMux   deadlock.Mutex
 	timeout     time.Duration
 	snapshotDir string
 	snapshotNum int

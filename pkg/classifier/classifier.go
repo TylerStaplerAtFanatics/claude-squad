@@ -8,8 +8,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/linkdata/deadlock"
 )
 
 // RiskLevel indicates the severity of a tool use request.
@@ -355,7 +356,7 @@ type Rule struct {
 
 // RuleBasedClassifier evaluates a priority-ordered list of Rules.
 type RuleBasedClassifier struct {
-	mu    sync.RWMutex
+	mu    deadlock.RWMutex
 	rules []Rule // sorted by Priority descending
 }
 
