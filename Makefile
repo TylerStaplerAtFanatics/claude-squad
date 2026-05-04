@@ -370,16 +370,24 @@ lint: ensure-tools proto-gen server/web/dist lint-custom ## Run golangci-lint wi
 	fi; \
 	golangci-lint run --enable=nilnil,staticcheck,ineffassign,govet
 
-HOTPOLLLOG_BIN := $(CURDIR)/bin/hotpolllog-lint
+HOTPOLLLOG_BIN       := $(CURDIR)/bin/hotpolllog-lint
+NOCOMMANDPATTERN_BIN := $(CURDIR)/bin/nocommandpattern-lint
 
-lint-custom: $(HOTPOLLLOG_BIN) ## Run project-specific custom linters (hotpolllog: detect DebugLog in select-case hot loops)
+lint-custom: $(HOTPOLLLOG_BIN) $(NOCOMMANDPATTERN_BIN) ## Run project-specific custom linters (hotpolllog, nocommandpattern)
 	@echo "Running custom lint: hotpolllog..."
 	@$(HOTPOLLLOG_BIN) ./...
 	@echo "hotpolllog: ok"
+	@echo "Running custom lint: nocommandpattern..."
+	@$(NOCOMMANDPATTERN_BIN) ./pkg/classifier/...
+	@echo "nocommandpattern: ok"
 
 $(HOTPOLLLOG_BIN):
 	@mkdir -p $(CURDIR)/bin
 	@cd tools/lint/hotpolllog && go build -o $(HOTPOLLLOG_BIN) ./cmd/hotpolllog
+
+$(NOCOMMANDPATTERN_BIN):
+	@mkdir -p $(CURDIR)/bin
+	@cd tools/lint/nocommandpattern && go build -o $(NOCOMMANDPATTERN_BIN) ./cmd/nocommandpattern
 
 lint-no-sleep-tests: ## ADR-003 audit: count time.Sleep calls in test files outside testutil/ (target: 0)
 	@violations=$$(grep -rn 'time\.Sleep(' --include='*_test.go' . \
