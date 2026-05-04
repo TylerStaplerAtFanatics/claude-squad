@@ -97,6 +97,7 @@ function HomeContent() {
     resumeSession,
     renameSession,
     restartSession,
+    clearConversationState,
     createCheckpoint,
     listCheckpoints,
     forkSession,
@@ -379,6 +380,10 @@ function HomeContent() {
     }
   };
 
+  const handleSetRateLimitEnabled = useCallback(async (sessionId: string, enabled: boolean): Promise<void> => {
+    await updateSession(sessionId, { rateLimitEnabled: enabled });
+  }, [updateSession]);
+
   // Handle one-shot PR creation (S3-3)
   const handleRunOneShot = useCallback(async (sessionId: string): Promise<void> => {
     await runOneShot(sessionId, "Create a pull request for the changes in this session.", 0);
@@ -477,6 +482,8 @@ function HomeContent() {
             onListCheckpoints={listCheckpoints}
             onForkFromCheckpoint={forkSession}
             onRunOneShot={handleRunOneShot}
+            onSetRateLimitEnabled={handleSetRateLimitEnabled}
+            onClearConversationState={clearConversationState}
           />
         )}
       </main>

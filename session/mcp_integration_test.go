@@ -126,6 +126,12 @@ func TestSessionStartInWorktreeWithMCP(t *testing.T) {
 	if !strings.Contains(lc, `"mcpServers"`) {
 		t.Errorf("LaunchCommand missing mcpServers wrapper: %q", lc)
 	}
+	// Old format passed {"type":"http","url":"..."} directly without the mcpServers wrapper.
+	// New format: {"mcpServers":{"stapler-squad":{"type":...}}}
+	// Check for the old shape: the mcp-config value starts with {"type" (not {"mcpServers").
+	if strings.Contains(lc, `--mcp-config '{"type"`) {
+		t.Errorf("LaunchCommand uses old MCP format without mcpServers wrapper: %q", lc)
+	}
 
 	t.Logf("LaunchCommand: %s", lc)
 	t.Logf("Worktree path: %s", worktreePath)
