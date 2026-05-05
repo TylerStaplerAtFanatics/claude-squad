@@ -6,13 +6,13 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/tstapler/stapler-squad/executor/safeexec"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/detection/ratelimit"
 	"github.com/tstapler/stapler-squad/session/git"
 	"github.com/tstapler/stapler-squad/session/scrollback"
 	"github.com/tstapler/stapler-squad/session/tmux"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -1355,8 +1355,7 @@ func (i *Instance) KillExternalSession() error {
 	// Kill the tmux session
 	killCtx, killCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer killCancel()
-	cmd := exec.CommandContext(killCtx, "tmux", "kill-session", "-t", i.ExternalMetadata.TmuxSessionName)
-	cmd.WaitDelay = 2 * time.Second
+	cmd := safeexec.CommandContext(killCtx, "tmux", "kill-session", "-t", i.ExternalMetadata.TmuxSessionName)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to kill tmux session '%s': %w", i.ExternalMetadata.TmuxSessionName, err)
 	}
