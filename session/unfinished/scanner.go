@@ -2,6 +2,8 @@
 // uncommitted changes, commits ahead of the default branch, or commits behind.
 package unfinished
 
+import "github.com/linkdata/deadlock"
+
 import (
 	"context"
 	"fmt"
@@ -162,7 +164,7 @@ type Scanner struct {
 	// autoSpiderEnabled controls whether SessionCreated/Updated events trigger scans.
 	autoSpiderEnabled atomic.Bool
 
-	mu sync.RWMutex
+	mu deadlock.RWMutex
 }
 
 // NewScanner constructs a Scanner. Call Start(ctx) to begin background processing.
@@ -688,7 +690,7 @@ func (s *Scanner) InvalidateCache(worktreePath string) {
 // --- Circuit breaker ---
 
 type circuitBreaker struct {
-	mu                  sync.Mutex
+	mu                  deadlock.Mutex
 	consecutiveTimeouts int
 	backoffUntil        time.Time
 }
