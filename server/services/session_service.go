@@ -2723,8 +2723,8 @@ func (s *SessionService) wireRateLimitCallbacks(inst *session.Instance) {
 			notifID := fmt.Sprintf("rl-detect-%s", sessionID)
 			s.eventBus.Publish(events.NewNotificationEvent(
 				sessionID, inst.Title, notifID,
-				int32(8),  // NotificationType_WARNING
-				int32(3),  // NotificationPriority_HIGH
+				int32(8), // NotificationType_WARNING
+				int32(3), // NotificationPriority_HIGH
 				title,
 				fmt.Sprintf("Session hit the usage limit%s.", resetMsg),
 				nil,
@@ -2756,6 +2756,7 @@ func (s *SessionService) wireRateLimitCallbacks(inst *session.Instance) {
 		},
 	)
 }
+
 
 // logClientEntry writes a single browser log entry to the server log.
 func logClientEntry(e *sessionv1.ClientLogEntry) {
