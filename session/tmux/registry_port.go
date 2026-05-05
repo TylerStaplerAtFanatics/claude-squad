@@ -9,6 +9,14 @@ type SessionExistenceChecker interface {
 	IsHealthy() bool
 }
 
+// SessionExistenceWriter allows callers to proactively mark a session as
+// existing in the registry. Used by start() to pre-populate the registry
+// immediately after session creation, bridging the gap before the async
+// %session-created control-mode event arrives.
+type SessionExistenceWriter interface {
+	MarkSessionExists(name string)
+}
+
 // SessionLister returns a snapshot of all live session names.
 // Used by PTYDiscovery and reconciliation loops.
 type SessionLister interface {

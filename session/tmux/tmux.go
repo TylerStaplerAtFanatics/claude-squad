@@ -663,6 +663,12 @@ func (t *TmuxSession) start(workDir string, setupCleanup bool, cleanup *CleanupF
 	// causes poll-loop timeouts when the event is delayed. A single no-cache check
 	// right after successful new-session avoids the 10s wait in the common case.
 	if t.DoesSessionExistNoCache() {
+		// Proactively update the push-based registry so DoesSessionExist()
+		// returns true immediately, without waiting for the async
+		// %session-created control-mode event to arrive.
+		if w, ok := t.registry.(SessionExistenceWriter); ok {
+			w.MarkSessionExists(t.sanitizedName)
+		}
 		t.invalidateExistsCache()
 	} else {
 		// Fall back to the poll loop for the rare case where the session isn't

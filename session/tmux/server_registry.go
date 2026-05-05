@@ -125,6 +125,14 @@ func (r *TmuxServerRegistry) SessionExists(name string) bool {
 	return r.sessions[name]
 }
 
+// MarkSessionExists implements SessionExistenceWriter. It proactively marks a
+// session as existing before the async %session-created event arrives.
+func (r *TmuxServerRegistry) MarkSessionExists(name string) {
+	r.mu.Lock()
+	r.sessions[name] = true
+	r.mu.Unlock()
+}
+
 // ListSessions implements SessionLister. Returns a copy of the live sessions map.
 func (r *TmuxServerRegistry) ListSessions() map[string]bool {
 	r.mu.RLock()
