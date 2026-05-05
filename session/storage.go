@@ -289,18 +289,6 @@ func (s *Storage) DeleteAllInstances() error {
 	return nil
 }
 
-// updateFieldInRepo loads the InstanceData for title, applies fn to it, then saves.
-// Used for partial-field updates.
-func (s *Storage) updateFieldInRepo(title string, fn func(*InstanceData)) error {
-	ctx := context.Background()
-	data, err := s.repo.Get(ctx, title)
-	if err != nil {
-		return fmt.Errorf("failed to get instance '%s': %w", title, err)
-	}
-	fn(data)
-	return s.repo.Update(ctx, *data)
-}
-
 // UpdateInstanceTimestampsOnly updates ONLY the timestamp fields in storage without
 // creating Instance objects. This preserves in-memory state like controllers.
 // This is critical for WebSocket terminal streaming which updates timestamps frequently.
