@@ -1,5 +1,4 @@
 package claude_squad
-import "github.com/linkdata/deadlock"
 
 import (
 	"fmt"
@@ -7,12 +6,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/creack/pty"
+	"github.com/linkdata/deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tstapler/stapler-squad/testutil/wait"
