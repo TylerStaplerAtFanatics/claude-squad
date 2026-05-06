@@ -16,7 +16,9 @@ import { Session, SessionStatus } from "@/gen/session/v1/types_pb";
 import { PathCompletionDropdown, type CompletionEntry } from "./PathCompletionDropdown";
 import { OmnibarResultList, getResultListItemCount, getHighlightedItemId } from "./OmnibarResultList";
 import { OmnibarModeBadge } from "./OmnibarModeBadge";
-import { OmnibarCreationPanel } from "./OmnibarCreationPanel";
+import { OmnibarCreationPanel, SESSION_TYPES } from "./OmnibarCreationPanel";
+import { parseSlashCommand } from "@/lib/omnibar/parseSlashCommand";
+import { parseInputWithSeparator } from "@/lib/omnibar/parseInput";
 import {
   overlay, modal, inputContainer, typeIndicator, input as inputClass,
   detectionInfo, detectionBadge, unknown,
@@ -47,6 +49,7 @@ export interface OmnibarFormState {
   parentDir: string;
   projectName: string;
   newProjectSessionType: "directory" | "new_worktree";
+  firstPrompt: string;
 }
 
 const INITIAL_FORM_STATE: OmnibarFormState = {
@@ -63,6 +66,7 @@ const INITIAL_FORM_STATE: OmnibarFormState = {
   parentDir: "",
   projectName: "",
   newProjectSessionType: "new_worktree",
+  firstPrompt: "",
 };
 
 // Consolidated UI state
@@ -90,6 +94,7 @@ export interface OmnibarSessionData {
   existingWorktree?: string;
   workingDir?: string;
   oneOff?: boolean;
+  initialPrompt?: string;
   // New project mode: tells the context layer to use SESSION_TYPE_NEW_PROJECT
   isNewProject?: boolean;
   // Directory mode confirmation: retry with directory creation enabled
@@ -332,7 +337,14 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
 
     debounceRef.current = setTimeout(() => {
       if (input.trim()) {
-        const result = detect(input);
+        // Pre-process slash commands before detection so /oneoff etc. aren't
+        // misidentified as local paths by LocalPathDetector (priority 100).
+        const slashCmd = parseSlashCommand(input);
+        if (slashCmd) {
+          setFormField("sessionType", slashCmd.sessionType);
+        }
+        const detectInput = slashCmd ? slashCmd.remainder : input;
+        const result = detect(detectInput || input);
         setDetection(result);
 
         // Reset dropdown dismissed state when input type changes modes.
@@ -354,11 +366,22 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
           }
         }
 
-        // Auto-fill session name if:
+        // Auto-fill session name (and firstPrompt for `>` separator) if:
         // 1. Session name is empty, OR
         // 2. Session name matches the last auto-suggested name (not manually edited)
         // This allows suggestions to update as the user types the path (e.g., "~" → "sqlway")
-        if (result.suggestedName) {
+        if (result.type === InputType.SessionSearch && !slashCmd) {
+          // Derive-on-read: split on first `>` to populate name + firstPrompt
+          const parsed = parseInputWithSeparator(input);
+          const derivedName = parsed.name;
+          if (derivedName && (!sessionNameRef.current || sessionNameRef.current === lastSuggestedNameRef.current)) {
+            setSessionName(derivedName);
+            lastSuggestedNameRef.current = derivedName;
+          }
+          if (parsed.firstPrompt) {
+            setFormField("firstPrompt", parsed.firstPrompt);
+          }
+        } else if (result.suggestedName) {
           if (!sessionNameRef.current || sessionNameRef.current === lastSuggestedNameRef.current) {
             setSessionName(result.suggestedName);
             lastSuggestedNameRef.current = result.suggestedName;
@@ -537,6 +560,16 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
         }
       }
 
+      // Tab cycles session type when in creation mode and no dropdown is open
+      if (e.key === "Tab" && !isDiscoveryMode && !isDropdownVisible) {
+        e.preventDefault();
+        const types = SESSION_TYPES.map((t) => t.value);
+        const idx = types.indexOf(sessionType as typeof types[number]);
+        const next = types[(idx + 1) % types.length];
+        setFormField("sessionType", next as OmnibarFormState["sessionType"]);
+        return;
+      }
+
       if (e.key === "Escape") {
         // Stop propagation so the global document listener doesn't call onClose() a second time.
         e.nativeEvent.stopImmediatePropagation();
@@ -567,6 +600,8 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
       handleCompletionSelect,
       onClose,
       dispatchMode,
+      sessionType,
+      setFormField,
     ]
   );
 
@@ -639,6 +674,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
       // Build prompt from attached image paths (pre-session uploads go to temp dir).
       const imagePaths = attachedImagePathsRef.current;
       const finalPrompt = imagePaths.length > 0 ? imagePaths.join(" ") : undefined;
+      const firstPromptText = formState.firstPrompt?.trim() || undefined;
 
       let sessionData: OmnibarSessionData;
 
@@ -655,6 +691,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
           autoYes,
           sessionType: newProjectSessionType,
           isNewProject: true,
+          initialPrompt: firstPromptText,
         };
       } else {
         sessionData = {
@@ -669,6 +706,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
           existingWorktree: sessionType === "one_off" ? undefined : (existingWorktree.trim() || undefined),
           workingDir: sessionType === "one_off" ? undefined : (workingDir.trim() || undefined),
           oneOff: sessionType === "one_off" ? true : undefined,
+          initialPrompt: firstPromptText,
         };
 
         // Handle GitHub URLs - path will be resolved server-side
@@ -1031,6 +1069,11 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
                 <span className={shortcutKey}>Tab</span> Complete
               </span>
             </>
+          )}
+          {!isDiscoveryMode && !isDropdownVisible && (
+            <span className={shortcut}>
+              <span className={shortcutKey}>Tab</span> Cycle type
+            </span>
           )}
         </div>
       </div>
