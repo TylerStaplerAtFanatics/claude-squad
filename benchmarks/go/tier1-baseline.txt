@@ -2,108 +2,108 @@
 goos: linux
 goarch: amd64
 pkg: github.com/tstapler/stapler-squad/server/terminal
-cpu: AMD EPYC 7763 64-Core Processor                
-BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  102080	     11428 ns/op	8960.74 MB/s	   13310 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  105205	     11351 ns/op	9021.10 MB/s	   13310 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  103215	     11661 ns/op	8781.69 MB/s	   13310 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  102327	     11596 ns/op	8830.74 MB/s	   13310 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  104256	     11452 ns/op	8942.01 MB/s	   13310 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  103954	     11372 ns/op	9004.29 MB/s	   13310 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  105186	     11320 ns/op	9045.89 MB/s	   13310 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  104983	     11344 ns/op	9026.52 MB/s	   13310 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_RapidSequential-4              	  493372	      2314 ns/op	    1784 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_RapidSequential-4              	  489364	      2316 ns/op	    1784 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_RapidSequential-4              	  489812	      2338 ns/op	    1784 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_RapidSequential-4              	  476978	      2332 ns/op	    1784 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_RapidSequential-4              	  494445	      2361 ns/op	    1784 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_RapidSequential-4              	  496716	      2419 ns/op	    1784 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_RapidSequential-4              	  492418	      2318 ns/op	    1784 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_RapidSequential-4              	  494150	      2312 ns/op	    1784 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  362749	      3158 ns/op	3591.72 MB/s	    2073 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  363807	      3164 ns/op	3585.42 MB/s	    2073 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  358069	      3163 ns/op	3585.77 MB/s	    2073 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  363296	      3207 ns/op	3537.42 MB/s	    2073 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  346952	      3168 ns/op	3581.02 MB/s	    2073 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  353055	      3267 ns/op	3472.37 MB/s	    2073 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  351118	      3168 ns/op	3580.02 MB/s	    2073 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  343197	      3159 ns/op	3590.91 MB/s	    2073 B/op	       9 allocs/op
-BenchmarkDeltaGenerator_ProgressBar-4                  	  525296	      2145 ns/op	    1464 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_ProgressBar-4                  	  543813	      2134 ns/op	    1464 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_ProgressBar-4                  	  533410	      2141 ns/op	    1464 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_ProgressBar-4                  	  547712	      2153 ns/op	    1464 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_ProgressBar-4                  	  536674	      2131 ns/op	    1464 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_ProgressBar-4                  	  540242	      2135 ns/op	    1464 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_ProgressBar-4                  	  533055	      2142 ns/op	    1464 B/op	      10 allocs/op
-BenchmarkDeltaGenerator_ProgressBar-4                  	  540506	      2131 ns/op	    1464 B/op	      10 allocs/op
-BenchmarkDeltaGeneration-4                             	  542282	      2074 ns/op	    1689 B/op	       7 allocs/op
-BenchmarkDeltaGeneration-4                             	  530270	      2081 ns/op	    1689 B/op	       7 allocs/op
-BenchmarkDeltaGeneration-4                             	  526574	      2117 ns/op	    1689 B/op	       7 allocs/op
-BenchmarkDeltaGeneration-4                             	  549314	      2084 ns/op	    1689 B/op	       7 allocs/op
-BenchmarkDeltaGeneration-4                             	  547912	      2081 ns/op	    1689 B/op	       7 allocs/op
-BenchmarkDeltaGeneration-4                             	  526142	      2110 ns/op	    1689 B/op	       7 allocs/op
-BenchmarkDeltaGeneration-4                             	  548104	      2185 ns/op	    1689 B/op	       7 allocs/op
-BenchmarkDeltaGeneration-4                             	  515413	      2097 ns/op	    1689 B/op	       7 allocs/op
+cpu: AMD EPYC 9V74 80-Core Processor                
+BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  101836	     11742 ns/op	8720.80 MB/s	   13310 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  100242	     11825 ns/op	8659.73 MB/s	   13310 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_LargeANSI_100KB-4              	   97460	     11854 ns/op	8638.07 MB/s	   13310 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  100215	     11815 ns/op	8667.22 MB/s	   13310 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_LargeANSI_100KB-4              	   99896	     12277 ns/op	8340.65 MB/s	   13310 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_LargeANSI_100KB-4              	   98624	     12027 ns/op	8514.07 MB/s	   13310 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_LargeANSI_100KB-4              	  100351	     11818 ns/op	8664.73 MB/s	   13310 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_LargeANSI_100KB-4              	   97064	     11868 ns/op	8628.23 MB/s	   13310 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_RapidSequential-4              	  494847	      2326 ns/op	    1784 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_RapidSequential-4              	  485361	      2317 ns/op	    1784 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_RapidSequential-4              	  488684	      2315 ns/op	    1784 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_RapidSequential-4              	  437072	      2326 ns/op	    1784 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_RapidSequential-4              	  512642	      2307 ns/op	    1784 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_RapidSequential-4              	  491163	      2312 ns/op	    1784 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_RapidSequential-4              	  484022	      2331 ns/op	    1784 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_RapidSequential-4              	  440361	      2316 ns/op	    1784 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  351603	      3183 ns/op	3563.59 MB/s	    2073 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  358676	      3191 ns/op	3554.32 MB/s	    2073 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  351976	      3205 ns/op	3539.46 MB/s	    2073 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  355594	      3269 ns/op	3470.02 MB/s	    2073 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  353512	      3188 ns/op	3557.95 MB/s	    2073 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  355048	      3182 ns/op	3565.17 MB/s	    2073 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  361281	      3207 ns/op	3536.65 MB/s	    2073 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_FullScreen_WithCompression-4   	  349873	      3180 ns/op	3566.57 MB/s	    2073 B/op	       9 allocs/op
+BenchmarkDeltaGenerator_ProgressBar-4                  	  538537	      2094 ns/op	    1464 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_ProgressBar-4                  	  552794	      2091 ns/op	    1464 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_ProgressBar-4                  	  538771	      2082 ns/op	    1464 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_ProgressBar-4                  	  541305	      2091 ns/op	    1464 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_ProgressBar-4                  	  538176	      2099 ns/op	    1464 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_ProgressBar-4                  	  524419	      2101 ns/op	    1464 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_ProgressBar-4                  	  542365	      2079 ns/op	    1464 B/op	      10 allocs/op
+BenchmarkDeltaGenerator_ProgressBar-4                  	  540668	      2087 ns/op	    1464 B/op	      10 allocs/op
+BenchmarkDeltaGeneration-4                             	  537711	      2038 ns/op	    1689 B/op	       7 allocs/op
+BenchmarkDeltaGeneration-4                             	  548164	      2052 ns/op	    1689 B/op	       7 allocs/op
+BenchmarkDeltaGeneration-4                             	  546096	      2042 ns/op	    1689 B/op	       7 allocs/op
+BenchmarkDeltaGeneration-4                             	  548167	      2034 ns/op	    1689 B/op	       7 allocs/op
+BenchmarkDeltaGeneration-4                             	  542802	      2029 ns/op	    1689 B/op	       7 allocs/op
+BenchmarkDeltaGeneration-4                             	  552664	      2047 ns/op	    1689 B/op	       7 allocs/op
+BenchmarkDeltaGeneration-4                             	  539554	      2032 ns/op	    1689 B/op	       7 allocs/op
+BenchmarkDeltaGeneration-4                             	  537861	      2046 ns/op	    1689 B/op	       7 allocs/op
 PASS
-ok  	github.com/tstapler/stapler-squad/server/terminal	47.987s
+ok  	github.com/tstapler/stapler-squad/server/terminal	48.187s
 goos: linux
 goarch: amd64
 pkg: github.com/tstapler/stapler-squad/session/scrollback
-cpu: AMD EPYC 7763 64-Core Processor                
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  378789	      3422 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  341720	      3420 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  349987	      3442 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  340039	      3418 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  368379	      3508 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  359446	      3383 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  358917	      3400 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  360292	      3404 ns/op	    6208 B/op	       2 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    100946 ns/op	 634.00 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    100858 ns/op	 634.56 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    104402 ns/op	 613.02 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    105148 ns/op	 608.67 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    105244 ns/op	 608.11 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    104944 ns/op	 609.85 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    104533 ns/op	 612.25 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_BurstAppend-4            	   10000	    105116 ns/op	 608.85 MB/s	   64000 B/op	    1000 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   77512	     16195 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   74421	     16259 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   77592	     16945 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   72843	     16829 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   73148	     17161 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   66405	     17232 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   74534	     16892 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   71628	     16934 ns/op	   57344 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  116577	      9838 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  109152	     10450 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  117834	      9873 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  115195	     10153 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  122473	     10574 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  103450	     10033 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  108446	     10103 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBuffer_GetRange_Sequential-4    	  103948	     10333 ns/op	   28672 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	11968084	        99.14 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	11985748	        99.98 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12120768	        99.11 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12002857	        99.51 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12154515	        99.54 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12009016	        99.66 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	12070621	        99.24 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferAppend-4                  	11986688	        99.45 ns/op	      24 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  582703	      1968 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  610669	      1946 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  605780	      1914 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  617922	      1955 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  603747	      1958 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  608461	      1921 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  627181	      1965 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferGetLastN-4                	  601640	      2003 ns/op	    6144 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 9016668	       131.4 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 8994706	       131.7 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 8872028	       132.2 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 8946258	       131.8 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 8857735	       131.4 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 9144326	       131.3 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 9040712	       131.0 ns/op	      32 B/op	       1 allocs/op
-BenchmarkCircularBufferConcurrentAppend-4        	 8945448	       131.2 ns/op	      32 B/op	       1 allocs/op
+cpu: AMD EPYC 9V74 80-Core Processor                
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  418184	      3131 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  390024	      3123 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  376773	      3134 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  398944	      3267 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  383672	      3105 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  376844	      3158 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  389280	      3218 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_ConcurrentReadWrite-4    	  396889	      3125 ns/op	    6208 B/op	       2 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	    9883	    104601 ns/op	 611.85 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	    9945	    105750 ns/op	 605.20 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	    9846	    105124 ns/op	 608.80 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	    9788	    104849 ns/op	 610.40 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	    9955	    105728 ns/op	 605.33 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	    9688	    105853 ns/op	 604.61 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	    9676	    107084 ns/op	 597.66 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_BurstAppend-4            	    9771	    104442 ns/op	 612.78 MB/s	   64000 B/op	    1000 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   74828	     15738 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   75128	     16034 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   75014	     16169 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   74397	     16164 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   75790	     16492 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   78943	     16504 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   67666	     16139 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetLastN_LargeBuffer-4   	   74425	     16090 ns/op	   57344 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  133370	      9106 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  135621	      9203 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  135132	      9139 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  139464	      9116 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  135027	      8896 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  130501	      8952 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  137179	      9256 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBuffer_GetRange_Sequential-4    	  136346	      8907 ns/op	   28672 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	11369944	       103.1 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	11540173	       103.1 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	11559084	       103.3 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	11484318	       103.4 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	11472754	       103.3 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	11509501	       103.1 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	11474308	       103.2 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferAppend-4                  	11550838	       103.0 ns/op	      24 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  627290	      1720 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  652827	      1738 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  655178	      1752 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  685605	      1742 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  607396	      1746 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  647956	      1764 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  662325	      1742 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferGetLastN-4                	  663043	      1787 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8503843	       135.6 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8700705	       135.4 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8638580	       136.2 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8693631	       136.1 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8663256	       136.4 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8713280	       135.5 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8478463	       136.6 ns/op	      32 B/op	       1 allocs/op
+BenchmarkCircularBufferConcurrentAppend-4        	 8617946	       138.4 ns/op	      32 B/op	       1 allocs/op
 PASS
-ok  	github.com/tstapler/stapler-squad/session/scrollback	71.492s
+ok  	github.com/tstapler/stapler-squad/session/scrollback	71.254s
