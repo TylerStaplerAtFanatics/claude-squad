@@ -43,6 +43,7 @@ type ClassificationResult struct {
 	Alternative string
 	RuleID      string
 	RuleName    string
+	Source      string // rule source: "seed", "user", or "claude-settings"
 }
 
 // PermissionRequestPayload is the JSON payload from Claude Code's PermissionRequest HTTP hook.
@@ -501,6 +502,7 @@ func (c *RuleBasedClassifier) classifySingle(payload PermissionRequestPayload) C
 				Alternative: rule.Alternative,
 				RuleID:      rule.ID,
 				RuleName:    rule.Name,
+				Source:      rule.Source,
 			}
 		}
 	}
@@ -731,7 +733,7 @@ func SeedRules() []Rule {
 		{
 			ID:          "seed-deny-env-write",
 			Name:        "Block writes to .env files",
-			ToolPattern: regexp.MustCompile(`(?i)^(Write|Edit|MultiEdit)$`),
+			ToolPattern: regexp.MustCompile(`(?i)^(Write|Edit|MultiEdit|Update)$`),
 			FilePattern: regexp.MustCompile(`(^|/)\.env(\.|$)`),
 			Decision:    AutoDeny,
 			RiskLevel:   RiskCritical,
@@ -744,7 +746,7 @@ func SeedRules() []Rule {
 		{
 			ID:          "seed-deny-git-internals-write",
 			Name:        "Block writes to .git internals",
-			ToolPattern: regexp.MustCompile(`(?i)^(Write|Edit|MultiEdit)$`),
+			ToolPattern: regexp.MustCompile(`(?i)^(Write|Edit|MultiEdit|Update)$`),
 			FilePattern: regexp.MustCompile(`(^|/)\.git/`),
 			Decision:    AutoDeny,
 			RiskLevel:   RiskCritical,
@@ -1306,7 +1308,7 @@ func SeedRules() []Rule {
 		{
 			ID:          "seed-allow-file-tools",
 			Name:        "Allow core file editing tools",
-			ToolPattern: regexp.MustCompile(`(?i)^(Edit|Write|MultiEdit)$`),
+			ToolPattern: regexp.MustCompile(`(?i)^(Edit|Write|MultiEdit|Update)$`),
 			Decision:    AutoAllow,
 			RiskLevel:   RiskLow,
 			Reason:      "Core Claude Code file editing tools; .env and .git deny rules protect critical paths.",
