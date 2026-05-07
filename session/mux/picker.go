@@ -2,6 +2,7 @@ package mux
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tstapler/stapler-squad/executor/safeexec"
 	"golang.org/x/term"
 )
 
@@ -26,7 +28,9 @@ type SessionInfo struct {
 // ListStaplerSquadSessionsWithInfo returns sessions with full metadata
 func ListStaplerSquadSessionsWithInfo() ([]SessionInfo, error) {
 	// Format: name|created|activity|path|windows|attached
-	cmd := exec.Command("tmux", "list-sessions", "-F",
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := safeexec.CommandContext(ctx, "tmux", "list-sessions", "-F",
 		"#{session_name}|#{session_created}|#{session_activity}|#{session_path}|#{session_windows}|#{session_attached}")
 	output, err := cmd.Output()
 	if err != nil {

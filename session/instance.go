@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/atotto/clipboard"
 	"github.com/google/uuid"
 	"github.com/linkdata/deadlock"
+	"github.com/tstapler/stapler-squad/executor/safeexec"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/detection/ratelimit"
 	"github.com/tstapler/stapler-squad/session/git"
@@ -1354,8 +1354,7 @@ func (i *Instance) KillExternalSession() error {
 	// Kill the tmux session
 	killCtx, killCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer killCancel()
-	cmd := exec.CommandContext(killCtx, "tmux", "kill-session", "-t", i.ExternalMetadata.TmuxSessionName)
-	cmd.WaitDelay = 2 * time.Second
+	cmd := safeexec.CommandContext(killCtx, "tmux", "kill-session", "-t", i.ExternalMetadata.TmuxSessionName)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to kill tmux session '%s': %w", i.ExternalMetadata.TmuxSessionName, err)
 	}
@@ -2001,28 +2000,36 @@ func (i *Instance) UpdateDiffStats() error {
 	// I/O outside lock: check worktree existence and compute diff
 	stats, needsPause := i.gitManager.ComputeDiffIfReady()
 
-	// Write lock to update state
+	// Write lock to update state — keep non-logging work only to minimise hold time.
 	i.stateMutex.Lock()
-	defer i.stateMutex.Unlock()
-
+	var transitionErr error
+	var didTransitionToPaused bool
 	if needsPause {
 		if i.Status != Paused {
-			log.WarningLog.Printf("Worktree directory for '%s' doesn't exist, marking as paused", i.Title)
-			if err := i.transitionTo(Paused); err != nil {
-				log.WarningLog.Printf("Failed to transition '%s' to Paused: %v", i.Title, err)
-			}
+			didTransitionToPaused = true
+			transitionErr = i.transitionTo(Paused)
 		}
 		i.gitManager.ClearDiffStats()
+		i.stateMutex.Unlock()
+		if didTransitionToPaused {
+			log.WarningLog.Printf("Worktree directory for '%s' doesn't exist, marking as paused", i.Title)
+		}
+		if transitionErr != nil {
+			log.WarningLog.Printf("Failed to transition '%s' to Paused: %v", i.Title, transitionErr)
+		}
 		return nil
 	}
 	if stats != nil && stats.Error != nil {
 		if strings.Contains(stats.Error.Error(), "base commit SHA not set") {
 			i.gitManager.ClearDiffStats()
+			i.stateMutex.Unlock()
 			return nil
 		}
+		i.stateMutex.Unlock()
 		return fmt.Errorf("failed to get diff stats: %w", stats.Error)
 	}
 	i.gitManager.SetDiffStats(stats)
+	i.stateMutex.Unlock()
 	return nil
 }
 

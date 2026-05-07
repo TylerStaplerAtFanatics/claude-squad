@@ -534,6 +534,86 @@ func TestClassify_PythonInline_SafeStdlib_Allow(t *testing.T) {
 	}
 }
 
+func TestClassify_PythonInlineMultiline_Escalate(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	// Multiline python -c scripts that use banned patterns (e.g. open()) should escalate
+	// via seed-escalate-python-inline-multiline, which provides a temp-script recommendation.
+	// The banned pattern must be in the actual code, not in a # comment.
+	multilineWithOpen := "python3 -c \"\nimport json\nwith open('/tmp/foo') as f: pass\n\""
+	payload := PermissionRequestPayload{
+		ToolName:  "Bash",
+		ToolInput: map[string]interface{}{"command": multilineWithOpen},
+	}
+	result := c.Classify(payload, ctx)
+	if result.Decision == AutoAllow {
+		t.Errorf("multiline python -c with open(): expected Escalate, got AutoAllow (rule=%s)", result.RuleID)
+	}
+	if result.RuleID != "seed-escalate-python-inline-multiline" {
+		t.Errorf("multiline python -c with open(): expected rule seed-escalate-python-inline-multiline, got %s", result.RuleID)
+	}
+}
+
+func TestClassify_PythonInlineMultilineSafeStdlib_Allow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	// Multiline python -c that uses only safe stdlib and has no banned patterns in the
+	// actual code should be auto-allowed even when # comment lines are present.
+	multilineSafe := "python3 -c \"\nimport json\n# print last reply too if multiple\nfor t in []: print(t)\n\""
+	payload := PermissionRequestPayload{
+		ToolName:  "Bash",
+		ToolInput: map[string]interface{}{"command": multilineSafe},
+	}
+	result := c.Classify(payload, ctx)
+	if result.Decision != AutoAllow {
+		t.Errorf("multiline stdlib-only python -c: expected AutoAllow, got %v (rule=%s reason=%s)",
+			result.Decision, result.RuleID, result.Reason)
+	}
+}
+
+func TestClassify_PythonInlineCommentStripping_Allow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	// Multiline python -c where a whole-line # comment mentions a banned pattern
+	// (open, eval, exec) should still be auto-allowed when the actual code is safe stdlib.
+	// The comment line "# use open() to read" must not trigger the banned-pattern check.
+	safeWithCommentLine := "python3 -c \"\nimport json\n# use open() to read\nprint(json.dumps({}))\n\""
+	payload := PermissionRequestPayload{
+		ToolName:  "Bash",
+		ToolInput: map[string]interface{}{"command": safeWithCommentLine},
+	}
+	result := c.Classify(payload, ctx)
+	if result.Decision != AutoAllow {
+		t.Errorf("python -c with banned pattern only in # comment line: expected AutoAllow, got %v (rule=%s reason=%s)",
+			result.Decision, result.RuleID, result.Reason)
+	}
+}
+
+func TestClassify_PythonInlineActualBannedPattern_Escalate(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	// python -c that actually uses open() in code (not just in a comment) must still escalate.
+	cmds := []string{
+		`python3 -c "import json; f = open('/tmp/x'); print(f.read())"`,
+		`python3 -c "import json; eval('1+1')"`,
+		`python3 -c "import json; exec('print(1)')"`,
+	}
+	for _, cmd := range cmds {
+		payload := PermissionRequestPayload{
+			ToolName:  "Bash",
+			ToolInput: map[string]interface{}{"command": cmd},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision == AutoAllow {
+			t.Errorf("cmd %q: expected Escalate for actual banned pattern, got AutoAllow (rule=%s)", cmd, result.RuleID)
+		}
+	}
+}
+
 func TestClassify_PipUnknownSubcmd_Escalate(t *testing.T) {
 	c := NewRuleBasedClassifier()
 	ctx := ClassificationContext{}
@@ -2867,5 +2947,90 @@ func TestClassify_EnvExpansion(t *testing.T) {
 					tc.cmd, tc.env, r.Decision, r.RuleID, r.Reason, tc.want)
 			}
 		})
+	}
+}
+
+// T-UNIT-GO-01: Update tool must be auto-allowed for regular file edits (seed-allow-file-tools).
+func TestClassify_UpdateTool_RegularFile_AutoAllow(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	files := []string{
+		"/project/main.go",
+		"/project/web-app/src/App.tsx",
+		"README.md",
+		"/tmp/some_file.txt",
+	}
+	for _, file := range files {
+		payload := PermissionRequestPayload{
+			ToolName:  "Update",
+			ToolInput: map[string]interface{}{"file_path": file},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoAllow {
+			t.Errorf("Update on %q: expected AutoAllow, got %v (rule=%s)", file, result.Decision, result.RuleID)
+		}
+	}
+}
+
+// T-UNIT-GO-02: Update tool must be auto-denied for .env files (seed-deny-env-write).
+func TestClassify_UpdateTool_EnvFile_AutoDeny(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	files := []string{".env", ".env.local", ".env.production", "/project/.env.test"}
+	for _, file := range files {
+		payload := PermissionRequestPayload{
+			ToolName:  "Update",
+			ToolInput: map[string]interface{}{"file_path": file},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoDeny {
+			t.Errorf("Update on %q: expected AutoDeny, got %v (rule=%s)", file, result.Decision, result.RuleID)
+		}
+	}
+}
+
+// T-UNIT-GO-03: Update tool must be auto-denied for .git internal files (seed-deny-git-internals-write).
+func TestClassify_UpdateTool_GitInternals_AutoDeny(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	files := []string{
+		".git/hooks/pre-commit",
+		".git/config",
+		".git/HEAD",
+	}
+	for _, file := range files {
+		payload := PermissionRequestPayload{
+			ToolName:  "Update",
+			ToolInput: map[string]interface{}{"file_path": file},
+		}
+		result := c.Classify(payload, ctx)
+		if result.Decision != AutoDeny {
+			t.Errorf("Update on %q: expected AutoDeny, got %v (rule=%s)", file, result.Decision, result.RuleID)
+		}
+	}
+}
+
+// T-UNIT-GO-04: ClassificationResult.Source is populated from the matching rule's Source field.
+func TestClassify_ResultSource_PopulatedFromRule(t *testing.T) {
+	c := NewRuleBasedClassifier()
+	ctx := ClassificationContext{}
+
+	payload := PermissionRequestPayload{
+		ToolName:  "Update",
+		ToolInput: map[string]interface{}{"file_path": "/project/main.go"},
+	}
+	result := c.Classify(payload, ctx)
+	if result.Decision != AutoAllow {
+		t.Fatalf("expected AutoAllow, got %v", result.Decision)
+	}
+	if result.Source == "" {
+		t.Error("expected Source to be populated, got empty string")
+	}
+	// Seed rules have Source == "seed"
+	if result.Source != "seed" {
+		t.Errorf("expected Source=%q for seed rule, got %q", "seed", result.Source)
 	}
 }

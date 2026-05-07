@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tstapler/stapler-squad/executor/safeexec"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/session/tmux"
 )
@@ -32,7 +33,7 @@ func batchPTYInfo(socket string) map[string]paneEntry {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "tmux", args...)
+	cmd := safeexec.CommandContext(ctx, "tmux", args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -68,7 +69,7 @@ func batchProcessStates(pids []int) map[int]PTYStatus {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "ps", "-p", strings.Join(pidStrs, ","), "-o", "pid=,state=")
+	cmd := safeexec.CommandContext(ctx, "ps", "-p", strings.Join(pidStrs, ","), "-o", "pid=,state=")
 	output, err := cmd.Output()
 	result := make(map[int]PTYStatus, len(pids))
 	if err == nil {
@@ -126,7 +127,7 @@ func batchPaneActivity(socket string) map[string]time.Time {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "tmux", args...)
+	cmd := safeexec.CommandContext(ctx, "tmux", args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -162,7 +163,7 @@ func batchIsClaudeProcess(pids []int) map[int]bool {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "ps", "-p", strings.Join(pidStrs, ","), "-o", "pid=,command=")
+	cmd := safeexec.CommandContext(ctx, "ps", "-p", strings.Join(pidStrs, ","), "-o", "pid=,command=")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -514,7 +515,7 @@ func (pd *PTYDiscovery) discoverSquadPTYsWithCache(paneInfoMap map[string]paneEn
 func (pd *PTYDiscovery) getPTYInfoFromTmux(sessionName string) (string, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "tmux", "display-message", "-p", "-t", sessionName,
+	cmd := safeexec.CommandContext(ctx, "tmux", "display-message", "-p", "-t", sessionName,
 		"#{pane_tty}:#{pane_pid}")
 	output, err := cmd.Output()
 	if err != nil {
@@ -552,7 +553,7 @@ func (pd *PTYDiscovery) discoverOrphanedPTYsWithCache(paneInfoMap map[string]pan
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "tmux", "list-sessions", "-F", "#{session_name}")
+		cmd := safeexec.CommandContext(ctx, "tmux", "list-sessions", "-F", "#{session_name}")
 		output, err := cmd.Output()
 		if err != nil {
 			return connections
@@ -651,9 +652,9 @@ func (pd *PTYDiscovery) discoverExternalClaude(socket string, paneInfoMap map[st
 		defer cancel()
 		var cmd *exec.Cmd
 		if socket != "" {
-			cmd = exec.CommandContext(ctx, "tmux", "-L", socket, "list-sessions", "-F", "#{session_name}")
+			cmd = safeexec.CommandContext(ctx, "tmux", "-L", socket, "list-sessions", "-F", "#{session_name}")
 		} else {
-			cmd = exec.CommandContext(ctx, "tmux", "list-sessions", "-F", "#{session_name}")
+			cmd = safeexec.CommandContext(ctx, "tmux", "list-sessions", "-F", "#{session_name}")
 		}
 		output, err := cmd.Output()
 		if err != nil {
@@ -740,10 +741,10 @@ func (pd *PTYDiscovery) getPTYInfoFromTmuxWithSocket(sessionName string, socket 
 	defer cancel()
 	var cmd *exec.Cmd
 	if socket != "" {
-		cmd = exec.CommandContext(ctx, "tmux", "-L", socket, "display-message", "-p", "-t", sessionName,
+		cmd = safeexec.CommandContext(ctx, "tmux", "-L", socket, "display-message", "-p", "-t", sessionName,
 			"#{pane_tty}:#{pane_pid}")
 	} else {
-		cmd = exec.CommandContext(ctx, "tmux", "display-message", "-p", "-t", sessionName,
+		cmd = safeexec.CommandContext(ctx, "tmux", "display-message", "-p", "-t", sessionName,
 			"#{pane_tty}:#{pane_pid}")
 	}
 

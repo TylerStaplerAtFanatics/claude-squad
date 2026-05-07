@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/linkdata/deadlock"
+	"github.com/tstapler/stapler-squad/executor/safeexec"
 )
 
 // RiskLevel indicates the severity of a tool use request.
@@ -43,6 +43,7 @@ type ClassificationResult struct {
 	Alternative string
 	RuleID      string
 	RuleName    string
+	Source      string // rule source: "seed", "user", or "claude-settings"
 }
 
 // PermissionRequestPayload is the JSON payload from Claude Code's PermissionRequest HTTP hook.
@@ -300,8 +301,15 @@ func (cc *CommandCriteria) Matches(pc ParsedCommand) bool {
 		// Covers: dangerous builtins (eval, exec, open, …) and pathlib write methods
 		// (.write_text, .unlink, .mkdir, …). See bannedInlinePythonPatterns for the
 		// full list and the rationale for each entry.
+		//
+		// Use CodeWithoutComments so that a Python comment like "# open() is dangerous"
+		// does not trigger a false positive — only real code occurrences are checked.
+		codeToCheck := pyInfo.CodeWithoutComments
+		if codeToCheck == "" {
+			codeToCheck = pc.Raw // fallback when ParsePythonCommand couldn't extract code
+		}
 		for _, banned := range bannedInlinePythonPatterns {
-			if strings.Contains(pc.Raw, banned) {
+			if strings.Contains(codeToCheck, banned) {
 				return false
 			}
 		}
@@ -501,6 +509,7 @@ func (c *RuleBasedClassifier) classifySingle(payload PermissionRequestPayload) C
 				Alternative: rule.Alternative,
 				RuleID:      rule.ID,
 				RuleName:    rule.Name,
+				Source:      rule.Source,
 			}
 		}
 	}
@@ -643,8 +652,7 @@ func (c *RuleBasedClassifier) BuildContext(cwd string) ClassificationContext {
 	}
 	gitCtx, gitCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer gitCancel()
-	toplevelCmd := exec.CommandContext(gitCtx, "git", "-C", cwd, "rev-parse", "--show-toplevel")
-	toplevelCmd.WaitDelay = 2 * time.Second
+	toplevelCmd := safeexec.CommandContext(gitCtx, "git", "-C", cwd, "rev-parse", "--show-toplevel")
 	if out, err := toplevelCmd.Output(); err == nil {
 		ctx.RepoRoot = strings.TrimSpace(string(out))
 		ctx.IsGitRepo = true
@@ -652,8 +660,7 @@ func (c *RuleBasedClassifier) BuildContext(cwd string) ClassificationContext {
 	if ctx.IsGitRepo {
 		gitDirCtx, gitDirCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer gitDirCancel()
-		gitDirCmd := exec.CommandContext(gitDirCtx, "git", "-C", cwd, "rev-parse", "--git-dir")
-		gitDirCmd.WaitDelay = 2 * time.Second
+		gitDirCmd := safeexec.CommandContext(gitDirCtx, "git", "-C", cwd, "rev-parse", "--git-dir")
 		if out, err := gitDirCmd.Output(); err == nil {
 			ctx.IsWorktree = strings.Contains(string(out), "worktrees")
 		}
@@ -731,7 +738,7 @@ func SeedRules() []Rule {
 		{
 			ID:          "seed-deny-env-write",
 			Name:        "Block writes to .env files",
-			ToolPattern: regexp.MustCompile(`(?i)^(Write|Edit|MultiEdit)$`),
+			ToolPattern: regexp.MustCompile(`(?i)^(Write|Edit|MultiEdit|Update)$`),
 			FilePattern: regexp.MustCompile(`(^|/)\.env(\.|$)`),
 			Decision:    AutoDeny,
 			RiskLevel:   RiskCritical,
@@ -744,7 +751,7 @@ func SeedRules() []Rule {
 		{
 			ID:          "seed-deny-git-internals-write",
 			Name:        "Block writes to .git internals",
-			ToolPattern: regexp.MustCompile(`(?i)^(Write|Edit|MultiEdit)$`),
+			ToolPattern: regexp.MustCompile(`(?i)^(Write|Edit|MultiEdit|Update)$`),
 			FilePattern: regexp.MustCompile(`(^|/)\.git/`),
 			Decision:    AutoDeny,
 			RiskLevel:   RiskCritical,
@@ -1306,7 +1313,7 @@ func SeedRules() []Rule {
 		{
 			ID:          "seed-allow-file-tools",
 			Name:        "Allow core file editing tools",
-			ToolPattern: regexp.MustCompile(`(?i)^(Edit|Write|MultiEdit)$`),
+			ToolPattern: regexp.MustCompile(`(?i)^(Edit|Write|MultiEdit|Update)$`),
 			Decision:    AutoAllow,
 			RiskLevel:   RiskLow,
 			Reason:      "Core Claude Code file editing tools; .env and .git deny rules protect critical paths.",
@@ -1444,6 +1451,7 @@ func SeedRules() []Rule {
 			// python -c "..." that only imports from the safe stdlib safelist (safeStdlibModules)
 			// is auto-allowed. If any import falls outside the safelist the rule does not match,
 			// and the escalate rule at priority 50 fires instead.
+			// Applies to both single-line ("inline") and multiline ("inline-multiline") -c scripts.
 			// Examples that auto-allow: python3 -c "import json, sys; print(json.dumps(sys.argv))"
 			// Examples that escalate: python3 -c "import requests; r = requests.get(url)"
 			ID:       "seed-allow-python-inline-stdlib",
@@ -1451,7 +1459,7 @@ func SeedRules() []Rule {
 			ToolName: "Bash",
 			Criteria: &CommandCriteria{
 				Programs:              []string{"python", "python2", "python3", "pypy", "pypy3"},
-				PythonModes:           []string{"inline"},
+				PythonModes:           []string{"inline", "inline-multiline"},
 				SafePythonImportsOnly: true,
 			},
 			Decision:  AutoAllow,
@@ -2211,6 +2219,33 @@ func SeedRules() []Rule {
 		},
 
 		// ══════════════════════════════════════════════════════════════════════════
+		// Escalate targeted (Priority 60) — more specific than catch-all; provides
+		// actionable alternatives for known patterns that benefit from guidance.
+		// ══════════════════════════════════════════════════════════════════════════
+
+		{
+			// Multiline python -c scripts (code blocks with embedded newlines and # comments)
+			// are harder to review inline and benefit from being saved to a temp .py file.
+			// Safe stdlib-only multiline scripts are auto-allowed at priority 100 by
+			// seed-allow-python-inline-stdlib. This rule catches multiline scripts that
+			// are not purely safe stdlib (e.g. they use open() or non-stdlib imports).
+			ID:       "seed-escalate-python-inline-multiline",
+			Name:     "Escalate multiline python -c inline script",
+			ToolName: "Bash",
+			Criteria: &CommandCriteria{
+				Programs:    []string{"python", "python2", "python3", "pypy", "pypy3"},
+				PythonModes: []string{"inline-multiline"},
+			},
+			Decision:    Escalate,
+			RiskLevel:   RiskMedium,
+			Reason:      "Multiline python -c scripts with embedded newlines and # comments are difficult to review safely inline.",
+			Alternative: "Save the code to a named script in /tmp/claude-scripts/ (e.g. /tmp/claude-scripts/parse-json.py) and run: python3 /tmp/claude-scripts/parse-json.py — named scripts are clearer, easier to review, and make it obvious they were generated by Claude.",
+			Priority:    60,
+			Enabled:     true,
+			Source:      "seed",
+		},
+
+		// ══════════════════════════════════════════════════════════════════════════
 		// Escalate catch-all (Priority 50) — no allow rule exists; provides a reason
 		// ══════════════════════════════════════════════════════════════════════════
 
@@ -2259,7 +2294,7 @@ func SeedRules() []Rule {
 			ToolName: "Bash",
 			Criteria: &CommandCriteria{
 				Programs:    []string{"python", "python2", "python3", "pypy", "pypy3"},
-				PythonModes: []string{"inline"},
+				PythonModes: []string{"inline", "inline-multiline"},
 			},
 			Decision:    Escalate,
 			RiskLevel:   RiskMedium,

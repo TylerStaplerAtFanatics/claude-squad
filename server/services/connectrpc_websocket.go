@@ -6,6 +6,7 @@ import (
 	"fmt"
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
+	"github.com/tstapler/stapler-squad/executor/safeexec"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/server/protocol"
 	"github.com/tstapler/stapler-squad/session"
@@ -13,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"sync"
@@ -23,6 +23,12 @@ import (
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 )
+
+// terminalDataPool reuses TerminalData proto objects in the stream hot path to avoid
+// per-frame heap allocations. Reset via proto.Reset before putting back.
+var terminalDataPool = sync.Pool{
+	New: func() any { return &sessionv1.TerminalData{} },
+}
 
 var wsUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -454,7 +460,9 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 	// asynchronously via the output reader goroutine. We must check existence first so
 	// the restore path actually runs.
 	tmuxSession := instance.GetTmuxSession()
-	if tmuxSession != nil && !tmuxSession.DoesSessionExist() {
+	// Use no-cache check: a stale positive (cache still true after session died) causes
+	// control mode to attach to a dead session and immediately receive %exit.
+	if tmuxSession != nil && !tmuxSession.DoesSessionExistNoCache() {
 		log.InfoLog.Printf("[streamViaControlMode] Session '%s' not in tmux, restoring before control mode", sessionID)
 		workDir := instance.GetWorkingDirectory()
 		if restoreErr := tmuxSession.RestoreWithWorkDir(workDir); restoreErr != nil {
@@ -517,8 +525,10 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 		return instance.CapturePaneContentRaw()
 	})
 	if err != nil {
-		log.InfoLog.Printf("[streamViaControlMode] capture-pane failed for '%s', proceeding with empty content: %v", sessionID, err)
-		initialContent = ""
+		log.InfoLog.Printf("[streamViaControlMode] capture-pane failed for '%s', sending stopped notice: %v", sessionID, err)
+		// Send a visible notice instead of leaving the terminal blank so the user
+		// knows why there is no output (session stopped, not a connection failure).
+		initialContent = "\r\n\x1b[33m[session stopped — no terminal content available]\x1b[0m\r\n"
 	}
 
 	if initialContent != "" {
@@ -567,11 +577,29 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 	errChan := make(chan error, 2)
 	doneChan := make(chan struct{})
 
-	// Goroutine 1: Forward control mode updates to WebSocket
+	// Goroutine 1: Forward control mode updates to WebSocket.
+	// Coalesces back-to-back frames so rapid terminal bursts are batched into a
+	// single proto message per write, reducing syscall count and allocations.
 	go func() {
 		defer close(doneChan)
 
 		log.InfoLog.Printf("[streamViaControlMode] Output goroutine started for session '%s'", sessionID)
+
+		// sendData marshals and writes a terminal output message, using a pooled proto.
+		sendData := func(data []byte) error {
+			msg := terminalDataPool.Get().(*sessionv1.TerminalData)
+			msg.SessionId = sessionID
+			msg.Data = &sessionv1.TerminalData_Output{
+				Output: &sessionv1.TerminalOutput{Data: data},
+			}
+			dataBytes, err := proto.Marshal(msg)
+			proto.Reset(msg)
+			terminalDataPool.Put(msg)
+			if err != nil {
+				return fmt.Errorf("failed to marshal output: %w", err)
+			}
+			return stream.WriteMessage(websocket.BinaryMessage, protocol.CreateEnvelope(0, dataBytes))
+		}
 
 		for {
 			select {
@@ -585,9 +613,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 						exitData := &sessionv1.TerminalData{
 							SessionId: sessionID,
 							Data: &sessionv1.TerminalData_Output{
-								Output: &sessionv1.TerminalOutput{
-									Data: exitContent,
-								},
+								Output: &sessionv1.TerminalOutput{Data: exitContent},
 							},
 						}
 						if exitBytes, merr := proto.Marshal(exitData); merr == nil {
@@ -599,28 +625,27 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 					return
 				}
 
-				// Mark snapshot dirty so the next client connect captures fresh content
+				// Mark snapshot dirty so the next client connect captures fresh content.
 				h.markSnapshotDirty(sessionID)
 
-				// Send incremental output (control mode provides raw terminal output)
-				terminalData := &sessionv1.TerminalData{
-					SessionId: sessionID,
-					Data: &sessionv1.TerminalData_Output{
-						Output: &sessionv1.TerminalOutput{
-							Data: data,
-						},
-					},
+				// Coalesce: drain any immediately available frames into a single write.
+				// Copy data into a fresh buffer — data is broadcast to all subscribers
+				// and shares a backing array; appending into it would corrupt other readers.
+				buf := append([]byte(nil), data...)
+			coalesce:
+				for {
+					select {
+					case more, ok := <-updateChan:
+						if !ok {
+							break coalesce
+						}
+						buf = append(buf, more...)
+					default:
+						break coalesce
+					}
 				}
 
-				dataBytes, err := proto.Marshal(terminalData)
-				if err != nil {
-					log.ErrorLog.Printf("[streamViaControlMode] Failed to marshal output: %v", err)
-					errChan <- fmt.Errorf("failed to marshal output: %w", err)
-					return
-				}
-
-				envelope := protocol.CreateEnvelope(0, dataBytes)
-				if err := stream.WriteMessage(websocket.BinaryMessage, envelope); err != nil {
+				if err := sendData(buf); err != nil {
 					log.ErrorLog.Printf("[streamViaControlMode] Failed to send output: %v", err)
 					errChan <- fmt.Errorf("failed to send output: %w", err)
 					return
@@ -1025,9 +1050,8 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 						// External sessions: Use tmux commands (best effort)
 						// External sessions may be attached to other terminals which control the actual size
 						rwCtx, rwCancel := context.WithTimeout(context.Background(), 5*time.Second)
-						resizeCmd := exec.CommandContext(rwCtx, "tmux", "resize-window", "-t", tmuxSessionName,
+						resizeCmd := safeexec.CommandContext(rwCtx, "tmux", "resize-window", "-t", tmuxSessionName,
 							"-x", fmt.Sprintf("%d", targetCols), "-y", fmt.Sprintf("%d", targetRows))
-						resizeCmd.WaitDelay = 2 * time.Second
 						if err := resizeCmd.Run(); err != nil {
 							log.WarningLog.Printf("[streamViaTmuxCapture] Failed to resize tmux window for external '%s': %v",
 								tmuxSessionName, err)
@@ -1036,9 +1060,8 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 
 						// Also try to resize the pane
 						rpCtx, rpCancel := context.WithTimeout(context.Background(), 5*time.Second)
-						paneCmd := exec.CommandContext(rpCtx, "tmux", "resize-pane", "-t", tmuxSessionName,
+						paneCmd := safeexec.CommandContext(rpCtx, "tmux", "resize-pane", "-t", tmuxSessionName,
 							"-x", fmt.Sprintf("%d", targetCols), "-y", fmt.Sprintf("%d", targetRows))
-						paneCmd.WaitDelay = 2 * time.Second
 						if err := paneCmd.Run(); err != nil {
 							log.WarningLog.Printf("[streamViaTmuxCapture] Failed to resize tmux pane for external '%s': %v",
 								tmuxSessionName, err)
@@ -1237,8 +1260,7 @@ func sendInputToTmux(tmuxSessionName string, data []byte) error {
 
 	skCtx, skCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer skCancel()
-	cmd := exec.CommandContext(skCtx, "tmux", args...)
-	cmd.WaitDelay = 2 * time.Second
+	cmd := safeexec.CommandContext(skCtx, "tmux", args...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("tmux send-keys failed: %w", err)
 	}

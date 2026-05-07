@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/executor"
+	"github.com/tstapler/stapler-squad/executor/safeexec"
 	"github.com/tstapler/stapler-squad/log"
 	"io"
 	"os"
@@ -228,8 +229,7 @@ func ListAllSessions(serverSocket string) (map[string]bool, error) {
 	args := prependSocket(serverSocket, []string{"list-sessions", "-F", "#{session_name}"})
 	listCtx, listCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer listCancel()
-	cmd := exec.CommandContext(listCtx, Binary(), args...)
-	cmd.WaitDelay = 2 * time.Second
+	cmd := safeexec.CommandContext(listCtx, Binary(), args...)
 	out, err := cmd.Output()
 	if err != nil {
 		// Collect stderr for server-down detection
@@ -258,8 +258,7 @@ func checkServerNotRunning(serverSocket string) bool {
 	args := prependSocket(serverSocket, []string{"list-sessions"})
 	checkCtx, checkCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer checkCancel()
-	cmd := exec.CommandContext(checkCtx, Binary(), args...)
-	cmd.WaitDelay = 2 * time.Second
+	cmd := safeexec.CommandContext(checkCtx, Binary(), args...)
 	out, err := cmd.CombinedOutput()
 	return err != nil && serverNotRunning(out)
 }
@@ -283,8 +282,7 @@ func EnsureServerRunning(serverSocket string) error {
 	args := prependSocket(serverSocket, []string{"start-server"})
 	startCtx, startCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer startCancel()
-	cmd := exec.CommandContext(startCtx, Binary(), args...)
-	cmd.WaitDelay = 2 * time.Second
+	cmd := safeexec.CommandContext(startCtx, Binary(), args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("tmux start-server failed: %w (output: %s)", err, out)
@@ -319,8 +317,7 @@ func SetExitEmpty(serverSocket string, enabled bool) error {
 	args := prependSocket(serverSocket, []string{"set-option", "-g", "exit-empty", value})
 	optCtx, optCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer optCancel()
-	cmd := exec.CommandContext(optCtx, Binary(), args...)
-	cmd.WaitDelay = 2 * time.Second
+	cmd := safeexec.CommandContext(optCtx, Binary(), args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("tmux set-option exit-empty %s failed: %w (output: %s)", value, err, out)
@@ -338,8 +335,7 @@ func CreateKeepaliveSession(serverSocket string) error {
 	hasArgs := prependSocket(serverSocket, []string{"has-session", "-t", keepaliveName})
 	hasCtx, hasCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer hasCancel()
-	hasCmd := exec.CommandContext(hasCtx, Binary(), hasArgs...)
-	hasCmd.WaitDelay = 2 * time.Second
+	hasCmd := safeexec.CommandContext(hasCtx, Binary(), hasArgs...)
 	if hasCmd.Run() == nil {
 		return nil // already exists
 	}
@@ -348,8 +344,7 @@ func CreateKeepaliveSession(serverSocket string) error {
 	newArgs := prependSocket(serverSocket, []string{"new-session", "-d", "-s", keepaliveName})
 	newCtx, newCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer newCancel()
-	cmd := exec.CommandContext(newCtx, Binary(), newArgs...)
-	cmd.WaitDelay = 2 * time.Second
+	cmd := safeexec.CommandContext(newCtx, Binary(), newArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to create keepalive session: %w (output: %s)", err, out)
@@ -585,7 +580,7 @@ func (t *TmuxSession) buildTmuxCommand(args ...string) *exec.Cmd {
 	cmdArgs = append(cmdArgs, args...)
 
 	// Use background context; callers supply their own timeout via the executor layer.
-	return exec.CommandContext(context.Background(), Binary(), cmdArgs...)
+	return safeexec.CommandContext(context.Background(), Binary(), cmdArgs...)
 }
 
 // buildAttachCommand creates a tmux attach-session command for PTY operations.
@@ -616,8 +611,11 @@ func (t *TmuxSession) StartWithCleanup(workDir string) (CleanupFunc, error) {
 
 // start is the internal implementation for Start and StartWithCleanup
 func (t *TmuxSession) start(workDir string, setupCleanup bool, cleanup *CleanupFunc) error {
-	// Check if the session already exists
-	if t.DoesSessionExist() {
+	// Use a no-cache check here to detect stale sessions from previous server runs.
+	// The registry only tracks sessions from the current run, so a session left over
+	// from a crashed/restarted server would not be in the registry and DoesSessionExist()
+	// would return false, causing new-session to fail with "duplicate session".
+	if t.DoesSessionExistNoCache() {
 		// Session already exists - we can reuse it
 		log.InfoLog.Printf("Tmux session '%s' already exists, reusing existing session", t.sanitizedName)
 
@@ -659,29 +657,61 @@ func (t *TmuxSession) start(workDir string, setupCleanup bool, cleanup *CleanupF
 
 	// Invalidate cache so the poll loop gets a fresh check immediately.
 	// The pre-creation DoesSessionExist() call above caches a "false" result,
-	// and the 500ms cache TTL would otherwise cause the first 500ms of the
+	// and the 5s cache TTL would otherwise cause the first 5s of the
 	// timeout window to be wasted on stale data.
 	t.invalidateExistsCache()
 
-	// Poll for session existence with exponential backoff.
-	// sessionCreateTimeout gives enough headroom when the tmux server is under load
-	// from multiple active sessions (ReviewQueuePoller, control-mode streaming, etc.).
-	timeout := time.After(sessionCreateTimeout)
-	sleepDuration := sessionPollInitialDelay
-	for !t.DoesSessionExist() {
-		select {
-		case <-timeout:
-			if cleanupErr := t.Close(); cleanupErr != nil {
-				err = fmt.Errorf("%v (cleanup error: %v)", err, cleanupErr)
+	// Fast path: confirm session existence directly via list-sessions before entering
+	// the poll loop. The push-based registry can lag behind tmux reality (the
+	// %session-created event arrives asynchronously), so using the registry alone
+	// causes poll-loop timeouts when the event is delayed. A single no-cache check
+	// right after successful new-session avoids the 10s wait in the common case.
+	if t.DoesSessionExistNoCache() {
+		// Proactively update the registry so DoesSessionExist() returns true
+		// immediately — the async %session-created event may not have arrived yet.
+		if notifier, ok := t.registry.(interface{ NotifySessionCreated(string) }); ok {
+			notifier.NotifySessionCreated(t.sanitizedName)
+		}
+		t.invalidateExistsCache()
+		// The registry is push-based: %session-created arrives asynchronously and may
+		// not be reflected yet. Wait briefly so that DoesSessionExist() (which takes
+		// the registry fast path when healthy) is consistent the moment Start() returns.
+		// Without this, callers see false immediately after a successful Start().
+		if t.registry != nil && t.registry.IsHealthy() {
+			registryDeadline := time.Now().Add(2 * time.Second)
+			for !t.registry.SessionExists(t.sanitizedName) {
+				if time.Now().After(registryDeadline) {
+					log.WarningLog.Printf("Registry lagged for session %s after creation; continuing", t.sanitizedName)
+					break
+				}
+				time.Sleep(5 * time.Millisecond)
 			}
-			return fmt.Errorf("timed out waiting for tmux session %s: %v", t.sanitizedName, err)
-		default:
-			time.Sleep(sleepDuration)
-			// Exponential backoff up to 50ms max
-			if sleepDuration < 50*time.Millisecond {
-				sleepDuration *= 2
+			t.invalidateExistsCache()
+		}
+	} else {
+		// Fall back to the poll loop for the rare case where the session isn't
+		// immediately visible (e.g. tmux server under heavy load).
+		// sessionCreateTimeout gives enough headroom when the tmux server is under load
+		// from multiple active sessions (ReviewQueuePoller, control-mode streaming, etc.).
+		timeout := time.After(sessionCreateTimeout)
+		sleepDuration := sessionPollInitialDelay
+		for !t.DoesSessionExistNoCache() {
+			select {
+			case <-timeout:
+				if cleanupErr := t.Close(); cleanupErr != nil {
+					err = fmt.Errorf("%v (cleanup error: %v)", err, cleanupErr)
+				}
+				return fmt.Errorf("timed out waiting for tmux session %s: %v", t.sanitizedName, err)
+			default:
+				time.Sleep(sleepDuration)
+				// Exponential backoff up to 50ms max
+				if sleepDuration < 50*time.Millisecond {
+					sleepDuration *= 2
+				}
 			}
 		}
+		// Session confirmed by poll loop, invalidate cache for fresh state
+		t.invalidateExistsCache()
 	}
 
 	// Session exists now, invalidate cache to ensure fresh state
@@ -1422,13 +1452,13 @@ func (t *TmuxSession) listSessionsRaw(ctx context.Context) ([]byte, error) {
 	} else {
 		cmdArgs = []string{"list-sessions", "-F", "#{session_name}"}
 	}
-	cmd := exec.CommandContext(ctx, Binary(), cmdArgs...)
+	cmd := safeexec.CommandContext(ctx, Binary(), cmdArgs...)
 	output, err := t.cmdExec.CombinedOutput(cmd)
 	// If the circuit breaker is open, fall back to direct exec.
 	// "No sessions" (exit 1 when server running but empty) can cause false circuit
 	// breaker trips; the fallback ensures checks always work regardless of breaker state.
 	if errors.Is(err, executor.ErrCircuitOpen) {
-		cmd = exec.CommandContext(ctx, Binary(), cmdArgs...)
+		cmd = safeexec.CommandContext(ctx, Binary(), cmdArgs...)
 		output, err = cmd.CombinedOutput()
 	}
 	return output, err
@@ -1439,10 +1469,15 @@ func (t *TmuxSession) DoesSessionExist() bool {
 		return false
 	}
 
-	// Fast path: use the push-based registry when it is healthy.
-	// This avoids an exec.Command fork entirely.
+	// Fast path: use the push-based registry when it is healthy and it confirms
+	// the session exists. If the registry returns false, it may be lagging behind
+	// tmux reality (e.g. the %session-created event has not been delivered yet),
+	// so fall through to the cache/subprocess path for an authoritative answer.
 	if t.registry != nil && t.registry.IsHealthy() {
-		return t.registry.SessionExists(t.sanitizedName)
+		if t.registry.SessionExists(t.sanitizedName) {
+			return true
+		}
+		// Registry returned false — do not trust it blindly; fall through.
 	}
 
 	// Check cache first (read lock)
@@ -1588,8 +1623,7 @@ func (t *TmuxSession) RefreshClient() error {
 		panePID := strings.TrimSpace(string(output))
 		winchCtx, winchCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer winchCancel()
-		killCmd := exec.CommandContext(winchCtx, "kill", "-WINCH", panePID)
-		killCmd.WaitDelay = 2 * time.Second
+		killCmd := safeexec.CommandContext(winchCtx, "kill", "-WINCH", panePID)
 		if err := killCmd.Run(); err != nil {
 			return fmt.Errorf("failed to send SIGWINCH: %w", err)
 		}
@@ -1813,11 +1847,10 @@ func CleanupSessionsOnServer(cmdExec executor.Executor, serverSocket string) err
 	defer lsCancel()
 	var cmd *exec.Cmd
 	if serverSocket != "" {
-		cmd = exec.CommandContext(lsCtx, Binary(), "-L", serverSocket, "ls")
+		cmd = safeexec.CommandContext(lsCtx, Binary(), "-L", serverSocket, "ls")
 	} else {
-		cmd = exec.CommandContext(lsCtx, Binary(), "ls")
+		cmd = safeexec.CommandContext(lsCtx, Binary(), "ls")
 	}
-	cmd.WaitDelay = 2 * time.Second
 	output, err := cmdExec.Output(cmd)
 
 	// If there's an error and it's because no server is running, that's fine
@@ -1840,11 +1873,10 @@ func CleanupSessionsOnServer(cmdExec executor.Executor, serverSocket string) err
 		killCtx, killCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		var killCmd *exec.Cmd
 		if serverSocket != "" {
-			killCmd = exec.CommandContext(killCtx, Binary(), "-L", serverSocket, "kill-session", "-t", match)
+			killCmd = safeexec.CommandContext(killCtx, Binary(), "-L", serverSocket, "kill-session", "-t", match)
 		} else {
-			killCmd = exec.CommandContext(killCtx, Binary(), "kill-session", "-t", match)
+			killCmd = safeexec.CommandContext(killCtx, Binary(), "kill-session", "-t", match)
 		}
-		killCmd.WaitDelay = 2 * time.Second
 		runErr := cmdExec.Run(killCmd)
 		killCancel()
 		if runErr != nil {
