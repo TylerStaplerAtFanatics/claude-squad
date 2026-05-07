@@ -15,6 +15,15 @@ export const paneHeader = style({
   fontSize: vars.fontSize.xs,
   userSelect: "none",
   cursor: "default",
+  "@media": {
+    // Hide pane header at ≤768px — SessionDetail's own tab bar (and MobilePaneTabStrip when
+    // multiple panes exist) covers pane navigation at that width. At 769–900px the pane header
+    // IS visible; cockpitRoot still subtracts the BottomNav height at that range (≤900px) so
+    // both can coexist. Above 900px the BottomNav disappears and the full 100dvh is available.
+    "(max-width: 768px)": {
+      display: "none",
+    },
+  },
 });
 
 export const paneTitle = style({

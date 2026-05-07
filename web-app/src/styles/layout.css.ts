@@ -13,6 +13,16 @@ export const cockpitRoot = style({
   gridTemplateColumns: "auto 1fr",
   height: "100dvh",
   overflow: "hidden",
+  "@media": {
+    // BottomNav is position:fixed below 900px. Shrink cockpit so content never renders
+    // underneath it. Breakpoint relationship:
+    //   ≤768px  — pane header hidden (paneHeader.css.ts), BottomNav visible, cockpit shrunk
+    //   769–900px — pane header visible, BottomNav visible, cockpit shrunk
+    //   >900px   — pane header visible, BottomNav hidden, full 100dvh available
+    "(max-width: 900px)": {
+      height: "calc(100dvh - var(--bottom-nav-height, 64px) - max(env(safe-area-inset-bottom, 0px), 8px))",
+    },
+  },
 });
 
 export const drawerColumn = style({

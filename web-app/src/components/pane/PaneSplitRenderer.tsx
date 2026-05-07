@@ -66,10 +66,8 @@ interface PaneSplitProps {
 function PaneSplitComponent({ pane, state, dispatch, sessions, isMobile }: PaneSplitProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // On mobile + vertical split: show only the pane containing the focused id
-  const isMobileVertical = isMobile && pane.direction === "vertical";
-
-  if (isMobileVertical) {
+  // On mobile: show only the pane containing the focused id (any split direction)
+  if (isMobile) {
     const focusedInFirst = containsPaneId(pane.first, state.focusedPaneId);
     const visibleNode = focusedInFirst ? pane.first : pane.second;
     return (
@@ -180,11 +178,13 @@ function PaneLeafComponent({ pane, state, dispatch, sessions }: PaneLeafProps) {
  * Renders the full recursive pane layout.
  */
 export function PaneSplitRenderer({ state, dispatch, sessions }: PaneSplitRendererProps) {
-  const { isMobile } = useViewport();
+  const { isMobile, isFoldable } = useViewport();
+  // Collapse split panes for any viewport below 900px (mobile + foldable) — BottomNav is
+  // visible there and single-pane + MobilePaneTabStrip gives a better UX than cramped splits.
+  const isNarrow = isMobile || isFoldable;
   const allLeaves = getAllLeaves(state.root);
   const hasMultiplePanes = allLeaves.length > 1;
-  const hasVerticalSplit = state.root.type === "split" && state.root.direction === "vertical";
-  const showMobileTabStrip = isMobile && hasVerticalSplit && hasMultiplePanes;
+  const showMobileTabStrip = isNarrow && hasMultiplePanes;
 
   return (
     <div
@@ -219,7 +219,7 @@ export function PaneSplitRenderer({ state, dispatch, sessions }: PaneSplitRender
           state={state}
           dispatch={dispatch}
           sessions={sessions}
-          isMobile={isMobile}
+          isMobile={isNarrow}
         />
       </div>
 
