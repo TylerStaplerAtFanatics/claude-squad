@@ -488,7 +488,7 @@ export function SessionList({
   };
 
   return (
-    <div className={container}>
+    <div className={container} data-context="session-list">
       <div className={header}>
         <div className={headerTop}>
           <h2 className={title}>Sessions ({filteredSessions.length})</h2>

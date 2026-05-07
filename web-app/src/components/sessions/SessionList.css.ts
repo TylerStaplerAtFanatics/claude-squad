@@ -3,12 +3,12 @@ import { vars } from "@/styles/theme.css";
 
 export const container = style({
   width: "100%",
-  maxWidth: "1200px",
-  margin: "0 auto",
-  padding: vars.space["6"],
+  // Story 2.2.2: max-width removed — the session list now lives in a fixed 280px
+  // column; constraining width further would waste space.
+  padding: vars.space["4"],
   "@media": {
     "(max-width: 768px)": {
-      padding: vars.space["4"],
+      padding: vars.space["3"],
     },
   },
 });
@@ -261,9 +261,23 @@ export const categoryTitle = style({
   fontSize: "1rem",
   fontWeight: 600,
   color: vars.color.textPrimary,
+  // Story 4.3: sticky group headers — stick to top of scrolling column
+  position: "sticky",
+  top: 0,
+  zIndex: 10,
   background: vars.color.surfaceSubtle,
   borderLeft: `4px solid ${vars.color.primary}`,
   borderRadius: vars.radii.sm,
+  // Subtle glow on group header accent border
+  boxShadow: `inset 4px 0 0 ${vars.color.glowSecondary}`,
+  cursor: "pointer",
+  userSelect: "none",
+  selectors: {
+    "&:hover": {
+      background: vars.color.hoverBackground,
+    },
+  },
+  transition: "background 0.15s ease",
 });
 
 export const categoryContent = style({
@@ -324,18 +338,18 @@ export const newSessionButtonLarge = style({
   borderRadius: vars.radii.lg,
   fontSize: "1rem",
   fontWeight: 600,
-  color: "white",
+  color: vars.color.primaryText,
   background: vars.color.primary,
   textDecoration: "none",
   transition: "all 0.2s ease",
-  boxShadow: "0 2px 4px rgba(0, 102, 204, 0.2)",
+  boxShadow: `0 2px 4px ${vars.color.glowSecondary}`,
   border: "none",
   cursor: "pointer",
   selectors: {
     "&:hover": {
       background: vars.color.primaryHover,
       transform: "translateY(-2px)",
-      boxShadow: "0 6px 12px rgba(0, 102, 204, 0.3)",
+      boxShadow: `0 6px 12px ${vars.color.glowPrimary}`,
     },
     "&:active": { transform: "translateY(0)" },
   },

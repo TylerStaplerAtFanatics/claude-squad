@@ -635,12 +635,13 @@ export function SessionCard({
         isExternal ? cardExternal : "",
         isDeleting ? cardDeleting : "",
       ].filter(Boolean).join(" ")}
+      data-testid="session-card"
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
-      role="button"
+      role="group"
+      aria-roledescription="session"
       tabIndex={0}
       aria-label={`Session ${session.title}, status: ${getStatusText(session.status)}, program: ${session.program}`}
-      aria-pressed={selectMode ? isSelected : undefined}
     >
       <div className={checkbox} onClick={handleCheckboxClick}>
         <input

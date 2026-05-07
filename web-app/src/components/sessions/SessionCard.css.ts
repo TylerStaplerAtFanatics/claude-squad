@@ -1,14 +1,10 @@
 import { style, keyframes, globalStyle, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
+import { pulseGlowKeyframes } from "@/styles/animations.css";
 
 const cardFadeSlideIn = keyframes({
   from: { opacity: 0, transform: "translateY(8px)" },
   to: { opacity: 1, transform: "translateY(0)" },
-});
-
-const attentionPulse = keyframes({
-  "0%, 100%": { boxShadow: "0 0 0 0 rgba(239, 68, 68, 0)" },
-  "50%": { boxShadow: "0 0 0 4px rgba(239, 68, 68, 0.3)" },
 });
 
 const fadeIn = keyframes({
@@ -41,7 +37,8 @@ export const card = style({
   selectors: {
     "&:hover": {
       borderColor: vars.color.borderHover,
-      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+      // Story 4.2: Theme-aware glow on hover
+      boxShadow: `0 2px 8px rgba(0, 0, 0, 0.1), 0 0 0 1px ${vars.color.glowSecondary}`,
     },
   },
 });
@@ -167,70 +164,42 @@ export const status = style({
 });
 
 export const statusRunning = style({
-  background: "#dcfce7",
-  color: "#14532d", // bumped from #166534 (~4.6:1) for better contrast safety margin
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#166534",
-      color: "#dcfce7",
-    },
-  },
+  background: vars.statusBadge.completeBg,
+  color: vars.statusBadge.completeFg,
 });
 
 export const statusReady = style({
-  background: "#dbeafe",
-  color: "#1e40af",
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#1e40af",
-      color: "#dbeafe",
-    },
-  },
+  background: vars.statusBadge.inputBg,
+  color: vars.statusBadge.inputFg,
 });
 
 export const statusPaused = style({
-  background: "#fef3c7",
-  color: "#78350f", // bumped from #92400e (~4.5:1) for better contrast safety margin
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#92400e",
-      color: "#fef3c7",
-    },
-  },
+  background: vars.statusBadge.uncommittedBg,
+  color: vars.statusBadge.uncommittedFg,
 });
 
 export const statusLoading = style({
-  background: "#e0e7ff",
-  color: "#4338ca",
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#3730a3",
-      color: "#e0e7ff",
-    },
-  },
+  background: vars.statusBadge.processingBg,
+  color: vars.statusBadge.processingFg,
 });
 
 export const statusNeedsApproval = style({
-  background: "#fecaca",
-  color: "#991b1b",
-  animationName: attentionPulse,
-  animationDuration: "2s",
-  animationTimingFunction: "ease-in-out",
-  animationIterationCount: "infinite",
+  background: vars.color.errorBg,
+  color: vars.color.errorText,
+  // Story 4.2: Use theme-aware glow pulse from animations.css.ts
   "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#991b1b",
-      color: "#fecaca",
-    },
-    "(prefers-reduced-motion: reduce)": {
-      animationName: "none",
+    "(prefers-reduced-motion: no-preference)": {
+      animationName: pulseGlowKeyframes,
+      animationDuration: "2s",
+      animationTimingFunction: "ease-in-out",
+      animationIterationCount: "infinite",
     },
   },
 });
 
 export const statusUnknown = style({
-  background: "#f3f4f6",
-  color: "#374151",
+  background: vars.statusBadge.idleBg,
+  color: vars.statusBadge.idleFg,
 });
 
 export const category = style({
@@ -262,17 +231,12 @@ export const tag = style({
   padding: `${vars.space["1"]} 10px`,
   fontSize: "0.6875rem",
   fontWeight: 500,
-  background: "#1e40af",
-  color: "#dbeafe",
+  background: vars.statusBadge.inputBg,
+  color: vars.statusBadge.inputFg,
   borderRadius: vars.radii.full,
   transition: "background 0.2s ease",
   selectors: {
-    "&:hover": { background: "#1e3a8a" },
-  },
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      color: "#dbeafe",
-    },
+    "&:hover": { background: vars.color.accentHover },
   },
 });
 
@@ -281,19 +245,13 @@ export const editTagsButton = style({
   fontSize: "0.6875rem",
   fontWeight: 600,
   background: "transparent",
-  color: "#1e40af",
-  border: "1px solid #1e40af",
+  color: vars.color.textSecondary,
+  border: `1px solid ${vars.color.primary}`,
   borderRadius: vars.radii.full,
   cursor: "pointer",
   transition: "all 0.2s ease",
   selectors: {
-    "&:hover": { background: "#1e40af", color: "#dbeafe" },
-  },
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      color: "#dbeafe",
-      borderColor: "#1e40af",
-    },
+    "&:hover": { background: vars.color.primary, color: vars.color.primaryText },
   },
 });
 
