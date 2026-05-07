@@ -1,4 +1,4 @@
-import { PaneId, PaneNode, LeafPane, SplitPane, PaneState, SessionDetailTab } from "./paneTypes";
+import { PaneId, PaneNode, LeafPane, SplitPane, PaneState, SessionDetailTab, PaneViewKind } from "./paneTypes";
 
 export const MIN_RATIO = 0.1;
 export const MAX_RATIO = 0.9;
@@ -13,18 +13,43 @@ export function generatePaneId(): PaneId {
 }
 
 /** Create a new empty leaf pane */
-export function createLeaf(id?: PaneId, activeTab: SessionDetailTab = "terminal"): LeafPane {
-  return { type: "leaf", id: id ?? generatePaneId(), sessionId: null, activeTab };
+export function createLeaf(id?: PaneId, activeTab: SessionDetailTab = "terminal", viewKind: PaneViewKind = "session-detail"): LeafPane {
+  return { type: "leaf", id: id ?? generatePaneId(), sessionId: null, activeTab, viewKind };
 }
 
-/** Return the initial single-pane state */
+/** Return the initial pane state: a vertical split with session-list on the left and session-detail on the right */
 export function initialPaneState(): PaneState {
-  const leaf = createLeaf();
+  const listLeaf = createLeaf(undefined, "terminal", "session-list");
+  const detailLeaf = createLeaf(undefined, "terminal", "session-detail");
+  const splitNode: SplitPane = {
+    type: "split",
+    id: generatePaneId(),
+    direction: "vertical",
+    ratio: 0.28,
+    first: listLeaf,
+    second: detailLeaf,
+  };
   return {
-    root: leaf,
-    focusedPaneId: leaf.id,
+    root: splitNode,
+    focusedPaneId: detailLeaf.id,
     zoomedPaneId: null,
   };
+}
+
+/**
+ * Swap the content (viewKind, sessionId, activeTab) of two leaf panes while keeping their IDs.
+ * Returns the original root unchanged if either pane is not found.
+ */
+export function swapPanes(root: PaneNode, paneId: PaneId, targetPaneId: PaneId): PaneNode {
+  if (paneId === targetPaneId) return root;
+  const leaf1 = findLeaf(root, paneId);
+  const leaf2 = findLeaf(root, targetPaneId);
+  if (!leaf1 || !leaf2) return root;
+  const c1 = { viewKind: leaf1.viewKind, sessionId: leaf1.sessionId, activeTab: leaf1.activeTab };
+  const c2 = { viewKind: leaf2.viewKind, sessionId: leaf2.sessionId, activeTab: leaf2.activeTab };
+  let result = replaceNode(root, paneId, { ...leaf1, ...c2 });
+  result = replaceNode(result, targetPaneId, { ...leaf2, ...c1 });
+  return result;
 }
 
 /** Returns true if the tree contains at least one vertical (side-by-side) split */

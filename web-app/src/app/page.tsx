@@ -4,26 +4,16 @@
 import React, { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Session } from "@/gen/session/v1/types_pb";
-import { SessionList } from "@/components/sessions/SessionList";
 import { SessionListSkeleton } from "@/components/sessions/SessionListSkeleton";
 import { SessionDetailTab } from "@/components/sessions/SessionDetail";
-import { SessionDetailBar } from "@/components/sessions/SessionDetailBar";
 import { SessionWizard } from "@/components/sessions/SessionWizard";
 import { ResumeSessionModal } from "@/components/sessions/ResumeSessionModal";
-import { ErrorState } from "@/components/ui/ErrorState";
 import { useSessionServiceContext } from "@/lib/contexts/SessionServiceContext";
 import { useKeyboard } from "@/lib/hooks/useKeyboard";
 import { useOmnibar } from "@/lib/contexts/OmnibarContext";
 import { SessionFormData } from "@/lib/validation/sessionSchema";
 import { PaneTilingContainer } from "@/components/pane/PaneTilingContainer";
-import { ResizeHandle } from "@/components/pane/ResizeHandle";
-import { useListColumnWidth } from "@/lib/hooks/useListColumnWidth";
-import { useSessionListSplit } from "@/lib/hooks/useSessionListSplit";
-import {
-  cockpitGrid,
-  sessionListColumn,
-  detailColumn,
-} from "@/styles/sessionCockpit.css";
+import { CockpitActionsProvider } from "@/lib/contexts/CockpitActionsContext";
 import * as styles from "./page.css";
 
 function HomeContent() {
@@ -42,18 +32,6 @@ function HomeContent() {
   const [externalAssignCounter, setExternalAssignCounter] = useState(0);
   const [externalAssignSession, setExternalAssignSession] = useState<{ sessionId: string; tab: SessionDetailTab } | null>(null);
 
-  // US-1: resizable session list column width
-  const [listColumnWidth, setListColumnWidth] = useListColumnWidth();
-
-  // Session list vertical split
-  const { isSplit: isListSplit, splitRatio: listSplitRatio, toggleSplit: toggleListSplit, setSplitRatio: setListSplitRatio } = useSessionListSplit();
-
-  // Keep the last visible session alive so SessionDetail doesn't unmount on deselect
-  const lastVisibleSessionRef = useRef<Session | null>(null);
-  if (selectedSession) {
-    lastVisibleSessionRef.current = selectedSession;
-  }
-  const detailSession = lastVisibleSessionRef.current;
 
   // Resume modal state
   const [resumeTarget, setResumeTarget] = useState<Session | null>(null);
@@ -444,126 +422,51 @@ function HomeContent() {
     },
   });
 
+  const cockpitActions = {
+    sessions,
+    loading,
+    error,
+    onSessionClick: handleSessionClick,
+    onDeleteSession: handleDeleteSession,
+    onPauseSession: pauseSession,
+    onResumeSession: handleResumeRequest,
+    onDirectResumeSession: handleDirectResume,
+    onCloneSession: handleCloneSession,
+    onNewWorkspaceSession: handleNewWorkspaceSession,
+    onRenameSession: renameSession,
+    onRestartSession: restartSession,
+    onUpdateTags: handleUpdateTags,
+    onNewSession: handleNewSession,
+    onCreateCheckpoint: createCheckpoint,
+    onListCheckpoints: listCheckpoints,
+    onForkFromCheckpoint: forkSession,
+    onRunOneShot: handleRunOneShot,
+    onSetRateLimitEnabled: handleSetRateLimitEnabled,
+    onClearConversationState: clearConversationState,
+    onListSessions: listSessions,
+  };
+
   return (
     <div className={styles.page}>
-      {/* 3-column cockpit grid: session list | detail panel | (context panel future) */}
-      <div
-        className={cockpitGrid({ contextPanelOpen: false })}
-        style={{ flex: 1, minHeight: 0, "--list-col-width": `${listColumnWidth}px` } as React.CSSProperties}
-      >
-        {/* Column 1 — session list (supports vertical split into two independent lists) */}
-        <div
-          className={sessionListColumn({ sessionSelected: !!selectedSession })}
-          style={isListSplit ? { overflowY: "hidden", display: "flex", flexDirection: "column" } : undefined}
-        >
-          {loading && <SessionListSkeleton count={4} />}
-          {error && !loading && (
-            <ErrorState
-              error={error}
-              title="Failed to Load Sessions"
-              message="Unable to connect to the server. Please check that the server is running and try again."
-              onRetry={() => listSessions()}
-            />
-          )}
-          {!loading && !error && (() => {
-            const splitToggleButton = (
-              <button
-                onClick={toggleListSplit}
-                title={isListSplit ? "Collapse session list split" : "Split session list"}
-                aria-label={isListSplit ? "Collapse session list split" : "Split session list"}
-                style={{
-                  padding: "2px 8px",
-                  fontSize: "0.75rem",
-                  background: isListSplit ? "var(--color-primary, #0070f3)" : "transparent",
-                  color: isListSplit ? "white" : "inherit",
-                  border: "1px solid var(--color-border, #e5e7eb)",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  lineHeight: 1.5,
-                }}
-              >
-                ⊟
-              </button>
-            );
-            const sharedListProps = {
-              sessions,
-              onSessionClick: handleSessionClick,
-              onDeleteSession: handleDeleteSession,
-              onPauseSession: pauseSession,
-              onResumeSession: handleResumeRequest,
-              onDirectResumeSession: handleDirectResume,
-              onCloneSession: handleCloneSession,
-              onNewWorkspaceSession: handleNewWorkspaceSession,
-              onRenameSession: renameSession,
-              onRestartSession: restartSession,
-              onUpdateTags: handleUpdateTags,
-              onNewSession: handleNewSession,
-              onCreateCheckpoint: createCheckpoint,
-              onListCheckpoints: listCheckpoints,
-              onForkFromCheckpoint: forkSession,
-              onRunOneShot: handleRunOneShot,
-              onSetRateLimitEnabled: handleSetRateLimitEnabled,
-              onClearConversationState: clearConversationState,
-            };
-            if (!isListSplit) {
-              return <SessionList {...sharedListProps} extraHeaderActions={splitToggleButton} />;
-            }
-            return (
-              <>
-                <div style={{ flex: listSplitRatio, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
-                  <SessionList {...sharedListProps} extraHeaderActions={splitToggleButton} />
-                </div>
-                <ResizeHandle
-                  splitId="list-split"
-                  direction="horizontal"
-                  onResize={(_id, ratio) => setListSplitRatio(ratio)}
-                />
-                <div style={{ flex: 1 - listSplitRatio, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
-                  <SessionList {...sharedListProps} storageKeyPrefix="split2." />
-                </div>
-              </>
-            );
-          })()}
-        </div>
-
-        {/* List column resize handle (US-1) — sits between col 1 and col 2 in the grid */}
-        <ResizeHandle
-          splitId="list-column"
-          direction="vertical"
-          onResize={(_splitId, ratio) => {
-            // Convert ratio back to pixel width based on viewport
-            const totalW = typeof window !== "undefined" ? window.innerWidth : 1200;
-            setListColumnWidth(Math.round(ratio * totalW));
-          }}
-        />
-
-        {/* Column 2 — tiling pane layout */}
+      {/* Unified tiling cockpit — session list and detail panels are both pane views */}
+      <CockpitActionsProvider value={cockpitActions}>
         <div
           ref={sessionDetailRef}
-          className={detailColumn({ sessionSelected: !!selectedSession })}
+          style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}
           tabIndex={-1}
           role="region"
-          aria-label="Session detail"
+          aria-label="Session cockpit"
           data-context="cockpit"
         >
-          {detailSession && (
-            <SessionDetailBar
-              branch={detailSession.branch}
-              path={detailSession.path}
-              onBack={closeSession}
-            />
-          )}
-          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <PaneTilingContainer
-              sessions={sessions}
-              externalSessionAssign={externalAssignSession ? {
-                ...externalAssignSession,
-                version: externalAssignCounter,
-              } : null}
-            />
-          </div>
+          <PaneTilingContainer
+            sessions={sessions}
+            externalSessionAssign={externalAssignSession ? {
+              ...externalAssignSession,
+              version: externalAssignCounter,
+            } : null}
+          />
         </div>
-      </div>
+      </CockpitActionsProvider>
 
       {/* Session creation wizard modal */}
       {showWizard && (

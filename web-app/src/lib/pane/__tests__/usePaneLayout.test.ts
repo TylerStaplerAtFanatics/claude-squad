@@ -33,7 +33,7 @@ describe("loadPaneLayout", () => {
       LS_KEY,
       JSON.stringify({
         version: 1,
-        root: { type: "leaf", id: "x", sessionId: null, activeTab: "terminal" },
+        root: { type: "leaf", id: "x", viewKind: "session-detail", sessionId: null, activeTab: "terminal" },
       })
     );
     expect(loadPaneLayout()).toBeNull();
@@ -42,7 +42,7 @@ describe("loadPaneLayout", () => {
   it("usePaneLayout_should_returnParsedLayout_When_validJsonStored", () => {
     const layout = {
       version: 1,
-      root: { type: "leaf", id: "abc", sessionId: null, activeTab: "terminal" },
+      root: { type: "leaf", id: "abc", viewKind: "session-detail", sessionId: null, activeTab: "terminal" },
       focusedPaneId: "abc",
       zoomedPaneId: null,
     };
@@ -58,7 +58,7 @@ describe("loadPaneLayout", () => {
 describe("savePaneLayout", () => {
   it("usePaneLayout_should_writeToLocalStorage_When_saveCalledWithValidState", () => {
     const state: PaneState = {
-      root: { type: "leaf", id: "abc", sessionId: null, activeTab: "terminal" },
+      root: { type: "leaf", id: "abc", viewKind: "session-detail", sessionId: null, activeTab: "terminal" },
       focusedPaneId: "abc",
       zoomedPaneId: null,
     };
@@ -88,6 +88,7 @@ describe("validateAndRepair", () => {
     const tree: PaneNode = {
       type: "leaf",
       id: "p1",
+      viewKind: "session-detail",
       sessionId: "stale-session",
       activeTab: "terminal",
     };
@@ -100,6 +101,7 @@ describe("validateAndRepair", () => {
     const tree: PaneNode = {
       type: "leaf",
       id: "p1",
+      viewKind: "session-detail",
       sessionId: "live-session",
       activeTab: "terminal",
     };
@@ -114,8 +116,8 @@ describe("validateAndRepair", () => {
       id: "s1",
       direction: "vertical",
       ratio: 0.5,
-      first: { type: "leaf", id: "p1", sessionId: "live", activeTab: "terminal" },
-      second: { type: "leaf", id: "p2", sessionId: "stale", activeTab: "terminal" },
+      first: { type: "leaf", id: "p1", viewKind: "session-detail", sessionId: "live", activeTab: "terminal" },
+      second: { type: "leaf", id: "p2", viewKind: "session-detail", sessionId: "stale", activeTab: "terminal" },
     };
     const validIds = new Set<string>(["live"]);
     const repaired = validateAndRepair(tree, validIds) as SplitPane;
@@ -127,6 +129,7 @@ describe("validateAndRepair", () => {
     const tree: PaneNode = {
       type: "leaf",
       id: "p1",
+      viewKind: "session-detail",
       sessionId: null,
       activeTab: "terminal",
     };

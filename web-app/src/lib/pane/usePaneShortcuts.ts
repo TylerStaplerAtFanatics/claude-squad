@@ -2,8 +2,9 @@
 
 import { useCallback, RefObject } from "react";
 import { useShortcut } from "@/lib/shortcuts/useShortcut";
-import type { PaneState, PaneAction } from "./paneTypes";
+import type { PaneState } from "./paneTypes";
 import { getAdjacentLeaf } from "./paneUtils";
+import type { PaneAction } from "./paneTypes";
 
 /**
  * usePaneShortcuts — registers all 12 pane keyboard shortcuts.
@@ -105,6 +106,27 @@ export function usePaneShortcuts(
     });
   }, [dispatch, state.focusedPaneId, containerRef]);
 
+  // ── Swap ───────────────────────────────────────────────────────────────────
+  const swapRight = useCallback(() => {
+    const adj = getAdjacentLeaf(state.root, state.focusedPaneId, "ArrowRight");
+    if (adj) dispatch({ type: "SWAP_PANES", paneId: state.focusedPaneId, targetPaneId: adj.id });
+  }, [dispatch, state.root, state.focusedPaneId]);
+
+  const swapLeft = useCallback(() => {
+    const adj = getAdjacentLeaf(state.root, state.focusedPaneId, "ArrowLeft");
+    if (adj) dispatch({ type: "SWAP_PANES", paneId: state.focusedPaneId, targetPaneId: adj.id });
+  }, [dispatch, state.root, state.focusedPaneId]);
+
+  const swapUp = useCallback(() => {
+    const adj = getAdjacentLeaf(state.root, state.focusedPaneId, "ArrowUp");
+    if (adj) dispatch({ type: "SWAP_PANES", paneId: state.focusedPaneId, targetPaneId: adj.id });
+  }, [dispatch, state.root, state.focusedPaneId]);
+
+  const swapDown = useCallback(() => {
+    const adj = getAdjacentLeaf(state.root, state.focusedPaneId, "ArrowDown");
+    if (adj) dispatch({ type: "SWAP_PANES", paneId: state.focusedPaneId, targetPaneId: adj.id });
+  }, [dispatch, state.root, state.focusedPaneId]);
+
   // ── Zoom ───────────────────────────────────────────────────────────────────
   const zoomPane = useCallback(() => {
     dispatch({ type: "ZOOM_PANE", paneId: state.focusedPaneId });
@@ -205,5 +227,37 @@ export function usePaneShortcuts(
     label: "Zoom/unzoom focused pane",
     context: "cockpit",
     action: zoomPane,
+  });
+
+  useShortcut("cockpit.swap-right", {
+    key: "ArrowRight",
+    modifiers: { ctrl: true, shift: true },
+    label: "Swap pane right",
+    context: "cockpit",
+    action: swapRight,
+  });
+
+  useShortcut("cockpit.swap-left", {
+    key: "ArrowLeft",
+    modifiers: { ctrl: true, shift: true },
+    label: "Swap pane left",
+    context: "cockpit",
+    action: swapLeft,
+  });
+
+  useShortcut("cockpit.swap-up", {
+    key: "ArrowUp",
+    modifiers: { ctrl: true, shift: true },
+    label: "Swap pane up",
+    context: "cockpit",
+    action: swapUp,
+  });
+
+  useShortcut("cockpit.swap-down", {
+    key: "ArrowDown",
+    modifiers: { ctrl: true, shift: true },
+    label: "Swap pane down",
+    context: "cockpit",
+    action: swapDown,
   });
 }

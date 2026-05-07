@@ -1,4 +1,4 @@
-import { PaneState, PaneNode, LeafPane, PersistedPaneLayout } from "./paneTypes";
+import { PaneState, PaneNode, LeafPane, PersistedPaneLayout, PaneViewKind } from "./paneTypes";
 
 const STORAGE_KEY = "cockpit.paneLayout";
 
@@ -10,6 +10,8 @@ export function validateAndRepair(tree: PaneNode, validIds: Set<string>): PaneNo
   if (tree.type === "leaf") {
     const leaf: LeafPane = {
       ...tree,
+      // Backward compat: old saved layouts pre-dating viewKind default to session-detail
+      viewKind: (tree.viewKind ?? "session-detail") as PaneViewKind,
       sessionId:
         tree.sessionId !== null && validIds.has(tree.sessionId)
           ? tree.sessionId

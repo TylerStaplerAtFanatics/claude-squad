@@ -4,7 +4,7 @@ import { PaneState, PaneNode, LeafPane, SplitPane } from "../paneTypes";
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 function leaf(id: string, sessionId: string | null = null): LeafPane {
-  return { type: "leaf", id, sessionId, activeTab: "terminal" };
+  return { type: "leaf", id, viewKind: "session-detail", sessionId, activeTab: "terminal" };
 }
 
 function split(
@@ -106,8 +106,9 @@ describe("CLOSE_PANE", () => {
     const root = leaf("pane-only");
     const state = stateOf(root, "pane-only");
     const next = paneReducer(state, { type: "CLOSE_PANE", paneId: "pane-only" });
-    expect(next.root.type).toBe("leaf");
-    expect((next.root as LeafPane).sessionId).toBeNull();
+    // Closing the last leaf resets to the initial split layout (list | detail)
+    expect(next.root.type).toBe("split");
+    expect(next.zoomedPaneId).toBeNull();
   });
 
   it("paneReducer_should_returnUnchangedState_When_paneIdNotFound", () => {
@@ -201,23 +202,30 @@ describe("ASSIGN_SESSION", () => {
 // ─── RESET_LAYOUT ─────────────────────────────────────────────────────────────
 
 describe("RESET_LAYOUT", () => {
-  it("paneReducer_should_returnInitialSingleEmptyLeaf_When_resetLayout", () => {
+  it("paneReducer_should_returnInitialSplitLayout_When_resetLayout", () => {
     const root = split("s1", "vertical",
       split("s2", "horizontal", leaf("p1", "session-A"), leaf("p2", "session-B")),
       leaf("p3", "session-C")
     );
     const state = stateOf(root, "p3");
     const next = paneReducer(state, { type: "RESET_LAYOUT" });
-    expect(next.root.type).toBe("leaf");
-    expect((next.root as LeafPane).sessionId).toBeNull();
+    // RESET_LAYOUT returns the default split layout: session-list | session-detail
+    expect(next.root.type).toBe("split");
+    const s = next.root as SplitPane;
+    expect(s.direction).toBe("vertical");
+    expect((s.first as LeafPane).viewKind).toBe("session-list");
+    expect((s.second as LeafPane).viewKind).toBe("session-detail");
+    expect((s.second as LeafPane).sessionId).toBeNull();
     expect(next.zoomedPaneId).toBeNull();
   });
 
-  it("paneReducer_should_setFocusToNewRootLeaf_When_resetLayout", () => {
+  it("paneReducer_should_setFocusToDetailPane_When_resetLayout", () => {
     const root = split("s1", "vertical", leaf("p1"), leaf("p2"));
     const state = stateOf(root, "p2");
     const next = paneReducer(state, { type: "RESET_LAYOUT" });
-    expect(next.focusedPaneId).toBe((next.root as LeafPane).id);
+    // Focus lands on the detail pane (second leaf in the default split)
+    const detailLeaf = ((next.root as SplitPane).second) as LeafPane;
+    expect(next.focusedPaneId).toBe(detailLeaf.id);
   });
 });
 

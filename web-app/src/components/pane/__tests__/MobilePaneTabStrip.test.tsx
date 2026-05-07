@@ -7,6 +7,7 @@ import type { Session } from "@/gen/session/v1/types_pb";
 const makeLeaf = (id: string, sessionId: string | null = null): LeafPane => ({
   type: "leaf",
   id,
+  viewKind: "session-detail",
   sessionId,
   activeTab: "info",
 });

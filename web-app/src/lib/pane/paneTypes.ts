@@ -1,5 +1,6 @@
 export type PaneId = string;
 export type SplitDirection = "horizontal" | "vertical";
+export type PaneViewKind = "session-detail" | "session-list";
 
 // Mirrors SessionDetail's tab union
 export type SessionDetailTab = "terminal" | "diff" | "vcs" | "logs" | "info" | "files";
@@ -7,7 +8,8 @@ export type SessionDetailTab = "terminal" | "diff" | "vcs" | "logs" | "info" | "
 export interface LeafPane {
   type: "leaf";
   id: PaneId;
-  sessionId: string | null;  // null = empty slot ("click a session to load")
+  viewKind: PaneViewKind;   // what this pane displays; defaults to "session-detail"
+  sessionId: string | null; // used only when viewKind === "session-detail"
   activeTab: SessionDetailTab;
 }
 
@@ -47,5 +49,7 @@ export type PaneAction =
   | { type: "ASSIGN_TAB";    paneId: PaneId; tab: SessionDetailTab }
   | { type: "ZOOM_PANE";     paneId: PaneId | null }
   | { type: "NUDGE_RESIZE";  paneId: PaneId; direction: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"; amountPx: number; containerSizePx: number }
+  | { type: "SET_PANE_VIEW"; paneId: PaneId; viewKind: PaneViewKind }
+  | { type: "SWAP_PANES";    paneId: PaneId; targetPaneId: PaneId }
   | { type: "RESET_LAYOUT" }
   | { type: "RESTORE_LAYOUT"; state: PaneState };

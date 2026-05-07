@@ -4,6 +4,7 @@ import { useRef, useEffect } from "react";
 import type { Session } from "@/gen/session/v1/types_pb";
 import { usePaneReducer } from "@/lib/pane/usePaneReducer";
 import { usePaneShortcuts } from "@/lib/pane/usePaneShortcuts";
+import { getAllLeaves, findLeaf } from "@/lib/pane/paneReducer";
 import { PaneSplitRenderer } from "./PaneSplitRenderer";
 import { PaneContext } from "./PaneContext";
 
@@ -38,17 +39,26 @@ export function PaneTilingContainer({
   // Register keyboard shortcuts
   usePaneShortcuts(state, dispatch, containerRef);
 
-  // When externalSessionAssign.version changes, route the session to the focused pane
+  // When externalSessionAssign.version changes, route the session to the best detail pane.
+  // Skips session-list panes: if focused pane is a list, fall back to the first detail pane.
   useEffect(() => {
     if (!externalSessionAssign) return;
     if (externalSessionAssign.version === prevVersionRef.current) return;
     prevVersionRef.current = externalSessionAssign.version;
 
-    dispatch({ type: "ASSIGN_SESSION", paneId: state.focusedPaneId, sessionId: externalSessionAssign.sessionId });
-    if (externalSessionAssign.tab) {
-      dispatch({ type: "ASSIGN_TAB", paneId: state.focusedPaneId, tab: externalSessionAssign.tab });
+    const focusedLeaf = findLeaf(state.root, state.focusedPaneId);
+    let targetPaneId = state.focusedPaneId;
+    if (!focusedLeaf || focusedLeaf.viewKind === "session-list") {
+      const allLeaves = getAllLeaves(state.root);
+      const detailLeaf = allLeaves.find((l) => l.viewKind === "session-detail");
+      if (detailLeaf) targetPaneId = detailLeaf.id;
     }
-  }, [externalSessionAssign, dispatch, state.focusedPaneId]);
+
+    dispatch({ type: "ASSIGN_SESSION", paneId: targetPaneId, sessionId: externalSessionAssign.sessionId });
+    if (externalSessionAssign.tab) {
+      dispatch({ type: "ASSIGN_TAB", paneId: targetPaneId, tab: externalSessionAssign.tab });
+    }
+  }, [externalSessionAssign, dispatch, state.root, state.focusedPaneId]);
 
   return (
     <PaneContext.Provider value={{ state, dispatch, sessions }}>

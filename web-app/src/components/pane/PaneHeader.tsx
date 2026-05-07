@@ -1,7 +1,7 @@
 "use client";
 
 import type { Session } from "@/gen/session/v1/types_pb";
-import type { LeafPane, SessionDetailTab } from "@/lib/pane/paneTypes";
+import type { LeafPane, SessionDetailTab, PaneViewKind } from "@/lib/pane/paneTypes";
 import {
   paneHeader,
   paneTitle,
@@ -38,6 +38,7 @@ interface PaneHeaderProps {
   onFocus: () => void;
   onTabChange: (tab: SessionDetailTab) => void;
   onZoom: () => void;
+  onSetView?: (viewKind: PaneViewKind) => void;
   splitButtonVisible?: boolean;
   onSplitVertical?: () => void;
 }
@@ -50,13 +51,15 @@ export function PaneHeader({
   onFocus,
   onTabChange,
   onZoom,
+  onSetView,
   splitButtonVisible,
   onSplitVertical,
 }: PaneHeaderProps) {
-  const session = pane.sessionId
+  const isListPane = pane.viewKind === "session-list";
+  const session = !isListPane && pane.sessionId
     ? sessions.find((s) => s.id === pane.sessionId) ?? null
     : null;
-  const titleText = session ? session.title : "Empty";
+  const titleText = isListPane ? "Sessions" : (session ? session.title : "Empty");
 
   return (
     <div
@@ -68,8 +71,8 @@ export function PaneHeader({
         {titleText}
       </span>
 
-      {/* Tab switcher buttons (only show when pane has a session) */}
-      {session &&
+      {/* Tab switcher buttons (only for session-detail panes with a session) */}
+      {!isListPane && session &&
         ALL_TABS.map((tab) => (
           <button
             key={tab}
@@ -84,6 +87,22 @@ export function PaneHeader({
             {TAB_LABELS[tab]}
           </button>
         ))}
+
+      {/* View-kind toggle: cycle between session-list and session-detail */}
+      {onSetView && (
+        <button
+          className={paneHeaderButton}
+          data-testid="pane-view-toggle-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSetView(isListPane ? "session-detail" : "session-list");
+          }}
+          title={isListPane ? "Switch to session detail" : "Switch to session list"}
+          aria-label={isListPane ? "Switch to session detail" : "Switch to session list"}
+        >
+          {isListPane ? "⊡" : "☰"}
+        </button>
+      )}
 
       {/* Split vertical button */}
       {splitButtonVisible && (
@@ -101,18 +120,20 @@ export function PaneHeader({
         </button>
       )}
 
-      {/* Zoom button */}
-      <button
-        className={paneHeaderButton}
-        onClick={(e) => {
-          e.stopPropagation();
-          onZoom();
-        }}
-        title="Zoom pane"
-        aria-label="Zoom pane"
-      >
-        ⊞
-      </button>
+      {/* Zoom button (only for session-detail) */}
+      {!isListPane && (
+        <button
+          className={paneHeaderButton}
+          onClick={(e) => {
+            e.stopPropagation();
+            onZoom();
+          }}
+          title="Zoom pane"
+          aria-label="Zoom pane"
+        >
+          ⊞
+        </button>
+      )}
 
       {/* Close button */}
       <button

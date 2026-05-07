@@ -19,6 +19,7 @@ import {
   containsPaneId,
   replaceNode,
   wouldExceedMaxDepth,
+  swapPanes,
 } from "./paneUtils";
 
 function clampRatio(ratio: number): number {
@@ -148,6 +149,28 @@ export function paneReducer(state: PaneState, action: PaneAction): PaneState {
       return { ...state, root: newRoot };
     }
 
+    case "SET_PANE_VIEW": {
+      const { paneId, viewKind } = action;
+      const target = findLeaf(state.root, paneId);
+      if (!target) return state;
+      const updated: LeafPane = {
+        ...target,
+        viewKind,
+        // session-list panes don't display a specific session
+        sessionId: viewKind === "session-list" ? null : target.sessionId,
+      };
+      const newRoot = replaceNode(state.root, paneId, updated);
+      return { ...state, root: newRoot };
+    }
+
+    case "SWAP_PANES": {
+      const { paneId, targetPaneId } = action;
+      if (paneId === targetPaneId) return state;
+      const newRoot = swapPanes(state.root, paneId, targetPaneId);
+      if (newRoot === state.root) return state;
+      return { ...state, root: newRoot };
+    }
+
     case "RESET_LAYOUT": {
       return initialPaneState();
     }
@@ -172,6 +195,7 @@ export {
   getAdjacentLeaf,
   generatePaneId,
   createLeaf,
+  swapPanes,
   MIN_RATIO,
   MAX_RATIO,
   containsPaneId,

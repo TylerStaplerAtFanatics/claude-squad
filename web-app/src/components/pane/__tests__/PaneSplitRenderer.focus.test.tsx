@@ -20,7 +20,7 @@ const mockLeafContainer = jest.fn((_args?: { focused?: boolean }) => "leafContai
 
 jest.mock("@/styles/pane/paneSplit.css", () => ({
   splitContainer: jest.fn(() => "splitContainer"),
-  leafContainer: (...args: unknown[]) => mockLeafContainer(...args),
+  leafContainer: (args?: { focused?: boolean }) => mockLeafContainer(args),
   leafZoomed: "leafZoomed",
   emptyPaneSlot: "emptyPaneSlot",
   paneBody: "paneBody",
@@ -39,8 +39,12 @@ jest.mock("@/components/pane/ResizeHandle", () => ({
   ResizeHandle: () => <div />,
 }));
 
+jest.mock("@/lib/contexts/CockpitActionsContext", () => ({
+  useCockpitActions: () => ({ sessions: [], loading: false, error: null }),
+}));
+
 const singlePaneState: PaneState = {
-  root: { type: "leaf", id: "p1", sessionId: null, activeTab: "info" },
+  root: { type: "leaf", id: "p1", viewKind: "session-detail", sessionId: null, activeTab: "info" },
   focusedPaneId: "p1",
   zoomedPaneId: null,
 };
@@ -51,8 +55,8 @@ const splitPaneState: PaneState = {
     id: "s1",
     direction: "vertical",
     ratio: 0.5,
-    first: { type: "leaf", id: "p1", sessionId: null, activeTab: "info" },
-    second: { type: "leaf", id: "p2", sessionId: null, activeTab: "info" },
+    first: { type: "leaf", id: "p1", viewKind: "session-detail", sessionId: null, activeTab: "info" },
+    second: { type: "leaf", id: "p2", viewKind: "session-detail", sessionId: null, activeTab: "info" },
   },
   focusedPaneId: "p1",
   zoomedPaneId: null,
