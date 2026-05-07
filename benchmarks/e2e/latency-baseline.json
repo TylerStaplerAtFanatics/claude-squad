@@ -2,13 +2,13 @@
   {
     "name": "list-sessions-ttfb-mean",
     "unit": "ms",
-    "value": 2.39,
-    "extra": "p95=7.4ms min=1.3ms max=7.4ms cv=80.7%"
+    "value": 1.81,
+    "extra": "p95=2.9ms min=1.0ms max=2.9ms cv=32.0%"
   },
   {
     "name": "list-sessions-total-mean",
     "unit": "ms",
-    "value": 3.36,
-    "extra": "p95=8.1ms min=2.1ms max=8.1ms"
+    "value": 2.45,
+    "extra": "p95=3.3ms min=2.0ms max=3.3ms"
   }
 ]
