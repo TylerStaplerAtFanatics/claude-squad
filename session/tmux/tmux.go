@@ -273,11 +273,18 @@ func prependSocket(socket string, args []string) []string {
 	return append([]string{"-L", socket}, args...)
 }
 
+// TmuxServerReady is a zero-size proof token returned by EnsureServerRunning.
+// BuildRuntimeDeps requires it as its first parameter to enforce that the tmux
+// server is running before any sessions are loaded — preventing cold-restore of
+// processes that are still alive inside tmux.
+type TmuxServerReady struct{}
+
 // EnsureServerRunning starts the tmux server if it is not already running.
 // Uses exec.Command directly so it always runs regardless of circuit breaker state.
-func EnsureServerRunning(serverSocket string) error {
+// Returns a TmuxServerReady token that callers must pass to BuildRuntimeDeps.
+func EnsureServerRunning(serverSocket string) (TmuxServerReady, error) {
 	if !checkServerNotRunning(serverSocket) {
-		return nil // server is already running
+		return TmuxServerReady{}, nil // server is already running
 	}
 	args := prependSocket(serverSocket, []string{"start-server"})
 	startCtx, startCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -285,10 +292,10 @@ func EnsureServerRunning(serverSocket string) error {
 	cmd := safeexec.CommandContext(startCtx, Binary(), args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("tmux start-server failed: %w (output: %s)", err, out)
+		return TmuxServerReady{}, fmt.Errorf("tmux start-server failed: %w (output: %s)", err, out)
 	}
 	log.InfoLog.Printf("[tmux] server started successfully")
-	return nil
+	return TmuxServerReady{}, nil
 }
 
 // ensureServerRunning is a package-level variable holding the function called by
@@ -1421,7 +1428,7 @@ func recoverFromServerFailure(serverSocket, caller string) {
 		recoveryMu.Unlock()
 	}()
 
-	if restartErr := ensureServerRunning(serverSocket); restartErr == nil {
+	if _, restartErr := ensureServerRunning(serverSocket); restartErr == nil {
 		log.InfoLog.Printf("[tmux] server restarted from %s, resetting circuit breakers", caller)
 		executor.GetGlobalRegistry().ResetAll()
 		if onServerRecovered != nil {
