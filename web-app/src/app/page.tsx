@@ -290,10 +290,7 @@ function HomeContent() {
   }, [openInCreationMode]);
 
   const handleNewSession = () => {
-    wizardTriggerRef.current = document.activeElement as HTMLElement;
-    openedViaQueryParam.current = false;
-    setWizardInitialData(undefined);
-    setShowWizard(true);
+    openInCreationMode();
   };
 
   const handleWizardComplete = async (data: SessionFormData) => {

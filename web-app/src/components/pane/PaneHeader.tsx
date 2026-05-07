@@ -11,12 +11,12 @@ import {
 } from "@/styles/pane/paneHeader.css";
 
 const TAB_LABELS: Record<SessionDetailTab, string> = {
-  terminal: "T",
-  diff: "D",
-  vcs: "V",
-  logs: "L",
-  info: "I",
-  files: "F",
+  terminal: "Term",
+  diff: "Diff",
+  vcs: "VCS",
+  logs: "Logs",
+  info: "Info",
+  files: "Files",
 };
 
 const ALL_TABS: SessionDetailTab[] = ["terminal", "diff", "vcs", "logs", "info", "files"];

@@ -45,6 +45,7 @@ import {
   emptyHint,
   newSessionButtonLarge,
   newSessionIcon,
+  newSessionHeaderButton,
 } from "./SessionList.css";
 
 interface SessionListProps {
@@ -493,6 +494,14 @@ export function SessionList({
         <div className={headerTop}>
           <h2 className={title}>Sessions ({filteredSessions.length})</h2>
           <div className={headerActions}>
+            <button
+              onClick={() => onNewSession?.()}
+              className={newSessionHeaderButton}
+              aria-label="Create new session (Ctrl+K)"
+              title="Create new session (Ctrl+K)"
+            >
+              +
+            </button>
             <button
               onClick={handleToggleSelectMode}
               className={`${selectModeButton} ${selectMode ? selectModeButtonActive : ""}`}

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, ReactNode } from "react";
 import { DrawerNav } from "./DrawerNav";
+import { BottomNav } from "./BottomNav";
 import { KeyboardShortcutOverlay } from "@/components/ui/KeyboardShortcutOverlay";
 import { useShortcut } from "@/lib/shortcuts/useShortcut";
 import { useNavigation } from "@/lib/contexts/NavigationContext";
@@ -51,6 +52,7 @@ export function CockpitShell({ children }: CockpitShellProps) {
           {children}
         </div>
       </div>
+      <BottomNav />
       <KeyboardShortcutOverlay isOpen={shortcutsOpen} onClose={closeShortcuts} />
     </>
   );

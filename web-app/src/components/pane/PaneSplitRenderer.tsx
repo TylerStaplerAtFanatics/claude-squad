@@ -30,9 +30,10 @@ interface PaneNodeProps {
   dispatch: React.Dispatch<PaneAction>;
   sessions: Session[];
   isMobile: boolean;
+  hasSplits: boolean;
 }
 
-function PaneNodeComponent({ node, state, dispatch, sessions, isMobile }: PaneNodeProps) {
+function PaneNodeComponent({ node, state, dispatch, sessions, isMobile, hasSplits }: PaneNodeProps) {
   if (node.type === "leaf") {
     return (
       <PaneLeafComponent
@@ -40,6 +41,7 @@ function PaneNodeComponent({ node, state, dispatch, sessions, isMobile }: PaneNo
         state={state}
         dispatch={dispatch}
         sessions={sessions}
+        hasSplits={hasSplits}
       />
     );
   }
@@ -51,6 +53,7 @@ function PaneNodeComponent({ node, state, dispatch, sessions, isMobile }: PaneNo
       dispatch={dispatch}
       sessions={sessions}
       isMobile={isMobile}
+      hasSplits={hasSplits}
     />
   );
 }
@@ -61,9 +64,10 @@ interface PaneSplitProps {
   dispatch: React.Dispatch<PaneAction>;
   sessions: Session[];
   isMobile: boolean;
+  hasSplits: boolean;
 }
 
-function PaneSplitComponent({ pane, state, dispatch, sessions, isMobile }: PaneSplitProps) {
+function PaneSplitComponent({ pane, state, dispatch, sessions, isMobile, hasSplits }: PaneSplitProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // On mobile: show only the pane containing the focused id (any split direction)
@@ -77,6 +81,7 @@ function PaneSplitComponent({ pane, state, dispatch, sessions, isMobile }: PaneS
         dispatch={dispatch}
         sessions={sessions}
         isMobile={isMobile}
+        hasSplits={hasSplits}
       />
     );
   }
@@ -93,6 +98,7 @@ function PaneSplitComponent({ pane, state, dispatch, sessions, isMobile }: PaneS
         dispatch={dispatch}
         sessions={sessions}
         isMobile={isMobile}
+        hasSplits={hasSplits}
       />
       <ResizeHandle
         splitId={pane.id}
@@ -107,6 +113,7 @@ function PaneSplitComponent({ pane, state, dispatch, sessions, isMobile }: PaneS
         dispatch={dispatch}
         sessions={sessions}
         isMobile={isMobile}
+        hasSplits={hasSplits}
       />
     </div>
   );
@@ -117,9 +124,10 @@ interface PaneLeafProps {
   state: PaneState;
   dispatch: React.Dispatch<PaneAction>;
   sessions: Session[];
+  hasSplits: boolean;
 }
 
-function PaneLeafComponent({ pane, state, dispatch, sessions }: PaneLeafProps) {
+function PaneLeafComponent({ pane, state, dispatch, sessions, hasSplits }: PaneLeafProps) {
   const isFocused = state.focusedPaneId === pane.id;
   const isZoomed = state.zoomedPaneId === pane.id;
   const session = pane.sessionId
@@ -136,7 +144,7 @@ function PaneLeafComponent({ pane, state, dispatch, sessions }: PaneLeafProps) {
 
   return (
     <div
-      className={`${leafContainer({ focused: isFocused })}${isZoomed ? ` ${leafZoomed}` : ""}`}
+      className={`${leafContainer({ focused: isFocused && hasSplits })}${isZoomed ? ` ${leafZoomed}` : ""}`}
       data-focused={isFocused ? "true" : "false"}
       data-testid={`pane-leaf-${pane.id}`}
       data-context="cockpit"
@@ -162,6 +170,7 @@ function PaneLeafComponent({ pane, state, dispatch, sessions }: PaneLeafProps) {
             onFullscreenChange={() => {}}
             onTabChange={handleTabChange}
             initialTab={pane.activeTab}
+            embedded={true}
           />
         ) : (
           <div className={emptyPaneSlot}>
@@ -220,6 +229,7 @@ export function PaneSplitRenderer({ state, dispatch, sessions }: PaneSplitRender
           dispatch={dispatch}
           sessions={sessions}
           isMobile={isNarrow}
+          hasSplits={hasMultiplePanes}
         />
       </div>
 

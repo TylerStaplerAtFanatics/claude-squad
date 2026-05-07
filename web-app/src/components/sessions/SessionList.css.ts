@@ -330,6 +330,28 @@ export const emptyHint = style({
   color: vars.color.textSecondary,
 });
 
+export const newSessionHeaderButton = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "32px",
+  height: "32px",
+  borderRadius: vars.radii.md,
+  fontSize: "1.25rem",
+  fontWeight: 400,
+  lineHeight: 1,
+  background: vars.color.primary,
+  color: vars.color.textInverse,
+  border: "none",
+  cursor: "pointer",
+  flexShrink: 0,
+  transition: "background 0.15s, opacity 0.15s",
+  selectors: {
+    "&:hover": { background: vars.color.primaryHover, opacity: 0.9 },
+    "&:active": { background: vars.color.primaryActive },
+  },
+});
+
 export const newSessionButtonLarge = style({
   display: "flex",
   alignItems: "center",

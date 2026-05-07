@@ -44,6 +44,7 @@ export const leafContainer = recipe({
     minWidth: 0,
     minHeight: 0,
     position: "relative",
+    background: vars.color.background,
     outline: "2px solid transparent",
     outlineOffset: "-2px",
     transition: "outline-color 120ms ease",
@@ -71,14 +72,17 @@ export const leafZoomed = style({
 export const emptyPaneSlot = style({
   display: "flex",
   flex: 1,
+  flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
+  gap: vars.space["2"],
   color: vars.color.textMuted,
   fontStyle: "italic",
   fontSize: vars.fontSize.sm,
   fontFamily: vars.font.sans,
   padding: vars.space["4"],
   textAlign: "center",
+  background: vars.color.cardBackground,
 });
 
 export const paneBody = style({
