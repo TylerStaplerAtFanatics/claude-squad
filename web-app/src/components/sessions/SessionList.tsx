@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { SessionService, Project } from "@/gen/session/v1/session_pb";
@@ -68,13 +68,16 @@ interface SessionListProps {
   onRunOneShot?: (sessionId: string) => Promise<void>;
   onSetRateLimitEnabled?: (sessionId: string, enabled: boolean) => void;
   onClearConversationState?: (sessionId: string) => Promise<boolean>;
+  /** Prefix for localStorage keys, used when multiple instances are rendered (e.g. split view). */
+  storageKeyPrefix?: string;
+  /** Extra action buttons rendered in the header beside the "+" button. */
+  extraHeaderActions?: React.ReactNode;
 }
 
 type SortField = 'lastActivity' | 'name' | 'createdAt' | 'updatedAt';
 type SortDir = 'asc' | 'desc';
 
-// Local storage keys for persisting UI preferences
-const STORAGE_KEYS = {
+const BASE_STORAGE_KEYS = {
   SEARCH_QUERY: 'stapler-squad-search-query',
   SELECTED_STATUS: 'stapler-squad-selected-status',
   SELECTED_CATEGORY: 'stapler-squad-selected-category',
@@ -84,6 +87,13 @@ const STORAGE_KEYS = {
   SORT_FIELD: 'stapler-squad-sort-field',
   SORT_DIR: 'stapler-squad-sort-dir',
 };
+
+function makeStorageKeys(prefix = '') {
+  if (!prefix) return BASE_STORAGE_KEYS;
+  return Object.fromEntries(
+    Object.entries(BASE_STORAGE_KEYS).map(([k, v]) => [k, `${prefix}${v}`])
+  ) as typeof BASE_STORAGE_KEYS;
+}
 
 // Helper functions for local storage operations
 const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
@@ -130,7 +140,12 @@ export function SessionList({
   onRunOneShot,
   onSetRateLimitEnabled,
   onClearConversationState,
+  storageKeyPrefix,
+  extraHeaderActions,
 }: SessionListProps) {
+  // Stable storage key set — storageKeyPrefix is fixed for the lifetime of this instance
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const STORAGE_KEYS = useRef(makeStorageKeys(storageKeyPrefix)).current;
   // Review queue items indexed by session ID for badge display on session cards
   const { items: reviewItems } = useReviewQueueContext();
   const reviewItemBySessionId = useMemo(() => {
@@ -494,6 +509,7 @@ export function SessionList({
         <div className={headerTop}>
           <h2 className={title}>Sessions ({filteredSessions.length})</h2>
           <div className={headerActions}>
+            {extraHeaderActions}
             <button
               onClick={() => onNewSession?.()}
               className={newSessionHeaderButton}

@@ -101,6 +101,8 @@ function renderTerminal(sessionId = "session-abc", baseUrl = "/api") {
 beforeEach(() => {
   jest.clearAllMocks();
   localStorage.clear();
+  // Toolbar starts collapsed by default; expand it so toolbar buttons are rendered
+  localStorage.setItem("stapler-squad-toolbar-expanded", "true");
   (useTerminalStream as jest.Mock).mockReturnValue(makeStreamMock());
   mockUseBrowserLogStream.mockReset();
   jest.spyOn(console, "log").mockImplementation(() => {});

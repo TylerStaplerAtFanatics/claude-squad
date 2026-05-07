@@ -98,6 +98,8 @@ beforeEach(() => {
   jest.spyOn(console, "log").mockImplementation(() => {});
   jest.spyOn(console, "warn").mockImplementation(() => {});
   jest.spyOn(console, "error").mockImplementation(() => {});
+  // Toolbar starts collapsed by default; expand it so toolbar buttons are rendered
+  localStorage.setItem("stapler-squad-toolbar-expanded", "true");
 });
 
 afterEach(() => {

@@ -19,6 +19,15 @@ const TAB_LABELS: Record<SessionDetailTab, string> = {
   files: "Files",
 };
 
+const TAB_FULL_LABELS: Record<SessionDetailTab, string> = {
+  terminal: "Terminal",
+  diff: "Diff",
+  vcs: "Version Control",
+  logs: "Logs",
+  info: "Session Info",
+  files: "Files",
+};
+
 const ALL_TABS: SessionDetailTab[] = ["terminal", "diff", "vcs", "logs", "info", "files"];
 
 interface PaneHeaderProps {
@@ -47,7 +56,7 @@ export function PaneHeader({
   const session = pane.sessionId
     ? sessions.find((s) => s.id === pane.sessionId) ?? null
     : null;
-  const titleText = session ? session.title : "Empty — click a session";
+  const titleText = session ? session.title : "Empty";
 
   return (
     <div
@@ -69,8 +78,8 @@ export function PaneHeader({
               e.stopPropagation();
               onTabChange(tab);
             }}
-            title={tab}
-            aria-label={`Switch to ${tab} tab`}
+            title={TAB_FULL_LABELS[tab]}
+            aria-label={`Switch to ${TAB_FULL_LABELS[tab]} tab`}
           >
             {TAB_LABELS[tab]}
           </button>

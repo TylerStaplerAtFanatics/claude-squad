@@ -65,52 +65,34 @@ export const selectModeButtonActive = style({
 
 export const filters = style({
   display: "flex",
-  gap: vars.space["3"],
-  flexWrap: "wrap",
-  alignItems: "center",
-  "@media": {
-    "(max-width: 768px)": {
-      flexDirection: "column",
-      alignItems: "stretch",
-      gap: vars.space["2"],
-    },
-  },
+  flexDirection: "column",
+  gap: vars.space["2"],
 });
 
 export const filterTopRow = style({
-  // On desktop, children participate in the parent flex
-  display: "contents",
-  "@media": {
-    "(max-width: 768px)": {
-      display: "flex",
-      gap: vars.space["2"],
-      width: "100%",
-    },
-  },
+  display: "flex",
+  gap: vars.space["2"],
+  alignItems: "center",
+  width: "100%",
 });
 
 export const filterToggle = style({
-  display: "none",
+  display: "flex",
   alignItems: "center",
   gap: "6px",
-  padding: `10px ${vars.space["4"]}`,
+  padding: `6px 12px`,
   border: `1px solid ${vars.color.inputBorder}`,
   borderRadius: vars.radii.lg,
   background: vars.color.inputBackground,
   color: vars.color.textPrimary,
-  fontSize: "0.875rem",
+  fontSize: "0.8125rem",
   fontWeight: 500,
   cursor: "pointer",
-  minHeight: "44px",
   whiteSpace: "nowrap",
   transition: "border-color 0.2s ease",
+  flexShrink: 0,
   selectors: {
     "&:hover": { borderColor: vars.color.inputFocusBorder },
-  },
-  "@media": {
-    "(max-width: 768px)": {
-      display: "flex",
-    },
   },
 });
 
@@ -129,28 +111,20 @@ export const filterActiveDot = style({
 });
 
 export const filterControls = style({
-  display: "contents",
-  "@media": {
-    "(max-width: 768px)": {
-      display: "none",
-      flexDirection: "column",
-      gap: vars.space["2"],
-      width: "100%",
-    },
-  },
+  display: "none",
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: vars.space["2"],
+  width: "100%",
 });
 
 export const filterControlsOpen = style({
-  "@media": {
-    "(max-width: 768px)": {
-      display: "flex",
-    },
-  },
+  display: "flex",
 });
 
 export const searchInput = style({
   flex: 1,
-  minWidth: "250px",
+  minWidth: 0,
   padding: `10px ${vars.space["4"]}`,
   border: `1px solid ${vars.color.inputBorder}`,
   borderRadius: vars.radii.lg,

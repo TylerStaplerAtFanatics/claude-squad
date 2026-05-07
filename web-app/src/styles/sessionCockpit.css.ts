@@ -4,7 +4,7 @@ import { vars, breakpoints } from "@/styles/theme.css";
 /**
  * Three-column session cockpit grid.
  *
- * Col 1 — session list: 280px fixed
+ * Col 1 — session list: 320px fixed
  * Col 2 — terminal/detail: fills remaining space
  * Col 3 — context panel: 320px, slides in when open
  *
@@ -29,10 +29,10 @@ export const cockpitGrid = recipe({
   variants: {
     contextPanelOpen: {
       true: {
-        gridTemplateColumns: "var(--list-col-width, 280px) 6px 1fr 320px",
+        gridTemplateColumns: "var(--list-col-width, 320px) 6px 1fr 320px",
         "@media": {
           [`(max-width: ${breakpoints.inner})`]: {
-            gridTemplateColumns: "var(--list-col-width, 240px) 6px 1fr 280px",
+            gridTemplateColumns: "var(--list-col-width, 240px) 6px 1fr 320px",
           },
           [`(max-width: ${breakpoints.md})`]: {
             gridTemplateColumns: "1fr",
@@ -42,7 +42,7 @@ export const cockpitGrid = recipe({
       },
       false: {
         // Use CSS custom property for resizable list column width (US-1)
-        gridTemplateColumns: "var(--list-col-width, 280px) 6px 1fr",
+        gridTemplateColumns: "var(--list-col-width, 320px) 6px 1fr",
         "@media": {
           [`(max-width: ${breakpoints.inner})`]: {
             gridTemplateColumns: "var(--list-col-width, 240px) 6px 1fr",

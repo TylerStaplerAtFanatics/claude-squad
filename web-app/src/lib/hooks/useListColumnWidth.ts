@@ -3,8 +3,8 @@
 import { useState, useCallback, useEffect } from "react";
 
 const STORAGE_KEY = "cockpit.listColumnWidth";
-const DEFAULT_WIDTH = 280;
-const MIN_WIDTH = 160;
+const DEFAULT_WIDTH = 320;
+const MIN_WIDTH = 240;
 
 /**
  * useListColumnWidth — persists the session list column width in localStorage.

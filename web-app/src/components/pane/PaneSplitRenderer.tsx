@@ -9,7 +9,7 @@ import { PaneHeader } from "./PaneHeader";
 import { ResizeHandle } from "./ResizeHandle";
 import { MobilePaneTabStrip } from "./MobilePaneTabStrip";
 import { useViewport } from "@/components/providers/ViewportProvider";
-import { containsPaneId } from "@/lib/pane/paneUtils";
+import { containsPaneId, hasVerticalSplit } from "@/lib/pane/paneUtils";
 import {
   splitContainer,
   leafContainer,
@@ -70,8 +70,9 @@ interface PaneSplitProps {
 function PaneSplitComponent({ pane, state, dispatch, sessions, isMobile, hasSplits }: PaneSplitProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // On mobile: show only the pane containing the focused id (any split direction)
-  if (isMobile) {
+  // On mobile: vertical (side-by-side) splits collapse to the focused pane only.
+  // Horizontal (top/bottom) splits are fine on mobile — show both panes stacked.
+  if (isMobile && pane.direction === "vertical") {
     const focusedInFirst = containsPaneId(pane.first, state.focusedPaneId);
     const visibleNode = focusedInFirst ? pane.first : pane.second;
     return (
@@ -193,7 +194,10 @@ export function PaneSplitRenderer({ state, dispatch, sessions }: PaneSplitRender
   const isNarrow = isMobile || isFoldable;
   const allLeaves = getAllLeaves(state.root);
   const hasMultiplePanes = allLeaves.length > 1;
-  const showMobileTabStrip = isNarrow && hasMultiplePanes;
+  // Tab strip only needed when vertical (side-by-side) splits exist — those get collapsed
+  // to one pane on mobile and need a tab strip to switch. Horizontal (stacked) splits
+  // show both panes and don't need a tab strip.
+  const showMobileTabStrip = isNarrow && hasMultiplePanes && hasVerticalSplit(state.root);
 
   return (
     <div

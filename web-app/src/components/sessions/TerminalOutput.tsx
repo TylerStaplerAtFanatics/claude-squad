@@ -197,14 +197,14 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
   // Mobile detection — use shared ViewportProvider hook for consistency
   const { isMobile } = useViewport();
 
-  // Toolbar collapsed/expanded state — persisted in localStorage
+  // Toolbar collapsed/expanded state — persisted in localStorage; collapsed by default
   const [toolbarExpanded, setToolbarExpanded] = useState(() => {
-    if (typeof window === 'undefined') return true;
+    if (typeof window === 'undefined') return false;
     try {
       const s = localStorage.getItem('stapler-squad-toolbar-expanded');
-      return s === null ? true : s === 'true';
+      return s === null ? false : s === 'true';
     } catch {
-      return true;
+      return false;
     }
   });
   const [mobileOverflowOpen, setMobileOverflowOpen] = useState(false);

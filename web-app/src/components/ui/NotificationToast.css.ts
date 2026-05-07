@@ -24,11 +24,12 @@ export const toast = style({
   opacity: 0,
   transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
   "@media": {
-    "screen and (max-width: 768px)": {
+    // On mobile the bottom nav is 64px tall; clear it + 12px breathing room
+    "screen and (max-width: 899px)": {
       left: "16px",
       right: "16px",
       width: "auto",
-      bottom: "16px",
+      bottom: "calc(64px + 12px + max(env(safe-area-inset-bottom, 0px), 0px))",
     },
   },
   selectors: {

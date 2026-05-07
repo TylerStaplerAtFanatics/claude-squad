@@ -18,6 +18,7 @@ import { SessionFormData } from "@/lib/validation/sessionSchema";
 import { PaneTilingContainer } from "@/components/pane/PaneTilingContainer";
 import { ResizeHandle } from "@/components/pane/ResizeHandle";
 import { useListColumnWidth } from "@/lib/hooks/useListColumnWidth";
+import { useSessionListSplit } from "@/lib/hooks/useSessionListSplit";
 import {
   cockpitGrid,
   sessionListColumn,
@@ -43,6 +44,9 @@ function HomeContent() {
 
   // US-1: resizable session list column width
   const [listColumnWidth, setListColumnWidth] = useListColumnWidth();
+
+  // Session list vertical split
+  const { isSplit: isListSplit, splitRatio: listSplitRatio, toggleSplit: toggleListSplit, setSplitRatio: setListSplitRatio } = useSessionListSplit();
 
   // Keep the last visible session alive so SessionDetail doesn't unmount on deselect
   const lastVisibleSessionRef = useRef<Session | null>(null);
@@ -447,8 +451,11 @@ function HomeContent() {
         className={cockpitGrid({ contextPanelOpen: false })}
         style={{ flex: 1, minHeight: 0, "--list-col-width": `${listColumnWidth}px` } as React.CSSProperties}
       >
-        {/* Column 1 — session list */}
-        <div className={sessionListColumn({ sessionSelected: !!selectedSession })}>
+        {/* Column 1 — session list (supports vertical split into two independent lists) */}
+        <div
+          className={sessionListColumn({ sessionSelected: !!selectedSession })}
+          style={isListSplit ? { overflowY: "hidden", display: "flex", flexDirection: "column" } : undefined}
+        >
           {loading && <SessionListSkeleton count={4} />}
           {error && !loading && (
             <ErrorState
@@ -458,28 +465,65 @@ function HomeContent() {
               onRetry={() => listSessions()}
             />
           )}
-          {!loading && !error && (
-            <SessionList
-              sessions={sessions}
-              onSessionClick={handleSessionClick}
-              onDeleteSession={handleDeleteSession}
-              onPauseSession={pauseSession}
-              onResumeSession={handleResumeRequest}
-              onDirectResumeSession={handleDirectResume}
-              onCloneSession={handleCloneSession}
-              onNewWorkspaceSession={handleNewWorkspaceSession}
-              onRenameSession={renameSession}
-              onRestartSession={restartSession}
-              onUpdateTags={handleUpdateTags}
-              onNewSession={handleNewSession}
-              onCreateCheckpoint={createCheckpoint}
-              onListCheckpoints={listCheckpoints}
-              onForkFromCheckpoint={forkSession}
-              onRunOneShot={handleRunOneShot}
-              onSetRateLimitEnabled={handleSetRateLimitEnabled}
-              onClearConversationState={clearConversationState}
-            />
-          )}
+          {!loading && !error && (() => {
+            const splitToggleButton = (
+              <button
+                onClick={toggleListSplit}
+                title={isListSplit ? "Collapse session list split" : "Split session list"}
+                aria-label={isListSplit ? "Collapse session list split" : "Split session list"}
+                style={{
+                  padding: "2px 8px",
+                  fontSize: "0.75rem",
+                  background: isListSplit ? "var(--color-primary, #0070f3)" : "transparent",
+                  color: isListSplit ? "white" : "inherit",
+                  border: "1px solid var(--color-border, #e5e7eb)",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  lineHeight: 1.5,
+                }}
+              >
+                ⊟
+              </button>
+            );
+            const sharedListProps = {
+              sessions,
+              onSessionClick: handleSessionClick,
+              onDeleteSession: handleDeleteSession,
+              onPauseSession: pauseSession,
+              onResumeSession: handleResumeRequest,
+              onDirectResumeSession: handleDirectResume,
+              onCloneSession: handleCloneSession,
+              onNewWorkspaceSession: handleNewWorkspaceSession,
+              onRenameSession: renameSession,
+              onRestartSession: restartSession,
+              onUpdateTags: handleUpdateTags,
+              onNewSession: handleNewSession,
+              onCreateCheckpoint: createCheckpoint,
+              onListCheckpoints: listCheckpoints,
+              onForkFromCheckpoint: forkSession,
+              onRunOneShot: handleRunOneShot,
+              onSetRateLimitEnabled: handleSetRateLimitEnabled,
+              onClearConversationState: clearConversationState,
+            };
+            if (!isListSplit) {
+              return <SessionList {...sharedListProps} extraHeaderActions={splitToggleButton} />;
+            }
+            return (
+              <>
+                <div style={{ flex: listSplitRatio, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
+                  <SessionList {...sharedListProps} extraHeaderActions={splitToggleButton} />
+                </div>
+                <ResizeHandle
+                  splitId="list-split"
+                  direction="horizontal"
+                  onResize={(_id, ratio) => setListSplitRatio(ratio)}
+                />
+                <div style={{ flex: 1 - listSplitRatio, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
+                  <SessionList {...sharedListProps} storageKeyPrefix="split2." />
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         {/* List column resize handle (US-1) — sits between col 1 and col 2 in the grid */}

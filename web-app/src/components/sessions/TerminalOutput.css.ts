@@ -139,7 +139,7 @@ export const toolbarButton = style({
 
 export const debugActive = style({});
 
-// Toolbar toggle button — always visible on mobile, hidden on desktop
+// Toolbar toggle button — visible on all screen sizes
 export const toolbarToggle = style({
   padding: "0.5rem",
   background: vars.color.terminalHoverBg,
@@ -159,18 +159,13 @@ export const toolbarToggle = style({
       background: "#505050",
     },
   },
-  "@media": {
-    // On desktop always show the full toolbar; hide the toggle
-    "screen and (min-width: 1024px)": {
-      display: "none",
-    },
-  },
 });
 
 // Container for collapsible toolbar buttons
 export const toolbarActions = style({
   display: "flex",
   gap: "0.5rem",
+  flexWrap: "wrap",
   "@media": {
     "screen and (max-width: 768px)": {
       gap: "0.25rem",
@@ -182,10 +177,6 @@ export const toolbarActions = style({
       // Fade the right edge to signal swipeable overflow content
       maskImage: "linear-gradient(to right, black calc(100% - 32px), transparent 100%)" as string,
       WebkitMaskImage: "linear-gradient(to right, black calc(100% - 32px), transparent 100%)" as string,
-    },
-    // On desktop toolbarActions always visible regardless of toolbarExpanded
-    "screen and (min-width: 1024px)": {
-      display: "flex !important" as "flex",
     },
   },
 });

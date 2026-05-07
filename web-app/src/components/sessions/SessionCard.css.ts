@@ -249,8 +249,11 @@ export const editTagsButton = style({
   border: `1px solid ${vars.color.primary}`,
   borderRadius: vars.radii.full,
   cursor: "pointer",
-  transition: "all 0.2s ease",
+  opacity: 0,
+  transition: "all 0.2s ease, opacity 0.15s ease",
   selectors: {
+    [`${card}:hover &`]: { opacity: 1 },
+    [`${card}:focus-within &`]: { opacity: 1 },
     "&:hover": { background: vars.color.primary, color: vars.color.primaryText },
   },
 });

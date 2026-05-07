@@ -798,10 +798,12 @@ export function SessionCard({
             <span className={label}>Program:</span>
             <span className={value}>{session.program}</span>
           </div>
-          <div className={infoRow}>
-            <span className={label}>Branch:</span>
-            <span className={value}>{session.branch}</span>
-          </div>
+          {session.branch && (
+            <div className={infoRow}>
+              <span className={label}>Branch:</span>
+              <span className={value}>{session.branch}</span>
+            </div>
+          )}
           <div className={infoRow}>
             <span className={label}>Path:</span>
             <span className={value} title={session.path}>
@@ -902,27 +904,14 @@ export function SessionCard({
 
       <div className={footer}>
         <div className={timestamps}>
-          <span className={timestamp}>
-            Created: <time dateTime={session.createdAt ? new Date(Number(session.createdAt.seconds) * 1000).toISOString() : ""}>{formatDate(session.createdAt)}</time>
-          </span>
-          <span className={timestamp}>
-            Updated: <time dateTime={session.updatedAt ? new Date(Number(session.updatedAt.seconds) * 1000).toISOString() : ""}>{formatDate(session.updatedAt)}</time>
-          </span>
-          {(() => {
-            // Use the most recent of lastMeaningfulOutput and lastTerminalUpdate.
-            // lastMeaningfulOutput is gated by a content-signature check, so it can lag
-            // behind lastTerminalUpdate when content repeats (e.g. idle prompt).
-            const moSecs = session.lastMeaningfulOutput?.seconds ?? BigInt(0);
-            const tuSecs = session.lastTerminalUpdate?.seconds ?? BigInt(0);
-            const lastActivity = moSecs === BigInt(0) && tuSecs === BigInt(0)
-              ? undefined
-              : moSecs >= tuSecs ? session.lastMeaningfulOutput : session.lastTerminalUpdate;
-            return lastActivity ? (
-              <span className={timestamp} title="Last terminal activity">
-                Last Activity: <time dateTime={new Date(Number(lastActivity.seconds) * 1000).toISOString()}>{formatTimeAgo(lastActivity)}</time>
-              </span>
-            ) : null;
-          })()}
+          {session.updatedAt && (
+            <span
+              className={timestamp}
+              title={`Created: ${formatDate(session.createdAt)}\nUpdated: ${formatDate(session.updatedAt)}`}
+            >
+              Updated <time dateTime={new Date(Number(session.updatedAt.seconds) * 1000).toISOString()}>{formatTimeAgo(session.updatedAt)}</time>
+            </span>
+          )}
         </div>
 
         {/* Desktop: primary action + overflow menu */}

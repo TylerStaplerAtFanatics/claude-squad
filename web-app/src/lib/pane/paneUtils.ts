@@ -27,6 +27,13 @@ export function initialPaneState(): PaneState {
   };
 }
 
+/** Returns true if the tree contains at least one vertical (side-by-side) split */
+export function hasVerticalSplit(node: PaneNode): boolean {
+  if (node.type === "leaf") return false;
+  if (node.direction === "vertical") return true;
+  return hasVerticalSplit(node.first) || hasVerticalSplit(node.second);
+}
+
 /** Collect all leaf panes from the tree */
 export function getAllLeaves(root: PaneNode): LeafPane[] {
   if (root.type === "leaf") return [root];
