@@ -23,6 +23,7 @@ const CONTEXT_LABELS: Record<ShortcutContext, string> = {
   "session-list": "Session List",
   approval: "Approval Review",
   terminal: "Terminal",
+  cockpit: "Cockpit / Panes",
 };
 
 interface KeyboardShortcutOverlayProps {
@@ -87,7 +88,7 @@ export function KeyboardShortcutOverlay({ isOpen, onClose }: KeyboardShortcutOve
   const loweredQuery = query.toLowerCase();
 
   const filteredByContext: Partial<Record<ShortcutContext, Shortcut[]>> = {};
-  const contexts: ShortcutContext[] = ["global", "session-list", "approval", "terminal"];
+  const contexts: ShortcutContext[] = ["global", "session-list", "approval", "terminal", "cockpit"];
 
   for (const ctx of contexts) {
     const filtered = allShortcuts[ctx].filter((s) =>

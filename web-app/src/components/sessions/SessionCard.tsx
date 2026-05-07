@@ -643,14 +643,16 @@ export function SessionCard({
       tabIndex={0}
       aria-label={`Session ${session.title}, status: ${getStatusText(session.status)}, program: ${session.program}`}
     >
-      <div className={checkbox} onClick={handleCheckboxClick}>
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={(e) => { e.stopPropagation(); onToggleSelect?.(); }}
-          aria-label={`Select ${session.title}`}
-        />
-      </div>
+      {selectMode && (
+        <div className={checkbox} onClick={handleCheckboxClick}>
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => { e.stopPropagation(); onToggleSelect?.(); }}
+            aria-label={`Select ${session.title}`}
+          />
+        </div>
+      )}
       <div className={header}>
         <div className={titleRow}>
           {isInlineEditing ? (

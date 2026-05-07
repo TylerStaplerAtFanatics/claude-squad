@@ -1,4 +1,3 @@
-import { style } from "@vanilla-extract/css";
 import { recipe } from "@vanilla-extract/recipes";
 import { vars, breakpoints } from "@/styles/theme.css";
 
@@ -23,33 +22,34 @@ export const cockpitGrid = recipe({
       [`(max-width: ${breakpoints.md})`]: {
         // Mobile: vertical stack
         gridTemplateColumns: "1fr",
-        gridTemplateRows: "auto 1fr",
+        gridTemplateRows: "1fr",
       },
     },
   },
   variants: {
     contextPanelOpen: {
       true: {
-        gridTemplateColumns: "280px 1fr 320px",
+        gridTemplateColumns: "var(--list-col-width, 280px) 6px 1fr 320px",
         "@media": {
           [`(max-width: ${breakpoints.inner})`]: {
-            gridTemplateColumns: "240px 1fr 280px",
+            gridTemplateColumns: "var(--list-col-width, 240px) 6px 1fr 280px",
           },
           [`(max-width: ${breakpoints.md})`]: {
             gridTemplateColumns: "1fr",
-            gridTemplateRows: "auto 1fr",
+            gridTemplateRows: "1fr",
           },
         },
       },
       false: {
-        gridTemplateColumns: "280px 1fr",
+        // Use CSS custom property for resizable list column width (US-1)
+        gridTemplateColumns: "var(--list-col-width, 280px) 6px 1fr",
         "@media": {
           [`(max-width: ${breakpoints.inner})`]: {
-            gridTemplateColumns: "240px 1fr",
+            gridTemplateColumns: "var(--list-col-width, 240px) 6px 1fr",
           },
           [`(max-width: ${breakpoints.md})`]: {
             gridTemplateColumns: "1fr",
-            gridTemplateRows: "auto 1fr",
+            gridTemplateRows: "1fr",
           },
         },
       },
@@ -58,35 +58,69 @@ export const cockpitGrid = recipe({
   defaultVariants: { contextPanelOpen: false },
 });
 
-export const sessionListColumn = style({
-  overflowY: "auto",
-  overflowX: "hidden",
-  borderRight: `1px solid ${vars.color.borderColor}`,
-  display: "flex",
-  flexDirection: "column",
-  "@media": {
-    [`(max-width: ${breakpoints.md})`]: {
-      borderRight: "none",
-      borderBottom: `1px solid ${vars.color.borderColor}`,
-      // On mobile with a session selected, collapse session list to a compact strip;
-      // without a selection it fills available height.
-      maxHeight: "40vh",
+export const sessionListColumn = recipe({
+  base: {
+    overflowY: "auto",
+    overflowX: "hidden",
+    borderRight: `1px solid ${vars.color.borderColor}`,
+    display: "flex",
+    flexDirection: "column",
+  },
+  variants: {
+    sessionSelected: {
+      true: {
+        "@media": {
+          [`(max-width: ${breakpoints.md})`]: {
+            maxHeight: 0,
+            overflow: "hidden",
+            borderRight: "none",
+            borderBottom: "none",
+          },
+        },
+      },
+      false: {
+        "@media": {
+          [`(max-width: ${breakpoints.md})`]: {
+            borderRight: "none",
+            borderBottom: `1px solid ${vars.color.borderColor}`,
+            flex: 1,
+            minHeight: 0,
+            overflow: "auto",
+          },
+        },
+      },
     },
   },
+  defaultVariants: { sessionSelected: false },
 });
 
-export const detailColumn = style({
-  display: "flex",
-  flexDirection: "column",
-  overflow: "hidden",
-  minWidth: 0,
-  "@media": {
-    [`(max-width: ${breakpoints.md})`]: {
-      // Take remaining space on mobile
-      flex: 1,
-      minHeight: 0,
+export const detailColumn = recipe({
+  base: {
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    minWidth: 0,
+  },
+  variants: {
+    sessionSelected: {
+      true: {
+        "@media": {
+          [`(max-width: ${breakpoints.md})`]: {
+            flex: 1,
+            minHeight: 0,
+          },
+        },
+      },
+      false: {
+        "@media": {
+          [`(max-width: ${breakpoints.md})`]: {
+            display: "none",
+          },
+        },
+      },
     },
   },
+  defaultVariants: { sessionSelected: false },
 });
 
 export const contextPanel = recipe({

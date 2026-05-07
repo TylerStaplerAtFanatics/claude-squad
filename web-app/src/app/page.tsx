@@ -1,12 +1,12 @@
 "use client";
 // +feature: session-list session-search session-filter session-groupby
 
-import { useState, useEffect, useRef, Suspense, useCallback } from "react";
+import React, { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Session } from "@/gen/session/v1/types_pb";
 import { SessionList } from "@/components/sessions/SessionList";
 import { SessionListSkeleton } from "@/components/sessions/SessionListSkeleton";
-import { SessionDetail, SessionDetailTab } from "@/components/sessions/SessionDetail";
+import { SessionDetailTab } from "@/components/sessions/SessionDetail";
 import { SessionDetailBar } from "@/components/sessions/SessionDetailBar";
 import { SessionWizard } from "@/components/sessions/SessionWizard";
 import { ResumeSessionModal } from "@/components/sessions/ResumeSessionModal";
@@ -15,6 +15,9 @@ import { useSessionServiceContext } from "@/lib/contexts/SessionServiceContext";
 import { useKeyboard } from "@/lib/hooks/useKeyboard";
 import { useOmnibar } from "@/lib/contexts/OmnibarContext";
 import { SessionFormData } from "@/lib/validation/sessionSchema";
+import { PaneTilingContainer } from "@/components/pane/PaneTilingContainer";
+import { ResizeHandle } from "@/components/pane/ResizeHandle";
+import { useListColumnWidth } from "@/lib/hooks/useListColumnWidth";
 import {
   cockpitGrid,
   sessionListColumn,
@@ -29,10 +32,17 @@ function HomeContent() {
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [activeTab, setActiveTab] = useState<SessionDetailTab>("info");
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<Session | null>(null);
-  const [isSessionFullscreen, setIsSessionFullscreen] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   // j/k keyboard navigation index within the session list
   const [focusedSessionIndex, setFocusedSessionIndex] = useState<number>(-1);
+
+  // Tiling: tracks the most-recently-clicked session to route to the focused pane.
+  // Using a counter-based key so that clicking the same session again still triggers.
+  const [externalAssignCounter, setExternalAssignCounter] = useState(0);
+  const [externalAssignSession, setExternalAssignSession] = useState<{ sessionId: string; tab: SessionDetailTab } | null>(null);
+
+  // US-1: resizable session list column width
+  const [listColumnWidth, setListColumnWidth] = useListColumnWidth();
 
   // Keep the last visible session alive so SessionDetail doesn't unmount on deselect
   const lastVisibleSessionRef = useRef<Session | null>(null);
@@ -361,6 +371,9 @@ function HomeContent() {
     setSelectedSession(session);
     setActiveTab("info");
     updateUrl(session.id, "info");
+    // Also route the session to the currently-focused tiling pane
+    setExternalAssignCounter((c) => c + 1);
+    setExternalAssignSession({ sessionId: session.id, tab: "info" });
   };
 
   const handleTabChange = (tab: SessionDetailTab) => {
@@ -435,10 +448,10 @@ function HomeContent() {
       {/* 3-column cockpit grid: session list | detail panel | (context panel future) */}
       <div
         className={cockpitGrid({ contextPanelOpen: false })}
-        style={{ flex: 1, minHeight: 0 }}
+        style={{ flex: 1, minHeight: 0, "--list-col-width": `${listColumnWidth}px` } as React.CSSProperties}
       >
         {/* Column 1 — session list */}
-        <div className={sessionListColumn}>
+        <div className={sessionListColumn({ sessionSelected: !!selectedSession })}>
           {loading && <SessionListSkeleton count={4} />}
           {error && !loading && (
             <ErrorState
@@ -472,37 +485,42 @@ function HomeContent() {
           )}
         </div>
 
-        {/* Column 2 — session detail / terminal */}
-        <div className={detailColumn}>
-          {detailSession ? (
-            <>
-              {/* Story 2.2.4 — compact session detail bar above terminal */}
-              <SessionDetailBar
-                branch={detailSession.branch}
-                path={detailSession.path}
-                onBack={closeSession}
-              />
-              <div
-                ref={sessionDetailRef}
-                tabIndex={-1}
-                role="region"
-                aria-label="Session detail"
-                style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
-              >
-                <SessionDetail
-                  session={detailSession}
-                  onClose={closeSession}
-                  onFullscreenChange={setIsSessionFullscreen}
-                  onTabChange={handleTabChange}
-                  initialTab={activeTab}
-                />
-              </div>
-            </>
-          ) : (
-            <div className={styles.placeholder}>
-              Select a session to view details
-            </div>
+        {/* List column resize handle (US-1) — sits between col 1 and col 2 in the grid */}
+        <ResizeHandle
+          splitId="list-column"
+          direction="vertical"
+          onResize={(_splitId, ratio) => {
+            // Convert ratio back to pixel width based on viewport
+            const totalW = typeof window !== "undefined" ? window.innerWidth : 1200;
+            setListColumnWidth(Math.round(ratio * totalW));
+          }}
+        />
+
+        {/* Column 2 — tiling pane layout */}
+        <div
+          ref={sessionDetailRef}
+          className={detailColumn({ sessionSelected: !!selectedSession })}
+          tabIndex={-1}
+          role="region"
+          aria-label="Session detail"
+          data-context="cockpit"
+        >
+          {detailSession && (
+            <SessionDetailBar
+              branch={detailSession.branch}
+              path={detailSession.path}
+              onBack={closeSession}
+            />
           )}
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <PaneTilingContainer
+              sessions={sessions}
+              externalSessionAssign={externalAssignSession ? {
+                ...externalAssignSession,
+                version: externalAssignCounter,
+              } : null}
+            />
+          </div>
         </div>
       </div>
 

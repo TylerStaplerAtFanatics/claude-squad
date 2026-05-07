@@ -1022,7 +1022,7 @@ export function TerminalOutput({ sessionId, baseUrl, isExternal = false, tmuxSes
                 🛠️ {debugMode ? 'Debug ON' : 'Debug'}
               </button>
               <button
-                className={`${styles.toolbarButton} ${logStreamEnabled ? styles.debugActive : ''}`}
+                className={`${styles.toolbarButton} ${styles.devOnly} ${logStreamEnabled ? styles.debugActive : ''}`}
                 onClick={handleToggleLogStream}
                 title={logStreamEnabled ? "Stop forwarding console logs to server" : "Forward console logs to server (Remote Debug)"}
                 aria-label={logStreamEnabled ? "Disable remote log streaming" : "Enable remote log streaming"}

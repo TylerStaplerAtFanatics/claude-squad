@@ -1,4 +1,4 @@
-export type ShortcutContext = "global" | "session-list" | "approval" | "terminal";
+export type ShortcutContext = "global" | "session-list" | "approval" | "terminal" | "cockpit";
 
 export interface Shortcut {
   /** Key string as reported by KeyboardEvent.key (e.g. "k", "Enter", "[", "?") */
@@ -61,6 +61,7 @@ export class ShortcutRegistry {
       "session-list": [],
       approval: [],
       terminal: [],
+      cockpit: [],
     };
     for (const shortcut of this.shortcuts.values()) {
       result[shortcut.context].push(shortcut);
@@ -98,7 +99,7 @@ export class ShortcutRegistry {
       // Context check: global shortcuts fire everywhere (except inside terminal unless
       // the shortcut is terminal-scoped). Terminal-scoped shortcuts only fire in terminal.
       if (shortcut.context === "terminal" && activeContext !== "terminal") continue;
-      if (activeContext === "terminal" && shortcut.context !== "terminal" && shortcut.context !== "global") continue;
+      if (activeContext === "terminal" && shortcut.context !== "terminal" && shortcut.context !== "global" && shortcut.context !== "cockpit") continue;
       if (shortcut.context !== "global" && shortcut.context !== activeContext) continue;
 
       if (!keyMatches(event, shortcut)) continue;

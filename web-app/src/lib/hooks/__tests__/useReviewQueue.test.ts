@@ -37,7 +37,11 @@ jest.mock("@connectrpc/connect", () => ({
 }));
 
 jest.mock("@connectrpc/connect-web", () => ({
-  createConnectTransport: jest.fn().mockReturnValue({}),
+  createConnectTransport: jest.fn().mockReturnValue({ unary: jest.fn(), stream: jest.fn() }),
+}));
+
+jest.mock("@/lib/transport/watch-ws-transport", () => ({
+  createWatchTransport: jest.fn().mockReturnValue({ unary: jest.fn(), stream: jest.fn() }),
 }));
 
 jest.mock("@/lib/config", () => ({
