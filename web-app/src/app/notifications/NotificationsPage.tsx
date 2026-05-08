@@ -80,17 +80,7 @@ import {
   autoHandledMeta,
   autoHandledTimestamp,
 } from "@/components/ui/NotificationPanel.css";
-import { style } from "@vanilla-extract/css";
-import { vars } from "@/styles/theme.css";
-
-const pageRoot = style({
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  maxWidth: "800px",
-  margin: "0 auto",
-  padding: `${vars.space[4]} ${vars.space[4]} 0`,
-});
+import { pageRoot } from "./NotificationsPage.css";
 
 type TypeFilter = "all" | "approval_needed" | "error" | "task_complete" | "info";
 
