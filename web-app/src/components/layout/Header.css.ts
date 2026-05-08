@@ -150,6 +150,15 @@ export const navLink = style({
   },
 });
 
+/** Shown only in the hamburger dropdown, hidden in the inline desktop nav row. */
+export const hamburgerOnlyNavLink = style({
+  "@media": {
+    "(min-width: 1100px)": {
+      display: "none",
+    },
+  },
+});
+
 export const active = style({
   // Use textPrimary (overridden to #ededed inside the dark header) instead of
   // vars.color.primary (#0070f3) which fails WCAG AA on the dark header backdrop.

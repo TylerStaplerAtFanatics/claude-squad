@@ -76,11 +76,12 @@ export function Header() {
               const isActive = page.href === routes.home
                 ? pathname === routes.home
                 : pathname?.startsWith(page.href);
+              const isSecondary = page.headerNav === false;
               return (
                 <AppLink
                   key={page.href}
                   href={page.href}
-                  className={`${styles.navLink} ${isActive ? styles.active : ""}`}
+                  className={`${styles.navLink} ${isActive ? styles.active : ""} ${isSecondary ? styles.hamburgerOnlyNavLink : ""}`}
                   aria-current={isActive ? "page" : undefined}
                 >
                   {page.href === routes.unfinished ? (
