@@ -3,52 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/lib/contexts/NavigationContext";
+import { NAV_PAGES } from "@/lib/nav-pages";
+import { routes } from "@/lib/routes";
+import { ReviewQueueNavBadge } from "@/components/sessions/ReviewQueueNavBadge";
+import { UnfinishedNavBadge } from "@/components/unfinished/UnfinishedNavBadge";
+import { NotificationsNavBadge } from "@/components/ui/NotificationsNavBadge";
 import {
   drawer,
   navList,
   navItem,
   navIcon,
   navLabel,
-  badge,
   toggleButton,
   drawerDivider,
 } from "./DrawerNav.css";
 
-interface NavEntry {
-  href: string;
-  icon: string;
-  label: string;
-  badgeCount?: number;
-}
-
-const NAV_ITEMS: NavEntry[] = [
-  { href: "/", icon: "▣", label: "Sessions" },
-  { href: "/review-queue", icon: "⚠", label: "Review Queue" },
-  { href: "/history", icon: "◷", label: "History" },
-  { href: "/rules", icon: "⊡", label: "Rules" },
-  { href: "/config", icon: "⚙", label: "Config" },
-  { href: "/logs", icon: "≡", label: "Logs" },
-];
-
-interface DrawerNavProps {
-  /** Optional badge counts injected from outside (e.g., approval count) */
-  reviewQueueCount?: number;
-  sessionCount?: number;
-}
-
-export function DrawerNav({ reviewQueueCount, sessionCount }: DrawerNavProps) {
+export function DrawerNav() {
   const { isDrawerOpen, toggleDrawer } = useNavigation();
   const pathname = usePathname();
-
-  const itemsWithBadges = NAV_ITEMS.map((item) => {
-    if (item.href === "/" && sessionCount !== undefined) {
-      return { ...item, badgeCount: sessionCount };
-    }
-    if (item.href === "/review-queue" && reviewQueueCount !== undefined) {
-      return { ...item, badgeCount: reviewQueueCount };
-    }
-    return item;
-  });
 
   return (
     <nav
@@ -57,30 +29,34 @@ export function DrawerNav({ reviewQueueCount, sessionCount }: DrawerNavProps) {
       aria-label="Main navigation"
     >
       <ul className={navList} role="list">
-        {itemsWithBadges.map((item) => {
+        {NAV_PAGES.map((page) => {
           const isActive =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
+            page.href === routes.home
+              ? pathname === routes.home
+              : pathname.startsWith(page.href);
 
           return (
-            <li key={item.href}>
+            <li key={page.href}>
               <Link
-                href={item.href}
+                href={page.href}
                 className={navItem({ active: isActive })}
                 aria-current={isActive ? "page" : undefined}
-                title={!isDrawerOpen ? item.label : undefined}
+                title={!isDrawerOpen ? page.label : undefined}
               >
                 <span className={navIcon} aria-hidden="true">
-                  {item.icon}
+                  {page.icon}
                 </span>
                 <span className={navLabel({ visible: isDrawerOpen })}>
-                  {item.label}
+                  {page.label}
                 </span>
-                {item.badgeCount !== undefined && item.badgeCount > 0 && (
-                  <span className={badge} aria-label={`${item.badgeCount} items`}>
-                    {item.badgeCount > 99 ? "99+" : item.badgeCount}
-                  </span>
+                {page.href === routes.reviewQueue && (
+                  <ReviewQueueNavBadge inline={true} />
+                )}
+                {page.href === routes.unfinished && (
+                  <UnfinishedNavBadge inline={true} />
+                )}
+                {page.href === routes.notifications && (
+                  <NotificationsNavBadge inline={true} />
                 )}
               </Link>
             </li>
