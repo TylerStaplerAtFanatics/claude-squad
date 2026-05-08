@@ -86,6 +86,7 @@ import {
 interface SessionCardProps {
   session: Session;
   onClick?: () => void;
+  onOpenInNewPane?: () => void;
   onDelete?: () => Promise<void> | void;
   onPause?: () => void;
   onResume?: () => void;
@@ -111,6 +112,7 @@ interface SessionCardProps {
 export function SessionCard({
   session,
   onClick,
+  onOpenInNewPane,
   onDelete,
   onPause,
   onResume,
@@ -310,6 +312,8 @@ export function SessionCard({
     if (selectMode && onToggleSelect) {
       e.stopPropagation();
       onToggleSelect();
+    } else if (e.altKey && onOpenInNewPane) {
+      onOpenInNewPane();
     } else if (onClick) {
       onClick();
     }
@@ -1006,6 +1010,16 @@ export function SessionCard({
                     aria-label={`Clone session ${session.title}`}
                   >
                     <span aria-hidden="true">⊕</span> Clone
+                  </button>
+                )}
+                {onOpenInNewPane && (
+                  <button
+                    role="menuitem"
+                    className={overflowMenuItem}
+                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onOpenInNewPane(); }}
+                    aria-label={`Open ${session.title} in new pane`}
+                  >
+                    <span aria-hidden="true">⊞</span> Open in new pane
                   </button>
                 )}
                 <button

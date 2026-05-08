@@ -51,6 +51,7 @@ import {
 interface SessionListProps {
   sessions: Session[];
   onSessionClick?: (session: Session) => void;
+  onSessionOpenInNewPane?: (session: Session) => void;
   onDeleteSession?: (sessionId: string) => Promise<void> | void;
   onPauseSession?: (sessionId: string) => void;
   onResumeSession?: (session: Session) => void;
@@ -124,6 +125,7 @@ const getTimestampMs = (ts?: { seconds: bigint; nanos: number }): number => {
 export function SessionList({
   sessions,
   onSessionClick,
+  onSessionOpenInNewPane,
   onDeleteSession,
   onPauseSession,
   onResumeSession,
@@ -843,6 +845,7 @@ export function SessionList({
                     <SessionCard
                       session={session}
                       onClick={() => onSessionClick?.(session)}
+                      onOpenInNewPane={onSessionOpenInNewPane ? () => onSessionOpenInNewPane(session) : undefined}
                       onDelete={() => onDeleteSession?.(session.id)}
                       onPause={() => onPauseSession?.(session.id)}
                       onResume={() => onResumeSession?.(session)}

@@ -30,7 +30,7 @@ function HomeContent() {
   // Tiling: tracks the most-recently-clicked session to route to the focused pane.
   // Using a counter-based key so that clicking the same session again still triggers.
   const [externalAssignCounter, setExternalAssignCounter] = useState(0);
-  const [externalAssignSession, setExternalAssignSession] = useState<{ sessionId: string; tab: SessionDetailTab } | null>(null);
+  const [externalAssignSession, setExternalAssignSession] = useState<{ sessionId: string; tab: SessionDetailTab; forceNewPane?: boolean } | null>(null);
 
 
   // Resume modal state
@@ -149,14 +149,26 @@ function HomeContent() {
   useEffect(() => {
     const sessionId = searchParams.get("session");
     const tabParam = searchParams.get("tab");
+    const newPaneParam = searchParams.get("newPane");
     if (sessionId && sessions.length > 0) {
       const session = findSessionById(sessionId);
       if (session) {
         setSelectedSession(session);
-        if (isValidTab(tabParam)) {
-          setActiveTab(tabParam);
-        } else {
-          setActiveTab("terminal");
+        const resolvedTab = isValidTab(tabParam) ? tabParam : "terminal";
+        setActiveTab(resolvedTab);
+        // Route through the pane tiling system (omnibar, deep-link, keyboard nav)
+        setExternalAssignCounter((c) => c + 1);
+        setExternalAssignSession({
+          sessionId: session.id,
+          tab: resolvedTab,
+          forceNewPane: newPaneParam === "true",
+        });
+        // Clean up newPane param from URL after consuming it
+        if (newPaneParam === "true") {
+          const params = new URLSearchParams();
+          params.set("session", sessionId);
+          if (tabParam) params.set("tab", tabParam);
+          router.replace(`/?${params.toString()}`, { scroll: false });
         }
       } else {
         console.warn(`[URL] Session not found: ${sessionId}`);

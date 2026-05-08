@@ -5,6 +5,7 @@ import type { Session } from "@/gen/session/v1/types_pb";
 import { usePaneReducer } from "@/lib/pane/usePaneReducer";
 import { usePaneShortcuts } from "@/lib/pane/usePaneShortcuts";
 import { getAllLeaves, findLeaf } from "@/lib/pane/paneReducer";
+import type { SplitDirection } from "@/lib/pane/paneTypes";
 import { PaneSplitRenderer } from "./PaneSplitRenderer";
 import { PaneContext } from "./PaneContext";
 
@@ -18,6 +19,7 @@ interface PaneTilingContainerProps {
   externalSessionAssign?: {
     sessionId: string;
     tab?: "terminal" | "diff" | "vcs" | "logs" | "info" | "files";
+    forceNewPane?: boolean;
     version: number;
   } | null;
 }
@@ -41,6 +43,27 @@ export function PaneTilingContainer({
   const cancelPicker = useCallback(() => {
     setPickerPendingSession(null);
   }, []);
+
+  const triggerPickerForceNew = useCallback(
+    (session: Session, tab?: string) => {
+      const resolvedTab = (tab ?? "terminal") as "terminal" | "diff" | "vcs" | "logs" | "info" | "files";
+
+      // Choose split direction that keeps terminal width >= 120 columns.
+      // At ~8px per character, 120 cols ≈ 960px per pane → need container >= 1920px for vertical split.
+      // If the container is narrower, use horizontal split (stacked) to preserve full width.
+      const containerWidth = containerRef.current?.getBoundingClientRect().width ?? 0;
+      const direction: SplitDirection = containerWidth / 2 >= 960 ? "vertical" : "horizontal";
+
+      dispatch({
+        type: "SPLIT_AND_ASSIGN_SESSION",
+        paneId: state.focusedPaneId,
+        sessionId: session.id,
+        tab: resolvedTab,
+        direction,
+      });
+    },
+    [state.focusedPaneId, dispatch, containerRef],
+  );
 
   const triggerPicker = useCallback(
     (session: Session, tab?: string) => {
@@ -115,11 +138,15 @@ export function PaneTilingContainer({
 
     const session = sessions.find((s) => s.id === externalSessionAssign.sessionId);
     if (!session) return;
-    triggerPicker(session, externalSessionAssign.tab);
-  }, [externalSessionAssign, sessions, triggerPicker]);
+    if (externalSessionAssign.forceNewPane) {
+      triggerPickerForceNew(session, externalSessionAssign.tab);
+    } else {
+      triggerPicker(session, externalSessionAssign.tab);
+    }
+  }, [externalSessionAssign, sessions, triggerPicker, triggerPickerForceNew]);
 
   return (
-    <PaneContext.Provider value={{ state, dispatch, sessions, pickerPendingSession, triggerPicker, cancelPicker }}>
+    <PaneContext.Provider value={{ state, dispatch, sessions, pickerPendingSession, triggerPicker, triggerPickerForceNew, cancelPicker }}>
       <div
         ref={containerRef}
         style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}

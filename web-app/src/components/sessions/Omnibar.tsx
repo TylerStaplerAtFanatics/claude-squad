@@ -34,6 +34,7 @@ interface OmnibarProps {
   onClose: () => void;
   onCreateSession: (data: OmnibarSessionData) => Promise<void>;
   onNavigateToSession: (sessionId: string) => void;
+  onNavigateToSessionInNewPane?: (sessionId: string) => void;
   initialMode?: "discovery" | "creation";
 }
 
@@ -116,7 +117,7 @@ function isValidProjectName(name: string): boolean {
 
 const RESULT_LISTBOX_ID = "omnibar-result-listbox";
 
-export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession, initialMode }: OmnibarProps) {
+export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession, onNavigateToSessionInNewPane, initialMode }: OmnibarProps) {
   const router = useRouter();
   const { setTheme } = useTheme();
 
@@ -451,6 +452,14 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
       onClose();
     },
     [onNavigateToSession, onClose]
+  );
+
+  const handleSessionSelectInNewPane = useCallback(
+    (session: Session) => {
+      onNavigateToSessionInNewPane?.(session.id);
+      onClose();
+    },
+    [onNavigateToSessionInNewPane, onClose]
   );
 
   const handleCloneSession = useCallback(
@@ -934,6 +943,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
             repoEntries={displayedRepoEntries}
             highlightedIndex={resultHighlightIndex}
             onSessionSelect={handleSessionSelect}
+            onSessionOpenInNewPane={onNavigateToSessionInNewPane ? handleSessionSelectInNewPane : undefined}
             onRepoSelect={handleRepoSelect}
             onCloneSession={handleCloneSession}
             onCreateNew={() => {

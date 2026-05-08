@@ -52,4 +52,5 @@ export type PaneAction =
   | { type: "SET_PANE_VIEW"; paneId: PaneId; viewKind: PaneViewKind }
   | { type: "SWAP_PANES";    paneId: PaneId; targetPaneId: PaneId }
   | { type: "RESET_LAYOUT" }
-  | { type: "RESTORE_LAYOUT"; state: PaneState };
+  | { type: "RESTORE_LAYOUT"; state: PaneState }
+  | { type: "SPLIT_AND_ASSIGN_SESSION"; paneId: PaneId; sessionId: string; tab: SessionDetailTab; direction?: SplitDirection };

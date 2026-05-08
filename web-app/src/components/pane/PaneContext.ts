@@ -10,6 +10,7 @@ export interface PaneContextValue {
   sessions: Session[];
   pickerPendingSession: Session | null;
   triggerPicker: (session: Session, tab?: string) => void;
+  triggerPickerForceNew: (session: Session, tab?: string) => void;
   cancelPicker: () => void;
 }
 

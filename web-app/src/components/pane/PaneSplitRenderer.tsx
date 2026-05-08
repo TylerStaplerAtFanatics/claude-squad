@@ -143,7 +143,7 @@ interface PaneLeafProps {
 
 function SessionListPaneBody({ pane, dispatch }: { pane: LeafPane; dispatch: React.Dispatch<PaneAction> }) {
   const actions = useCockpitActions();
-  const { triggerPicker } = usePaneContext();
+  const { triggerPicker, triggerPickerForceNew } = usePaneContext();
   if (actions.loading) return <SessionListSkeleton count={4} />;
   if (actions.error) {
     return (
@@ -159,6 +159,7 @@ function SessionListPaneBody({ pane, dispatch }: { pane: LeafPane; dispatch: Rea
     <SessionList
       sessions={actions.sessions}
       onSessionClick={triggerPicker}
+      onSessionOpenInNewPane={triggerPickerForceNew}
       onDeleteSession={actions.onDeleteSession}
       onPauseSession={actions.onPauseSession}
       onResumeSession={actions.onResumeSession}

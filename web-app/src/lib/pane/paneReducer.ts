@@ -197,6 +197,36 @@ export function paneReducer(state: PaneState, action: PaneAction): PaneState {
       return action.state;
     }
 
+    case "SPLIT_AND_ASSIGN_SESSION": {
+      const { paneId, sessionId, tab, direction = "vertical" } = action;
+      const target = findLeaf(state.root, paneId);
+      if (!target) return state;
+
+      // Duplicate guard: session already open somewhere
+      const allLeaves = getAllLeaves(state.root);
+      const isDuplicate = allLeaves.some((l) => l.sessionId === sessionId);
+      if (isDuplicate) return state;
+
+      // If max depth reached, fall back to assigning in place
+      if (wouldExceedMaxDepth(state.root, paneId)) {
+        const updated: LeafPane = { ...target, sessionId, activeTab: tab, viewKind: "session-detail" };
+        const newRoot = replaceNode(state.root, paneId, updated);
+        return { ...state, root: newRoot };
+      }
+
+      const newLeaf: LeafPane = { type: "leaf", id: generatePaneId(), sessionId, activeTab: tab, viewKind: "session-detail" };
+      const splitNode: SplitPane = {
+        type: "split",
+        id: generatePaneId(),
+        direction,
+        ratio: 0.5,
+        first: target,
+        second: newLeaf,
+      };
+      const newRoot = replaceNode(state.root, paneId, splitNode);
+      return { ...state, root: newRoot, focusedPaneId: newLeaf.id };
+    }
+
     default: {
       const _exhaustive: never = action;
       return state;
