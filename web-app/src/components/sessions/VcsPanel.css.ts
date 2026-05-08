@@ -24,10 +24,10 @@ export const error = style({
   alignItems: "center",
   gap: "12px",
   padding: "16px",
-  background: "rgba(255, 100, 100, 0.1)",
-  border: "1px solid rgba(255, 100, 100, 0.3)",
+  background: vars.color.errorBg,
+  border: `1px solid ${vars.color.error}`,
   borderRadius: "8px",
-  color: "#ff6b6b",
+  color: vars.color.error,
 });
 
 export const errorIcon = style({
@@ -45,7 +45,7 @@ export const retryButton = style({
   fontSize: "12px",
   selectors: {
     "&:hover": {
-      background: "rgba(255, 100, 100, 0.2)",
+      background: vars.color.errorBg,
     },
   },
 });
@@ -135,7 +135,7 @@ export const githubRepo = style({
 
 export const githubPrLink = style({
   fontFamily: "monospace",
-  color: "#3b82f6",
+  color: vars.color.primary,
   textDecoration: "none",
   selectors: {
     "&:hover": { textDecoration: "underline" },
@@ -149,7 +149,7 @@ export const githubPrState = style({
 });
 
 export const githubDraft = style({
-  color: "#888",
+  color: vars.color.textMuted,
   fontFamily: "sans-serif",
   fontSize: "12px",
 });
@@ -162,12 +162,12 @@ export const githubReviews = style({
 });
 
 export const githubApproved = style({
-  color: "#7ee787",
+  color: vars.color.success,
   fontWeight: 500,
 });
 
 export const githubChangesReq = style({
-  color: "#f97583",
+  color: vars.color.error,
   fontWeight: 500,
 });
 
@@ -191,7 +191,7 @@ export const branchRow = style({
 });
 
 export const branchIcon = style({
-  color: "#7ee787",
+  color: vars.color.success,
   fontWeight: "bold",
 });
 
@@ -199,7 +199,7 @@ export const branchName = style({
   fontFamily: "monospace",
   fontSize: "14px",
   fontWeight: 600,
-  color: "#7ee787",
+  color: vars.color.success,
 });
 
 export const commitHash = style({
@@ -242,12 +242,12 @@ export const upstream = style({
 });
 
 export const ahead = style({
-  color: "#7ee787",
+  color: vars.color.success,
   fontWeight: 500,
 });
 
 export const behind = style({
-  color: "#f97583",
+  color: vars.color.error,
   fontWeight: 500,
 });
 
@@ -260,10 +260,10 @@ export const cleanStatus = style({
   alignItems: "center",
   gap: "8px",
   padding: "12px",
-  background: "rgba(126, 231, 135, 0.1)",
-  border: "1px solid rgba(126, 231, 135, 0.3)",
+  background: vars.color.successBg,
+  border: `1px solid ${vars.color.success}`,
   borderRadius: "8px",
-  color: "#7ee787",
+  color: vars.color.success,
 });
 
 export const cleanIcon = style({
@@ -286,36 +286,36 @@ const sharedBadge = style({
 export const conflictBadge = style([
   sharedBadge,
   {
-    background: "rgba(249, 117, 131, 0.2)",
-    color: "#f97583",
-    border: "1px solid rgba(249, 117, 131, 0.4)",
+    background: vars.color.errorBg,
+    color: vars.color.error,
+    border: `1px solid ${vars.color.error}`,
   },
 ]);
 
 export const stagedBadge = style([
   sharedBadge,
   {
-    background: "rgba(126, 231, 135, 0.2)",
-    color: "#7ee787",
-    border: "1px solid rgba(126, 231, 135, 0.4)",
+    background: vars.color.successBg,
+    color: vars.color.success,
+    border: `1px solid ${vars.color.success}`,
   },
 ]);
 
 export const unstagedBadge = style([
   sharedBadge,
   {
-    background: "rgba(247, 203, 104, 0.2)",
-    color: "#f7cb68",
-    border: "1px solid rgba(247, 203, 104, 0.4)",
+    background: vars.color.warningBg,
+    color: vars.color.warning,
+    border: `1px solid ${vars.color.warning}`,
   },
 ]);
 
 export const untrackedBadge = style([
   sharedBadge,
   {
-    background: "rgba(136, 136, 136, 0.2)",
-    color: "#888",
-    border: "1px solid rgba(136, 136, 136, 0.4)",
+    background: vars.color.surfaceMuted,
+    color: vars.color.textMuted,
+    border: `1px solid ${vars.color.borderMuted}`,
   },
 ]);
 
@@ -382,28 +382,28 @@ export const filePath = style({
 });
 
 export const modified = style({});
-globalStyle(`${modified} .${fileStatus}`, { color: "#f7cb68" });
-globalStyle(`${modified} .${filePath}`, { color: "#f7cb68" });
+globalStyle(`${modified} .${fileStatus}`, { color: vars.color.warning });
+globalStyle(`${modified} .${filePath}`, { color: vars.color.warning });
 
 export const added = style({});
-globalStyle(`${added} .${fileStatus}`, { color: "#7ee787" });
-globalStyle(`${added} .${filePath}`, { color: "#7ee787" });
+globalStyle(`${added} .${fileStatus}`, { color: vars.color.success });
+globalStyle(`${added} .${filePath}`, { color: vars.color.success });
 
 export const deleted = style({});
-globalStyle(`${deleted} .${fileStatus}`, { color: "#f97583" });
-globalStyle(`${deleted} .${filePath}`, { color: "#f97583" });
+globalStyle(`${deleted} .${fileStatus}`, { color: vars.color.error });
+globalStyle(`${deleted} .${filePath}`, { color: vars.color.error });
 
 export const renamed = style({});
-globalStyle(`${renamed} .${fileStatus}`, { color: "#d2a8ff" });
-globalStyle(`${renamed} .${filePath}`, { color: "#d2a8ff" });
+globalStyle(`${renamed} .${fileStatus}`, { color: vars.color.primary });
+globalStyle(`${renamed} .${filePath}`, { color: vars.color.primary });
 
 export const untracked = style({});
-globalStyle(`${untracked} .${fileStatus}`, { color: "#888" });
-globalStyle(`${untracked} .${filePath}`, { color: "#888" });
+globalStyle(`${untracked} .${fileStatus}`, { color: vars.color.textMuted });
+globalStyle(`${untracked} .${filePath}`, { color: vars.color.textMuted });
 
 export const conflict = style({});
-globalStyle(`${conflict} .${fileStatus}`, { color: "#f97583", fontWeight: "bold" });
-globalStyle(`${conflict} .${filePath}`, { color: "#f97583", fontWeight: "bold" });
+globalStyle(`${conflict} .${fileStatus}`, { color: vars.color.error, fontWeight: "bold" });
+globalStyle(`${conflict} .${filePath}`, { color: vars.color.error, fontWeight: "bold" });
 
 export const filePathClickable = style({
   cursor: "pointer",

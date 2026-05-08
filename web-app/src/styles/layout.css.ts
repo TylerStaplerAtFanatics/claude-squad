@@ -1,5 +1,6 @@
 import { style } from "@vanilla-extract/css";
 import { recipe } from "@vanilla-extract/recipes";
+import { vars } from "./theme.css";
 
 /**
  * Cockpit root — CSS Grid shell.
@@ -11,8 +12,10 @@ import { recipe } from "@vanilla-extract/recipes";
 export const cockpitRoot = style({
   display: "grid",
   gridTemplateColumns: "auto 1fr",
-  height: "100dvh",
+  height: "var(--viewport-height, 100dvh)",
   overflow: "hidden",
+  backgroundColor: vars.color.background,
+  color: vars.color.textPrimary,
   "@media": {
     // BottomNav is position:fixed below 900px. Shrink cockpit so content never renders
     // underneath it. Breakpoint relationship:

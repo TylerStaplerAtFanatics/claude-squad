@@ -8,7 +8,7 @@ const DRAWER_WIDTH_CLOSED = "56px";
 export const drawer = recipe({
   base: {
     position: "relative",
-    height: "100dvh",
+    height: "var(--viewport-height, 100dvh)",
     display: "flex",
     flexDirection: "column",
     background: vars.color.cardBackground,

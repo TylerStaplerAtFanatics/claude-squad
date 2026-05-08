@@ -1,4 +1,5 @@
 import { style, keyframes } from "@vanilla-extract/css";
+import { vars } from "@/styles/theme.css";
 
 const pulse = keyframes({
   "0%, 100%": { opacity: 1 },
@@ -12,8 +13,8 @@ export const badge = style({
   minWidth: "1.25rem",
   height: "1.25rem",
   padding: "0 0.375rem",
-  background: "#f59e0b",
-  color: "white",
+  background: vars.color.warning,
+  color: vars.color.primaryText,
   fontSize: "0.6875rem",
   fontWeight: 600,
   borderRadius: "0.625rem",

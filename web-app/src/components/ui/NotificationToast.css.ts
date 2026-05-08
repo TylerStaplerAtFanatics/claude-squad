@@ -154,7 +154,7 @@ export const typeLabel = style({
   padding: "2px 6px",
   borderRadius: "4px",
   background: `var(--priority-color, ${vars.color.primary})`,
-  color: "white",
+  color: vars.color.primaryText,
   whiteSpace: "nowrap",
   flexShrink: 0,
   selectors: {
@@ -273,7 +273,7 @@ const baseActionButton = style({
 
 export const viewButton = style([baseActionButton, {
   background: `var(--priority-color, ${vars.color.primary})`,
-  color: "white",
+  color: vars.color.primaryText,
   selectors: {
     "&:hover": {
       filter: "brightness(1.1)",
@@ -303,17 +303,17 @@ export const focusButton = style([baseActionButton, {
   selectors: {
     "&:hover": {
       background: vars.color.primary,
-      color: "white",
+      color: vars.color.primaryText,
     },
   },
 }]);
 
 export const approveButton = style([baseActionButton, {
-  background: "#22c55e",
-  color: "white",
+  background: vars.color.success,
+  color: vars.color.primaryText,
   selectors: {
     "&:hover": {
-      background: "#16a34a",
+      background: vars.color.successBg,
       transform: "translateY(-1px)",
       boxShadow: "0 4px 8px rgba(0, 0, 0, 0.2)",
     },
@@ -321,11 +321,11 @@ export const approveButton = style([baseActionButton, {
 }]);
 
 export const denyButton = style([baseActionButton, {
-  background: "#ef4444",
-  color: "white",
+  background: vars.color.error,
+  color: vars.color.primaryText,
   selectors: {
     "&:hover": {
-      background: "#dc2626",
+      background: vars.color.errorDark,
       transform: "translateY(-1px)",
       boxShadow: "0 4px 8px rgba(0, 0, 0, 0.2)",
     },

@@ -88,23 +88,12 @@ export const input = style({
       color: vars.color.textMuted,
     },
   },
-  "@media": {
-    "(prefers-color-scheme: light)": {
-      color: "#111",
-    },
-  },
 });
 
 export const detectionInfo = style({
   padding: "12px 16px",
   background: vars.color.hoverBackground,
   borderBottom: `1px solid ${vars.color.borderColor}`,
-  "@media": {
-    "(prefers-color-scheme: light)": {
-      background: "#f5f5f5",
-      borderBottomColor: "#e5e5e5",
-    },
-  },
 });
 
 export const detectionBadge = style({
@@ -160,13 +149,6 @@ export const fieldInput = style({
       color: vars.color.textMuted,
     },
   },
-  "@media": {
-    "(prefers-color-scheme: light)": {
-      background: "#f5f5f5",
-      borderColor: "#e5e5e5",
-      color: "#111",
-    },
-  },
 });
 
 export const hint = style({
@@ -186,13 +168,6 @@ export const select = style({
   selectors: {
     "&:focus": {
       borderColor: vars.color.primary,
-    },
-  },
-  "@media": {
-    "(prefers-color-scheme: light)": {
-      background: "#f5f5f5",
-      borderColor: "#e5e5e5",
-      color: "#111",
     },
   },
 });
@@ -255,12 +230,6 @@ export const footer = style({
   padding: 16,
   borderTop: `1px solid ${vars.color.borderColor}`,
   background: vars.color.hoverBackground,
-  "@media": {
-    "(prefers-color-scheme: light)": {
-      background: "#f5f5f5",
-      borderTopColor: "#e5e5e5",
-    },
-  },
 });
 
 export const button = style({
@@ -287,7 +256,7 @@ export const buttonSecondary = style({
 
 export const buttonPrimary = style({
   background: vars.color.primary,
-  color: "white",
+  color: vars.color.primaryText,
   selectors: {
     "&:hover": {
       background: vars.color.accentHover,
@@ -315,11 +284,6 @@ export const shortcuts = style({
   background: vars.color.hoverBackground,
   fontSize: 12,
   color: vars.color.textMuted,
-  "@media": {
-    "(prefers-color-scheme: light)": {
-      background: "#f5f5f5",
-    },
-  },
 });
 
 export const shortcut = style({
@@ -333,11 +297,6 @@ export const shortcutKey = style({
   padding: "2px 6px",
   borderRadius: 4,
   fontFamily: "monospace",
-  "@media": {
-    "(prefers-color-scheme: light)": {
-      background: "#e5e5e5",
-    },
-  },
 });
 
 export const completionError = style({
@@ -357,11 +316,11 @@ export const pathIndicator = style({
 });
 
 export const pathIndicatorValid = style({
-  color: "#22c55e",
+  color: vars.color.success,
 });
 
 export const pathIndicatorInvalid = style({
-  color: "#ef4444",
+  color: vars.color.error,
 });
 
 export const pathIndicatorLoading = style({

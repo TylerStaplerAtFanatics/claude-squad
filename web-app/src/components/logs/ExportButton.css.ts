@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { vars } from "@/styles/theme.css";
 
 export const container = style({
   position: "relative",
@@ -9,9 +10,9 @@ export const button = style({
   alignItems: "center",
   gap: "0.5rem",
   padding: "0.5rem 0.75rem",
-  backgroundColor: "#1a1a1a",
-  border: "1px solid #444",
-  color: "#e5e5e5",
+  backgroundColor: vars.color.cardBackground,
+  border: `1px solid ${vars.color.inputBorder}`,
+  color: vars.color.textPrimary,
   borderRadius: "4px",
   cursor: "pointer",
   fontSize: "0.85rem",
@@ -19,8 +20,8 @@ export const button = style({
   transition: "all 0.2s",
   selectors: {
     "&:hover:not(:disabled)": {
-      backgroundColor: "#2a2a2a",
-      borderColor: "#666",
+      backgroundColor: vars.color.hoverBackground,
+      borderColor: vars.color.textMuted,
     },
     "&:disabled": {
       opacity: 0.5,
@@ -34,10 +35,10 @@ export const dropdown = style({
   top: "100%",
   right: "0",
   marginTop: "4px",
-  backgroundColor: "#1a1a1a",
-  border: "1px solid #333",
+  backgroundColor: vars.color.cardBackground,
+  border: `1px solid ${vars.color.borderColor}`,
   borderRadius: "6px",
-  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
+  boxShadow: vars.shadow.md,
   zIndex: 100,
   minWidth: "180px",
   overflow: "hidden",
@@ -50,7 +51,7 @@ export const option = style({
   padding: "0.625rem 0.75rem",
   background: "none",
   border: "none",
-  color: "#e5e5e5",
+  color: vars.color.textPrimary,
   cursor: "pointer",
   fontSize: "0.85rem",
   fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
@@ -59,7 +60,7 @@ export const option = style({
   transition: "background-color 0.15s",
   selectors: {
     "&:hover": {
-      backgroundColor: "#2a2a2a",
+      backgroundColor: vars.color.hoverBackground,
     },
   },
 });
@@ -76,12 +77,12 @@ export const optionLabel = style({
 
 export const optionDesc = style({
   fontSize: "0.75rem",
-  color: "#666",
+  color: vars.color.textMuted,
   marginLeft: "auto",
 });
 
 export const divider = style({
   height: "1px",
-  backgroundColor: "#333",
+  backgroundColor: vars.color.borderColor,
   margin: "0.25rem 0",
 });

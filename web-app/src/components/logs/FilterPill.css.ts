@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { vars } from "@/styles/theme.css";
 
 export const container = style({
   display: "flex",
@@ -13,19 +14,19 @@ export const pill = style({
   alignItems: "center",
   gap: "0.25rem",
   padding: "0.25rem 0.5rem",
-  backgroundColor: "#1a1a1a",
-  border: "1px solid #444",
+  backgroundColor: vars.color.cardBackground,
+  border: `1px solid ${vars.color.inputBorder}`,
   borderRadius: "16px",
   fontSize: "0.8rem",
   fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
 });
 
 export const label = style({
-  color: "#999",
+  color: vars.color.textMuted,
 });
 
 export const value = style({
-  color: "#e5e5e5",
+  color: vars.color.textPrimary,
   fontWeight: 500,
 });
 
@@ -39,7 +40,7 @@ export const removeButton = style({
   padding: "0",
   background: "none",
   border: "none",
-  color: "#666",
+  color: vars.color.textMuted,
   cursor: "pointer",
   borderRadius: "50%",
   fontSize: "1rem",
@@ -47,12 +48,12 @@ export const removeButton = style({
   transition: "color 0.15s, background-color 0.15s",
   selectors: {
     "&:hover": {
-      color: "#ff6b6b",
-      backgroundColor: "rgba(255, 107, 107, 0.1)",
+      color: vars.color.error,
+      backgroundColor: vars.color.errorBg,
     },
     "&:focus": {
       outline: "none",
-      boxShadow: "0 0 0 2px rgba(23, 162, 184, 0.3)",
+      boxShadow: `0 0 0 2px ${vars.color.accentHover}`,
     },
   },
 });
@@ -61,14 +62,14 @@ export const clearAllButton = style({
   padding: "0.25rem 0.5rem",
   background: "none",
   border: "none",
-  color: "#17a2b8",
+  color: vars.color.primary,
   cursor: "pointer",
   fontSize: "0.8rem",
   fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
   transition: "color 0.15s",
   selectors: {
     "&:hover": {
-      color: "#1dc3d8",
+      color: vars.color.primaryHover,
       textDecoration: "underline",
     },
     "&:focus": {

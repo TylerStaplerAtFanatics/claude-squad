@@ -81,16 +81,9 @@ export const countdown = style({
 });
 
 export const countdownNormal = style({
-  background: "#dbeafe",
-  color: "#1e40af",
-  border: "1px solid #93c5fd",
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#1e3a8a",
-      color: "#dbeafe",
-      borderColor: "#1e40af",
-    },
-  },
+  background: vars.statusBadge.inputBg,
+  color: vars.statusBadge.inputFg,
+  border: `1px solid ${vars.statusBadge.inputBorder}`,
 });
 
 export const countdownWarning = style({
@@ -233,11 +226,11 @@ export const approveButton = style({
   fontWeight: 600,
   cursor: "pointer",
   transition: "all 0.15s ease",
-  background: "#22c55e",
-  color: "white",
+  background: vars.color.success,
+  color: vars.color.primaryText,
   selectors: {
     "&:hover": {
-      background: "#16a34a",
+      background: vars.color.success,
       transform: "translateY(-1px)",
       boxShadow: "0 4px 8px rgba(0, 0, 0, 0.2)",
     },
@@ -258,11 +251,11 @@ export const denyButton = style({
   fontWeight: 600,
   cursor: "pointer",
   transition: "all 0.15s ease",
-  background: "#ef4444",
-  color: "white",
+  background: vars.color.error,
+  color: vars.color.primaryText,
   selectors: {
     "&:hover": {
-      background: "#dc2626",
+      background: vars.color.errorDark,
       transform: "translateY(-1px)",
       boxShadow: "0 4px 8px rgba(0, 0, 0, 0.2)",
     },

@@ -27,8 +27,8 @@ export const toolbar = style({
   alignItems: "center",
   justifyContent: "space-between",
   padding: "0.75rem 1rem",
-  background: vars.color.terminalHeaderBg,
-  borderBottom: `1px solid ${vars.color.terminalBorder}`,
+  background: vars.color.cardBackground,
+  borderBottom: `1px solid ${vars.color.borderColor}`,
   flexShrink: 0,
   "@media": {
     "screen and (max-width: 768px)": {
@@ -51,25 +51,25 @@ export const statusIndicator = style({
 });
 
 export const connected = style({
-  background: "#4ec9b0",
-  boxShadow: "0 0 8px #4ec9b0",
+  background: vars.color.success,
+  boxShadow: `0 0 8px ${vars.color.success}`,
 });
 
 export const disconnected = style({
-  background: "#f48771",
-  boxShadow: "0 0 8px #f48771",
+  background: vars.color.error,
+  boxShadow: `0 0 8px ${vars.color.error}`,
   animationName: "none",
 });
 
 export const stabilizing = style({
-  background: "#e5c07b",
-  boxShadow: "0 0 8px #e5c07b",
+  background: vars.color.warning,
+  boxShadow: `0 0 8px ${vars.color.warning}`,
   animation: `${pulse} 0.8s infinite`,
 });
 
 export const statusText = style({
   fontSize: "0.875rem",
-  color: vars.color.terminalForeground,
+  color: vars.color.textSecondary,
   "@media": {
     // Keep a compact label visible so connectivity state isn't color-only (WCAG 1.4.1)
     "screen and (max-width: 768px)": {
@@ -81,16 +81,16 @@ export const statusText = style({
 export const externalLabel = style({
   fontSize: "12px",
   fontWeight: 600,
-  color: "#6366f1",
+  color: vars.color.primary,
   padding: "2px 8px",
-  background: "rgba(99, 102, 241, 0.1)",
+  background: vars.color.accentBg,
   borderRadius: "4px",
-  border: "1px solid rgba(99, 102, 241, 0.3)",
+  border: `1px solid ${vars.color.borderSubtle}`,
 });
 
 export const errorText = style({
   fontSize: "0.875rem",
-  color: "#f48771",
+  color: vars.color.error,
   marginLeft: "0.5rem",
 });
 
@@ -111,20 +111,20 @@ export const actions = style({
 
 export const toolbarButton = style({
   padding: "0.5rem 0.75rem",
-  background: vars.color.terminalHoverBg,
-  border: `1px solid ${vars.color.terminalBorder}`,
+  background: vars.color.hoverBackground,
+  border: `1px solid ${vars.color.borderColor}`,
   borderRadius: "4px",
-  color: vars.color.terminalForeground,
+  color: vars.color.textPrimary,
   fontSize: "0.875rem",
   cursor: "pointer",
   transition: "background 0.2s, border-color 0.2s",
   selectors: {
     "&:hover": {
-      background: "#505050",
-      borderColor: "#6e6e6e",
+      background: vars.color.panelBgSecondary,
+      borderColor: vars.color.borderHover,
     },
     "&:active": {
-      background: vars.color.terminalHeaderBg,
+      background: vars.color.cardBackground,
     },
   },
   "@media": {
@@ -142,10 +142,10 @@ export const debugActive = style({});
 // Toolbar toggle button — visible on all screen sizes
 export const toolbarToggle = style({
   padding: "0.5rem",
-  background: vars.color.terminalHoverBg,
-  border: `1px solid ${vars.color.terminalBorder}`,
+  background: vars.color.hoverBackground,
+  border: `1px solid ${vars.color.borderColor}`,
   borderRadius: "4px",
-  color: vars.color.terminalForeground,
+  color: vars.color.textPrimary,
   fontSize: "0.75rem",
   cursor: "pointer",
   minWidth: "var(--min-touch-target, 44px)",
@@ -156,7 +156,8 @@ export const toolbarToggle = style({
   flexShrink: 0,
   selectors: {
     "&:hover": {
-      background: "#505050",
+      background: vars.color.panelBgSecondary,
+      borderColor: vars.color.borderHover,
     },
   },
 });
@@ -217,8 +218,8 @@ export const mobileMoreButton = style({
 
 // Active state for the More button when overflow is open
 export const mobileMoreActive = style({
-  background: "#505050 !important",
-  borderColor: "#6e6e6e !important",
+  background: `${vars.color.panelBgSecondary} !important`,
+  borderColor: `${vars.color.borderHover} !important`,
 });
 
 // Overflow row — rendered below the toolbar when More is open; never shown on desktop
@@ -229,8 +230,8 @@ export const mobileOverflowRow = style({
       display: "flex",
       gap: "0.25rem",
       padding: "0.3rem 0.75rem 0.4rem",
-      background: vars.color.terminalTabsBg,
-      borderBottom: `1px solid ${vars.color.terminalBorder}`,
+      background: vars.color.cardBackground,
+      borderBottom: `1px solid ${vars.color.borderColor}`,
       overflowX: "auto",
       WebkitOverflowScrolling: "touch" as "auto",
       scrollbarWidth: "none",
@@ -254,23 +255,23 @@ export const mobileKeyboardToggle = style({
 
 // Sticky modifier active state (CTRL / ALT armed)
 export const mobileKeyActive = style({
-  background: "#1e4976 !important",
-  borderColor: "#4a8fc7 !important",
-  color: "#93d0ff !important",
+  background: `${vars.color.accentBg} !important`,
+  borderColor: `${vars.color.primary} !important`,
+  color: `${vars.color.primaryText} !important`,
 });
 
 // Mouse-mode toolbar button active state
 export const mouseModeActive = style({
-  background: "#1e4976 !important",
-  borderColor: "#4a8fc7 !important",
-  color: "#93d0ff !important",
+  background: `${vars.color.accentBg} !important`,
+  borderColor: `${vars.color.primary} !important`,
+  color: `${vars.color.primaryText} !important`,
 });
 
 export const error = style({
   padding: "1rem",
-  background: "rgba(244, 135, 113, 0.1)",
-  borderBottom: "1px solid #f48771",
-  color: "#f48771",
+  background: vars.color.errorBg,
+  borderBottom: `1px solid ${vars.color.error}`,
+  color: vars.color.error,
   fontSize: "0.875rem",
 });
 
@@ -303,7 +304,7 @@ export const loadingOverlay = style({
   left: 0,
   right: 0,
   bottom: 0,
-  background: "rgba(30, 30, 30, 0.95)",
+  background: vars.color.overlayBackground,
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -316,15 +317,15 @@ export const loadingOverlay = style({
 export const loadingSpinner = style({
   width: "48px",
   height: "48px",
-  border: "4px solid #3e3e42",
-  borderTop: "4px solid #4ec9b0",
+  border: `4px solid ${vars.color.terminalBorder}`,
+  borderTop: `4px solid ${vars.color.success}`,
   borderRadius: "50%",
   animation: `${spin} 1s linear infinite`,
 });
 
 export const loadingText = style({
   fontSize: "0.875rem",
-  color: "#cccccc",
+  color: vars.color.terminalForeground,
   fontWeight: 500,
 });
 
@@ -334,7 +335,7 @@ export const unavailableOverlay = style({
   left: 0,
   right: 0,
   bottom: 0,
-  background: "rgba(30, 30, 30, 0.92)",
+  background: vars.color.overlayBackground,
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -345,18 +346,18 @@ export const unavailableOverlay = style({
 
 export const unavailableIcon = style({
   fontSize: "2rem",
-  color: "#6b7280",
+  color: vars.color.textMuted,
 });
 
 export const unavailableText = style({
   fontSize: "1rem",
-  color: "#9ca3af",
+  color: vars.color.textSecondary,
   fontWeight: 600,
 });
 
 export const unavailableSubtext = style({
   fontSize: "0.8125rem",
-  color: "#6b7280",
+  color: vars.color.textMuted,
 });
 
 export const mobileKeyboard = style({
@@ -392,7 +393,7 @@ export const mobileKey = style({
   justifyContent: "center",
   background: vars.color.terminalHoverBg,
   border: `1px solid ${vars.color.terminalBorder}`,
-  borderBottom: "3px solid #333",
+  borderBottom: `3px solid ${vars.color.terminalBorder}`,
   borderRadius: "5px",
   color: vars.color.terminalForeground,
   fontFamily: "inherit",
@@ -407,7 +408,7 @@ export const mobileKey = style({
   transition: "background 0.08s, border-bottom-width 0.08s, transform 0.08s",
   selectors: {
     "&:active": {
-      background: "#555",
+      background: vars.color.terminalHoverBg,
       borderBottomWidth: "1px",
       transform: "translateY(2px)",
     },
@@ -416,11 +417,11 @@ export const mobileKey = style({
 
 // Highlight ^C so users can find the interrupt key instantly
 export const mobileKeyCtrlC = style({
-  background: "#4e1e1e !important",
-  borderColor: "#a03030 !important",
-  color: "#ff6060 !important",
+  background: `${vars.color.errorBg} !important`,
+  borderColor: `${vars.color.error} !important`,
+  color: `${vars.color.errorText} !important`,
   fontWeight: "700",
-  boxShadow: "0 0 0 1px #a03030",
+  boxShadow: `0 0 0 1px ${vars.color.error}`,
 });
 
 // Global styles for xterm.js selectors within the terminal class
@@ -434,13 +435,13 @@ globalStyle(`${terminal} .xterm-viewport::-webkit-scrollbar-track`, {
 });
 
 globalStyle(`${terminal} .xterm-viewport::-webkit-scrollbar-thumb`, {
-  background: "#424242",
+  background: vars.color.terminalBorder,
   borderRadius: "6px",
   border: `2px solid ${vars.color.terminalBackground}`,
 });
 
 globalStyle(`${terminal} .xterm-viewport::-webkit-scrollbar-thumb:hover`, {
-  background: "#4e4e4e",
+  background: vars.color.terminalHoverBg,
 });
 
 globalStyle(`${terminal} .xterm-viewport::-webkit-scrollbar-corner`, {
@@ -448,7 +449,7 @@ globalStyle(`${terminal} .xterm-viewport::-webkit-scrollbar-corner`, {
 });
 
 globalStyle(`${terminal} .xterm-selection`, {
-  background: "#264f78",
+  background: vars.color.accentBg,
 });
 
 globalStyle(`${terminal} .xterm-helper-textarea`, {

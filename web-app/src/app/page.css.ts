@@ -34,9 +34,9 @@ export const loading = style({
 });
 
 export const error = style({
-  color: "#ff4444",
+  color: vars.color.error,
   padding: "1rem",
-  backgroundColor: "rgba(255, 68, 68, 0.1)",
+  backgroundColor: vars.color.errorBg,
   borderRadius: "8px",
   margin: "1rem 0",
 });
@@ -47,7 +47,7 @@ export const modal = style({
   left: 0,
   right: 0,
   bottom: 0,
-  background: "rgba(0, 0, 0, 0.7)",
+  background: vars.color.overlayBackground,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

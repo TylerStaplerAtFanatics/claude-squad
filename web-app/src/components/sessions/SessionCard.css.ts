@@ -57,12 +57,12 @@ export const cardSelectMode = style({
 
 export const cardSelected = style({
   borderColor: vars.color.primary,
-  background: "rgba(0, 112, 243, 0.05)", // design-token: pending (no alpha-variant token)
+  background: vars.color.accentBg, // design-token: pending (no alpha-variant token)
 });
 
 export const cardExternal = style({
-  borderLeft: "4px solid #6366f1", // TODO: add vars.color.externalIndicator token
-  backgroundImage: `linear-gradient(to right, rgba(99, 102, 241, 0.05), ${vars.color.cardBackground})`,
+  borderLeft: `4px solid ${vars.color.primary}`,
+  backgroundImage: `linear-gradient(to right, ${vars.color.accentBg}, ${vars.color.cardBackground})`,
 });
 
 export const checkbox = style({
@@ -122,17 +122,17 @@ export const externalBadge = style({
   alignItems: "center",
   gap: vars.space["1"],
   padding: `${vars.space["1"]} 10px`,
-  background: "#6366f1", // TODO: add vars.color.externalIndicator token
-  color: "white",
+  background: vars.color.primary,
+  color: vars.color.primaryText,
   borderRadius: vars.radii.full,
   fontSize: vars.fontSize.sm,
   fontWeight: 600,
-  border: "1px solid #4f46e5", // TODO: add vars.color.externalIndicator token
+  border: `1px solid ${vars.color.primaryDark}`,
 });
 
 export const muxIndicator = style({
   fontSize: "0.625rem",
-  background: "rgba(255, 255, 255, 0.3)",
+  background: "rgba(255, 255, 255, 0.3)", // intentional: translucent white overlay on colored badge bg
   padding: `2px ${vars.space["1"]}`,
   borderRadius: vars.radii.sm,
   marginLeft: vars.space["1"],
@@ -288,20 +288,12 @@ export const value = style({
 });
 
 export const githubLink = style({
-  color: "#0969da",
+  color: vars.color.primary,
   textDecoration: "none",
   fontWeight: 500,
   transition: "color 0.2s ease",
   selectors: {
-    "&:hover": { color: "#0550ae", textDecoration: "underline" },
-  },
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      color: "#58a6ff",
-      selectors: {
-        "&:hover": { color: "#79c0ff" },
-      },
-    },
+    "&:hover": { color: vars.color.primaryDark, textDecoration: "underline" },
   },
 });
 
@@ -521,13 +513,13 @@ export const actionButton = style({
 export const deleteButton = style({
   background: vars.color.errorBg, // was #fee2e2
   color: vars.color.errorText, // was #991b1b
-  borderColor: "#fca5a5", // design-token: pending (no light-error-border token)
+  borderColor: vars.color.error, // design-token: pending (no light-error-border token)
   selectors: {
-    "&:hover:not(:disabled)": { background: "#fecaca", borderColor: "#f87171" },
+    "&:hover:not(:disabled)": { background: vars.color.errorDark, borderColor: vars.color.errorDark, color: vars.color.primaryText },
     "&:disabled": {
-      background: "#fca5a5",
-      color: "#7f1d1d",
-      borderColor: vars.color.error, // was #ef4444
+      background: vars.color.errorBg,
+      color: vars.color.errorText,
+      borderColor: vars.color.error,
       opacity: 0.8,
       cursor: "not-allowed",
     },
@@ -536,33 +528,15 @@ export const deleteButton = style({
     "(max-width: 768px)": {
       gridColumn: "1 / -1",
     },
-    "(prefers-color-scheme: dark)": {
-      background: "#7f1d1d",
-      color: "#fecaca",
-      borderColor: "#991b1b",
-      selectors: {
-        "&:hover:not(:disabled)": { background: "#991b1b", borderColor: "#b91c1c" },
-      },
-    },
   },
 });
 
 export const restartButton = style({
-  background: "#fef3c7",
-  color: "#92400e",
-  borderColor: "#fde68a",
+  background: vars.color.warningBg,
+  color: vars.color.warningText,
+  borderColor: vars.color.warning,
   selectors: {
-    "&:hover": { background: "#fcd34d", borderColor: "#fbbf24" },
-  },
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#713f12",
-      color: "#fef3c7",
-      borderColor: "#92400e",
-      selectors: {
-        "&:hover": { background: "#92400e", borderColor: "#a16207" },
-      },
-    },
+    "&:hover": { background: vars.color.warning, borderColor: vars.color.warning, color: vars.color.textPrimary },
   },
 });
 
@@ -572,7 +546,7 @@ export const renameDialog = style({
   left: 0,
   right: 0,
   bottom: 0,
-  background: "rgba(0, 0, 0, 0.5)",
+  background: vars.color.overlayBackground,
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
@@ -604,11 +578,6 @@ export const warningText = style({
   color: `${vars.color.error} !important` as string,
   fontWeight: 500,
   fontSize: `0.8125rem !important` as string,
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      color: `#fca5a5 !important` as string,
-    },
-  },
 });
 
 export const renameInput = style({
@@ -661,7 +630,7 @@ export const submitButton = style({
   transition: "all 0.2s ease",
   border: `1px solid ${vars.color.primary}`,
   background: vars.color.primary,
-  color: "white",
+  color: vars.color.primaryText,
   selectors: {
     "&:hover:not(:disabled)": {
       background: vars.color.primaryHover,
@@ -696,22 +665,12 @@ export const dangerButton = style({
   fontWeight: 600,
   cursor: "pointer",
   transition: "all 0.2s ease",
-  background: "#ef4444",
-  color: "white",
-  border: "1px solid #ef4444",
+  background: vars.color.error,
+  color: vars.color.primaryText,
+  border: `1px solid ${vars.color.error}`,
   selectors: {
-    "&:hover:not(:disabled)": { background: "#dc2626", borderColor: "#dc2626" },
+    "&:hover:not(:disabled)": { background: vars.color.errorDark, borderColor: vars.color.errorDark },
     "&:disabled": { opacity: 0.5, cursor: "not-allowed" },
-  },
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#991b1b",
-      color: "#fecaca",
-      borderColor: "#b91c1c",
-      selectors: {
-        "&:hover:not(:disabled)": { background: "#b91c1c", borderColor: "#dc2626" },
-      },
-    },
   },
 });
 
@@ -804,8 +763,8 @@ export const snapshotPane = style({
   fontFamily: '"Menlo", "Monaco", "Courier New", monospace',
   fontSize: "0.72rem",
   lineHeight: 1.5,
-  background: "#1e1e1e",
-  color: "#d4d4d4",
+  background: vars.color.terminalBackground,
+  color: vars.color.terminalForeground,
   whiteSpace: "pre-wrap",
   wordBreak: "break-all",
 });
