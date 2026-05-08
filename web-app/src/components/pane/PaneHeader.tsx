@@ -41,6 +41,7 @@ interface PaneHeaderProps {
   onSetView?: (viewKind: PaneViewKind) => void;
   splitButtonVisible?: boolean;
   onSplitVertical?: () => void;
+  onSplitHorizontal?: () => void;
 }
 
 export function PaneHeader({
@@ -54,6 +55,7 @@ export function PaneHeader({
   onSetView,
   splitButtonVisible,
   onSplitVertical,
+  onSplitHorizontal,
 }: PaneHeaderProps) {
   const isListPane = pane.viewKind === "session-list";
   const session = !isListPane && pane.sessionId
@@ -104,20 +106,34 @@ export function PaneHeader({
         </button>
       )}
 
-      {/* Split vertical button */}
+      {/* Split buttons */}
       {splitButtonVisible && (
-        <button
-          className={paneHeaderButton}
-          data-testid="pane-split-vertical-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSplitVertical?.();
-          }}
-          title="Split pane vertically"
-          aria-label="Split pane vertically"
-        >
-          ⊟
-        </button>
+        <>
+          <button
+            className={paneHeaderButton}
+            data-testid="pane-split-vertical-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSplitVertical?.();
+            }}
+            title="Split pane side by side (vertical)"
+            aria-label="Split pane side by side"
+          >
+            ⊟
+          </button>
+          <button
+            className={paneHeaderButton}
+            data-testid="pane-split-horizontal-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSplitHorizontal?.();
+            }}
+            title="Split pane top and bottom (horizontal)"
+            aria-label="Split pane top and bottom"
+          >
+            ⊠
+          </button>
+        </>
       )}
 
       {/* Zoom button (only for session-detail) */}

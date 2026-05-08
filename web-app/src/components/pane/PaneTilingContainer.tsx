@@ -35,23 +35,39 @@ export function PaneTilingContainer({
   const [state, dispatch] = usePaneReducer(sessions);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevVersionRef = useRef<number | null>(null);
+  // Tracks the most recently focused session-detail pane so session clicks from
+  // a session-list pane still open in the last explicitly focused detail pane.
+  const lastFocusedDetailPaneRef = useRef<string | null>(null);
 
   // Register keyboard shortcuts
   usePaneShortcuts(state, dispatch, containerRef);
 
-  // When externalSessionAssign.version changes, route the session to the best detail pane.
-  // Skips session-list panes: if focused pane is a list, fall back to the first detail pane.
+  // Keep lastFocusedDetailPaneRef current whenever focus moves to a detail pane.
+  useEffect(() => {
+    const leaf = findLeaf(state.root, state.focusedPaneId);
+    if (leaf && leaf.viewKind === "session-detail") {
+      lastFocusedDetailPaneRef.current = state.focusedPaneId;
+    }
+  }, [state.focusedPaneId, state.root]);
+
+  // When externalSessionAssign.version changes, route the session to the best detail pane:
+  // 1. The focused pane (if it is a session-detail pane)
+  // 2. The last explicitly focused session-detail pane (preserved across list-pane clicks)
+  // 3. The first session-detail pane in tree order (fallback)
   useEffect(() => {
     if (!externalSessionAssign) return;
     if (externalSessionAssign.version === prevVersionRef.current) return;
     prevVersionRef.current = externalSessionAssign.version;
 
     const focusedLeaf = findLeaf(state.root, state.focusedPaneId);
-    let targetPaneId = state.focusedPaneId;
+    let targetPaneId: string = state.focusedPaneId;
     if (!focusedLeaf || focusedLeaf.viewKind === "session-list") {
       const allLeaves = getAllLeaves(state.root);
-      const detailLeaf = allLeaves.find((l) => l.viewKind === "session-detail");
-      if (detailLeaf) targetPaneId = detailLeaf.id;
+      const lastDetail = lastFocusedDetailPaneRef.current
+        ? allLeaves.find((l) => l.id === lastFocusedDetailPaneRef.current && l.viewKind === "session-detail")
+        : null;
+      const firstDetail = allLeaves.find((l) => l.viewKind === "session-detail");
+      targetPaneId = (lastDetail ?? firstDetail)?.id ?? state.focusedPaneId;
     }
 
     dispatch({ type: "ASSIGN_SESSION", paneId: targetPaneId, sessionId: externalSessionAssign.sessionId });

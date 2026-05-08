@@ -32,7 +32,7 @@ export function BottomNav() {
   const pathname = usePathname();
   const { open: openOmnibar } = useOmnibar();
   const { authenticated, authEnabled } = useAuth();
-  const { togglePanel, getUnreadCount } = useNotifications();
+  const { getUnreadCount } = useNotifications();
   const unreadCount = getUnreadCount();
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -127,9 +127,10 @@ export function BottomNav() {
       {/* Bottom nav bar */}
       <nav className={styles.nav} aria-label="Bottom navigation">
         {primaryItems.map(renderPrimaryItem)}
-        <button
-          className={`${styles.navItem} ${styles.notificationButton}`}
-          onClick={togglePanel}
+        <AppLink
+          href={routes.notifications}
+          className={`${styles.navItem} ${styles.notificationButton} ${pathname === routes.notifications ? styles.navItemActive : ""}`}
+          aria-current={pathname === routes.notifications ? "page" : undefined}
           aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"}
         >
           <span className={styles.notificationIconWrap} aria-hidden="true">
@@ -144,7 +145,7 @@ export function BottomNav() {
             )}
           </span>
           <span className={styles.navItemLabel}>Alerts</span>
-        </button>
+        </AppLink>
         <button
           className={styles.newSessionButton}
           onClick={openOmnibar}

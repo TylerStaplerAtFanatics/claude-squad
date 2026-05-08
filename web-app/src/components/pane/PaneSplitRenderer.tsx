@@ -184,6 +184,8 @@ function PaneLeafComponent({ pane, state, dispatch, sessions, hasSplits }: PaneL
     dispatch({ type: "ASSIGN_TAB", paneId: pane.id, tab });
   const handleSplitVertical = () =>
     dispatch({ type: "SPLIT_PANE", paneId: pane.id, direction: "vertical" });
+  const handleSplitHorizontal = () =>
+    dispatch({ type: "SPLIT_PANE", paneId: pane.id, direction: "horizontal" });
   const handleSetView = (viewKind: PaneViewKind) =>
     dispatch({ type: "SET_PANE_VIEW", paneId: pane.id, viewKind });
 
@@ -228,6 +230,7 @@ function PaneLeafComponent({ pane, state, dispatch, sessions, hasSplits }: PaneL
         onSetView={handleSetView}
         splitButtonVisible={true}
         onSplitVertical={handleSplitVertical}
+        onSplitHorizontal={handleSplitHorizontal}
       />
       <div className={paneBody}>
         {pane.viewKind === "session-list" ? (

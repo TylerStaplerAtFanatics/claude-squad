@@ -15,8 +15,9 @@ export interface NavPage {
 export const NAV_PAGES: NavPage[] = [
   { href: routes.home,        label: "Sessions",     icon: "⊞" },
   { href: routes.unfinished,  label: "Unfinished",   icon: "✎" },
-  { href: routes.reviewQueue, label: "Review Queue", shortLabel: "Review", icon: "📋" },
-  { href: routes.rules,       label: "Rules",        icon: "📜" },
+  { href: routes.reviewQueue,   label: "Review Queue",  shortLabel: "Review", icon: "📋" },
+  { href: routes.notifications, label: "Notifications", shortLabel: "Alerts", icon: "🔔" },
+  { href: routes.rules,         label: "Rules",         icon: "📜" },
   { href: routes.logs,        label: "Logs",         icon: "📋", mobileNav: false },
   { href: routes.errors,      label: "Errors",       icon: "⚠", mobileNav: false },
   { href: routes.history,     label: "History",      icon: "🕐" },

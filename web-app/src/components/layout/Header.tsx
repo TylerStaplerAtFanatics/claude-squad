@@ -8,6 +8,7 @@ import { ReviewQueueNavBadge } from "@/components/sessions/ReviewQueueNavBadge";
 import { ApprovalNavBadge } from "@/components/sessions/ApprovalNavBadge";
 import { UnfinishedNavBadge } from "@/components/unfinished/UnfinishedNavBadge";
 import { DebugMenu } from "@/components/ui/DebugMenu";
+import { NotificationsNavBadge } from "@/components/ui/NotificationsNavBadge";
 import { useNotifications } from "@/lib/contexts/NotificationContext";
 import { useOmnibar } from "@/lib/contexts/OmnibarContext";
 import { routes } from "@/lib/routes";
@@ -86,6 +87,8 @@ export function Header() {
                     <><span>{page.label}</span><UnfinishedNavBadge inline={true} /></>
                   ) : page.href === routes.reviewQueue ? (
                     <><span>{page.label}</span><ReviewQueueNavBadge inline={true} /></>
+                  ) : page.href === routes.notifications ? (
+                    <><span>{page.label}</span><NotificationsNavBadge inline={true} /></>
                   ) : (
                     page.label
                   )}
