@@ -28,6 +28,14 @@ jest.mock("@/lib/contexts/CockpitActionsContext", () => ({
   useCockpitActions: () => ({ sessions: [], loading: false, error: null }),
 }));
 
+jest.mock("@/components/pane/PaneContext", () => ({
+  usePaneContext: () => ({
+    pickerPendingSession: null,
+    triggerPicker: jest.fn(),
+    cancelPicker: jest.fn(),
+  }),
+}));
+
 const makeSession = (id: string, title: string): Partial<Session> => ({ id, title });
 
 const singlePaneState: PaneState = {

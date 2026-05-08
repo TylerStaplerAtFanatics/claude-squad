@@ -9,6 +9,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import type { PaneNode, LeafPane, SplitPane, PaneState, PaneAction, PaneId, SessionDetailTab, PaneViewKind } from "@/lib/pane/paneTypes";
 import { getAllLeaves } from "@/lib/pane/paneReducer";
 import { useCockpitActions } from "@/lib/contexts/CockpitActionsContext";
+import { usePaneContext } from "./PaneContext";
 import { PaneHeader } from "./PaneHeader";
 import { ResizeHandle } from "./ResizeHandle";
 import { MobilePaneTabStrip } from "./MobilePaneTabStrip";
@@ -21,6 +22,14 @@ import {
   emptyPaneSlot,
   paneBody,
 } from "@/styles/pane/paneSplit.css";
+import { pickerOverlay, pickerLabel } from "@/styles/pane/panePickerOverlay.css";
+
+function getPickerLetter(root: PaneNode, paneId: string): string | null {
+  const allLeaves = getAllLeaves(root);
+  const eligible = allLeaves.filter((l) => l.viewKind !== "session-list");
+  const idx = eligible.findIndex((l) => l.id === paneId);
+  return idx >= 0 && idx < 26 ? "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[idx] : null;
+}
 
 interface PaneSplitRendererProps {
   state: PaneState;
@@ -134,6 +143,7 @@ interface PaneLeafProps {
 
 function SessionListPaneBody({ pane, dispatch }: { pane: LeafPane; dispatch: React.Dispatch<PaneAction> }) {
   const actions = useCockpitActions();
+  const { triggerPicker } = usePaneContext();
   if (actions.loading) return <SessionListSkeleton count={4} />;
   if (actions.error) {
     return (
@@ -148,7 +158,7 @@ function SessionListPaneBody({ pane, dispatch }: { pane: LeafPane; dispatch: Rea
   return (
     <SessionList
       sessions={actions.sessions}
-      onSessionClick={actions.onSessionClick}
+      onSessionClick={triggerPicker}
       onDeleteSession={actions.onDeleteSession}
       onPauseSession={actions.onPauseSession}
       onResumeSession={actions.onResumeSession}
@@ -171,8 +181,10 @@ function SessionListPaneBody({ pane, dispatch }: { pane: LeafPane; dispatch: Rea
 }
 
 function PaneLeafComponent({ pane, state, dispatch, sessions, hasSplits }: PaneLeafProps) {
+  const { pickerPendingSession, cancelPicker } = usePaneContext();
   const isFocused = state.focusedPaneId === pane.id;
   const isZoomed = state.zoomedPaneId === pane.id;
+  const pickerLetter = pickerPendingSession ? getPickerLetter(state.root, pane.id) : null;
   const session = pane.viewKind === "session-detail" && pane.sessionId
     ? sessions.find((s) => s.id === pane.sessionId) ?? null
     : null;
@@ -251,6 +263,22 @@ function PaneLeafComponent({ pane, state, dispatch, sessions, hasSplits }: PaneL
           </div>
         )}
       </div>
+      {pickerLetter && (
+        <div
+          className={pickerOverlay}
+          onClick={(e) => {
+            e.stopPropagation();
+            dispatch({ type: "ASSIGN_SESSION", paneId: pane.id, sessionId: pickerPendingSession!.id });
+            dispatch({ type: "ASSIGN_TAB", paneId: pane.id, tab: "terminal" });
+            cancelPicker();
+          }}
+          aria-label={`Open session in this pane (press ${pickerLetter})`}
+          role="button"
+          tabIndex={0}
+        >
+          <span className={pickerLabel}>{pickerLetter}</span>
+        </div>
+      )}
     </div>
   );
 }

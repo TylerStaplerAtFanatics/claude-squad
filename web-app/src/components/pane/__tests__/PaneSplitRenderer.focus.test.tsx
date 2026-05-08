@@ -43,6 +43,14 @@ jest.mock("@/lib/contexts/CockpitActionsContext", () => ({
   useCockpitActions: () => ({ sessions: [], loading: false, error: null }),
 }));
 
+jest.mock("@/components/pane/PaneContext", () => ({
+  usePaneContext: () => ({
+    pickerPendingSession: null,
+    triggerPicker: jest.fn(),
+    cancelPicker: jest.fn(),
+  }),
+}));
+
 const singlePaneState: PaneState = {
   root: { type: "leaf", id: "p1", viewKind: "session-detail", sessionId: null, activeTab: "info" },
   focusedPaneId: "p1",

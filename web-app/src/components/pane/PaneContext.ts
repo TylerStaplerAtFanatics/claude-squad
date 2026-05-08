@@ -8,6 +8,9 @@ export interface PaneContextValue {
   state: PaneState;
   dispatch: React.Dispatch<PaneAction>;
   sessions: Session[];
+  pickerPendingSession: Session | null;
+  triggerPicker: (session: Session, tab?: string) => void;
+  cancelPicker: () => void;
 }
 
 export const PaneContext = createContext<PaneContextValue | null>(null);

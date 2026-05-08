@@ -105,6 +105,24 @@ export function paneReducer(state: PaneState, action: PaneAction): PaneState {
 
       const target = findLeaf(state.root, paneId);
       if (!target) return state;
+
+      // If the target is a session-list pane (no detail pane to route to), auto-split
+      // it to create a new session-detail pane so the session becomes visible.
+      if (target.viewKind === "session-list" && !wouldExceedMaxDepth(state.root, paneId)) {
+        const newDetail = createLeaf(undefined, "terminal", "session-detail");
+        const detailWithSession: LeafPane = { ...newDetail, sessionId };
+        const splitNode: SplitPane = {
+          type: "split",
+          id: generatePaneId(),
+          direction: "vertical",
+          ratio: 0.35,
+          first: target,
+          second: detailWithSession,
+        };
+        const newRoot = replaceNode(state.root, paneId, splitNode);
+        return { ...state, root: newRoot, focusedPaneId: detailWithSession.id };
+      }
+
       const updated: LeafPane = { ...target, sessionId, activeTab: "terminal" };
       const newRoot = replaceNode(state.root, paneId, updated);
       return { ...state, root: newRoot };

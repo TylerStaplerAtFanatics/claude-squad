@@ -35,8 +35,16 @@ export function usePaneReducer(
     const validIds = new Set(sessions.map((s) => s.id));
     const repairedRoot = validateAndRepair(layout.root, validIds);
 
-    // Ensure focusedPaneId still exists in the repaired tree
+    // Pre-tiling layouts have no session-list pane. Discard them so the user
+    // gets the default split layout rather than a grid of empty detail panes.
     const allLeaves = getAllLeaves(repairedRoot);
+    const hasListPane = allLeaves.some((l) => l.viewKind === "session-list");
+    if (!hasListPane) {
+      clearPaneLayout();
+      return;
+    }
+
+    // Ensure focusedPaneId still exists in the repaired tree
     const focusedStillExists = allLeaves.some((l) => l.id === layout.focusedPaneId);
     const focusedPaneId = focusedStillExists
       ? layout.focusedPaneId

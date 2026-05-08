@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import type { Session } from "@/gen/session/v1/types_pb";
 import { usePaneReducer } from "@/lib/pane/usePaneReducer";
 import { usePaneShortcuts } from "@/lib/pane/usePaneShortcuts";
@@ -35,49 +35,91 @@ export function PaneTilingContainer({
   const [state, dispatch] = usePaneReducer(sessions);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevVersionRef = useRef<number | null>(null);
-  // Tracks the most recently focused session-detail pane so session clicks from
-  // a session-list pane still open in the last explicitly focused detail pane.
-  const lastFocusedDetailPaneRef = useRef<string | null>(null);
+
+  const [pickerPendingSession, setPickerPendingSession] = useState<Session | null>(null);
+
+  const cancelPicker = useCallback(() => {
+    setPickerPendingSession(null);
+  }, []);
+
+  const triggerPicker = useCallback(
+    (session: Session, tab?: string) => {
+      const resolvedTab = (tab ?? "terminal") as "terminal" | "diff" | "vcs" | "logs" | "info" | "files";
+
+      // If the focused pane is already a detail pane, open there directly — the user
+      // indicated intent by focusing it (e.g. omnibar search from within a detail pane).
+      const focusedLeaf = findLeaf(state.root, state.focusedPaneId);
+      if (focusedLeaf && focusedLeaf.viewKind === "session-detail") {
+        dispatch({ type: "ASSIGN_SESSION", paneId: state.focusedPaneId, sessionId: session.id });
+        dispatch({ type: "ASSIGN_TAB", paneId: state.focusedPaneId, tab: resolvedTab });
+        return;
+      }
+
+      const allLeaves = getAllLeaves(state.root);
+      const eligiblePanes = allLeaves.filter((l) => l.viewKind !== "session-list");
+
+      if (eligiblePanes.length === 0) {
+        // Auto-split: reducer creates a new detail pane beside the session-list pane.
+        dispatch({ type: "ASSIGN_SESSION", paneId: state.focusedPaneId, sessionId: session.id });
+      } else if (eligiblePanes.length === 1) {
+        dispatch({ type: "ASSIGN_SESSION", paneId: eligiblePanes[0].id, sessionId: session.id });
+        dispatch({ type: "ASSIGN_TAB", paneId: eligiblePanes[0].id, tab: resolvedTab });
+        // On mobile, vertical splits show only the focused pane. Move focus to the detail
+        // pane so the user sees the session they just opened instead of the session list.
+        dispatch({ type: "FOCUS_PANE", paneId: eligiblePanes[0].id });
+      } else {
+        setPickerPendingSession(session);
+      }
+    },
+    [state.root, state.focusedPaneId, dispatch],
+  );
 
   // Register keyboard shortcuts
   usePaneShortcuts(state, dispatch, containerRef);
 
-  // Keep lastFocusedDetailPaneRef current whenever focus moves to a detail pane.
+  // Keyboard handler for the pane picker: Escape cancels, A–Z selects the nth eligible pane.
   useEffect(() => {
-    const leaf = findLeaf(state.root, state.focusedPaneId);
-    if (leaf && leaf.viewKind === "session-detail") {
-      lastFocusedDetailPaneRef.current = state.focusedPaneId;
-    }
-  }, [state.focusedPaneId, state.root]);
+    if (!pickerPendingSession) return;
 
-  // When externalSessionAssign.version changes, route the session to the best detail pane:
-  // 1. The focused pane (if it is a session-detail pane)
-  // 2. The last explicitly focused session-detail pane (preserved across list-pane clicks)
-  // 3. The first session-detail pane in tree order (fallback)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        cancelPicker();
+        return;
+      }
+      const letter = e.key.toUpperCase();
+      if (letter.length === 1 && letter >= "A" && letter <= "Z") {
+        const allLeaves = getAllLeaves(state.root);
+        const eligiblePanes = allLeaves.filter((l) => l.viewKind !== "session-list");
+        const idx = letter.charCodeAt(0) - 65;
+        const target = eligiblePanes[idx];
+        if (target) {
+          e.stopPropagation();
+          dispatch({ type: "ASSIGN_SESSION", paneId: target.id, sessionId: pickerPendingSession.id });
+          dispatch({ type: "ASSIGN_TAB", paneId: target.id, tab: "terminal" });
+          cancelPicker();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, [pickerPendingSession, state.root, dispatch, cancelPicker]);
+
+  // When externalSessionAssign fires (omnibar, URL nav, keyboard), route through
+  // triggerPicker so the user gets the same pane-picker UX as session-list clicks.
   useEffect(() => {
     if (!externalSessionAssign) return;
     if (externalSessionAssign.version === prevVersionRef.current) return;
     prevVersionRef.current = externalSessionAssign.version;
 
-    const focusedLeaf = findLeaf(state.root, state.focusedPaneId);
-    let targetPaneId: string = state.focusedPaneId;
-    if (!focusedLeaf || focusedLeaf.viewKind === "session-list") {
-      const allLeaves = getAllLeaves(state.root);
-      const lastDetail = lastFocusedDetailPaneRef.current
-        ? allLeaves.find((l) => l.id === lastFocusedDetailPaneRef.current && l.viewKind === "session-detail")
-        : null;
-      const firstDetail = allLeaves.find((l) => l.viewKind === "session-detail");
-      targetPaneId = (lastDetail ?? firstDetail)?.id ?? state.focusedPaneId;
-    }
-
-    dispatch({ type: "ASSIGN_SESSION", paneId: targetPaneId, sessionId: externalSessionAssign.sessionId });
-    if (externalSessionAssign.tab) {
-      dispatch({ type: "ASSIGN_TAB", paneId: targetPaneId, tab: externalSessionAssign.tab });
-    }
-  }, [externalSessionAssign, dispatch, state.root, state.focusedPaneId]);
+    const session = sessions.find((s) => s.id === externalSessionAssign.sessionId);
+    if (!session) return;
+    triggerPicker(session, externalSessionAssign.tab);
+  }, [externalSessionAssign, sessions, triggerPicker]);
 
   return (
-    <PaneContext.Provider value={{ state, dispatch, sessions }}>
+    <PaneContext.Provider value={{ state, dispatch, sessions, pickerPendingSession, triggerPicker, cancelPicker }}>
       <div
         ref={containerRef}
         style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}
