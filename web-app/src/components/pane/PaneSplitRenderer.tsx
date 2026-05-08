@@ -295,10 +295,10 @@ export function PaneSplitRenderer({ state, dispatch, sessions }: PaneSplitRender
   const isNarrow = isMobile || isFoldable;
   const allLeaves = getAllLeaves(state.root);
   const hasMultiplePanes = allLeaves.length > 1;
-  // Tab strip only needed when vertical (side-by-side) splits exist — those get collapsed
-  // to one pane on mobile and need a tab strip to switch. Horizontal (stacked) splits
-  // show both panes and don't need a tab strip.
-  const showMobileTabStrip = isNarrow && hasMultiplePanes && hasVerticalSplit(state.root);
+  // Show tab strip on narrow screens whenever there are multiple panes — vertical splits
+  // collapse to one visible pane and need the strip to switch; horizontal splits keep both
+  // visible but still benefit from the strip's "+" add-pane button.
+  const showMobileTabStrip = isNarrow && hasMultiplePanes;
 
   return (
     <div
@@ -344,6 +344,7 @@ export function PaneSplitRenderer({ state, dispatch, sessions }: PaneSplitRender
           focusedPaneId={state.focusedPaneId}
           sessions={sessions}
           onFocus={(paneId: PaneId) => dispatch({ type: "FOCUS_PANE", paneId })}
+          onAddPane={() => dispatch({ type: "SPLIT_PANE", paneId: state.focusedPaneId, direction: "horizontal" })}
         />
       )}
     </div>

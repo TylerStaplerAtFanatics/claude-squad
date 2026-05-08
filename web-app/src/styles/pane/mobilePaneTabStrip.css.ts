@@ -21,6 +21,30 @@ export const mobileTabStrip = style({
   },
 });
 
+export const mobileAddPaneButton = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  height: "32px",
+  width: "32px",
+  padding: 0,
+  background: "transparent",
+  border: `1px solid ${vars.color.borderColor}`,
+  borderRadius: vars.radii.md,
+  cursor: "pointer",
+  fontSize: "18px",
+  color: vars.color.textMuted,
+  flexShrink: 0,
+  marginLeft: "auto",
+  transition: "background 100ms, color 100ms",
+  selectors: {
+    "&:hover": {
+      background: vars.color.hoverBackground,
+      color: vars.color.textPrimary,
+    },
+  },
+});
+
 export const mobileTabButton = recipe({
   base: {
     display: "flex",

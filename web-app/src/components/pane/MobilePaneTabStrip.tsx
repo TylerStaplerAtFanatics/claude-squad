@@ -2,13 +2,14 @@
 
 import type { Session } from "@/gen/session/v1/types_pb";
 import type { LeafPane, PaneId } from "@/lib/pane/paneTypes";
-import { mobileTabStrip, mobileTabButton } from "@/styles/pane/mobilePaneTabStrip.css";
+import { mobileTabStrip, mobileTabButton, mobileAddPaneButton } from "@/styles/pane/mobilePaneTabStrip.css";
 
 interface MobilePaneTabStripProps {
   leaves: LeafPane[];
   focusedPaneId: PaneId;
   sessions: Session[];
   onFocus: (paneId: PaneId) => void;
+  onAddPane?: () => void;
 }
 
 export function MobilePaneTabStrip({
@@ -16,6 +17,7 @@ export function MobilePaneTabStrip({
   focusedPaneId,
   sessions,
   onFocus,
+  onAddPane,
 }: MobilePaneTabStripProps) {
   if (leaves.length <= 1) return null;
 
@@ -25,7 +27,7 @@ export function MobilePaneTabStrip({
         const session = l.sessionId
           ? sessions.find((s) => s.id === l.sessionId) ?? null
           : null;
-        const label = session ? session.title : "Empty";
+        const label = session ? session.title : l.viewKind === "session-list" ? "Sessions" : "Empty";
         const isActive = l.id === focusedPaneId;
 
         return (
@@ -41,6 +43,16 @@ export function MobilePaneTabStrip({
           </button>
         );
       })}
+      {onAddPane && (
+        <button
+          className={mobileAddPaneButton}
+          onClick={onAddPane}
+          title="Add new pane"
+          aria-label="Add new pane"
+        >
+          +
+        </button>
+      )}
     </div>
   );
 }

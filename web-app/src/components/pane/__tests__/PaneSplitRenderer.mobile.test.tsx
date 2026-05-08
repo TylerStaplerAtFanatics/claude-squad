@@ -147,8 +147,9 @@ describe("PaneSplitRenderer — mobile layout", () => {
       render(
         <PaneSplitRenderer state={horizontalSplitState} dispatch={jest.fn()} sessions={sessions} />
       );
-      // Tab strip only shows for vertical splits on mobile
-      expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+      // Tab strip shows for any multi-pane layout on mobile (including horizontal splits)
+      // so the "+" add-pane button is always accessible on mobile
+      expect(screen.getByRole("tablist")).toBeInTheDocument();
     });
   });
 });
