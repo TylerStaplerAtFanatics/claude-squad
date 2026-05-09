@@ -3,6 +3,7 @@
 import { createContext, useContext, ReactNode, useCallback } from "react";
 import { useGetApprovalsQuery, useResolveApprovalMutation } from "@/lib/api/approvalsApi";
 import type { PlainApproval } from "@/lib/api/approvalsApi";
+import { toErrorOrNull } from "@/lib/utils/rtkQueryError";
 
 interface ApprovalsContextValue {
   approvals: PlainApproval[];
@@ -36,13 +37,7 @@ export function ApprovalsProvider({ children }: { children: ReactNode }) {
   }, [refetch]);
 
   const approvals = data?.approvals ?? [];
-  const error = queryError
-    ? new Error(
-        typeof queryError === "object" && "error" in queryError
-          ? String((queryError as { error: unknown }).error)
-          : "Unknown error"
-      )
-    : null;
+  const error = toErrorOrNull(queryError);
 
   return (
     <ApprovalsContext.Provider

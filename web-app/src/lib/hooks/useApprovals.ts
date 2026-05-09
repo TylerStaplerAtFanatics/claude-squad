@@ -3,6 +3,8 @@
 import { useCallback, useMemo } from "react";
 import { useGetApprovalsQuery, useResolveApprovalMutation } from "@/lib/api/approvalsApi";
 import type { PlainApproval } from "@/lib/api/approvalsApi";
+import type { AsyncResult } from "@/lib/types/asyncResult";
+import { toErrorOrNull } from "@/lib/utils/rtkQueryError";
 
 interface UseApprovalsOptions {
   sessionId?: string;
@@ -15,10 +17,8 @@ interface UseApprovalsOptions {
   notificationTrigger?: number;
 }
 
-interface UseApprovalsReturn {
+interface UseApprovalsReturn extends AsyncResult {
   approvals: PlainApproval[];
-  loading: boolean;
-  error: Error | null;
   approve: (approvalId: string) => Promise<void>;
   deny: (approvalId: string, message?: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -83,14 +83,7 @@ export function useApprovals(
     await refetch();
   }, [refetch]);
 
-  const error = useMemo(() => {
-    if (!queryError) return null;
-    const msg =
-      typeof queryError === "object" && "error" in queryError
-        ? String((queryError as { error: unknown }).error)
-        : "Unknown error";
-    return new Error(msg);
-  }, [queryError]);
+  const error = useMemo(() => toErrorOrNull(queryError), [queryError]);
 
   return {
     approvals,
