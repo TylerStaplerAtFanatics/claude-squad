@@ -21,6 +21,11 @@ import {
   leafZoomed,
   emptyPaneSlot,
   paneBody,
+  sessionListScroll,
+  resetLayoutBar,
+  resetLayoutButton,
+  rendererRoot,
+  rendererContent,
 } from "@/styles/pane/paneSplit.css";
 import { pickerOverlay, pickerLabel } from "@/styles/pane/panePickerOverlay.css";
 
@@ -156,28 +161,30 @@ function SessionListPaneBody({ pane, dispatch }: { pane: LeafPane; dispatch: Rea
     );
   }
   return (
-    <SessionList
-      sessions={actions.sessions}
-      onSessionClick={triggerPicker}
-      onSessionOpenInNewPane={triggerPickerForceNew}
-      onDeleteSession={actions.onDeleteSession}
-      onPauseSession={actions.onPauseSession}
-      onResumeSession={actions.onResumeSession}
-      onDirectResumeSession={actions.onDirectResumeSession}
-      onCloneSession={actions.onCloneSession}
-      onNewWorkspaceSession={actions.onNewWorkspaceSession}
-      onRenameSession={actions.onRenameSession}
-      onRestartSession={actions.onRestartSession}
-      onUpdateTags={actions.onUpdateTags}
-      onNewSession={actions.onNewSession}
-      onCreateCheckpoint={actions.onCreateCheckpoint}
-      onListCheckpoints={actions.onListCheckpoints}
-      onForkFromCheckpoint={actions.onForkFromCheckpoint}
-      onRunOneShot={actions.onRunOneShot}
-      onSetRateLimitEnabled={actions.onSetRateLimitEnabled}
-      onClearConversationState={actions.onClearConversationState}
-      storageKeyPrefix={`pane-${pane.id}.`}
-    />
+    <div className={sessionListScroll} data-testid="session-list-scroll">
+      <SessionList
+        sessions={actions.sessions}
+        onSessionClick={triggerPicker}
+        onSessionOpenInNewPane={triggerPickerForceNew}
+        onDeleteSession={actions.onDeleteSession}
+        onPauseSession={actions.onPauseSession}
+        onResumeSession={actions.onResumeSession}
+        onDirectResumeSession={actions.onDirectResumeSession}
+        onCloneSession={actions.onCloneSession}
+        onNewWorkspaceSession={actions.onNewWorkspaceSession}
+        onRenameSession={actions.onRenameSession}
+        onRestartSession={actions.onRestartSession}
+        onUpdateTags={actions.onUpdateTags}
+        onNewSession={actions.onNewSession}
+        onCreateCheckpoint={actions.onCreateCheckpoint}
+        onListCheckpoints={actions.onListCheckpoints}
+        onForkFromCheckpoint={actions.onForkFromCheckpoint}
+        onRunOneShot={actions.onRunOneShot}
+        onSetRateLimitEnabled={actions.onSetRateLimitEnabled}
+        onClearConversationState={actions.onClearConversationState}
+        storageKeyPrefix={`pane-${pane.id}.`}
+      />
+    </div>
   );
 }
 
@@ -302,23 +309,15 @@ export function PaneSplitRenderer({ state, dispatch, sessions }: PaneSplitRender
 
   return (
     <div
-      style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", minHeight: 0 }}
+      className={rendererRoot}
       data-context="cockpit"
     >
       {/* Reset layout button — only shown when there is a split layout */}
       {hasMultiplePanes && (
-        <div style={{ display: "flex", justifyContent: "flex-end", padding: "2px 4px", flexShrink: 0, background: "transparent" }}>
+        <div className={resetLayoutBar}>
           <button
             data-testid="reset-layout-btn"
-            style={{
-              fontSize: "11px",
-              padding: "2px 6px",
-              background: "transparent",
-              border: "1px solid var(--border-color)",
-              borderRadius: "4px",
-              cursor: "pointer",
-              color: "var(--text-muted)",
-            }}
+            className={resetLayoutButton}
             onClick={() => dispatch({ type: "RESET_LAYOUT" })}
             title="Reset to single pane"
           >
@@ -327,7 +326,7 @@ export function PaneSplitRenderer({ state, dispatch, sessions }: PaneSplitRender
         </div>
       )}
 
-      <div style={{ flex: 1, overflow: "hidden", minHeight: 0, position: "relative" }}>
+      <div className={rendererContent}>
         <PaneNodeComponent
           node={state.root}
           state={state}
