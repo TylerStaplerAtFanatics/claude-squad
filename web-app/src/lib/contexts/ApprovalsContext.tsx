@@ -1,12 +1,13 @@
 "use client";
 
-import { createContext, useContext, ReactNode, useCallback } from "react";
+import { createContext, useContext, ReactNode, useCallback, useMemo } from "react";
 import { useGetApprovalsQuery, useResolveApprovalMutation } from "@/lib/api/approvalsApi";
 import type { PlainApproval } from "@/lib/api/approvalsApi";
 import { toErrorOrNull } from "@/lib/utils/rtkQueryError";
 
-interface ApprovalsContextValue {
+export interface ApprovalsContextValue {
   approvals: PlainApproval[];
+  pendingCount: number;
   loading: boolean;
   error: Error | null;
   approve: (approvalId: string) => Promise<void>;
@@ -16,8 +17,21 @@ interface ApprovalsContextValue {
 
 const ApprovalsContext = createContext<ApprovalsContextValue | null>(null);
 
+/** Fallback returned by useApprovalsContext when used outside ApprovalsProvider. */
+const noopAsync = async () => {};
+
+const FALLBACK_CONTEXT: ApprovalsContextValue = {
+  approvals: [],
+  pendingCount: 0,
+  loading: false,
+  error: null,
+  approve: noopAsync,
+  deny: noopAsync,
+  refresh: noopAsync,
+};
+
 export function ApprovalsProvider({ children }: { children: ReactNode }) {
-  // RTK Query with 5s polling (approvals are blocking actions)
+  // RTK Query with 5s polling — single authoritative source for the entire app
   const { data, isLoading, error: queryError, refetch } = useGetApprovalsQuery(undefined, {
     pollingInterval: 5000,
   });
@@ -38,25 +52,26 @@ export function ApprovalsProvider({ children }: { children: ReactNode }) {
 
   const approvals = data?.approvals ?? [];
   const error = toErrorOrNull(queryError);
+  const pendingCount = approvals.length;
+
+  const value = useMemo<ApprovalsContextValue>(
+    () => ({ approvals, pendingCount, loading: isLoading, error, approve, deny, refresh }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [approvals, pendingCount, isLoading, error, approve, deny, refresh]
+  );
 
   return (
-    <ApprovalsContext.Provider
-      value={{
-        approvals,
-        loading: isLoading,
-        error,
-        approve,
-        deny,
-        refresh,
-      }}
-    >
+    <ApprovalsContext.Provider value={value}>
       {children}
     </ApprovalsContext.Provider>
   );
 }
 
-export function useApprovalsContext() {
+/**
+ * Returns the approvals context value.
+ * Safe to call outside ApprovalsProvider — returns a no-op fallback instead of throwing.
+ */
+export function useApprovalsContext(): ApprovalsContextValue {
   const ctx = useContext(ApprovalsContext);
-  if (!ctx) throw new Error("useApprovalsContext must be used within ApprovalsProvider");
-  return ctx;
+  return ctx ?? FALLBACK_CONTEXT;
 }
