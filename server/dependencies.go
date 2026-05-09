@@ -2,8 +2,13 @@ package server
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/tstapler/stapler-squad/config"
 	"github.com/tstapler/stapler-squad/log"
+	warren "github.com/tstapler/stapler-squad/pkg/warren"
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/server/services"
 	"github.com/tstapler/stapler-squad/session"
@@ -12,9 +17,6 @@ import (
 	"github.com/tstapler/stapler-squad/session/scrollback"
 	"github.com/tstapler/stapler-squad/session/tmux"
 	"github.com/tstapler/stapler-squad/session/unfinished"
-	"os"
-	"path/filepath"
-	"time"
 )
 
 // ServerDependencies holds all wired service components for the HTTP server.
@@ -184,7 +186,7 @@ func mapDetectedStatus(status detection.DetectedStatus, statusContext string) (s
 }
 
 // addStartupItem creates a ReviewItem from an instance and adds it to the queue.
-func addStartupItem(queue *session.ReviewQueue, inst *session.Instance, reason session.AttentionReason, priority session.Priority, context string) {
+func addStartupItem(queue session.ReviewQueueWriter, inst *session.Instance, reason session.AttentionReason, priority session.Priority, context string) {
 	item := &session.ReviewItem{
 		SessionID:    inst.Title,
 		SessionName:  inst.Title,
@@ -211,7 +213,7 @@ func addStartupItem(queue *session.ReviewQueue, inst *session.Instance, reason s
 func syncOrphanedApprovalsToQueue(
 	store *services.ApprovalStore,
 	instances []*session.Instance,
-	queue *session.ReviewQueue,
+	queue session.ReviewQueueWriter,
 ) {
 	if store == nil {
 		return
@@ -335,7 +337,12 @@ func BuildCoreDepsWithOptions(opts BuildOptions) (*CoreDeps, error) {
 	// GetEntClient returns nil when storage is not ent-backed (e.g. in tests),
 	// in which case ErrorRegistry gracefully disables itself.
 	errorRegistry := services.NewErrorRegistry(storage.GetEntClient(), true)
-	sessionService.SetErrorRegistry(errorRegistry)
+
+	w := warren.NewWire("CoreDeps")
+	warren.Set(w, "ErrorRegistry", sessionService.SetErrorRegistry, errorRegistry)
+	if err := w.Validate(); err != nil {
+		return nil, err
+	}
 
 	return &CoreDeps{
 		SessionService: sessionService,
@@ -375,11 +382,15 @@ func BuildServiceDeps(core *CoreDeps) (*ServiceDeps, error) {
 	reviewQueuePoller := session.NewReviewQueuePoller(
 		core.ReviewQueue, statusManager, core.Storage,
 	)
-	reviewQueuePoller.SetApprovalProvider(core.ApprovalStore)
 	prStatusPoller := session.NewPRStatusPoller(core.Storage)
 
-	core.SessionService.SetStatusManager(statusManager)
-	core.SessionService.SetReviewQueuePoller(reviewQueuePoller)
+	w := warren.NewWire("ServiceDeps")
+	warren.Set(w, "ApprovalProvider", reviewQueuePoller.SetApprovalProvider, session.ApprovalMetadataProvider(core.ApprovalStore))
+	warren.Set(w, "StatusManager", core.SessionService.SetStatusManager, statusManager)
+	warren.Set(w, "ReviewQueuePoller", core.SessionService.SetReviewQueuePoller, reviewQueuePoller)
+	if err := w.Validate(); err != nil {
+		return nil, err
+	}
 
 	return &ServiceDeps{
 		CoreDeps:          core,
@@ -446,15 +457,24 @@ func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, e
 	}
 
 	// Step 5 (continued): wire dependencies to each instance
+	// inst.SetReviewQueue and inst.SetStatusManager are called per-instance in a loop;
+	// Warren is designed for named scalar setters, not loop iterations. Left unwrapped.
 	for _, inst := range instances {
 		inst.SetReviewQueue(reviewQueue)
 		inst.SetStatusManager(statusManager)
 	}
-	reviewQueuePoller.SetInstances(instances)
-	svc.PRStatusPoller.SetInstances(instances)
-	svc.PRStatusPoller.SetOnUpdated(func(inst *session.Instance) {
+
+	// Wire instances to pollers.
+	// SetInstances accepts a slice (non-comparable) so use SetAlways (skips nil check).
+	w2 := warren.NewWire("RuntimeDeps.Pollers")
+	warren.SetAlways(w2, "ReviewQueuePoller.Instances", reviewQueuePoller.SetInstances, instances)
+	warren.SetAlways(w2, "PRStatusPoller.Instances", svc.PRStatusPoller.SetInstances, instances)
+	warren.SetAlways(w2, "PRStatusPoller.OnUpdated", svc.PRStatusPoller.SetOnUpdated, func(inst *session.Instance) {
 		eventBus.Publish(events.NewSessionUpdatedEvent(inst, []string{"github_pr_priority", "github_pr_state"}))
 	})
+	if err := w2.Validate(); err != nil {
+		return nil, err
+	}
 
 	// Perform heavy initialization (tmux starting, controllers, scanning) in the background
 	// so the HTTP server can bind and start immediately.
@@ -526,14 +546,11 @@ func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, e
 
 	// Step 8: ReactiveQueueManager
 	reactiveQueueMgr := NewReactiveQueueManager(reviewQueue, reviewQueuePoller, eventBus, statusManager, storage)
-	sessionService.SetReactiveQueueManager(reactiveQueueMgr)
 	log.InfoLog.Printf("ReactiveQueueManager initialized")
 
 	// Step 8.5: HistoryLinker — detects Claude JSONL files and links conversation
 	// UUIDs to sessions so cold restore can use --resume on restart.
 	historyLinker := session.NewHistoryLinkerFromRealInspector()
-	historyLinker.SetInstances(instances)
-	sessionService.SetHistoryLinker(historyLinker)
 	log.InfoLog.Printf("HistoryLinker initialized with %d instances", len(instances))
 
 	// Step 9: ScrollbackManager (independent of above)
@@ -544,8 +561,6 @@ func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, e
 	scrollbackManager := scrollback.NewScrollbackManager(scrollbackConfig)
 	log.InfoLog.Printf("Initialized ScrollbackManager: path=%s, compression=%s, maxLines=%d",
 		scrollbackPath, scrollbackConfig.StoragePath, scrollbackConfig.MaxLines)
-	// Wire scrollback sequence provider so CreateCheckpoint records accurate seq numbers.
-	sessionService.SetScrollbackManager(scrollbackManager)
 
 	// Step 10: TmuxStreamerManager (independent)
 	tmuxStreamerManager := session.NewExternalTmuxStreamerManager()
@@ -623,7 +638,23 @@ func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, e
 
 	// Wire external discovery to SessionService for unified session listing
 	// (moved from server.go to keep all dependency wiring in BuildRuntimeDeps)
-	sessionService.SetExternalDiscovery(externalDiscovery)
+
+	w3 := warren.NewWire("RuntimeDeps.SessionService")
+	// ReactiveQueueManager is an exported interface; cast to infer correct type param.
+	warren.Set(w3, "ReactiveQueueManager", sessionService.SetReactiveQueueManager, services.ReactiveQueueManager(reactiveQueueMgr))
+	warren.Set(w3, "HistoryLinker", sessionService.SetHistoryLinker, historyLinker)
+	// SetInstances accepts a slice (non-comparable) so use SetAlways.
+	warren.SetAlways(w3, "HistoryLinker.Instances", historyLinker.SetInstances, instances)
+	// scrollbackSequencer is unexported — warren type inference cannot resolve it from
+	// outside the services package. Call directly and mark as applied manually.
+	sessionService.SetScrollbackManager(scrollbackManager)
+	w3.Mark("ScrollbackManager")
+	warren.Set(w3, "ExternalDiscovery", sessionService.SetExternalDiscovery, externalDiscovery)
+	// UnfinishedWorkService is optional — nil when config directory is unavailable.
+	// Do not add to Warren Wire; nil is a valid production value documented on RuntimeDeps.
+	if err := w3.Validate(); err != nil {
+		return nil, err
+	}
 
 	// Initialize UnfinishedWork scanner and state store.
 	var (

@@ -56,3 +56,10 @@ var DeterminePriority = queue.DeterminePriority
 
 // reasonToPriority re-export (package-level alias for test access within session package)
 var reasonToPriority = queue.ReasonToPriority
+
+// ReviewQueueWriter is the write-side interface for the review queue.
+// It is satisfied by *ReviewQueue and can be used in place of the concrete
+// type wherever only Add is required, making it easy to supply a test double.
+type ReviewQueueWriter interface {
+	Add(item *ReviewItem) bool
+}
