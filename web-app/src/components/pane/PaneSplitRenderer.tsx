@@ -13,6 +13,7 @@ import { useSessionServiceContext } from "@/lib/contexts/SessionServiceContext";
 import { usePaneContext } from "./PaneContext";
 import { PaneHeader } from "./PaneHeader";
 import { ResizeHandle } from "./ResizeHandle";
+import { resetLayoutButton } from "./PaneSplitRenderer.css";
 import { MobilePaneTabStrip } from "./MobilePaneTabStrip";
 import { useViewport } from "@/components/providers/ViewportProvider";
 import { containsPaneId, hasVerticalSplit } from "@/lib/pane/paneUtils";
@@ -312,15 +313,7 @@ export function PaneSplitRenderer({ state, dispatch, sessions }: PaneSplitRender
         <div style={{ display: "flex", justifyContent: "flex-end", padding: "2px 4px", flexShrink: 0, background: "transparent" }}>
           <button
             data-testid="reset-layout-btn"
-            style={{
-              fontSize: "11px",
-              padding: "2px 6px",
-              background: "transparent",
-              border: "1px solid var(--border-color)",
-              borderRadius: "4px",
-              cursor: "pointer",
-              color: "var(--text-secondary)",
-            }}
+            className={resetLayoutButton}
             onClick={() => dispatch({ type: "RESET_LAYOUT" })}
             title="Reset to single pane"
           >
