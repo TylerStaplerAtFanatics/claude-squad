@@ -1,6 +1,12 @@
 "use client";
 // +feature: session-create-wizard session-title-autogen session-create-github-url
 
+/**
+ * @deprecated Use the Omnibar (OmnibarContext) for session creation.
+ * This component is no longer rendered. Scheduled for removal once all
+ * callers have migrated to the Omnibar flow.
+ */
+
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
