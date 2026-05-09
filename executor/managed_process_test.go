@@ -166,7 +166,12 @@ func TestManagedProcess_Stdout_readsOutput(t *testing.T) {
 func TestManagedProcess_Stderr_readsErrors(t *testing.T) {
 	t.Parallel()
 
-	p, err := StartProcess(context.Background(), helperBin,
+	// Bound the subprocess lifetime so io.ReadAll cannot block indefinitely
+	// when running in a crowded parallel test environment.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	p, err := StartProcess(ctx, helperBin,
 		[]string{"--print-stderr", "error output"})
 	if err != nil {
 		t.Fatalf("StartProcess failed: %v", err)
