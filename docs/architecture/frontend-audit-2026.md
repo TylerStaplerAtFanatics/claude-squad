@@ -404,7 +404,7 @@ Seven of the top ten are in `components/sessions/`. Total for that directory's t
 
 **Pattern CP-1: Pure Presentation (receives all data as props)**
 
-`SessionCard.tsx` (1,183 lines, 22 props): props interface lines 86–110 shows 3 data props (`session`, `reviewItem`, `detectedStatus`) and 19 callback props. All local state is UI-only (confirm dialogs, tag editor open state). The excessive prop count forces callers to know about every possible action even when only a subset applies.
+`SessionCard.tsx` (1,183 lines, 23 props): props interface lines 86–110 shows 3 data props (`session`, `reviewItem`, `detectedStatus`) and 20 callback props. All local state is UI-only (confirm dialogs, tag editor open state). The excessive prop count forces callers to know about every possible action even when only a subset applies.
 
 **Pattern CP-2: Mixed Responsibility (data + logic + render in one file)**
 
@@ -700,7 +700,7 @@ Add as an override in `web-app/.eslintrc.json` targeting only CSS-in-TS files:
 }
 ```
 
-This would catch all three violations in `ApprovalAnalyticsPanel.css.ts` (lines 300, 315, 320) and all 11 in `app/debug/escape-codes/page.css.ts` (lines 189–199). Before enabling as `"error"`, run `npx eslint web-app/src --ext .css.ts --rule '...' --no-eslintrc` to assess the full scope of violations. Start as `"warn"` and promote to `"error"` after fixing the known violations.
+This would catch all three violations in `ApprovalAnalyticsPanel.css.ts` (lines 300, 315, 320) and all 11 in `app/debug/escape-codes/page.css.ts` (lines 189–199). Before enabling as `"error"`, add the rule as `"warn"` first and run `cd web-app && npx eslint src --ext .css.ts 2>&1 | grep "Hardcoded hex" | wc -l` to count violations. Start as `"warn"` and promote to `"error"` after fixing the known violations.
 
 ---
 
@@ -918,6 +918,8 @@ graph TD
 ---
 
 ## 7. Recommended Action Roadmap
+
+> **New to this document?** Start with Phase 1 below — specifically Opp 1 (`lib/hooks/useApprovals.ts` lines 86–93) which takes under an hour, eliminates a polling duplicate, and establishes the pattern for all subsequent consolidations. Then add the hex-in-.css.ts lint rule (Rec 1) to make the CSS gap visible in CI. Those two changes deliver the clearest signal that the pattern consolidation is underway.
 
 ### Phase 1 — Quick Wins (1–2 days, low risk)
 
