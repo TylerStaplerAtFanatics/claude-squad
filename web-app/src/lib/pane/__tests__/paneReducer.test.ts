@@ -443,4 +443,24 @@ describe("state invariants after any action", () => {
       expect(s.ratio).toBeLessThan(1);
     });
   });
+
+  // T-016: keyboard-initiated ASSIGN_SESSION inherits move-and-clear from reducer
+  it("paneReducer_should_allowKeyboardAssignToMoveSession", () => {
+    // pane-1 holds session-A; session-B is in pane-2
+    const pane1 = { ...leaf("pane-1"), sessionId: "session-A" };
+    const pane2 = { ...leaf("pane-2"), sessionId: "session-B" };
+    const root = split("split-1", "vertical", pane1, pane2);
+    const state = stateOf(root, "pane-1");
+
+    // Keyboard handler fires ASSIGN_SESSION targeting pane-1 with session-B
+    const next = paneReducer(state, { type: "ASSIGN_SESSION", paneId: "pane-1", sessionId: "session-B" });
+
+    const leaves = getAllLeaves(next.root);
+    const nextPane1 = leaves.find((l) => l.id === "pane-1")!;
+    const nextPane2 = leaves.find((l) => l.id === "pane-2")!;
+    // session-B moved to pane-1
+    expect(nextPane1.sessionId).toBe("session-B");
+    // pane-2 cleared (move-and-clear semantics)
+    expect(nextPane2.sessionId).toBeNull();
+  });
 });

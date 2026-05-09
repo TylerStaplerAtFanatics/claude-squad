@@ -175,4 +175,32 @@ describe("triggerPicker", () => {
       expect.objectContaining({ type: "ASSIGN_SESSION" })
     );
   });
+
+  // T-015: cancelPicker must not fire during triggerPicker — overlay stays open
+  it("triggerPicker_should_notDispatchCancelPicker_When_twoDetailPanes", async () => {
+    const pane1 = makeLeaf("pane-1", "session-detail");
+    const pane2 = makeLeaf("pane-2", "session-detail");
+    const root = makeSplit("split-1", pane1, pane2);
+    const { dispatch } = setupReducerMock(root, "pane-1");
+
+    const session = makeSession("session-X");
+
+    const { rerender } = render(
+      <PaneTilingContainer sessions={[session]} externalSessionAssign={null} />
+    );
+
+    await act(async () => {
+      rerender(
+        <PaneTilingContainer
+          sessions={[session]}
+          externalSessionAssign={{ sessionId: "session-X", version: 1 }}
+        />
+      );
+    });
+
+    // Picker must remain open — cancelPicker must not have been dispatched
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "CANCEL_PICKER" })
+    );
+  });
 });
