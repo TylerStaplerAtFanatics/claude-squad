@@ -348,13 +348,6 @@ export const footer = style({
   alignItems: "center",
   paddingTop: vars.space["3"],
   borderTop: `1px solid ${vars.color.borderColor}`,
-  "@media": {
-    "(max-width: 768px)": {
-      flexDirection: "column",
-      alignItems: "stretch",
-      gap: vars.space["2"],
-    },
-  },
 });
 
 export const timestamps = style({
@@ -372,11 +365,6 @@ export const desktopActions = style({
   display: "flex",
   alignItems: "center",
   gap: vars.space["2"],
-  "@media": {
-    "(max-width: 768px)": {
-      display: "none",
-    },
-  },
 });
 
 export const overflowContainer = style({
@@ -443,51 +431,6 @@ export const overflowMenuItemDanger = style({
   },
 });
 
-export const actions = style({
-  display: "flex",
-  gap: vars.space["2"],
-  "@media": {
-    "(max-width: 768px)": {
-      display: "none",
-      width: "100%",
-    },
-  },
-});
-
-export const actionsOpen = style({
-  "@media": {
-    "(max-width: 768px)": {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gap: vars.space["2"],
-    },
-  },
-});
-
-export const actionsToggle = style({
-  display: "none",
-  "@media": {
-    "(max-width: 768px)": {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      width: "100%",
-      minHeight: "44px",
-      padding: `10px ${vars.space["4"]}`,
-      border: `1px solid ${vars.color.borderColor}`,
-      borderRadius: vars.radii.md,
-      background: vars.color.cardBackground,
-      color: vars.color.textPrimary,
-      fontSize: "0.875rem",
-      fontWeight: 500,
-      cursor: "pointer",
-      transition: "background 0.2s ease",
-      selectors: {
-        "&:hover": { background: vars.color.hoverBackground },
-      },
-    },
-  },
-});
 
 export const actionButton = style({
   padding: `6px ${vars.space["4"]}`,

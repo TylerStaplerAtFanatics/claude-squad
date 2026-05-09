@@ -182,13 +182,43 @@ describe("ASSIGN_SESSION", () => {
     expect((next.root as LeafPane).activeTab).toBe("terminal");
   });
 
-  it("paneReducer_should_returnUnchangedState_When_sessionAlreadyPresentInAnotherPane", () => {
+  it("paneReducer_should_moveSessionAndClearSource_When_sessionAlreadyPresentInAnotherPane", () => {
     const leaf1 = leaf("pane-1", "session-A");
     const leaf2 = leaf("pane-2", null);
     const root = split("split-1", "vertical", leaf1, leaf2);
     const state = stateOf(root, "pane-2");
     const next = paneReducer(state, { type: "ASSIGN_SESSION", paneId: "pane-2", sessionId: "session-A" });
-    expect(next).toEqual(state);
+
+    const leaves = getAllLeaves(next.root);
+    const pane1 = leaves.find((l) => l.id === "pane-1")!;
+    const pane2 = leaves.find((l) => l.id === "pane-2")!;
+
+    // Session moved to pane-2
+    expect(pane2.sessionId).toBe("session-A");
+    // Source pane cleared
+    expect(pane1.sessionId).toBeNull();
+  });
+
+  it("paneReducer_should_clearSourceAndAssignTarget_When_sessionMovedAcrossPanes", () => {
+    // Three panes: session-A in pane-1, session-B in pane-2, pane-3 empty
+    const leaf1 = leaf("pane-1", "session-A");
+    const leaf2 = leaf("pane-2", "session-B");
+    const leaf3 = leaf("pane-3", null);
+    const inner = split("split-inner", "vertical", leaf2, leaf3);
+    const root = split("split-outer", "vertical", leaf1, inner);
+    const state = stateOf(root, "pane-3");
+
+    // Move session-A from pane-1 to pane-3
+    const next = paneReducer(state, { type: "ASSIGN_SESSION", paneId: "pane-3", sessionId: "session-A" });
+
+    const leaves = getAllLeaves(next.root);
+    const p1 = leaves.find((l) => l.id === "pane-1")!;
+    const p2 = leaves.find((l) => l.id === "pane-2")!;
+    const p3 = leaves.find((l) => l.id === "pane-3")!;
+
+    expect(p3.sessionId).toBe("session-A");
+    expect(p1.sessionId).toBeNull();
+    expect(p2.sessionId).toBe("session-B"); // unaffected
   });
 
   it("paneReducer_should_allowAssign_When_sessionIsNullInBothPanes", () => {
@@ -196,6 +226,100 @@ describe("ASSIGN_SESSION", () => {
     const state = stateOf(leaf1, "pane-1");
     const next = paneReducer(state, { type: "ASSIGN_SESSION", paneId: "pane-1", sessionId: "session-new" });
     expect((next.root as LeafPane).sessionId).toBe("session-new");
+  });
+});
+
+// ─── SPLIT_AND_ASSIGN_SESSION ────────────────────────────────────────────────
+
+describe("SPLIT_AND_ASSIGN_SESSION", () => {
+  it("paneReducer_should_splitAndAssignNewLeaf_When_sessionNotInAnyPane", () => {
+    const leaf1 = leaf("pane-1", null);
+    const state = stateOf(leaf1, "pane-1");
+    const next = paneReducer(state, {
+      type: "SPLIT_AND_ASSIGN_SESSION",
+      paneId: "pane-1",
+      sessionId: "session-A",
+      tab: "terminal",
+      direction: "vertical",
+    });
+
+    expect(next.root.type).toBe("split");
+    const s = next.root as SplitPane;
+    expect(s.direction).toBe("vertical");
+    // First child is the original pane
+    expect((s.first as LeafPane).id).toBe("pane-1");
+    // Second child (new leaf) holds the session
+    const newLeaf = s.second as LeafPane;
+    expect(newLeaf.sessionId).toBe("session-A");
+    expect(newLeaf.activeTab).toBe("terminal");
+    expect(next.focusedPaneId).toBe(newLeaf.id);
+  });
+
+  it("paneReducer_should_clearSourceAndSplitAssign_When_sessionAlreadyInAnotherPane", () => {
+    // session-A is in pane-1; split pane-2 and move session-A there
+    const leaf1 = leaf("pane-1", "session-A");
+    const leaf2 = leaf("pane-2", null);
+    const root = split("split-1", "vertical", leaf1, leaf2);
+    const state = stateOf(root, "pane-2");
+    const next = paneReducer(state, {
+      type: "SPLIT_AND_ASSIGN_SESSION",
+      paneId: "pane-2",
+      sessionId: "session-A",
+      tab: "terminal",
+      direction: "vertical",
+    });
+
+    // Tree now has 3 leaves: pane-1 (cleared), pane-2 (original), new leaf (session-A)
+    const leaves = getAllLeaves(next.root);
+    const p1 = leaves.find((l) => l.id === "pane-1")!;
+    const newLeaf = leaves.find((l) => l.sessionId === "session-A")!;
+
+    expect(p1.sessionId).toBeNull();
+    expect(newLeaf.sessionId).toBe("session-A");
+    expect(next.focusedPaneId).toBe(newLeaf.id);
+  });
+
+  it("paneReducer_should_assignInPlace_When_maxDepthReached", () => {
+    // Build a tree at max depth so the split is refused
+    let node: PaneNode = leaf("deep-leaf");
+    for (let i = 0; i < 8; i++) {
+      node = split(`split-${i}`, "vertical", node, leaf(`other-${i}`));
+    }
+    const state = stateOf(node, "deep-leaf");
+    const next = paneReducer(state, {
+      type: "SPLIT_AND_ASSIGN_SESSION",
+      paneId: "deep-leaf",
+      sessionId: "session-X",
+      tab: "terminal",
+      direction: "vertical",
+    });
+
+    // Tree structure unchanged; deep-leaf now has the session
+    const deepLeaf = getAllLeaves(next.root).find((l) => l.id === "deep-leaf")!;
+    expect(deepLeaf.sessionId).toBe("session-X");
+    // No new leaves were added
+    expect(getAllLeaves(next.root).length).toBe(getAllLeaves(state.root).length);
+  });
+
+  it("paneReducer_should_notClearSource_When_sourcePaneIsSameAsSplitTarget", () => {
+    // Single leaf pane-1 holds session-A; split pane-1 and assign session-A to new pane
+    const leaf1 = leaf("pane-1", "session-A");
+    const state = stateOf(leaf1, "pane-1");
+    const next = paneReducer(state, {
+      type: "SPLIT_AND_ASSIGN_SESSION",
+      paneId: "pane-1",
+      sessionId: "session-A",
+      tab: "terminal",
+      direction: "vertical",
+    });
+
+    expect(next.root.type).toBe("split");
+    const s = next.root as SplitPane;
+    // First child (original pane-1) should retain session-A — not cleared
+    expect((s.first as LeafPane).id).toBe("pane-1");
+    expect((s.first as LeafPane).sessionId).toBe("session-A");
+    // Second child (new leaf) also has session-A
+    expect((s.second as LeafPane).sessionId).toBe("session-A");
   });
 });
 
@@ -296,6 +420,7 @@ describe("state invariants after any action", () => {
     { type: "ASSIGN_SESSION" as const, paneId: "pane-1", sessionId: "session-X" },
     { type: "RESET_LAYOUT" as const },
     { type: "ZOOM_PANE" as const, paneId: "pane-1" },
+    { type: "SPLIT_AND_ASSIGN_SESSION" as const, paneId: "pane-1", sessionId: "session-X", tab: "terminal" as const, direction: "vertical" as const },
   ];
 
   it.each(ALL_ACTIONS)(
@@ -317,5 +442,25 @@ describe("state invariants after any action", () => {
       expect(s.ratio).toBeGreaterThan(0);
       expect(s.ratio).toBeLessThan(1);
     });
+  });
+
+  // T-016: keyboard-initiated ASSIGN_SESSION inherits move-and-clear from reducer
+  it("paneReducer_should_allowKeyboardAssignToMoveSession", () => {
+    // pane-1 holds session-A; session-B is in pane-2
+    const pane1 = { ...leaf("pane-1"), sessionId: "session-A" };
+    const pane2 = { ...leaf("pane-2"), sessionId: "session-B" };
+    const root = split("split-1", "vertical", pane1, pane2);
+    const state = stateOf(root, "pane-1");
+
+    // Keyboard handler fires ASSIGN_SESSION targeting pane-1 with session-B
+    const next = paneReducer(state, { type: "ASSIGN_SESSION", paneId: "pane-1", sessionId: "session-B" });
+
+    const leaves = getAllLeaves(next.root);
+    const nextPane1 = leaves.find((l) => l.id === "pane-1")!;
+    const nextPane2 = leaves.find((l) => l.id === "pane-2")!;
+    // session-B moved to pane-1
+    expect(nextPane1.sessionId).toBe("session-B");
+    // pane-2 cleared (move-and-clear semantics)
+    expect(nextPane2.sessionId).toBeNull();
   });
 });

@@ -338,7 +338,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
       setDropdownDismissed(false);
       inputRef.current?.focus();
     },
-    []
+    [setDropdownIndex, setDropdownDismissed]
   );
 
   // Detect input type with debouncing
@@ -416,7 +416,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
         clearTimeout(debounceRef.current);
       }
     };
-  }, [input]);
+  }, [input, dispatchMode, setFormField, setBranch, setDropdownDismissed, setResultHighlightIndex, setSessionName]);
 
   // Focus input when opened
   useEffect(() => {
@@ -437,14 +437,14 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
       prevDetectionTypeRef.current = null;
       dispatchMode({ kind: "reset_to_discovery" });
     }
-  }, [isOpen]);
+  }, [isOpen, dispatchMode]);
 
   // On open: apply initialMode if provided
   useEffect(() => {
     if (isOpen && initialMode === "creation") {
       dispatchMode({ kind: "open_creation_direct" });
     }
-  }, [isOpen, initialMode]);
+  }, [isOpen, initialMode, dispatchMode]);
 
   // On open: pre-populate input if initialInput is provided
   useEffect(() => {
@@ -481,7 +481,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
         inputRef.current?.focus();
       }
     },
-    [dispatchMode]
+    [dispatchMode, setDropdownDismissed, setResultHighlightIndex]
   );
 
   const handleRepoSelect = useCallback(
@@ -492,7 +492,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
       setDropdownDismissed(false);
       inputRef.current?.focus();
     },
-    [dispatchMode]
+    [dispatchMode, setDropdownDismissed, setResultHighlightIndex]
   );
 
   const dispatchHighlightedResultAction = useCallback(
@@ -509,7 +509,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
         }
       }
     },
-    [displayedSessionResults, displayedRepoEntries, handleSessionSelect, handleRepoSelect]
+    [displayedSessionResults, displayedRepoEntries, handleSessionSelect, handleRepoSelect, dispatchMode, setResultHighlightIndex]
   );
 
   // Handle keyboard shortcuts
@@ -629,6 +629,9 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
       dispatchMode,
       sessionType,
       setFormField,
+      setDropdownDismissed,
+      setDropdownIndex,
+      setResultHighlightIndex,
     ]
   );
 
@@ -834,6 +837,9 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
     saveHistory,
     onCreateSession,
     onClose,
+    formState.firstPrompt,
+    router,
+    setTheme,
   ]);
 
   // Keep the ref in sync so handleKeyDown always dispatches the latest version.
@@ -890,6 +896,7 @@ export function Omnibar({ isOpen, onClose, onCreateSession, onNavigateToSession,
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
+            role="combobox"
             aria-label="Session source input"
             aria-autocomplete="list"
             aria-expanded={

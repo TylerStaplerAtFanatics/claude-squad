@@ -11,6 +11,47 @@ import (
 	"time"
 )
 
+// readAllWithStop reads all bytes from r. If the read doesn't complete within
+// timeout it calls p.Stop() to kill the process (closing the pipe) and fails
+// the test. Under the race detector on CI, subprocess exit can be arbitrarily
+// delayed, so we bound the wait rather than blocking indefinitely.
+func readAllWithStop(t *testing.T, r io.Reader, p *ManagedProcess, timeout time.Duration) ([]byte, error) {
+	t.Helper()
+	type result struct {
+		data []byte
+		err  error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		data, err := io.ReadAll(r)
+		ch <- result{data, err}
+	}()
+	select {
+	case res := <-ch:
+		return res.data, res.err
+	case <-time.After(timeout):
+		_ = p.Stop()
+		t.Fatalf("io.ReadAll timed out after %v — process did not exit as expected", timeout)
+		return nil, nil
+	}
+}
+
+// waitWithStop waits for p to exit. If it doesn't exit within timeout it calls
+// p.Stop() and fails the test.
+func waitWithStop(t *testing.T, p *ManagedProcess, timeout time.Duration) error {
+	t.Helper()
+	ch := make(chan error, 1)
+	go func() { ch <- p.Wait() }()
+	select {
+	case err := <-ch:
+		return err
+	case <-time.After(timeout):
+		_ = p.Stop()
+		t.Fatalf("p.Wait() timed out after %v — process did not exit as expected", timeout)
+		return nil
+	}
+}
+
 // T-UNIT-009: StartProcess_setpgidTrueByDefault
 func TestStartProcess_setpgidTrueByDefault(t *testing.T) {
 	t.Parallel()
@@ -127,7 +168,7 @@ func TestManagedProcess_WithEnv_appendsToEnvironment(t *testing.T) {
 	}
 	defer p.Stop() //nolint:errcheck
 
-	data, err := io.ReadAll(p.Stdout())
+	data, err := readAllWithStop(t, p.Stdout(), p, 10*time.Second)
 	if err != nil {
 		t.Fatalf("ReadAll stdout: %v", err)
 	}
@@ -150,7 +191,7 @@ func TestManagedProcess_Stdout_readsOutput(t *testing.T) {
 	}
 	defer p.Stop() //nolint:errcheck
 
-	data, err := io.ReadAll(p.Stdout())
+	data, err := readAllWithStop(t, p.Stdout(), p, 10*time.Second)
 	if err != nil {
 		t.Fatalf("ReadAll stdout: %v", err)
 	}
@@ -173,7 +214,7 @@ func TestManagedProcess_Stderr_readsErrors(t *testing.T) {
 	}
 	defer p.Stop() //nolint:errcheck
 
-	data, err := io.ReadAll(p.Stderr())
+	data, err := readAllWithStop(t, p.Stderr(), p, 10*time.Second)
 	if err != nil {
 		t.Fatalf("ReadAll stderr: %v", err)
 	}
@@ -195,8 +236,11 @@ func TestManagedProcess_ScanLines_callsCallbackPerLine(t *testing.T) {
 	}
 	defer p.Stop() //nolint:errcheck
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	var lines []string
-	err = p.ScanLines(context.Background(), func(line string) {
+	err = p.ScanLines(ctx, func(line string) {
 		lines = append(lines, line)
 	})
 	if err != nil {
@@ -371,7 +415,7 @@ func TestManagedProcess_ConsumeStdout_returnsNilStdout(t *testing.T) {
 	if p.Stdout() != nil {
 		t.Error("expected Stdout() == nil when WithConsumeStdout is used")
 	}
-	_ = p.Wait()
+	_ = waitWithStop(t, p, 10*time.Second)
 }
 
 // TestManagedProcess_PID_afterStop verifies PID is still accessible after stop.

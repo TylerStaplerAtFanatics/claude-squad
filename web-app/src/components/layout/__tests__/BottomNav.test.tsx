@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { BottomNav } from "../BottomNav";
 
 // Mock next/navigation
@@ -138,5 +138,64 @@ describe("BottomNav", () => {
     render(<BottomNav />);
 
     expect(screen.getByRole("button", { name: "More navigation options" })).toBeInTheDocument();
+  });
+});
+
+describe("BottomNav — ResizeObserver", () => {
+  let resizeCallback: ResizeObserverCallback;
+  const mockDisconnect = jest.fn();
+  const mockObserve = jest.fn();
+  let originalResizeObserver: typeof ResizeObserver;
+
+  beforeAll(() => {
+    originalResizeObserver = global.ResizeObserver;
+  });
+
+  afterAll(() => {
+    global.ResizeObserver = originalResizeObserver;
+  });
+
+  beforeEach(() => {
+    mockDisconnect.mockClear();
+    mockObserve.mockClear();
+    global.ResizeObserver = jest.fn().mockImplementation((cb: ResizeObserverCallback) => {
+      resizeCallback = cb;
+      return {
+        observe: mockObserve,
+        disconnect: mockDisconnect,
+        unobserve: jest.fn(),
+      };
+    });
+    // Reset CSS variable before each test
+    document.documentElement.style.removeProperty("--bottom-nav-height");
+    (usePathname as jest.Mock).mockReturnValue("/");
+  });
+
+  it("BottomNav_should_set_bottomNavHeight_When_mounted", () => {
+    render(<BottomNav />);
+    // observe must be called with the nav element (not null/undefined)
+    expect(mockObserve).toHaveBeenCalledTimes(1);
+    expect(mockObserve).toHaveBeenCalledWith(expect.any(HTMLElement));
+    const observedElement = mockObserve.mock.calls[0][0] as HTMLElement;
+    expect(observedElement.getAttribute("aria-label")).toBe("Bottom navigation");
+    // --bottom-nav-height must be set to a px value (jsdom returns "0px" since no layout engine)
+    const value = document.documentElement.style.getPropertyValue("--bottom-nav-height");
+    expect(value).toMatch(/^\d+px$/);
+  });
+
+  it("BottomNav_should_update_bottomNavHeight_When_navResizes", () => {
+    render(<BottomNav />);
+    // Simulate ResizeObserver callback firing (e.g., nav height changed)
+    act(() => {
+      resizeCallback([], {} as ResizeObserver);
+    });
+    const value = document.documentElement.style.getPropertyValue("--bottom-nav-height");
+    expect(value).toMatch(/^\d+px$/);
+  });
+
+  it("BottomNav_should_disconnect_ResizeObserver_When_unmounted", () => {
+    const { unmount } = render(<BottomNav />);
+    unmount();
+    expect(mockDisconnect).toHaveBeenCalledTimes(1);
   });
 });

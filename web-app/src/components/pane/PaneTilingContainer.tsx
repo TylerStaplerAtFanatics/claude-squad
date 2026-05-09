@@ -4,7 +4,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import type { Session } from "@/gen/session/v1/types_pb";
 import { usePaneReducer } from "@/lib/pane/usePaneReducer";
 import { usePaneShortcuts } from "@/lib/pane/usePaneShortcuts";
-import { getAllLeaves, findLeaf } from "@/lib/pane/paneReducer";
+import { getAllLeaves } from "@/lib/pane/paneReducer";
 import type { SplitDirection } from "@/lib/pane/paneTypes";
 import { PaneSplitRenderer } from "./PaneSplitRenderer";
 import { PaneContext } from "./PaneContext";
@@ -69,15 +69,6 @@ export function PaneTilingContainer({
     (session: Session, tab?: string) => {
       const resolvedTab = (tab ?? "terminal") as "terminal" | "diff" | "vcs" | "logs" | "info" | "files";
 
-      // If the focused pane is already a detail pane, open there directly — the user
-      // indicated intent by focusing it (e.g. omnibar search from within a detail pane).
-      const focusedLeaf = findLeaf(state.root, state.focusedPaneId);
-      if (focusedLeaf && focusedLeaf.viewKind === "session-detail") {
-        dispatch({ type: "ASSIGN_SESSION", paneId: state.focusedPaneId, sessionId: session.id });
-        dispatch({ type: "ASSIGN_TAB", paneId: state.focusedPaneId, tab: resolvedTab });
-        return;
-      }
-
       const allLeaves = getAllLeaves(state.root);
       const eligiblePanes = allLeaves.filter((l) => l.viewKind !== "session-list");
 
@@ -85,12 +76,17 @@ export function PaneTilingContainer({
         // Auto-split: reducer creates a new detail pane beside the session-list pane.
         dispatch({ type: "ASSIGN_SESSION", paneId: state.focusedPaneId, sessionId: session.id });
       } else if (eligiblePanes.length === 1) {
+        // Single detail pane: assign directly. If focused pane is the detail pane,
+        // eligiblePanes[0] === focusedLeaf, so the intent shortcut still fires — just
+        // via this branch rather than the removed early-return block.
         dispatch({ type: "ASSIGN_SESSION", paneId: eligiblePanes[0].id, sessionId: session.id });
         dispatch({ type: "ASSIGN_TAB", paneId: eligiblePanes[0].id, tab: resolvedTab });
         // On mobile, vertical splits show only the focused pane. Move focus to the detail
         // pane so the user sees the session they just opened instead of the session list.
         dispatch({ type: "FOCUS_PANE", paneId: eligiblePanes[0].id });
       } else {
+        // 2+ eligible panes: always show the picker overlay, even if a detail pane
+        // is focused. The user must choose which pane receives the session.
         setPickerPendingSession(session);
       }
     },
