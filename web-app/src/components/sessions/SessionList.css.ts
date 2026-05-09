@@ -6,6 +6,10 @@ export const container = style({
   // Story 2.2.2: max-width removed — the session list now lives in a fixed 280px
   // column; constraining width further would waste space.
   padding: vars.space["4"],
+  // Fill paneBody (flex column) and scroll when content overflows
+  flex: 1,
+  minHeight: 0,
+  overflowY: "auto",
   "@media": {
     "(max-width: 768px)": {
       padding: vars.space["3"],

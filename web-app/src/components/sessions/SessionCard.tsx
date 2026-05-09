@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { useState, useRef } from "react";
 import { Session, SessionStatus, ReviewItem, InstanceType, RateLimitState, CheckpointProto } from "@/gen/session/v1/types_pb";
 import { ReviewQueueBadge } from "./ReviewQueueBadge";
 import { StatusBadge } from "./StatusBadge";
 import { GitHubBadge } from "./GitHubBadge";
 import { TagEditor } from "./TagEditor";
 import { useTerminalSnapshot } from "@/lib/hooks/useTerminalSnapshot";
-import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
+import { SessionActionsOverflow } from "./SessionActionsOverflow";
 import {
   card,
   cardDeleting,
@@ -52,28 +51,6 @@ import {
   footer,
   timestamps,
   timestamp,
-  desktopActions,
-  overflowContainer,
-  overflowButton,
-  overflowMenu,
-  overflowMenuItem,
-  overflowMenuItemDanger,
-  actions,
-  actionsOpen,
-  actionsToggle,
-  actionButton,
-  deleteButton,
-  restartButton,
-  renameDialog,
-  confirmDialog,
-  dialogContent,
-  warningText,
-  renameInput,
-  errorMessage,
-  dialogActions,
-  submitButton,
-  cancelButton,
-  dangerButton,
   snapshotSection,
   snapshotToggle,
   snapshotToggleIcon,
@@ -135,51 +112,12 @@ export function SessionCard({
   detectedContext,
 }: SessionCardProps) {
   const [isTagEditorOpen, setIsTagEditorOpen] = useState(false);
-  const [showActions, setShowActions] = useState(false);
-  const [showOverflow, setShowOverflow] = useState(false);
-  const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [isCheckpointOpen, setIsCheckpointOpen] = useState(false);
-  const [checkpointLabel, setCheckpointLabel] = useState("");
-  const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
-  const [isForkOpen, setIsForkOpen] = useState(false);
-  const [forkCheckpoints, setForkCheckpoints] = useState<CheckpointProto[]>([]);
-  const [forkTitle, setForkTitle] = useState("");
-  const [activeForkCheckpointId, setActiveForkCheckpointId] = useState("");
-  const [isForking, setIsForking] = useState(false);
-  const [isRunningOneShot, setIsRunningOneShot] = useState(false);
-  const [oneShotResult, setOneShotResult] = useState<string | null>(null);
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [isRestarting, setIsRestarting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isInlineEditing, setIsInlineEditing] = useState(false);
   const [inlineEditValue, setInlineEditValue] = useState("");
   const [inlineEditError, setInlineEditError] = useState<string | null>(null);
   const inlineSavingRef = useRef(false);
-  const [checkpointError, setCheckpointError] = useState("");
   const [isSnapshotOpen, setIsSnapshotOpen] = useState(false);
-  const [forkError, setForkError] = useState("");
-
-  // Refs for focus trap: dialog containers and the buttons that trigger them
-  const restartDialogRef = useRef<HTMLDivElement>(null);
-  const deleteDialogRef = useRef<HTMLDivElement>(null);
-  const checkpointDialogRef = useRef<HTMLDivElement>(null);
-  const overflowContainerRef = useRef<HTMLDivElement>(null);
-  const overflowMenuRef = useRef<HTMLDivElement>(null);
-  const restartTriggerRef = useRef<HTMLButtonElement>(null);
-  const checkpointTriggerRef = useRef<HTMLButtonElement>(null);
-
-  useFocusTrap(restartDialogRef, isRestartConfirmOpen, restartTriggerRef);
-  useFocusTrap(deleteDialogRef, isDeleteConfirmOpen);
-  useFocusTrap(checkpointDialogRef, isCheckpointOpen, checkpointTriggerRef);
-  useFocusTrap(overflowMenuRef, showOverflow);
-
-  useEffect(() => {
-    if (showOverflow && overflowMenuRef.current) {
-      const first = overflowMenuRef.current.querySelector<HTMLElement>('[role="menuitem"]');
-      first?.focus();
-    }
-  }, [showOverflow]);
 
   // Only fetch snapshot for running sessions (paused/loading sessions have stale output)
   const isSnapshotEnabled = session.status === SessionStatus.RUNNING && isSnapshotOpen;
@@ -288,22 +226,7 @@ export function SessionCard({
     return `${Math.floor(seconds / 86400)}d ago`;
   };
 
-  const isPaused = session.status === SessionStatus.PAUSED;
-  const isRunning = session.status === SessionStatus.RUNNING;
-  const isReady = session.status === SessionStatus.READY;
   const isExternal = session.instanceType === InstanceType.EXTERNAL;
-
-  // Close overflow menu when clicking outside
-  useEffect(() => {
-    if (!showOverflow) return;
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (overflowContainerRef.current && !overflowContainerRef.current.contains(e.target as Node)) {
-        setShowOverflow(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [showOverflow]);
 
   const sourceTerminal = session.externalMetadata?.sourceTerminal || "External";
   const muxEnabled = session.externalMetadata?.muxEnabled || false;
@@ -341,17 +264,6 @@ export function SessionCard({
   const handleEditTags = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsTagEditorOpen(true);
-  };
-
-  const handleSaveTags = (newTags: string[]) => {
-    if (onUpdateTags) {
-      onUpdateTags(session.id, newTags);
-    }
-    setIsTagEditorOpen(false);
-  };
-
-  const handleCancelTagEdit = () => {
-    setIsTagEditorOpen(false);
   };
 
   const handleTitleClick = (e: React.MouseEvent) => {
@@ -399,237 +311,15 @@ export function SessionCard({
     }
   };
 
-  const handleRestartClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsRestartConfirmOpen(true);
-  };
-
-  const handleRestartConfirm = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsRestarting(true);
-
-    try {
-      await onRestart?.(session.id);
-      setIsRestartConfirmOpen(false);
-    } catch (error) {
-      console.error("Failed to restart session:", error);
-    } finally {
-      setIsRestarting(false);
-    }
-  };
-
-  const handleRestartCancel = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsRestartConfirmOpen(false);
-  };
-
-  const handleCheckpointClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCheckpointLabel("");
-    setIsCheckpointOpen(true);
-  };
-
-  const handleCheckpointSubmit = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!checkpointLabel.trim()) return;
-    setIsCreatingCheckpoint(true);
-    setCheckpointError("");
-    try {
-      const success = await onCreateCheckpoint?.(session.id, checkpointLabel.trim());
-      if (success) {
-        setIsCheckpointOpen(false);
-      } else {
-        setCheckpointError("Failed to create checkpoint");
-      }
-    } catch (error) {
-      setCheckpointError(error instanceof Error ? error.message : "Failed to create checkpoint");
-    } finally {
-      setIsCreatingCheckpoint(false);
-    }
-  };
-
-  const handleCheckpointCancel = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsCheckpointOpen(false);
-    setCheckpointError("");
-  };
-
-  const handleForkClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const cps = await onListCheckpoints?.(session.id) ?? [];
-    setForkCheckpoints(cps);
-    setForkTitle(`${session.title}-fork`);
-    setActiveForkCheckpointId(cps.length > 0 ? cps[cps.length - 1].id : "");
-    setIsForkOpen(true);
-  };
-
-  const handleForkSubmit = async (checkpointId: string) => {
-    if (!forkTitle.trim() || !checkpointId) return;
-    setIsForking(true);
-    setForkError("");
-    try {
-      const result = await onForkFromCheckpoint?.(session.id, checkpointId, forkTitle.trim());
-      if (result) {
-        setIsForkOpen(false);
-      } else {
-        setForkError("Failed to fork session");
-      }
-    } catch (error) {
-      setForkError(error instanceof Error ? error.message : "Failed to fork session");
-    } finally {
-      setIsForking(false);
-    }
-  };
-
-  const handleForkCancel = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsForkOpen(false);
-    setForkError("");
-  };
-
-  const handleRunOneShot = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!onRunOneShot) return;
-    setIsRunningOneShot(true);
-    setOneShotResult(null);
-    try {
-      await onRunOneShot(session.id);
-      setOneShotResult("done");
-    } catch {
-      setOneShotResult("error");
-    } finally {
-      setIsRunningOneShot(false);
-    }
-  };
-
-
   return (
     <>
-      {isTagEditorOpen && (
+      {isTagEditorOpen && onUpdateTags && (
         <TagEditor
           tags={session.tags || []}
-          onSave={handleSaveTags}
-          onCancel={handleCancelTagEdit}
+          onSave={(newTags) => { onUpdateTags(session.id, newTags); setIsTagEditorOpen(false); }}
+          onCancel={() => setIsTagEditorOpen(false)}
           sessionTitle={session.title}
         />
-      )}
-      {isRestartConfirmOpen && createPortal(
-        <div className={confirmDialog} onClick={handleRestartCancel as unknown as React.MouseEventHandler}>
-          <div
-            ref={restartDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="restartDialogTitle"
-            className={dialogContent}
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => { if (e.key === "Escape") handleRestartCancel(e as unknown as React.MouseEvent); }}
-          >
-            <h3 id="restartDialogTitle">Restart Session</h3>
-            <p>Are you sure you want to restart &quot;{session.title}&quot;?</p>
-            <p className={warningText}>This will terminate the current process and start a new one.</p>
-            <div className={dialogActions}>
-              <button
-                onClick={handleRestartConfirm}
-                disabled={isRestarting}
-                className={dangerButton}
-              >
-                {isRestarting ? "Restarting..." : "Restart"}
-              </button>
-              <button
-                onClick={handleRestartCancel}
-                disabled={isRestarting}
-                className={cancelButton}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-      {isDeleteConfirmOpen && createPortal(
-        <div className={confirmDialog} onClick={() => setIsDeleteConfirmOpen(false)}>
-          <div
-            ref={deleteDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="deleteDialogTitle"
-            className={dialogContent}
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => { if (e.key === "Escape") setIsDeleteConfirmOpen(false); }}
-          >
-            <h3 id="deleteDialogTitle">Delete Session</h3>
-            <p>Are you sure you want to delete &quot;{session.title}&quot;?</p>
-            <p className={warningText}>This action cannot be undone.</p>
-            <div className={dialogActions}>
-              <button
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  setIsDeleteConfirmOpen(false);
-                  setIsDeleting(true);
-                  try { await onDelete?.(); } catch { setIsDeleting(false); }
-                }}
-                disabled={isDeleting}
-                className={dangerButton}
-              >
-                {isDeleting ? "Deleting..." : "Delete"}
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); setIsDeleteConfirmOpen(false); }}
-                disabled={isDeleting}
-                className={cancelButton}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-      {isCheckpointOpen && createPortal(
-        <div className={renameDialog} onClick={handleCheckpointCancel as unknown as React.MouseEventHandler}>
-          <div
-            ref={checkpointDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="checkpointDialogTitle"
-            className={dialogContent}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 id="checkpointDialogTitle">Create Checkpoint</h3>
-            <p>Enter a label for this checkpoint of &quot;{session.title}&quot;:</p>
-            <input
-              type="text"
-              value={checkpointLabel}
-              onChange={(e) => setCheckpointLabel(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCheckpointSubmit(e as unknown as React.MouseEvent);
-                if (e.key === "Escape") handleCheckpointCancel(e as unknown as React.MouseEvent);
-              }}
-              placeholder="e.g. before refactor, working state"
-              className={renameInput}
-              autoFocus
-            />
-            {checkpointError && <span className={errorMessage}>{checkpointError}</span>}
-            <div className={dialogActions}>
-              <button
-                onClick={handleCheckpointSubmit}
-                disabled={isCreatingCheckpoint || !checkpointLabel.trim()}
-                className={submitButton}
-              >
-                {isCreatingCheckpoint ? "Saving..." : "📍 Save Checkpoint"}
-              </button>
-              <button
-                onClick={handleCheckpointCancel}
-                disabled={isCreatingCheckpoint}
-                className={cancelButton}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
       )}
     <div
       className={[
@@ -918,264 +608,25 @@ export function SessionCard({
           )}
         </div>
 
-        {/* Desktop: primary action + overflow menu */}
-        <div className={desktopActions}>
-          {(isPaused || isReady) && (
-            <button
-              className={actionButton}
-              onClick={(e) => { e.stopPropagation(); onResume?.(); }}
-              aria-label={`Resume session ${session.title}`}
-              title="Resume this session"
-            >
-              <span aria-hidden="true">▶️</span> Resume
-            </button>
-          )}
-          {isRunning && (
-            <button
-              className={actionButton}
-              onClick={(e) => { e.stopPropagation(); onPause?.(); }}
-              aria-label={`Pause session ${session.title}`}
-              title="Pause this session"
-            >
-              <span aria-hidden="true">⏸️</span> Pause
-            </button>
-          )}
-          <div ref={overflowContainerRef} className={overflowContainer}>
-            <button
-              id={`overflow-btn-${session.id}`}
-              className={overflowButton}
-              onClick={(e) => { e.stopPropagation(); setShowOverflow((o) => !o); }}
-              aria-label="More session actions"
-              aria-expanded={showOverflow}
-              aria-haspopup="menu"
-              aria-controls={`overflow-menu-${session.id}`}
-            >
-              ···
-            </button>
-            {showOverflow && (
-              <div
-                ref={overflowMenuRef}
-                id={`overflow-menu-${session.id}`}
-                className={overflowMenu}
-                role="menu"
-                aria-labelledby={`overflow-btn-${session.id}`}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => { if (e.key === "Escape") setShowOverflow(false); }}
-              >
-                {!(isPaused || isReady) && (
-                  <button
-                    role="menuitem"
-                    className={overflowMenuItem}
-                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onResume?.(); }}
-                    aria-label={`Resume session ${session.title}`}
-                  >
-                    <span aria-hidden="true">▶️</span> Resume
-                  </button>
-                )}
-                {!isRunning && (
-                  <button
-                    role="menuitem"
-                    className={overflowMenuItem}
-                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onPause?.(); }}
-                    aria-label={`Pause session ${session.title}`}
-                  >
-                    <span aria-hidden="true">⏸️</span> Pause
-                  </button>
-                )}
-                <button
-                  ref={restartTriggerRef}
-                  role="menuitem"
-                  className={`${overflowMenuItem} ${overflowMenuItemDanger}`}
-                  onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleRestartClick(e); }}
-                  aria-label={`Restart session ${session.title}`}
-                >
-                  <span aria-hidden="true">🔄</span> Restart
-                </button>
-                {onCreateCheckpoint && (
-                  <button
-                    ref={checkpointTriggerRef}
-                    role="menuitem"
-                    className={overflowMenuItem}
-                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleCheckpointClick(e); }}
-                    aria-label={`Create checkpoint for session ${session.title}`}
-                  >
-                    <span aria-hidden="true">📍</span> Checkpoint
-                  </button>
-                )}
-                {onClone && (
-                  <button
-                    role="menuitem"
-                    className={overflowMenuItem}
-                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onClone(); }}
-                    aria-label={`Clone session ${session.title}`}
-                  >
-                    <span aria-hidden="true">⊕</span> Clone
-                  </button>
-                )}
-                {onOpenInNewPane && (
-                  <button
-                    role="menuitem"
-                    className={overflowMenuItem}
-                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onOpenInNewPane(); }}
-                    aria-label={`Open ${session.title} in new pane`}
-                  >
-                    <span aria-hidden="true">⊞</span> Open in new pane
-                  </button>
-                )}
-                <button
-                  role="menuitem"
-                  className={overflowMenuItem}
-                  onClick={(e) => { e.stopPropagation(); setShowOverflow(false); handleEditTags(e); }}
-                  aria-label={`Edit tags for session ${session.title}`}
-                >
-                  <span aria-hidden="true">🏷️</span> Edit Tags
-                </button>
-                {onSetRateLimitEnabled && (
-                  <button
-                    role="menuitem"
-                    className={overflowMenuItem}
-                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onSetRateLimitEnabled(session.id, !session.rateLimitEnabled); }}
-                    aria-label={session.rateLimitEnabled ? `Disable auto-resume for ${session.title}` : `Enable auto-resume for ${session.title}`}
-                  >
-                    <span aria-hidden="true">{session.rateLimitEnabled ? "⏸" : "▶"}</span> {session.rateLimitEnabled ? "Disable auto-resume" : "Enable auto-resume"}
-                  </button>
-                )}
-                <button
-                  role="menuitem"
-                  className={overflowMenuItem}
-                  onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onNewWorkspace?.(); }}
-                  aria-label={`New workspace from ${session.title}`}
-                >
-                  <span aria-hidden="true">➕</span> New Workspace
-                </button>
-                {onClearConversationState && (
-                  <button
-                    role="menuitem"
-                    className={overflowMenuItem}
-                    onClick={(e) => { e.stopPropagation(); setShowOverflow(false); onClearConversationState(session.id); }}
-                    aria-label={`Clear conversation state for session ${session.title}`}
-                  >
-                    <span aria-hidden="true">🗑️</span> Clear Conversation
-                  </button>
-                )}
-                <button
-                  role="menuitem"
-                  className={`${overflowMenuItem} ${overflowMenuItemDanger}`}
-                  onClick={(e) => { e.stopPropagation(); setShowOverflow(false); setIsDeleteConfirmOpen(true); }}
-                  disabled={isDeleting}
-                  aria-label={`Delete session ${session.title}`}
-                >
-                  {isDeleting ? "Deleting..." : <><span aria-hidden="true">🗑️</span> Delete</>}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Mobile: accordion toggle + full action list */}
-        <button
-          className={actionsToggle}
-          onClick={(e) => { e.stopPropagation(); setShowActions(!showActions); }}
-          aria-expanded={showActions}
-          aria-controls={`session-actions-${session.id}`}
-          aria-label="Toggle session actions"
-        >
-          Actions {showActions ? "▲" : "▼"}
-        </button>
-        <div id={`session-actions-${session.id}`} className={`${actions} ${showActions ? actionsOpen : ""}`}>
-          {isPaused ? (
-            <button
-              className={actionButton}
-              onClick={(e) => {
-                e.stopPropagation();
-                onResume?.();
-              }}
-              aria-label={`Resume session ${session.title}`}
-              title="Resume this session"
-            >
-              <span aria-hidden="true">▶️</span> Resume
-            </button>
-          ) : (
-            <button
-              className={actionButton}
-              onClick={(e) => {
-                e.stopPropagation();
-                onPause?.();
-              }}
-              aria-label={`Pause session ${session.title}`}
-              title="Pause this session"
-            >
-              <span aria-hidden="true">⏸️</span> Pause
-            </button>
-          )}
-          <button
-            className={`${actionButton} ${restartButton}`}
-            onClick={handleRestartClick}
-            title="Restart this session"
-            aria-label={`Restart session ${session.title}`}
-          >
-            <span aria-hidden="true">🔄</span> Restart
-          </button>
-          {onCreateCheckpoint && (
-            <button
-              className={actionButton}
-              onClick={handleCheckpointClick}
-              title="Save a named checkpoint of the current session state"
-              aria-label={`Create checkpoint for session ${session.title}`}
-            >
-              <span aria-hidden="true">📍</span> Checkpoint
-            </button>
-          )}
-          {onClone && (
-            <button
-              className={actionButton}
-              onClick={(e) => { e.stopPropagation(); onClone(); }}
-              title="Clone this session (open omnibar pre-filled with this repo)"
-              aria-label={`Clone session ${session.title}`}
-            >
-              <span aria-hidden="true">⊕</span> Clone
-            </button>
-          )}
-          {onRunOneShot && (
-            <button
-              className={actionButton}
-              onClick={handleRunOneShot}
-              disabled={isRunningOneShot}
-              title="Run claude one-shot to create a PR for this session"
-              aria-label={`Create PR for session ${session.title}`}
-            >
-              {isRunningOneShot ? "Creating PR…" : oneShotResult === "done" ? "✅ PR Created" : oneShotResult === "error" ? "❌ Failed – Retry?" : "🚀 Create PR"}
-            </button>
-          )}
-          <button
-            className={actionButton}
-            onClick={handleEditTags}
-            title="Edit session tags"
-            aria-label={`Edit tags for session ${session.title}`}
-          >
-            <span aria-hidden="true">🏷️</span> Edit Tags
-          </button>
-          <button
-            className={actionButton}
-            onClick={(e) => {
-              e.stopPropagation();
-              onNewWorkspace?.();
-            }}
-            title="New workspace on the same project (same path, fresh title and branch)"
-            aria-label={`New workspace from ${session.title}`}
-          >
-            <span aria-hidden="true">➕</span> New Workspace
-          </button>
-          <button
-            className={`${actionButton} ${deleteButton}`}
-            onClick={(e) => { e.stopPropagation(); setIsDeleteConfirmOpen(true); }}
-            disabled={isDeleting}
-            aria-label={`Delete session ${session.title}`}
-            title="Delete this session"
-          >
-            {isDeleting ? "Deleting..." : <><span aria-hidden="true">🗑️</span> Delete</>}
-          </button>
-        </div>
+        <SessionActionsOverflow
+          session={session}
+          showPrimaryAction
+          onResume={onResume}
+          onPause={onPause}
+          onDelete={async () => {
+            setIsDeleting(true);
+            try { await onDelete?.(); } finally { setIsDeleting(false); }
+          }}
+          onRestart={onRestart}
+          onClone={onClone}
+          onOpenInNewPane={onOpenInNewPane}
+          onNewWorkspace={onNewWorkspace}
+          onCreateCheckpoint={onCreateCheckpoint}
+          onRunOneShot={onRunOneShot}
+          onSetRateLimitEnabled={onSetRateLimitEnabled}
+          onClearConversationState={onClearConversationState}
+          onUpdateTags={onUpdateTags}
+        />
       </div>
     </div>
     </>
