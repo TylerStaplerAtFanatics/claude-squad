@@ -319,7 +319,7 @@ export function PaneSplitRenderer({ state, dispatch, sessions }: PaneSplitRender
               border: "1px solid var(--border-color)",
               borderRadius: "4px",
               cursor: "pointer",
-              color: "var(--text-muted)",
+              color: "var(--text-secondary)",
             }}
             onClick={() => dispatch({ type: "RESET_LAYOUT" })}
             title="Reset to single pane"
