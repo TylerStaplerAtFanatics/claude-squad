@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useViewport } from "@/components/providers/ViewportProvider";
 import dynamic from "next/dynamic";
 import { Session, InstanceType, SessionStatus, SessionType } from "@/gen/session/v1/types_pb";
 import { DiffViewer } from "./DiffViewer";
@@ -90,6 +91,7 @@ export function SessionDetail({
   queuePosition,
   queueTotal,
 }: SessionDetailProps) {
+  const { isMobile } = useViewport();
   const [activeTab, setActiveTab] = useState<SessionDetailTab>(initialTab);
 
   // Sync active tab when the pane's controlled tab changes (e.g. PaneHeader tab click)
@@ -373,7 +375,7 @@ export function SessionDetail({
         </ActionBar>
       </div>}
 
-      {!embedded && <div
+      {(!embedded || isMobile) && <div
         className={`${styles.tabs} ${isFullscreen ? styles.fullscreenMobileTabs : ""}`}
         role="tablist"
         onKeyDown={(e) => {
