@@ -96,19 +96,26 @@ export function paneReducer(state: PaneState, action: PaneAction): PaneState {
 
     case "ASSIGN_SESSION": {
       const { paneId, sessionId } = action;
-      // Duplicate guard: reject if sessionId already in another leaf
       const allLeaves = getAllLeaves(state.root);
-      const isDuplicate = allLeaves.some(
-        (l) => l.id !== paneId && l.sessionId === sessionId
-      );
-      if (isDuplicate) return state;
+
+      // Move-and-clear: if this session is already in another pane, clear it from there
+      // first so the same session is never visible in two panes simultaneously.
+      const sourcePaneId =
+        allLeaves.find((l) => l.id !== paneId && l.sessionId === sessionId)?.id ?? null;
 
       const target = findLeaf(state.root, paneId);
       if (!target) return state;
 
-      // If the target is a session-list pane (no detail pane to route to), auto-split
-      // it to create a new session-detail pane so the session becomes visible.
-      if (target.viewKind === "session-list" && !wouldExceedMaxDepth(state.root, paneId)) {
+      // Step 1: clear the source pane (atomic — uses the immutable replaceNode chain)
+      let newRoot = state.root;
+      if (sourcePaneId) {
+        const sourceLeaf = findLeaf(newRoot, sourcePaneId)!;
+        newRoot = replaceNode(newRoot, sourcePaneId, { ...sourceLeaf, sessionId: null });
+      }
+
+      // Step 2: assign to the target pane.
+      // If the target is a session-list pane, auto-split to create a detail pane.
+      if (target.viewKind === "session-list" && !wouldExceedMaxDepth(newRoot, paneId)) {
         const newDetail = createLeaf(undefined, "terminal", "session-detail");
         const detailWithSession: LeafPane = { ...newDetail, sessionId };
         const splitNode: SplitPane = {
@@ -119,12 +126,12 @@ export function paneReducer(state: PaneState, action: PaneAction): PaneState {
           first: target,
           second: detailWithSession,
         };
-        const newRoot = replaceNode(state.root, paneId, splitNode);
+        newRoot = replaceNode(newRoot, paneId, splitNode);
         return { ...state, root: newRoot, focusedPaneId: detailWithSession.id };
       }
 
       const updated: LeafPane = { ...target, sessionId, activeTab: "terminal" };
-      const newRoot = replaceNode(state.root, paneId, updated);
+      newRoot = replaceNode(newRoot, paneId, updated);
       return { ...state, root: newRoot };
     }
 
@@ -202,15 +209,24 @@ export function paneReducer(state: PaneState, action: PaneAction): PaneState {
       const target = findLeaf(state.root, paneId);
       if (!target) return state;
 
-      // Duplicate guard: session already open somewhere
       const allLeaves = getAllLeaves(state.root);
-      const isDuplicate = allLeaves.some((l) => l.sessionId === sessionId);
-      if (isDuplicate) return state;
+
+      // Move-and-clear: find the pane currently holding this session (if any).
+      // Skip clearing if the source is the same pane being split (splitting the
+      // pane that already holds the session is valid — the new child gets it).
+      const sourceLeaf = allLeaves.find((l) => l.sessionId === sessionId) ?? null;
+      const sourcePaneId = sourceLeaf?.id ?? null;
+
+      let newRoot = state.root;
+      if (sourcePaneId && sourcePaneId !== paneId) {
+        const src = findLeaf(newRoot, sourcePaneId)!;
+        newRoot = replaceNode(newRoot, sourcePaneId, { ...src, sessionId: null });
+      }
 
       // If max depth reached, fall back to assigning in place
-      if (wouldExceedMaxDepth(state.root, paneId)) {
+      if (wouldExceedMaxDepth(newRoot, paneId)) {
         const updated: LeafPane = { ...target, sessionId, activeTab: tab, viewKind: "session-detail" };
-        const newRoot = replaceNode(state.root, paneId, updated);
+        newRoot = replaceNode(newRoot, paneId, updated);
         return { ...state, root: newRoot };
       }
 
@@ -223,7 +239,7 @@ export function paneReducer(state: PaneState, action: PaneAction): PaneState {
         first: target,
         second: newLeaf,
       };
-      const newRoot = replaceNode(state.root, paneId, splitNode);
+      newRoot = replaceNode(newRoot, paneId, splitNode);
       return { ...state, root: newRoot, focusedPaneId: newLeaf.id };
     }
 
