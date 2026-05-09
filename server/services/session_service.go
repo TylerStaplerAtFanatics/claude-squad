@@ -91,7 +91,7 @@ type SessionService struct {
 
 	// scrollbackMgr provides access to per-session scrollback sequence numbers
 	// for checkpoint creation. May be nil if not wired (seq defaults to 0).
-	scrollbackMgr scrollbackSequencer
+	scrollbackMgr ScrollbackSequencer
 
 	// mcpServerURL is the URL of the stapler-squad HTTP MCP endpoint.
 	// When non-empty, passed to new sessions via InstanceOptions.MCPServerURL.
@@ -105,8 +105,9 @@ type SessionService struct {
 	errorRegistry *ErrorRegistry
 }
 
-// scrollbackSequencer is the minimal interface SessionService needs from ScrollbackManager.
-type scrollbackSequencer interface {
+// ScrollbackSequencer is the minimal interface SessionService needs from ScrollbackManager.
+// Exported so server/dependencies.go can use warren.Set to validate this wiring at startup.
+type ScrollbackSequencer interface {
 	CurrentSequence(sessionID string) uint64
 }
 
@@ -1889,7 +1890,7 @@ func (s *SessionService) MergeDatabase(
 }
 
 // SetScrollbackManager wires a scrollback sequence provider for checkpoint creation.
-func (s *SessionService) SetScrollbackManager(mgr scrollbackSequencer) {
+func (s *SessionService) SetScrollbackManager(mgr ScrollbackSequencer) {
 	s.scrollbackMgr = mgr
 }
 

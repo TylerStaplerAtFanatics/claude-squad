@@ -45,7 +45,7 @@ func (i *Instance) MatchesID(id string) bool {
 }
 
 // SetTitle sets the title of the instance. Returns an error if the instance has started.
-// We cant change the title once it's been used for a tmux session etc.
+// We can't change the title once it's been used for a tmux session etc.
 func (i *Instance) SetTitle(title string) error {
 	if i.started {
 		return fmt.Errorf("cannot change title of a started instance")

@@ -374,7 +374,8 @@ func BuildServiceDeps(core *CoreDeps) (*ServiceDeps, error) {
 	if core == nil {
 		return nil, fmt.Errorf("BuildServiceDeps: CoreDeps is nil (Phase 1 not completed)")
 	}
-	if core.Storage == nil || core.EventBus == nil || core.ReviewQueue == nil {
+	if core.Storage == nil || core.EventBus == nil || core.ReviewQueue == nil ||
+		core.SessionService == nil || core.ApprovalStore == nil {
 		return nil, fmt.Errorf("BuildServiceDeps: CoreDeps has nil fields")
 	}
 
@@ -645,10 +646,7 @@ func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, e
 	warren.Set(w3, "HistoryLinker", sessionService.SetHistoryLinker, historyLinker)
 	// SetInstances accepts a slice (non-comparable) so use SetAlways.
 	warren.SetAlways(w3, "HistoryLinker.Instances", historyLinker.SetInstances, instances)
-	// scrollbackSequencer is unexported — warren type inference cannot resolve it from
-	// outside the services package. Call directly and mark as applied manually.
-	sessionService.SetScrollbackManager(scrollbackManager)
-	w3.Mark("ScrollbackManager")
+	warren.Set(w3, "ScrollbackManager", sessionService.SetScrollbackManager, services.ScrollbackSequencer(scrollbackManager))
 	warren.Set(w3, "ExternalDiscovery", sessionService.SetExternalDiscovery, externalDiscovery)
 	// UnfinishedWorkService is optional — nil when config directory is unavailable.
 	// Do not add to Warren Wire; nil is a valid production value documented on RuntimeDeps.
