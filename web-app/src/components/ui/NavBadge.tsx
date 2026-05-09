@@ -27,10 +27,7 @@ interface NavBadgeSpanProps
 export type NavBadgeProps = NavBadgeButtonProps | NavBadgeSpanProps;
 
 function buildClassName(inline: boolean, isEmpty: boolean): string {
-  const parts = [badge];
-  if (inline) parts.push(inlineClass);
-  if (isEmpty) parts.push(empty);
-  return parts.join(" ");
+  return [badge, inline && inlineClass, isEmpty && empty].filter(Boolean).join(" ");
 }
 
 /**

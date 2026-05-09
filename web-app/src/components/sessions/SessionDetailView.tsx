@@ -72,6 +72,11 @@ function getSessionTypeLabel(type: SessionType): string {
   }
 }
 
+const POOL_PANE_BASE: React.CSSProperties = {
+  position: "absolute",
+  top: 0, left: 0, right: 0, bottom: 0,
+};
+
 export function SessionDetailView({
   session,
   allSessions,
@@ -181,7 +186,9 @@ export function SessionDetailView({
   };
 
   const handleCopy = (field: string, value: string) => {
-    navigator.clipboard.writeText(value).catch(() => {});
+    navigator.clipboard.writeText(value).catch((err) => {
+      console.warn("[SessionDetailView] clipboard write failed", err);
+    });
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 1500);
   };
@@ -209,45 +216,42 @@ export function SessionDetailView({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isFullscreen, showNavigation, onNext, onPrevious]);
 
-  // Handler for saving program change
-  const handleSaveProgram = async () => {
-    if (programValue !== session.program) {
-      await actions.update({ program: programValue });
-    }
-    setIsEditingProgram(false);
-  };
+  function makeStringFieldEditor(
+    editValue: string,
+    originalValue: string,
+    setValue: (v: string) => void,
+    setEditing: (v: boolean) => void,
+    updateFn: (v: string) => Promise<void>,
+  ) {
+    return {
+      handleSave: async () => {
+        if (editValue !== originalValue) await updateFn(editValue);
+        setEditing(false);
+      },
+      handleCancel: () => {
+        setValue(originalValue);
+        setEditing(false);
+      },
+    };
+  }
 
-  // Handler for canceling program edit
-  const handleCancelProgramEdit = () => {
-    setProgramValue(session.program || "");
-    setIsEditingProgram(false);
-  };
+  const { handleSave: handleSaveProgram, handleCancel: handleCancelProgramEdit } =
+    makeStringFieldEditor(
+      programValue, session.program || "", setProgramValue, setIsEditingProgram,
+      (v) => actions.update({ program: v }),
+    );
 
-  // Handler for saving working directory change
-  const handleSaveWorkingDir = async () => {
-    if (workingDirValue !== (session.workingDir || "")) {
-      await actions.update({ workingDir: workingDirValue });
-    }
-    setIsEditingWorkingDir(false);
-  };
+  const { handleSave: handleSaveWorkingDir, handleCancel: handleCancelWorkingDirEdit } =
+    makeStringFieldEditor(
+      workingDirValue, session.workingDir || "", setWorkingDirValue, setIsEditingWorkingDir,
+      (v) => actions.update({ workingDir: v }),
+    );
 
-  // Handler for canceling working directory edit
-  const handleCancelWorkingDirEdit = () => {
-    setWorkingDirValue(session.workingDir || "");
-    setIsEditingWorkingDir(false);
-  };
-
-  const handleSaveCategory = async () => {
-    if (categoryValue !== (session.category || "")) {
-      await actions.update({ category: categoryValue });
-    }
-    setIsEditingCategory(false);
-  };
-
-  const handleCancelCategoryEdit = () => {
-    setCategoryValue(session.category || "");
-    setIsEditingCategory(false);
-  };
+  const { handleSave: handleSaveCategory, handleCancel: handleCancelCategoryEdit } =
+    makeStringFieldEditor(
+      categoryValue, session.category || "", setCategoryValue, setIsEditingCategory,
+      (v) => actions.update({ category: v }),
+    );
 
   const handleSaveTags = async () => {
     const newTags = tagsInputValue.split(",").map((t) => t.trim()).filter(Boolean);
@@ -450,10 +454,9 @@ export function SessionDetailView({
                 <div
                   key={poolPath}
                   style={{
-                    position: 'absolute',
-                    top: 0, left: 0, right: 0, bottom: 0,
-                    visibility: poolPath === session.externalMetadata?.muxSocketPath ? 'visible' : 'hidden',
-                    pointerEvents: poolPath === session.externalMetadata?.muxSocketPath ? 'auto' : 'none',
+                    ...POOL_PANE_BASE,
+                    visibility: poolPath === session.externalMetadata?.muxSocketPath ? "visible" : "hidden",
+                    pointerEvents: poolPath === session.externalMetadata?.muxSocketPath ? "auto" : "none",
                   }}
                 >
                   <TerminalOutput
@@ -472,10 +475,9 @@ export function SessionDetailView({
                 <div
                   key={poolId}
                   style={{
-                    position: 'absolute',
-                    top: 0, left: 0, right: 0, bottom: 0,
-                    visibility: poolId === session.id ? 'visible' : 'hidden',
-                    pointerEvents: poolId === session.id ? 'auto' : 'none',
+                    ...POOL_PANE_BASE,
+                    visibility: poolId === session.id ? "visible" : "hidden",
+                    pointerEvents: poolId === session.id ? "auto" : "none",
                   }}
                 >
                   <TerminalOutput

@@ -56,7 +56,6 @@ export function ApprovalsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ApprovalsContextValue>(
     () => ({ approvals, pendingCount, loading: isLoading, error, approve, deny, refresh }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [approvals, pendingCount, isLoading, error, approve, deny, refresh]
   );
 
