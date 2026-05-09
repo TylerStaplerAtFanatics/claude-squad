@@ -5,7 +5,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-web";
 import { create } from "@bufbuild/protobuf";
 import { Wizard, WizardActions } from "@/components/ui/Wizard";
 import { AutocompleteInput } from "@/components/ui/AutocompleteInput";
@@ -22,7 +21,7 @@ import {
   ProfileDefaultsProtoSchema,
   PromptHistoryEntry,
 } from "@/gen/session/v1/session_pb";
-import { getApiBaseUrl } from "@/lib/config";
+import { getConnectTransport } from "@/lib/api/transport";
 import * as styles from "./SessionWizard.css";
 
 interface SessionWizardProps {
@@ -130,8 +129,7 @@ export function SessionWizard({ onComplete, onCancel, initialData, existingTitle
     if (recentPrompts.length > 0 || loadingPrompts) return;
     setLoadingPrompts(true);
     try {
-      const transport = createConnectTransport({ baseUrl: getApiBaseUrl() });
-      const client = createClient(SessionService, transport);
+      const client = createClient(SessionService, getConnectTransport());
       const response = await client.listPromptHistory({ limit: 10 });
       setRecentPrompts(response.entries);
     } catch {
@@ -259,8 +257,7 @@ export function SessionWizard({ onComplete, onCancel, initialData, existingTitle
     setSaveProfileError(null);
 
     try {
-      const transport = createConnectTransport({ baseUrl: getApiBaseUrl() });
-      const client = createClient(SessionService, transport);
+      const client = createClient(SessionService, getConnectTransport());
 
       const profile = create(ProfileDefaultsProtoSchema, {
         name: profileName.trim(),
