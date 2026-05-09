@@ -224,7 +224,7 @@ export function SessionDetailView({
     originalValue: string,
     setValue: (v: string) => void,
     setEditing: (v: boolean) => void,
-    updateFn: (v: string) => Promise<void>,
+    updateFn: (v: string) => Promise<unknown>,
   ) {
     return {
       handleSave: async () => {
