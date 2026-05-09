@@ -174,8 +174,8 @@ function HomeContent() {
       });
     } else if (worktreePath) {
       router.replace("/", { scroll: false });
-      // Pass path:branch so the PathWithBranch detector pre-fills both fields
-      openOmnibar(worktreeBranch ? `${worktreePath}:${worktreeBranch}` : worktreePath);
+      // Pass path@branch so the PathWithBranch detector pre-fills both fields
+      openOmnibar(worktreeBranch ? `${worktreePath}@${worktreeBranch}` : worktreePath);
     }
   }, [searchParams, getSession, openOmnibar, router]);
 

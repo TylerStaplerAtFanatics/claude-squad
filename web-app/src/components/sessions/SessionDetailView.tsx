@@ -186,11 +186,14 @@ export function SessionDetailView({
   };
 
   const handleCopy = (field: string, value: string) => {
-    navigator.clipboard.writeText(value).catch((err) => {
-      console.warn("[SessionDetailView] clipboard write failed", err);
-    });
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 1500);
+    navigator.clipboard.writeText(value)
+      .then(() => {
+        setCopiedField(field);
+        setTimeout(() => setCopiedField(null), 1500);
+      })
+      .catch((err) => {
+        console.warn("[SessionDetailView] clipboard write failed", err);
+      });
   };
 
   // Keyboard shortcuts: Escape to exit fullscreen, Shift+Arrow for navigation
@@ -732,9 +735,14 @@ export function SessionDetailView({
                         </button>
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(session.launchCommand);
-                            setCopiedLaunchCmd(true);
-                            setTimeout(() => setCopiedLaunchCmd(false), 2000);
+                            navigator.clipboard.writeText(session.launchCommand)
+                              .then(() => {
+                                setCopiedLaunchCmd(true);
+                                setTimeout(() => setCopiedLaunchCmd(false), 2000);
+                              })
+                              .catch((err) => {
+                                console.warn("[SessionDetailView] clipboard write failed", err);
+                              });
                           }}
                           className={styles.editButton}
                           title="Copy to clipboard"
