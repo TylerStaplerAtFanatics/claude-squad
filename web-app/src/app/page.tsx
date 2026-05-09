@@ -48,6 +48,11 @@ function HomeContent() {
   const sessionTriggerRef = useRef<HTMLElement | null>(null);
   const wizardTriggerRef = useRef<HTMLElement | null>(null);
 
+  // Tracks the last URL params that were routed to a pane. Prevents the URL-watching
+  // effect from re-triggering pane assignment on every sessions stream update (which
+  // changes the `sessions` dependency but not the URL itself).
+  const lastUrlRoutedRef = useRef<{ sessionId: string | null; tab: string | null }>({ sessionId: null, tab: null });
+
   // Focus detail panel when session opens; return focus on close
   useEffect(() => {
     if (selectedSession) {
@@ -156,13 +161,18 @@ function HomeContent() {
         setSelectedSession(session);
         const resolvedTab = isValidTab(tabParam) ? tabParam : "terminal";
         setActiveTab(resolvedTab);
-        // Route through the pane tiling system (omnibar, deep-link, keyboard nav)
-        setExternalAssignCounter((c) => c + 1);
-        setExternalAssignSession({
-          sessionId: session.id,
-          tab: resolvedTab,
-          forceNewPane: newPaneParam === "true",
-        });
+        // Only route to pane when URL params actually changed. The `sessions` dependency
+        // causes this effect to re-run on every stream update; without this guard the
+        // picker would re-appear after every session status change.
+        if (lastUrlRoutedRef.current.sessionId !== sessionId || lastUrlRoutedRef.current.tab !== tabParam) {
+          lastUrlRoutedRef.current = { sessionId, tab: tabParam };
+          setExternalAssignCounter((c) => c + 1);
+          setExternalAssignSession({
+            sessionId: session.id,
+            tab: resolvedTab,
+            forceNewPane: newPaneParam === "true",
+          });
+        }
         // Clean up newPane param from URL after consuming it
         if (newPaneParam === "true") {
           const params = new URLSearchParams();
@@ -243,6 +253,7 @@ function HomeContent() {
   const closeSession = () => {
     setSelectedSession(null);
     setActiveTab("info");
+    lastUrlRoutedRef.current = { sessionId: null, tab: null };
     updateUrl(null, null);
   };
 
@@ -361,6 +372,10 @@ function HomeContent() {
     }
     setSelectedSession(session);
     setActiveTab("info");
+    // Pre-mark the URL state so the URL-watching effect skips re-routing when
+    // searchParams updates in response to this updateUrl call. "info" tab is not
+    // added to the URL (filtered out), so the stored tabParam is null.
+    lastUrlRoutedRef.current = { sessionId: session.id, tab: null };
     updateUrl(session.id, "info");
     // Also route the session to the currently-focused tiling pane
     setExternalAssignCounter((c) => c + 1);
@@ -370,6 +385,10 @@ function HomeContent() {
   const handleTabChange = (tab: SessionDetailTab) => {
     setActiveTab(tab);
     if (selectedSession) {
+      // Pre-mark the URL state before the URL changes so the URL-watching effect
+      // does not re-route the session to a pane (which would show the picker).
+      // "info" is not written to the URL, so its tabParam is null.
+      lastUrlRoutedRef.current = { sessionId: selectedSession.id, tab: tab !== "info" ? tab : null };
       updateUrl(selectedSession.id, tab);
     }
   };
