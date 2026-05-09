@@ -10,12 +10,13 @@ import (
 	"github.com/tstapler/stapler-squad/session/git"
 )
 
-// InstanceReader exposes the read-only attributes of an Instance that are
-// consumed by review-queue helpers (addStartupItem, syncOrphanedApprovalsToQueue)
-// and other server-layer code that only needs to observe session state.
+// InstanceReader exposes a minimal read-only view of an Instance for server-layer
+// code that only needs to observe session state. It is not yet used at every call
+// site (some helpers still take *Instance directly for field access); adopt it
+// incrementally as call sites are converted to use getter methods.
 //
-// *Instance satisfies this interface automatically; a lightweight fake can be
-// used in unit tests without spinning up a real tmux session.
+// *Instance satisfies this interface automatically. Use it to supply lightweight
+// test doubles without starting a real tmux session.
 type InstanceReader interface {
 	// Identity
 	GetTitle() string
@@ -24,7 +25,8 @@ type InstanceReader interface {
 	// Descriptive metadata
 	GetWorkingDirectory() string
 
-	// Status returns the current lifecycle status as int (cast to Status for display).
+	// GetStatus returns the current lifecycle status as int; matches the
+	// SessionAccessor interface contract on *Instance.
 	GetStatus() int
 
 	// Git / diff
