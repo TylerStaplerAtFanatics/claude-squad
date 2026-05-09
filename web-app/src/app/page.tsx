@@ -1,7 +1,7 @@
 "use client";
 // +feature: session-list session-search session-filter session-groupby
 
-import React, { useState, useEffect, useRef, Suspense, useCallback } from "react";
+import React, { useState, useEffect, useRef, Suspense, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Session } from "@/gen/session/v1/types_pb";
 import { SessionListSkeleton } from "@/components/sessions/SessionListSkeleton";
@@ -337,10 +337,7 @@ function HomeContent() {
     },
   });
 
-  const cockpitActions = {
-    sessions,
-    loading,
-    error,
+  const cockpitActions = useMemo(() => ({
     onSessionClick: handleSessionClick,
     onDeleteSession: handleDeleteSession,
     onPauseSession: pauseSession,
@@ -359,7 +356,13 @@ function HomeContent() {
     onSetRateLimitEnabled: handleSetRateLimitEnabled,
     onClearConversationState: clearConversationState,
     onListSessions: listSessions,
-  };
+  }), [
+    handleSessionClick, handleDeleteSession, pauseSession, handleResumeRequest,
+    handleDirectResume, handleCloneSession, handleNewWorkspaceSession, renameSession,
+    restartSession, handleUpdateTags, handleNewSession, createCheckpoint,
+    listCheckpoints, forkSession, handleRunOneShot, handleSetRateLimitEnabled,
+    clearConversationState, listSessions,
+  ]);
 
   return (
     <div className={styles.page}>
