@@ -108,13 +108,14 @@ func (h *TelemetryHandler) HandleTelemetry(w http.ResponseWriter, r *http.Reques
 	durationMs := int64(req.DurationMs)
 	if err := h.provider.Record(r.Context(), analytics.Event{
 		EventName:     safeEvent,
-		EventCategory: "performance",
+		EventCategory: "user_action",
 		DurationMs:    &durationMs,
 		SessionID:     req.SessionId,
 		Labels:        req.Labels,
 	}); err != nil {
 		log.ErrorLog.Printf("[telemetry] analytics.Record: %v", err)
 	}
+
 
 	w.WriteHeader(http.StatusNoContent)
 }
