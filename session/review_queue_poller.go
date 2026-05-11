@@ -938,8 +938,6 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 	// This helps identify sessions that might be stuck or waiting without showing obvious idle state
 	// IMPORTANT: Respect acknowledgment - don't flag as stale if user already acknowledged
 	timeSinceOutput := inst.GetTimeSinceLastMeaningfulOutput()
-	log.InfoLog.Printf("[ReviewQueue] Session '%s': Staleness check - %s since last meaningful output (threshold: %s, shouldAdd=%v, priority=%v)",
-		inst.Title, detection.FormatDuration(timeSinceOutput), detection.FormatDuration(rqp.config.StalenessThreshold), shouldAdd, priority)
 
 	// Check if user has acknowledged this session after it became stale
 	// If acknowledged after last output, don't re-flag as stale
@@ -947,31 +945,30 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 
 	if timeSinceOutput > rqp.config.StalenessThreshold {
 		if alreadyAcknowledged {
-			log.InfoLog.Printf("[ReviewQueue] Session '%s': STALE but already acknowledged - skipping staleness flag",
-				inst.Title)
+			if log.IsDebugEnabled() {
+				log.DebugLog.Printf("[ReviewQueue] Session '%s': STALE but already acknowledged - skipping staleness flag",
+					inst.Title)
+			}
 		} else {
-			log.InfoLog.Printf("[ReviewQueue] Session '%s': STALENESS DETECTED - time since output (%s) > threshold (%s)",
-				inst.Title, detection.FormatDuration(timeSinceOutput), detection.FormatDuration(rqp.config.StalenessThreshold))
-
 			// Only override if we don't already have a higher-priority reason.
 			// Only set stale if not already flagged with Medium priority or higher.
 			if !shouldAdd || priority.IsLowerThan(PriorityMedium) {
-				// Use semantic ReasonStale instead of deprecated ReasonIdleTimeout
 				reason = ReasonStale
 				priority = PriorityLow // Lower priority than approval/error, but should be reviewed
 				shouldAdd = true
 				context = fmt.Sprintf("No activity for %s - session may be stuck or waiting",
 					detection.FormatDuration(timeSinceOutput))
-
-				log.InfoLog.Printf("[ReviewQueue] Session '%s': SETTING shouldAdd=true - flagged as stale - %s since last meaningful output",
-					inst.Title, detection.FormatDuration(timeSinceOutput))
-			} else {
-				log.InfoLog.Printf("[ReviewQueue] Session '%s': Stale but already has higher priority reason (%s)",
+				if log.IsDebugEnabled() {
+					log.DebugLog.Printf("[ReviewQueue] Session '%s': STALENESS DETECTED - flagged as stale, %s since last meaningful output",
+						inst.Title, detection.FormatDuration(timeSinceOutput))
+				}
+			} else if log.IsDebugEnabled() {
+				log.DebugLog.Printf("[ReviewQueue] Session '%s': Stale but already has higher priority reason (%s)",
 					inst.Title, reason.String())
 			}
 		}
-	} else {
-		log.InfoLog.Printf("[ReviewQueue] Session '%s': NOT STALE - time since output (%s) <= threshold (%s)",
+	} else if log.IsDebugEnabled() {
+		log.DebugLog.Printf("[ReviewQueue] Session '%s': NOT STALE - %s since last meaningful output (threshold: %s)",
 			inst.Title, detection.FormatDuration(timeSinceOutput), detection.FormatDuration(rqp.config.StalenessThreshold))
 	}
 
