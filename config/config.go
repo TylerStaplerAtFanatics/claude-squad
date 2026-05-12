@@ -117,7 +117,7 @@ func GetConfigDir() (string, error) {
 		legacyDir := filepath.Join(homeDir, ".claude-squad")
 		if _, legacyErr := os.Stat(legacyDir); legacyErr == nil {
 			if migrateErr := os.Rename(legacyDir, baseDir); migrateErr == nil {
-				log.InfoLog.Printf("Migrated data directory: %s → %s\n", legacyDir, baseDir)
+				log.Info("migrated data directory", "from", legacyDir, "to", baseDir)
 			}
 		}
 	}
@@ -164,7 +164,7 @@ func GetConfigDir() (string, error) {
 			return filepath.Join(baseDir, "workspaces", workspaceID), nil
 		}
 		// If we can't get working directory, fall through to shared state
-		log.WarningLog.Printf("Failed to get working directory for workspace isolation: %v", err)
+		log.Warn("failed to get working directory for workspace isolation", "err", err)
 	}
 
 	// Priority 5: Global shared state (fallback, backward compatibility)
@@ -315,7 +315,7 @@ func defaultConfigWithExecutor(exec CommandExecutor) *Config {
 
 	program, err := cfg.GetClaudeCommand()
 	if err != nil {
-		log.ErrorLog.Printf("failed to get claude command: %v", err)
+		log.Error("failed to get claude command", "err", err)
 		program = defaultProgram
 	}
 
@@ -328,7 +328,7 @@ func defaultConfigWithExecutor(exec CommandExecutor) *Config {
 	cfg.BranchPrefix = func() string {
 		user, err := user.Current()
 		if err != nil || user == nil || user.Username == "" {
-			log.ErrorLog.Printf("failed to get current user: %v", err)
+			log.Error("failed to get current user", "err", err)
 			return "session/"
 		}
 		return fmt.Sprintf("%s/", strings.ToLower(user.Username))
@@ -548,7 +548,7 @@ func GetAvailablePrograms() []string {
 func LoadConfig() *Config {
 	configDir, err := GetConfigDir()
 	if err != nil {
-		log.ErrorLog.Printf("failed to get config directory: %v", err)
+		log.Error("failed to get config directory", "err", err)
 		return DefaultConfig()
 	}
 
@@ -558,11 +558,11 @@ func LoadConfig() *Config {
 		if os.IsNotExist(err) {
 			defaultCfg := DefaultConfig()
 			if saveErr := saveConfig(defaultCfg); saveErr != nil {
-				log.WarningLog.Printf("failed to save default config: %v", saveErr)
+				log.Warn("failed to save default config", "err", saveErr)
 			}
 			return defaultCfg
 		}
-		log.WarningLog.Printf("failed to load config file: %v", err)
+		log.Warn("failed to load config file", "err", err)
 		return DefaultConfig()
 	}
 

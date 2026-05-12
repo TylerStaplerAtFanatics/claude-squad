@@ -111,14 +111,14 @@ func (rs *ResponseStream) Start(ctx context.Context) error {
 	rs.wg.Add(1)
 	go rs.streamLoop()
 
-	log.InfoLog.Printf("Response stream started for session '%s'", rs.sessionName)
+	log.Info("response stream started", "session", rs.sessionName)
 	return nil
 }
 
 // streamLoop is the main streaming loop that reads from PTY and broadcasts to subscribers.
 func (rs *ResponseStream) streamLoop() {
 	defer rs.wg.Done()
-	defer log.InfoLog.Printf("Response stream stopped for session '%s'", rs.sessionName)
+	defer log.Info("response stream stopped", "session", rs.sessionName)
 
 	// Buffer for reading PTY output
 	readBuf := make([]byte, 4096)
@@ -155,7 +155,7 @@ func (rs *ResponseStream) streamLoop() {
 			if err != nil {
 				if err == io.EOF {
 					// PTY closed - the tmux session's program has exited
-					log.ForSession(rs.sessionName).Info("Session program exited (PTY EOF)")
+					log.ForSession(rs.sessionName).Info("session program exited (PTY EOF)")
 					rs.closeAllSubscribers()
 					rs.mu.Lock()
 					rs.started = false
@@ -176,7 +176,7 @@ func (rs *ResponseStream) streamLoop() {
 					strings.Contains(errMsg, "bad file descriptor") ||
 					strings.Contains(errMsg, "input/output error") {
 					// PTY has been closed - the tmux session's program has exited
-					log.ForSession(rs.sessionName).Info("Session program exited (PTY closed: %v)", err)
+					log.ForSession(rs.sessionName).Info("session program exited (PTY closed)", "err", err)
 					rs.closeAllSubscribers()
 					rs.mu.Lock()
 					rs.started = false
@@ -187,7 +187,7 @@ func (rs *ResponseStream) streamLoop() {
 					return
 				}
 				// Other errors - log and continue
-				log.ErrorLog.Printf("Error reading from PTY in response stream for '%s': %v", rs.sessionName, err)
+				log.Error("error reading from PTY in response stream", "session", rs.sessionName, "err", err)
 				continue
 			}
 
@@ -240,7 +240,7 @@ func (rs *ResponseStream) broadcast(chunk ResponseChunk) {
 			// Successfully sent
 		default:
 			// Channel is full, log warning but don't block
-			log.WarningLog.Printf("Subscriber %s channel full in session '%s', dropping chunk", id, rs.sessionName)
+			log.Warn("subscriber channel full, dropping chunk", "subscriber", id, "session", rs.sessionName)
 		}
 	}
 }
@@ -262,7 +262,7 @@ func (rs *ResponseStream) Subscribe(subscriberID string) (<-chan ResponseChunk, 
 	}
 
 	rs.subscribers[subscriberID] = sub
-	log.InfoLog.Printf("Subscriber '%s' registered for session '%s'", subscriberID, rs.sessionName)
+	log.Info("subscriber registered", "subscriber", subscriberID, "session", rs.sessionName)
 
 	return sub.Ch, nil
 }
@@ -279,7 +279,7 @@ func (rs *ResponseStream) Unsubscribe(subscriberID string) error {
 
 	close(sub.Ch)
 	delete(rs.subscribers, subscriberID)
-	log.InfoLog.Printf("Subscriber '%s' unregistered from session '%s'", subscriberID, rs.sessionName)
+	log.Info("subscriber unregistered", "subscriber", subscriberID, "session", rs.sessionName)
 
 	return nil
 }
@@ -291,7 +291,7 @@ func (rs *ResponseStream) closeAllSubscribers() {
 
 	for id, sub := range rs.subscribers {
 		close(sub.Ch)
-		log.InfoLog.Printf("Closed subscriber '%s' for session '%s'", id, rs.sessionName)
+		log.Info("closed subscriber", "subscriber", id, "session", rs.sessionName)
 	}
 	rs.subscribers = make(map[string]*Subscriber)
 }
@@ -318,7 +318,7 @@ func (rs *ResponseStream) Stop() error {
 	rs.started = false
 	rs.mu.Unlock()
 
-	log.InfoLog.Printf("Response stream stopped for session '%s'", rs.sessionName)
+	log.Info("response stream stopped", "session", rs.sessionName)
 	return nil
 }
 

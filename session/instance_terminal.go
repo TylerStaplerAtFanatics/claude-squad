@@ -80,7 +80,7 @@ func (i *Instance) Rename(newTitle string) error {
 	i.Title = newTitle
 	i.UpdatedAt = time.Now()
 
-	log.InfoLog.Printf("Renamed session from '%s' to '%s'", oldTitle, newTitle)
+	log.Info("renamed session", "from", oldTitle, "to", newTitle)
 	return nil
 }
 

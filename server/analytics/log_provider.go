@@ -3,8 +3,7 @@ package analytics
 import (
 	"context"
 	"encoding/json"
-
-	"github.com/tstapler/stapler-squad/log"
+	"log/slog"
 )
 
 // LogAnalyticsProvider is a no-op analytics provider that logs events instead of
@@ -17,10 +16,9 @@ func NewLogAnalyticsProvider() *LogAnalyticsProvider {
 	return &LogAnalyticsProvider{}
 }
 
-// Record logs the event using the package-level InfoLog and returns nil.
+// Record logs the event using slog.Default() and returns nil.
 func (p *LogAnalyticsProvider) Record(_ context.Context, event Event) error {
 	labelsJSON, _ := json.Marshal(event.Labels)
-	log.InfoLog.Printf("[analytics] event=%q category=%q session=%q page=%q component=%q labels=%s",
-		event.EventName, event.EventCategory, event.SessionID, event.Page, event.Component, labelsJSON)
+	slog.Info("analytics event", "event", event.EventName, "category", event.EventCategory, "session", event.SessionID, "page", event.Page, "component", event.Component, "labels", string(labelsJSON))
 	return nil
 }

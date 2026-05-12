@@ -101,8 +101,7 @@ func (h *TelemetryHandler) HandleTelemetry(w http.ResponseWriter, r *http.Reques
 	safeEvent := strings.ReplaceAll(req.Event, "\n", `\n`)
 	safeEvent = strings.ReplaceAll(safeEvent, "\r", `\r`)
 
-	log.InfoLog.Printf("frontend_telemetry event=%s duration_ms=%d session_id=%s labels=%v",
-		safeEvent, req.DurationMs, req.SessionId, req.Labels)
+	log.Info("frontend telemetry", "event", safeEvent, "duration_ms", req.DurationMs, "session_id", req.SessionId, "labels", req.Labels)
 
 	// Forward to analytics provider (fire-and-forget; errors don't affect response).
 	durationMs := int64(req.DurationMs)
@@ -113,7 +112,7 @@ func (h *TelemetryHandler) HandleTelemetry(w http.ResponseWriter, r *http.Reques
 		SessionID:     req.SessionId,
 		Labels:        req.Labels,
 	}); err != nil {
-		log.ErrorLog.Printf("[telemetry] analytics.Record: %v", err)
+		log.Error("telemetry analytics.Record failed", "err", err)
 	}
 
 

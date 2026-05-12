@@ -153,7 +153,7 @@ func (h *AnalyticsHandler) HandlePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !validCategories[ev.EventCategory] {
-			log.InfoLog.Printf("[analytics] invalid category %q on event %d", ev.EventCategory, i)
+			log.Info("analytics invalid category on event", "category", ev.EventCategory, "index", i)
 			http.Error(w, "invalid event category: must be one of user_action, performance, navigation, rpc", http.StatusBadRequest)
 			return
 		}
@@ -176,7 +176,7 @@ func (h *AnalyticsHandler) HandlePost(w http.ResponseWriter, r *http.Request) {
 			Labels:        ev.Labels,
 		})
 		if aerr != nil {
-			log.ErrorLog.Printf("[analytics] Record error (continuing): %v", aerr)
+			log.Error("analytics record error (continuing)", "err", aerr)
 		}
 	}
 
@@ -215,7 +215,7 @@ func (h *AnalyticsHandler) HandleSummary(w http.ResponseWriter, r *http.Request)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			log.ErrorLog.Printf("[analytics/summary] encode error: %v", err)
+			log.Error("analytics/summary encode error", "err", err)
 		}
 		return
 	}
@@ -235,7 +235,7 @@ func (h *AnalyticsHandler) HandleSummary(w http.ResponseWriter, r *http.Request)
 
 	events, err := query.All(ctx)
 	if err != nil {
-		log.ErrorLog.Printf("[analytics/summary] query failed: %v", err)
+		log.Error("analytics/summary query failed", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -334,7 +334,7 @@ func (h *AnalyticsHandler) HandleSummary(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		log.ErrorLog.Printf("[analytics/summary] encode error: %v", err)
+		log.Error("analytics/summary encode error", "err", err)
 	}
 }
 

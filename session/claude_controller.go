@@ -195,8 +195,7 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 			migrationSource = "time.Now()"
 		}
 
-		log.InfoLog.Printf("[ClaudeController] Migrating old session '%s': initializing LastMeaningfulOutput from %s (%v)",
-			cc.sessionName, migrationSource, migrationTime)
+		log.Info("migrating old session: initializing lastmeaningfuloutput", "session", cc.sessionName, "from", migrationSource, "time", migrationTime)
 		cc.instance.SetLastMeaningfulOutput(migrationTime)
 		cc.idleDetector.InitializeFromTimestamp(migrationTime)
 	}
@@ -227,7 +226,7 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 	// Set up result callback to automatically add to history
 	cc.executor.SetResultCallback(func(result *ExecutionResult) {
 		if err := cc.history.AddFromResult(result); err != nil {
-			log.ErrorLog.Printf("Failed to add execution result to history: %v", err)
+			log.Error("failed to add execution result to history", "err", err)
 		}
 	})
 
@@ -279,7 +278,7 @@ func (cc *ClaudeController) Start(ctx context.Context) error {
 		cc.rateLimitHandler.Start()
 	}
 
-	log.InfoLog.Printf("Claude controller started for session '%s'", cc.sessionName)
+	log.Info("claude controller started", "session", cc.sessionName)
 	return nil
 }
 
@@ -331,7 +330,7 @@ func (cc *ClaudeController) Stop() error {
 		return fmt.Errorf("stop errors: %v", errs)
 	}
 
-	log.InfoLog.Printf("Claude controller stopped for session '%s'", cc.sessionName)
+	log.Info("claude controller stopped", "session", cc.sessionName)
 	return nil
 }
 
@@ -356,8 +355,7 @@ func (cc *ClaudeController) SendCommand(text string, priority int) (string, erro
 		return "", fmt.Errorf("failed to enqueue command: %w", err)
 	}
 
-	log.InfoLog.Printf("Command queued for session '%s': %s (ID: %s, priority: %d)",
-		cc.sessionName, text, cmd.ID, priority)
+	log.Info("command queued", "session", cc.sessionName, "text", text, "id", cmd.ID, "priority", priority)
 
 	return cmd.ID, nil
 }
@@ -386,11 +384,10 @@ func (cc *ClaudeController) SendCommandImmediate(text string) (*ExecutionResult,
 
 	// Add to history
 	if err := cc.history.AddFromResult(result); err != nil {
-		log.ErrorLog.Printf("Failed to add immediate execution to history: %v", err)
+		log.Error("failed to add immediate execution to history", "err", err)
 	}
 
-	log.InfoLog.Printf("Immediate command executed for session '%s': %s (ID: %s)",
-		cc.sessionName, text, cmd.ID)
+	log.Info("immediate command executed", "session", cc.sessionName, "text", text, "id", cmd.ID)
 
 	return result, nil
 }
@@ -519,7 +516,7 @@ func (cc *ClaudeController) GetCurrentStatus() (detection.DetectedStatus, string
 
 	content, err := cc.instance.Preview()
 	if err != nil {
-		log.DebugLog.Printf("[GetCurrentStatus] Session '%s': Preview() error: %v", cc.sessionName, err)
+		log.Debug("getcurrentstatus: preview error", "session", cc.sessionName, "err", err)
 		return detection.StatusUnknown, "Failed to get terminal content"
 	}
 
@@ -742,7 +739,7 @@ func (cc *ClaudeController) GetIdleState() (detection.IdleState, time.Time) {
 	if cc.instance != nil {
 		content, err := cc.instance.Preview()
 		if err != nil {
-			log.DebugLog.Printf("[GetIdleState] Session '%s': Preview() error: %v, using fallback", cc.sessionName, err)
+			log.Debug("getidlestate: preview error, using fallback", "session", cc.sessionName, "err", err)
 			state = cc.idleDetector.DetectState()
 		} else if content != "" {
 			tail := tailContent(content, statusDetectionTailBytes)

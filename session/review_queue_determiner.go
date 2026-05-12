@@ -225,8 +225,7 @@ func (d *DefaultStatusDeterminer) Determine(
 			} else if worktree != nil {
 				isDirty, err := worktree.IsDirty()
 				if err != nil {
-					log.WarningLog.Printf("[ReviewQueue] Session '%s': Failed to check git status: %v", inst.Title, err)
-					log.ForSession(inst.Title).Warning("Failed to check git status: %v", err)
+					log.Warn("failed to check git status", "session", inst.Title, "err", err)
 				} else if isDirty {
 					if !shouldAdd || priority == PriorityLow {
 						reason = ReasonUncommittedChanges

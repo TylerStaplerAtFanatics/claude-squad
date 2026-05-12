@@ -50,9 +50,9 @@ func runRetention(ctx context.Context, client *ent.Client, maxRows int, maxAgeDa
 			Where(analyticsevent.CreatedAtLT(cutoff)).
 			Exec(ctx)
 		if err != nil {
-			log.WarningLog.Printf("[analytics/retention] age eviction failed: %v", err)
+			log.Warn("analytics/retention age eviction failed", "err", err)
 		} else if deleted > 0 {
-			log.InfoLog.Printf("[analytics/retention] age eviction deleted %d rows (cutoff=%s)", deleted, cutoff.Format(time.RFC3339))
+			log.Info("analytics/retention age eviction deleted rows", "deleted", deleted, "cutoff", cutoff.Format(time.RFC3339))
 		}
 	}
 
@@ -63,7 +63,7 @@ func runRetention(ctx context.Context, client *ent.Client, maxRows int, maxAgeDa
 
 	count, err := client.AnalyticsEvent.Query().Count(ctx)
 	if err != nil {
-		log.WarningLog.Printf("[analytics/retention] count query failed: %v", err)
+		log.Warn("analytics/retention count query failed", "err", err)
 		return
 	}
 	if count <= maxRows {
@@ -77,7 +77,7 @@ func runRetention(ctx context.Context, client *ent.Client, maxRows int, maxAgeDa
 		Limit(excess).
 		IDs(ctx)
 	if err != nil {
-		log.WarningLog.Printf("[analytics/retention] oldest-IDs query failed: %v", err)
+		log.Warn("analytics/retention oldest-IDs query failed", "err", err)
 		return
 	}
 
@@ -85,8 +85,8 @@ func runRetention(ctx context.Context, client *ent.Client, maxRows int, maxAgeDa
 		Where(analyticsevent.IDIn(ids...)).
 		Exec(ctx)
 	if err != nil {
-		log.WarningLog.Printf("[analytics/retention] count eviction failed: %v", err)
+		log.Warn("analytics/retention count eviction failed", "err", err)
 		return
 	}
-	log.InfoLog.Printf("[analytics/retention] count eviction deleted %d rows (was %d, limit %d)", deleted, count, maxRows)
+	log.Info("analytics/retention count eviction deleted rows", "deleted", deleted, "was", count, "limit", maxRows)
 }

@@ -524,8 +524,18 @@ type SessionLogger struct {
 	sessionID string
 }
 
-// ForSession returns a SessionLogger bound to the given session ID.
-func ForSession(sessionID string) *SessionLogger {
+// ForSession returns a *slog.Logger pre-populated with "session" = sessionID.
+// All calls route through the async slog handler — no stdlib mutex serialization.
+// Session-specific log files still receive the entry via LogForSession when needed.
+func ForSession(sessionID string) *slog.Logger {
+	return slog.Default().With("session", sessionID)
+}
+
+// ForSessionLegacy returns the old SessionLogger for callers that write to
+// per-session log files. New code should use ForSession instead.
+//
+// Deprecated: use ForSession.
+func ForSessionLegacy(sessionID string) *SessionLogger {
 	return &SessionLogger{sessionID: sessionID}
 }
 
@@ -545,7 +555,22 @@ func (sl *SessionLogger) Error(format string, v ...interface{}) {
 	LogForSession(sl.sessionID, "error", format, v...)
 }
 
-// Global convenience functions for structured logging
+// Info logs an info-level message through the default slog handler (async, no mutex hold).
+// args are alternating key-value pairs: log.Info("msg", "key", val, "key2", val2)
+func Info(msg string, args ...any) { slog.Info(msg, args...) }
+
+// Warn logs a warning-level message through the default slog handler.
+func Warn(msg string, args ...any) { slog.Warn(msg, args...) }
+
+// Error logs an error-level message through the default slog handler.
+func Error(msg string, args ...any) { slog.Error(msg, args...) }
+
+// Debug logs a debug-level message through the default slog handler.
+// The handler drops debug records when the runtime level is above DEBUG, so
+// this is safe to call without an IsDebugEnabled() guard.
+func Debug(msg string, args ...any) { slog.Debug(msg, args...) }
+
+// Global convenience functions for structured logging (legacy — prefer Info/Warn/Error/Debug)
 
 // DebugS logs a structured debug message
 func DebugS(message string, fields ...map[string]interface{}) {

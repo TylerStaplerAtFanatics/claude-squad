@@ -208,7 +208,7 @@ func (rqp *ReviewQueuePoller) Start(ctx context.Context) {
 	rqp.mu.Lock()
 	if rqp.ctx != nil {
 		rqp.mu.Unlock()
-		log.InfoLog.Printf("ReviewQueuePoller already started")
+		log.Info("ReviewQueuePoller already started")
 		return
 	}
 
@@ -226,7 +226,7 @@ func (rqp *ReviewQueuePoller) Start(ctx context.Context) {
 	rqp.wg.Add(1)
 	go rqp.pollLoop()
 
-	log.InfoLog.Printf("ReviewQueuePoller started (poll interval: %s)", rqp.config.PollInterval)
+	log.Info("ReviewQueuePoller started", "poll_interval", rqp.config.PollInterval)
 }
 
 // Stop stops the poller.
@@ -238,7 +238,7 @@ func (rqp *ReviewQueuePoller) Stop() {
 	rqp.mu.Unlock()
 
 	rqp.wg.Wait()
-	log.InfoLog.Printf("ReviewQueuePoller stopped")
+	log.Info("ReviewQueuePoller stopped")
 }
 
 // cleanupOrphanedItems removes queue items with zero or invalid LastActivity timestamps.
@@ -255,17 +255,16 @@ func (rqp *ReviewQueuePoller) cleanupOrphanedItems() {
 	for _, item := range allItems {
 		// Remove items with zero or invalid LastActivity timestamps
 		if item.LastActivity.IsZero() || item.LastActivity.Before(minValidTime) {
-			log.InfoLog.Printf("[ReviewQueue] STARTUP CLEANUP: Removing orphaned item '%s' with invalid LastActivity (%v)",
-				item.SessionID, item.LastActivity)
+			log.Info("startup cleanup: removing orphaned item with invalid LastActivity", "session", item.SessionID, "last_activity", item.LastActivity)
 			rqp.queue.Remove(item.SessionID)
 			removedCount++
 		}
 	}
 
 	if removedCount > 0 {
-		log.InfoLog.Printf("[ReviewQueue] STARTUP CLEANUP: Removed %d orphaned items with invalid timestamps", removedCount)
+		log.Info("startup cleanup: removed orphaned items with invalid timestamps", "count", removedCount)
 	} else {
-		log.InfoLog.Printf("[ReviewQueue] STARTUP CLEANUP: No orphaned items found")
+		log.Info("startup cleanup: no orphaned items found")
 	}
 }
 
@@ -318,8 +317,7 @@ func (rqp *ReviewQueuePoller) pollLoop() {
 			if err := rqp.checkSessionsSafe(); err != nil {
 				rqp.consecutiveErrors++
 				backoff := rqp.backoffDuration(rqp.consecutiveErrors)
-				log.WarningLog.Printf("[ReviewQueuePoller] checkSessions error (consecutive: %d): %v — backing off %s",
-					rqp.consecutiveErrors, err, backoff)
+				log.Warn("ReviewQueuePoller checkSessions error", "consecutive_errors", rqp.consecutiveErrors, "err", err, "backoff", backoff)
 				select {
 				case <-rqp.ctx.Done():
 					return
@@ -358,7 +356,7 @@ func (rqp *ReviewQueuePoller) checkSessionsSafe() (retErr error) {
 	defer func() {
 		if r := recover(); r != nil {
 			retErr = fmt.Errorf("panic in checkSessions: %v", r)
-			log.ErrorLog.Printf("[ReviewQueuePoller] panic recovered: %v", r)
+			log.Error("ReviewQueuePoller panic recovered", "panic", r)
 		}
 	}()
 	rqp.checkSessions()
@@ -388,7 +386,7 @@ func (rqp *ReviewQueuePoller) backoffDuration(consecutiveErrors int) time.Durati
 // Safe to call concurrently; typically used by the fork pressure monitor to rapidly clean
 // up dead sessions when subprocess failures indicate stale Running/Ready states.
 func (rqp *ReviewQueuePoller) ForceReconcile() {
-	log.InfoLog.Printf("[ReviewQueuePoller] ForceReconcile triggered")
+	log.Info("ReviewQueuePoller ForceReconcile triggered")
 	rqp.reconcileSessions()
 }
 
@@ -417,9 +415,9 @@ func (rqp *ReviewQueuePoller) reconcileSessions() {
 	liveSessions, err := tmux.ListAllSessions(serverSocket)
 	if err != nil {
 		if err == tmux.ErrServerDown {
-			log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: tmux server is down — skipping reconciliation")
+			log.Warn("reconcileSessions: tmux server is down, skipping reconciliation")
 		} else {
-			log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: ListAllSessions error: %v", err)
+			log.Warn("reconcileSessions: ListAllSessions error", "err", err)
 		}
 		return
 	}
@@ -437,13 +435,12 @@ func (rqp *ReviewQueuePoller) reconcileSessions() {
 		case Running, Ready:
 			// Running/Ready but tmux session gone — mark Stopped.
 			if !liveSessions[sessionName] {
-				log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: managed session '%s' (tmux: %s) not found in live sessions — transitioning to Stopped",
-					inst.Title, sessionName)
+				log.Warn("reconcileSessions: managed session not found in live sessions, transitioning to Stopped", "session", inst.Title, "tmux", sessionName)
 				inst.stateMutex.Lock()
 				switch inst.Status {
 				case Running, Ready:
 					if err := inst.transitionTo(Stopped); err != nil {
-						log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: transition to Stopped failed for '%s': %v — using setStatus", inst.Title, err)
+						log.Warn("reconcileSessions: transition to Stopped failed, using setStatus", "session", inst.Title, "err", err)
 						inst.setStatus(Stopped)
 					}
 				}
@@ -453,12 +450,11 @@ func (rqp *ReviewQueuePoller) reconcileSessions() {
 		case Stopped:
 			// Stopped but tmux session is alive — revive to Running.
 			if liveSessions[sessionName] {
-				log.InfoLog.Printf("[ReviewQueuePoller] reconcileSessions: stopped session '%s' (tmux: %s) found alive — reviving to Running",
-					inst.Title, sessionName)
+				log.Info("reconcileSessions: stopped session found alive, reviving to Running", "session", inst.Title, "tmux", sessionName)
 				inst.stateMutex.Lock()
 				if inst.Status == Stopped {
 					if err := inst.transitionTo(Running); err != nil {
-						log.WarningLog.Printf("[ReviewQueuePoller] reconcileSessions: revival to Running failed for '%s': %v", inst.Title, err)
+						log.Warn("reconcileSessions: revival to Running failed", "session", inst.Title, "err", err)
 					}
 				}
 				inst.stateMutex.Unlock()
@@ -585,7 +581,7 @@ func (p *pollerContentProvider) GetContent(inst *Instance, statusInfo InstanceSt
 
 	content, err := inst.Preview()
 	if err != nil {
-		log.DebugLog.Printf("[ReviewQueue] Session '%s': Preview() error: %v", inst.Title, err)
+		log.Debug("Preview() error", "session", inst.Title, "err", err)
 		p.cacheMu.Lock()
 		cached := p.cachedContent[inst.Title]
 		p.cacheMu.Unlock()
@@ -663,13 +659,13 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 
 	// If user responded and session is processing -> remove from queue
 	if userRespondedToPrompt && isProcessing {
-		log.InfoLog.Printf("[ReviewQueue] Session '%s': User responded and processing - removing from queue", inst.Title)
+		log.Info("user responded and processing, removing from queue", "session", inst.Title)
 		rqp.queue.Remove(inst.Title)
 		inst.ProcessingGraceUntil = time.Time{} // Clear grace period
 		// Persist cleared grace period
 		if rqp.storage != nil {
 			if err := rqp.storage.UpdateInstanceProcessingGrace(inst.Title, inst.ProcessingGraceUntil); err != nil {
-				log.ErrorLog.Printf("Failed to persist cleared ProcessingGraceUntil: %v", err)
+				log.Error("failed to persist cleared ProcessingGraceUntil", "err", err)
 			}
 		}
 		return
@@ -686,13 +682,12 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 		if inst.ProcessingGraceUntil.IsZero() {
 			// Fresh response - start grace period and remove from queue
 			inst.ProcessingGraceUntil = time.Now().Add(10 * time.Second)
-			log.InfoLog.Printf("[ReviewQueue] Session '%s': User responded, starting grace period until %v",
-				inst.Title, inst.ProcessingGraceUntil)
+			log.Info("user responded, starting grace period", "session", inst.Title, "grace_until", inst.ProcessingGraceUntil)
 
 			// Persist grace period
 			if rqp.storage != nil {
 				if err := rqp.storage.UpdateInstanceProcessingGrace(inst.Title, inst.ProcessingGraceUntil); err != nil {
-					log.ErrorLog.Printf("Failed to persist ProcessingGraceUntil: %v", err)
+					log.Error("failed to persist ProcessingGraceUntil", "err", err)
 				}
 			}
 			rqp.queue.Remove(inst.Title)
@@ -701,11 +696,11 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 
 		// Grace period expired and still not processing
 		// Clear grace period and fall through to add logic (will check if new prompt)
-		log.InfoLog.Printf("[ReviewQueue] Session '%s': Grace period expired, session not responding", inst.Title)
+		log.Info("grace period expired, session not responding", "session", inst.Title)
 		inst.ProcessingGraceUntil = time.Time{}
 		if rqp.storage != nil {
 			if err := rqp.storage.UpdateInstanceProcessingGrace(inst.Title, inst.ProcessingGraceUntil); err != nil {
-				log.ErrorLog.Printf("Failed to persist cleared ProcessingGraceUntil: %v", err)
+				log.Error("failed to persist cleared ProcessingGraceUntil", "err", err)
 			}
 		}
 	}
@@ -729,7 +724,7 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 	// If the determiner saw a clean worktree, remove any stale UncommittedChanges entry.
 	if result.CleanWorktree {
 		if existing, exists := rqp.queue.Get(inst.Title); exists && existing.Reason == ReasonUncommittedChanges {
-			log.InfoLog.Printf("[ReviewQueue] Session '%s': Changes committed - removing UncommittedChanges entry", inst.Title)
+			log.Info("changes committed, removing UncommittedChanges entry", "session", inst.Title)
 			rqp.queue.Remove(inst.Title)
 		}
 	}
@@ -764,7 +759,7 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 	// Prevent re-adding same prompt user already responded to
 	// Only add if this is a NEW prompt OR user hasn't responded yet
 	if shouldAdd && userRespondedToPrompt && !isNewPrompt {
-		log.InfoLog.Printf("[ReviewQueue] Session '%s': User already responded to this prompt - removing from queue", inst.Title)
+		log.Info("user already responded to this prompt, removing from queue", "session", inst.Title)
 		rqp.queue.Remove(inst.Title)
 		return
 	}
@@ -780,8 +775,7 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 				// Lower priority number = higher priority (Urgent=1 > High=2 > Medium=3 > Low=4)
 				isEscalation := priority < existingItem.Priority
 				if isEscalation {
-					log.InfoLog.Printf("[ReviewQueue] Session '%s': Priority escalation (%s → %s) - bypassing rate limit",
-						inst.Title, existingItem.Priority.String(), priority.String())
+					log.Info("priority escalation, bypassing rate limit", "session", inst.Title, "from", existingItem.Priority.String(), "to", priority.String())
 				} else {
 					return
 				}
@@ -792,8 +786,7 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 	}
 
 	// Add or update in queue
-	log.InfoLog.Printf("[ReviewQueue] Session '%s': Final decision - shouldAdd=%v, reason=%s, priority=%s, context=%q",
-		inst.Title, shouldAdd, reason.String(), priority.String(), context)
+	log.Info("final decision", "session", inst.Title, "should_add", shouldAdd, "reason", reason.String(), "priority", priority.String(), "context", context)
 
 	if shouldAdd {
 		// Check if item already exists and preserve DetectedAt if status hasn't changed
@@ -862,19 +855,16 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 				if a.Orphaned {
 					item.Metadata["orphaned"] = "true"
 				}
-				log.InfoLog.Printf("[ReviewQueue] Session '%s': Enriched approval item with hook metadata (tool=%s, approval_id=%s)",
-					inst.Title, a.ToolName, a.ApprovalID)
+				log.Info("enriched approval item with hook metadata", "session", inst.Title, "tool", a.ToolName, "approval_id", a.ApprovalID)
 			}
 		}
 
-		log.InfoLog.Printf("[ReviewQueue] Session '%s': ADDING TO QUEUE - reason=%s, priority=%s, context=%q",
-			inst.Title, reason.String(), priority.String(), context)
+		log.Info("adding to queue", "session", inst.Title, "reason", reason.String(), "priority", priority.String(), "context", context)
 		rqp.queue.Add(item)
 
 		// Update spam prevention timestamp
 		inst.LastAddedToQueue = time.Now()
-		log.InfoLog.Printf("[ReviewQueue] Session '%s': Updated LastAddedToQueue timestamp to %v",
-			inst.Title, inst.LastAddedToQueue)
+		log.Info("updated LastAddedToQueue timestamp", "session", inst.Title, "timestamp", inst.LastAddedToQueue)
 
 		// CRITICAL: Persist LastAddedToQueue to database to prevent notification spam
 		// Without persistence, this timestamp resets on app restart or instance reload,
@@ -883,13 +873,12 @@ func (rqp *ReviewQueuePoller) checkSession(inst *Instance, paneActivity map[stri
 		// the merge logic which would restore deleted instances from disk.
 		if rqp.storage != nil {
 			if err := rqp.storage.UpdateInstanceLastAddedToQueue(inst.Title, inst.LastAddedToQueue); err != nil {
-				log.ErrorLog.Printf("[ReviewQueue] Session '%s': Failed to persist LastAddedToQueue: %v", inst.Title, err)
+				log.Error("failed to persist LastAddedToQueue", "session", inst.Title, "err", err)
 			}
 		}
 
 		if !isUpdate {
-			log.InfoLog.Printf("[ReviewQueue] Session '%s': Successfully added to queue - %s (priority: %s, context: %s)",
-				inst.Title, reason.String(), priority.String(), context)
+			log.Info("successfully added to queue", "session", inst.Title, "reason", reason.String(), "priority", priority.String(), "context", context)
 		}
 	} else {
 		rqp.queue.Remove(inst.Title)
@@ -901,8 +890,7 @@ func (rqp *ReviewQueuePoller) UpdateConfig(config ReviewQueuePollerConfig) {
 	rqp.mu.Lock()
 	defer rqp.mu.Unlock()
 	rqp.config = config
-	log.InfoLog.Printf("ReviewQueuePoller config updated: poll interval=%s, idle threshold=%s",
-		config.PollInterval, config.IdleThreshold)
+	log.Info("ReviewQueuePoller config updated", "poll_interval", config.PollInterval, "idle_threshold", config.IdleThreshold)
 }
 
 // GetConfig returns the current configuration.
