@@ -728,10 +728,11 @@ func makeStaleInstance(rqp *ReviewQueuePoller, title string) *Instance {
 	inst.UpdatedAt = inst.CreatedAt
 
 	// Pre-warm content cache so getContent returns without calling inst.Preview() (tmux).
-	rqp.cacheMu.Lock()
-	rqp.cachedContent[title] = ""
-	rqp.lastPreviewTime[title] = time.Now() // within previewCacheTTL
-	rqp.cacheMu.Unlock()
+	cp := rqp.contentProvider.(*pollerContentProvider)
+	cp.cacheMu.Lock()
+	cp.cachedContent[title] = ""
+	cp.lastPreviewTime[title] = time.Now() // within previewCacheTTL
+	cp.cacheMu.Unlock()
 
 	return inst
 }
