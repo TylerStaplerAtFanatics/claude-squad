@@ -195,6 +195,7 @@ function HomeContent() {
       openOmnibar();
     } else if (duplicateId) {
       router.replace("/", { scroll: false });
+      // analytics-exempt
       getSession(duplicateId).then((session) => {
         openOmnibar(session?.path);
       }).catch(() => {
@@ -221,11 +222,13 @@ function HomeContent() {
       closeSession();
       await new Promise(resolve => setTimeout(resolve, 100));
     }
+    track({ name: "session_deleted", category: "user_action" });
     await deleteSession(sessionId);
   };
 
   // Handle new workspace on same project
   const handleNewWorkspaceSession = (sessionId: string) => {
+    // analytics-exempt
     getSession(sessionId).then((session) => {
       openOmnibar(session?.path);
     }).catch(() => {
@@ -243,13 +246,15 @@ function HomeContent() {
 
   const handleUpdateTags = async (sessionId: string, tags: string[]) => {
     if (tags.length > 0) {
+      track({ name: "session_tags_updated", category: "user_action" });
       await updateSession(sessionId, { tags });
     }
   };
 
   const handleSetRateLimitEnabled = useCallback(async (sessionId: string, enabled: boolean): Promise<void> => {
+    track({ name: "session_rate_limit_updated", category: "user_action" });
     await updateSession(sessionId, { rateLimitEnabled: enabled });
-  }, [updateSession]);
+  }, [updateSession, track]);
 
   const handleRunOneShot = useCallback(async (sessionId: string): Promise<void> => {
     await runOneShot(sessionId, "Create a pull request for the changes in this session.", 0);
@@ -260,18 +265,20 @@ function HomeContent() {
   }, []);
 
   const handleDirectResume = useCallback((session: Session) => {
+    track({ name: "session_resumed", category: "user_action" });
     resumeSession(session.id, { title: session.title, tags: [...(session.tags || [])] });
-  }, [resumeSession]);
+  }, [resumeSession, track]);
 
   const handleResumeConfirm = useCallback(async (updates: { title: string; tags: string[] }) => {
     if (!resumeTarget) return;
     try {
+      track({ name: "session_resumed", category: "user_action" });
       await resumeSession(resumeTarget.id, updates);
       setResumeTarget(null);
     } catch {
       // resumeSession dispatches to Redux error state; modal stays open for retry
     }
-  }, [resumeTarget, resumeSession]);
+  }, [resumeTarget, resumeSession, track]);
 
   const handleResumeCancel = useCallback(() => {
     setResumeTarget(null);
@@ -319,7 +326,12 @@ function HomeContent() {
         closeSession();
       }
     },
-    "R": () => !loading && listSessions(),
+    "R": () => {
+      if (!loading) {
+        // analytics-exempt
+        listSessions();
+      }
+    },
     // j/k navigation (only when no modal is open)
     "j": () => {
       if (deleteConfirmTarget || resumeTarget) return;
@@ -342,6 +354,7 @@ function HomeContent() {
     // p/r/d act on the open session
     "p": () => {
       if (selectedSession && !deleteConfirmTarget) {
+        track({ name: "session_paused", category: "user_action" });
         pauseSession(selectedSession.id);
       }
     },
