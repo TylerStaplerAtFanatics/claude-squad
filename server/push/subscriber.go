@@ -35,7 +35,6 @@ func StartDeliverySubscriber(ctx context.Context, bus *events.EventBus, notifier
 			select {
 			case event, ok := <-ch:
 				if !ok {
-					log.InfoLog.Printf("[DeliverySubscriber] event channel closed, stopping")
 					return
 				}
 				if event == nil {
@@ -59,7 +58,6 @@ func StartDeliverySubscriber(ctx context.Context, bus *events.EventBus, notifier
 				fanout(ctx, notifiers, dn)
 
 			case <-ctx.Done():
-				log.InfoLog.Printf("[DeliverySubscriber] context cancelled, stopping")
 				return
 			}
 		}

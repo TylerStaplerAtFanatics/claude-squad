@@ -1204,9 +1204,6 @@ func (s *SessionService) StreamTerminal(
 				case <-streamCtx.Done():
 					return
 				case ptyPaused = <-pauseCh:
-					if !ptyPaused {
-						log.InfoLog.Printf("[FlowControl] PTY reading RESUMED for session %s", initialMsg.SessionId)
-					}
 				}
 				continue
 			}
@@ -1216,9 +1213,6 @@ func (s *SessionService) StreamTerminal(
 				return
 			case paused := <-pauseCh:
 				ptyPaused = paused
-				if paused {
-					log.InfoLog.Printf("[FlowControl] PTY reading PAUSED for session %s", initialMsg.SessionId)
-				}
 			default:
 
 				n, readErr := ptyFile.Read(buf)
@@ -1356,15 +1350,12 @@ func (s *SessionService) StreamTerminal(
 					} else {
 						// Also resize terminal state to match
 						terminalState.Resize(rows, cols)
-						log.InfoLog.Printf("Resized terminal state to %dx%d for session %s", cols, rows, msg.SessionId)
 					}
 
 				case *sessionv1.TerminalData_FlowControl:
 					// Handle flow control signals from client
 					// Reference: https://xtermjs.org/docs/guides/flowcontrol/
 					if data.FlowControl.Paused {
-						log.InfoLog.Printf("[FlowControl] Client requested PAUSE (watermark: %d bytes) for session %s",
-							data.FlowControl.Watermark, msg.SessionId)
 						// Signal PTY reading goroutine to pause
 						select {
 						case pauseCh <- true:
@@ -1372,8 +1363,6 @@ func (s *SessionService) StreamTerminal(
 							// Channel already has pause signal, skip
 						}
 					} else {
-						log.InfoLog.Printf("[FlowControl] Client requested RESUME (watermark: %d bytes) for session %s",
-							data.FlowControl.Watermark, msg.SessionId)
 						// Signal PTY reading goroutine to resume
 						select {
 						case pauseCh <- false:

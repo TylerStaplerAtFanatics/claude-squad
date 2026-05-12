@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -708,6 +709,58 @@ func TestReviewQueuePoller_AcknowledgmentSnooze_ConditionLogic(t *testing.T) {
 			inst := makeAcknowledgedInstance("test")
 			if !inst.IsAcknowledgedAfterOutput() {
 				t.Error("acknowledged session should report IsAcknowledgedAfterOutput=true")
+			}
+		})
+	}
+}
+
+// makeStaleInstance creates a minimal Instance that will reach the staleness-check
+// path in checkSession without calling tmux or git. The content cache is pre-warmed
+// so getContent returns immediately without spawning a subprocess.
+func makeStaleInstance(rqp *ReviewQueuePoller, title string) *Instance {
+	inst := &Instance{
+		Title:  title,
+		Status: Running,
+	}
+	inst.started = true
+	// CreatedAt well in the past → GetTimeSinceLastMeaningfulOutput() > StalenessThreshold
+	inst.CreatedAt = time.Now().Add(-10 * time.Minute)
+	inst.UpdatedAt = inst.CreatedAt
+
+	// Pre-warm content cache so getContent returns without calling inst.Preview() (tmux).
+	rqp.cacheMu.Lock()
+	rqp.cachedContent[title] = ""
+	rqp.lastPreviewTime[title] = time.Now() // within previewCacheTTL
+	rqp.cacheMu.Unlock()
+
+	return inst
+}
+
+// BenchmarkCheckSessionsConcurrent exercises the concurrent hot path of checkSessions
+// with N stale sessions. It is the regression gate for hot-path log-mutex contention:
+// if InfoLog.Printf calls are re-added to the staleness section of checkSession, the
+// concurrent goroutines will serialise on the log mutex and ns/op will increase sharply.
+//
+// Run with: go test -bench=BenchmarkCheckSessionsConcurrent -benchmem ./session/
+func BenchmarkCheckSessionsConcurrent(b *testing.B) {
+	for _, n := range []int{1, 5, 10, 20} {
+		b.Run(fmt.Sprintf("sessions-%d", n), func(b *testing.B) {
+			queue := NewReviewQueue()
+			statusMgr := NewInstanceStatusManager()
+			cfg := DefaultReviewQueuePollerConfig()
+			cfg.StalenessThreshold = 1 * time.Minute // ensure all instances are stale
+			rqp := NewReviewQueuePollerWithConfig(queue, statusMgr, nil, cfg)
+
+			instances := make([]*Instance, n)
+			for i := 0; i < n; i++ {
+				instances[i] = makeStaleInstance(rqp, fmt.Sprintf("bench-session-%d", i))
+			}
+			rqp.SetInstances(instances)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				rqp.checkSessions()
 			}
 		})
 	}

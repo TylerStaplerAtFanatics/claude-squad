@@ -173,7 +173,6 @@ func (h *TerminalWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *htt
 					}
 
 				case websocket.CloseMessage:
-					log.InfoLog.Printf("WebSocket close message received for session '%s'", sessionID)
 					done <- struct{}{}
 					return
 				}

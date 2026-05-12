@@ -155,11 +155,7 @@ func (rs *ResponseStream) streamLoop() {
 			if err != nil {
 				if err == io.EOF {
 					// PTY closed - the tmux session's program has exited
-					log.InfoLog.Printf("Session '%s': PTY reached EOF - program exited", rs.sessionName)
 					log.ForSession(rs.sessionName).Info("Session program exited (PTY EOF)")
-					if len(rs.exitTail) > 0 {
-						log.InfoLog.Printf("Session '%s': last output before exit:\n%s", rs.sessionName, string(rs.exitTail))
-					}
 					rs.closeAllSubscribers()
 					rs.mu.Lock()
 					rs.started = false
@@ -180,11 +176,7 @@ func (rs *ResponseStream) streamLoop() {
 					strings.Contains(errMsg, "bad file descriptor") ||
 					strings.Contains(errMsg, "input/output error") {
 					// PTY has been closed - the tmux session's program has exited
-					log.InfoLog.Printf("Session '%s': PTY closed (%v) - program exited", rs.sessionName, err)
 					log.ForSession(rs.sessionName).Info("Session program exited (PTY closed: %v)", err)
-					if len(rs.exitTail) > 0 {
-						log.InfoLog.Printf("Session '%s': last output before exit:\n%s", rs.sessionName, string(rs.exitTail))
-					}
 					rs.closeAllSubscribers()
 					rs.mu.Lock()
 					rs.started = false

@@ -669,8 +669,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 						if exitBytes, merr := proto.Marshal(exitData); merr == nil {
 							_ = stream.WriteMessage(websocket.BinaryMessage, protocol.CreateEnvelope(0, exitBytes))
 						}
-						log.InfoLog.Printf("[streamViaControlMode] Sent %d bytes of exit content to client for session '%s'",
-							len(exitContent), sessionID)
 					}
 					return
 				}
@@ -800,7 +798,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 				_, message, err := stream.conn.ReadMessage()
 				if err != nil {
 					if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-						log.InfoLog.Printf("[streamViaControlMode] WebSocket closed for session '%s'", sessionID)
 						errChan <- nil
 					} else {
 						log.ErrorLog.Printf("[streamViaControlMode] WebSocket read error for session '%s': %v", sessionID, err)
@@ -1140,7 +1137,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 				stream.conn.SetReadDeadline(time.Time{}) //nolint:errcheck
 				if err != nil {
 					if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-						log.InfoLog.Printf("[streamViaTmuxCapture] WebSocket closed for session '%s'", sessionID)
 						errChan <- nil
 						return
 					}
@@ -1157,7 +1153,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 
 				// Check for EndStream
 				if envelope.Flags&protocol.EndStreamFlag != 0 {
-					log.InfoLog.Printf("[streamViaTmuxCapture] Received EndStream for session '%s'", sessionID)
 					errChan <- nil
 					return
 				}
@@ -1196,8 +1191,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 				if resize := incomingData.GetResize(); resize != nil {
 					targetCols := int(resize.Cols)
 					targetRows := int(resize.Rows)
-					log.InfoLog.Printf("[streamViaTmuxCapture] Resize request for session '%s': %dx%d",
-						sessionID, targetCols, targetRows)
+					log.ForSession(sessionID).Debug("resize request", "cols", targetCols, "rows", targetRows)
 
 					// Use different resize methods based on session type
 					if instance.IsManaged {
@@ -1207,9 +1201,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 							log.WarningLog.Printf("[streamViaTmuxCapture] Failed to resize managed session '%s': %v",
 								sessionID, err)
 						} else {
-							log.InfoLog.Printf("[streamViaTmuxCapture] Successfully resized managed session '%s' to %dx%d",
-								sessionID, targetCols, targetRows)
-
 							// PHASE 1: Verify resize actually succeeded
 							actualCols, actualRows, verifyErr := instance.GetPaneDimensions()
 							if verifyErr != nil {
@@ -1219,8 +1210,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 								log.WarningLog.Printf("[streamViaTmuxCapture] DIMENSION MISMATCH after resize '%s': target=%dx%d, actual=%dx%d",
 									sessionID, targetCols, targetRows, actualCols, actualRows)
 							} else {
-								log.InfoLog.Printf("[streamViaTmuxCapture] Resize verified for '%s': %dx%d",
-									sessionID, actualCols, actualRows)
+								log.ForSession(sessionID).Debug("resize verified", "cols", actualCols, "rows", actualRows)
 							}
 						}
 					} else {
@@ -1254,28 +1244,15 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 							log.WarningLog.Printf("[streamViaTmuxCapture] EXTERNAL DIMENSION MISMATCH for '%s': target=%dx%d, actual=%dx%d (external terminal may control size)",
 								sessionID, targetCols, targetRows, actualCols, actualRows)
 						} else {
-							log.InfoLog.Printf("[streamViaTmuxCapture] External resize verified for '%s': %dx%d",
-								sessionID, actualCols, actualRows)
+							log.ForSession(sessionID).Debug("external resize verified", "cols", actualCols, "rows", actualRows)
 						}
 					}
 				}
 
 				// Handle current pane request - capture current tmux content
 				if currentPaneReq := incomingData.GetCurrentPaneRequest(); currentPaneReq != nil {
-					log.InfoLog.Printf("[streamViaTmuxCapture] Current pane request for session '%s'",
-						sessionID)
-
-					// Debug: Log the target dimensions to verify they're being received
-					if currentPaneReq.TargetCols != nil {
-						log.InfoLog.Printf("[streamViaTmuxCapture] TargetCols received: %d", *currentPaneReq.TargetCols)
-					} else {
-						log.InfoLog.Printf("[streamViaTmuxCapture] TargetCols is nil")
-					}
-					if currentPaneReq.TargetRows != nil {
-						log.InfoLog.Printf("[streamViaTmuxCapture] TargetRows received: %d", *currentPaneReq.TargetRows)
-					} else {
-						log.InfoLog.Printf("[streamViaTmuxCapture] TargetRows is nil")
-					}
+					log.ForSession(sessionID).Debug("current pane request",
+						"targetCols", currentPaneReq.TargetCols, "targetRows", currentPaneReq.TargetRows)
 
 					// CRITICAL: Resize tmux BEFORE capturing content to prevent wrapping issues
 					// If target dimensions are provided, resize the tmux pane first
@@ -1291,15 +1268,14 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 
 						// Only resize if dimensions don't match
 						if dimensionErr != nil || currentCols != targetCols || currentRows != targetRows {
-							log.InfoLog.Printf("[streamViaTmuxCapture] Resizing tmux from %dx%d to target %dx%d before capture",
-								currentCols, currentRows, targetCols, targetRows)
+							log.ForSession(sessionID).Debug("resizing tmux before capture",
+								"from", fmt.Sprintf("%dx%d", currentCols, currentRows),
+								"to", fmt.Sprintf("%dx%d", targetCols, targetRows))
 
 							if resizeErr := instance.ResizePTY(targetCols, targetRows); resizeErr != nil {
 								log.ErrorLog.Printf("[streamViaTmuxCapture] Failed to resize tmux before capture: %v", resizeErr)
 								// Continue anyway - better to send content with wrong dimensions than no content
 							} else {
-								log.InfoLog.Printf("[streamViaTmuxCapture] Successfully resized tmux to %dx%d before capture", targetCols, targetRows)
-
 								// WORKAROUND: Send multiple SIGWINCH signals to help Claude Code detect new dimensions
 								// Claude Code has a bug where it sometimes renders wider than terminal dimensions.
 								// Sending multiple refresh signals gives it multiple chances to correct itself.
@@ -1307,8 +1283,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 								for i := 0; i < 3; i++ {
 									if refreshErr := instance.RefreshTmuxClient(); refreshErr != nil {
 										log.WarningLog.Printf("[streamViaTmuxCapture] Failed to send refresh signal %d: %v", i+1, refreshErr)
-									} else {
-										log.InfoLog.Printf("[streamViaTmuxCapture] Sent refresh signal %d/3", i+1)
 									}
 									// Small delay between signals to allow processing
 									if i < 2 {
@@ -1321,7 +1295,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 								// and regenerate cursor positions. Increased from 150ms to 250ms
 								// to ensure even complex interactive UIs have time to complete redraw.
 								time.Sleep(250 * time.Millisecond)
-								log.InfoLog.Printf("[streamViaTmuxCapture] Waited 250ms for process redraw after resize and multiple refresh signals")
 
 								// PHASE 1: Verify resize succeeded before capture
 								verifiedCols, verifiedRows, verifyErr := instance.GetPaneDimensions()
@@ -1332,11 +1305,9 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 										targetCols, targetRows, verifiedCols, verifiedRows)
 									// Log this as critical since we're about to capture with wrong dimensions
 								} else {
-									log.InfoLog.Printf("[streamViaTmuxCapture] Resize verification successful: %dx%d matches target", verifiedCols, verifiedRows)
+									log.ForSession(sessionID).Debug("resize before capture verified", "cols", verifiedCols, "rows", verifiedRows)
 								}
 							}
-						} else {
-							log.InfoLog.Printf("[streamViaTmuxCapture] Tmux already at target dimensions %dx%d, skipping resize", targetCols, targetRows)
 						}
 					}
 
@@ -1354,18 +1325,14 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 					if finalErr != nil {
 						log.WarningLog.Printf("[streamViaTmuxCapture] Failed to get final dimensions after capture: %v", finalErr)
 					} else {
+						log.ForSession(sessionID).Debug("captured pane content", "cols", finalCols, "rows", finalRows)
 						if currentPaneReq.TargetCols != nil && currentPaneReq.TargetRows != nil {
 							expectedCols := int(*currentPaneReq.TargetCols)
 							expectedRows := int(*currentPaneReq.TargetRows)
-							log.InfoLog.Printf("[streamViaTmuxCapture] Captured content at dimensions: %dx%d (target was %dx%d)",
-								finalCols, finalRows, expectedCols, expectedRows)
 							if finalCols != expectedCols || finalRows != expectedRows {
 								log.WarningLog.Printf("[streamViaTmuxCapture] FINAL DIMENSION MISMATCH: captured=%dx%d, client expects=%dx%d",
 									finalCols, finalRows, expectedCols, expectedRows)
 							}
-						} else {
-							log.InfoLog.Printf("[streamViaTmuxCapture] Captured content at dimensions: %dx%d (no target specified)",
-								finalCols, finalRows)
 						}
 
 						// WORKAROUND: Detect if Claude Code is rendering wider than terminal dimensions
@@ -1383,9 +1350,6 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 									"Report bug to: https://github.com/anthropics/claude-code/issues",
 								actualWidth, finalCols, actualWidth-finalCols,
 							)
-						} else {
-							log.InfoLog.Printf("[streamViaTmuxCapture] Content width validation: %d columns (within terminal width of %d)",
-								actualWidth, finalCols)
 						}
 					}
 
@@ -1410,8 +1374,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 						continue
 					}
 
-					log.InfoLog.Printf("[streamViaTmuxCapture] Sent pane content (%d bytes) for session '%s'",
-						len(content), sessionID)
+					log.ForSession(sessionID).Debug("sent pane content", "bytes", len(content))
 				}
 			}
 		}

@@ -320,15 +320,12 @@ func (ce *CommandExecutor) executeCommand(cmd *Command, responseCh <-chan Respon
 					result.StatusChanges = append(result.StatusChanges, change)
 					lastStatus = status
 
-					log.InfoLog.Printf("Command '%s' status changed to %s", cmd.ID, status.String())
-
 					// Check if terminal status reached
 					if ce.isTerminalStatus(status) {
 						result.Success = (status == detection.StatusReady)
 						result.EndTime = time.Now()
 						result.Output = string(outputBuffer)
 						result.FinalStatus = status
-						log.InfoLog.Printf("Command '%s' reached terminal status: %s", cmd.ID, status.String())
 						return result
 					}
 				}

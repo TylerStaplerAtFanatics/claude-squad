@@ -180,7 +180,6 @@ func MonitorGoroutines(ctx context.Context, interval time.Duration) {
 			return
 		case <-ticker.C:
 			count := runtime.NumGoroutine()
-			log.InfoLog.Printf("Active goroutines: %d", count)
 
 			// Alert on goroutine leak
 			if count > 100 {

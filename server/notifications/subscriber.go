@@ -74,7 +74,6 @@ func StartSubscriberWithInterval(ctx context.Context, bus *events.EventBus, stor
 			select {
 			case event, ok := <-ch:
 				if !ok {
-					log.InfoLog.Printf("[NotificationSubscriber] Event channel closed, stopping")
 					return
 				}
 				if event == nil || event.Type != events.EventNotification {
@@ -102,7 +101,6 @@ func StartSubscriberWithInterval(ctx context.Context, bus *events.EventBus, stor
 				mu.Unlock()
 
 			case <-ctx.Done():
-				log.InfoLog.Printf("[NotificationSubscriber] Context canceled, stopping")
 				// Drain any events already in the channel so the deferred flush captures them.
 				mu.Lock()
 				for {

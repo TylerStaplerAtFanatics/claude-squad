@@ -1099,7 +1099,6 @@ func (t *TmuxSession) Attach() (chan struct{}, error) {
 			select {
 			case <-timeoutCh:
 			default:
-				log.InfoLog.Printf("nuked first stdin: %s", buf[:nr])
 				continue
 			}
 

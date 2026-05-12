@@ -373,7 +373,6 @@ func (r *TmuxServerRegistry) reconnectLoop() {
 		case <-r.ctx.Done():
 			return
 		default:
-			log.InfoLog.Printf("[registry] control-mode exited; reconnecting in %v", backoff)
 			select {
 			case <-r.ctx.Done():
 				return

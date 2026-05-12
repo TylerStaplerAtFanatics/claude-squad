@@ -119,7 +119,6 @@ func RunDaemon(cfg *config.Config) error {
 						log.ErrorLog.Printf("failed to refresh state and detect new sessions: %v", err)
 					}
 				case <-stopCh:
-					log.InfoLog.Printf("stopping state refresh")
 					return
 				}
 			}
@@ -244,7 +243,6 @@ func watchForNewSessions(
 				}
 				lastProcessTime = time.Now()
 
-				log.InfoLog.Printf("detected change in file %s, checking for new sessions", event.Name)
 				if err := detectAndAddNewSessions(instances, storage); err != nil {
 					log.ErrorLog.Printf("failed to detect new sessions: %v", err)
 				}
@@ -281,7 +279,6 @@ func watchForNewSessions(
 			}
 
 		case <-stopCh:
-			log.InfoLog.Printf("stopping session detection")
 			return
 		}
 	}

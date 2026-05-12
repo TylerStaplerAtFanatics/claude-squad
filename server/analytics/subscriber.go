@@ -27,11 +27,11 @@ func StartAnalyticsSubscriber(ctx context.Context, bus *events.EventBus, provide
 
 	go func() {
 		log.InfoLog.Printf("[analytics/subscriber] Started listening for session events")
+		defer log.InfoLog.Printf("[analytics/subscriber] Stopped")
 		for {
 			select {
 			case event, ok := <-ch:
 				if !ok {
-					log.InfoLog.Printf("[analytics/subscriber] Event channel closed, stopping")
 					return
 				}
 				if event == nil {
@@ -40,7 +40,6 @@ func StartAnalyticsSubscriber(ctx context.Context, bus *events.EventBus, provide
 				recordFromEvent(ctx, provider, event)
 
 			case <-ctx.Done():
-				log.InfoLog.Printf("[analytics/subscriber] Context cancelled, stopping")
 				return
 			}
 		}

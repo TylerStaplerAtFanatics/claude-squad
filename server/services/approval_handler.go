@@ -480,9 +480,7 @@ func StartExpirationCleanup(ctx context.Context, store *ApprovalStore) {
 		for {
 			select {
 			case <-ticker.C:
-				if expired := store.CleanupExpired(); len(expired) > 0 {
-					log.InfoLog.Printf("[ApprovalStore] Cleaned up %d expired approvals: %v", len(expired), expired)
-				}
+				store.CleanupExpired()
 			case <-ctx.Done():
 				return
 			}
