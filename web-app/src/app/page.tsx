@@ -195,7 +195,7 @@ function HomeContent() {
       openOmnibar();
     } else if (duplicateId) {
       router.replace("/", { scroll: false });
-      // analytics-exempt
+      track({ name: "session_duplicate_initiated", category: "user_action" });
       getSession(duplicateId).then((session) => {
         openOmnibar(session?.path);
       }).catch(() => {
@@ -206,7 +206,7 @@ function HomeContent() {
       // Pass path@branch so the PathWithBranch detector pre-fills both fields
       openOmnibar(worktreeBranch ? `${worktreePath}@${worktreeBranch}` : worktreePath);
     }
-  }, [searchParams, getSession, openOmnibar, router]);
+  }, [searchParams, getSession, openOmnibar, router, track]);
 
   // Close session and clear URL query parameter
   const closeSession = () => {
@@ -228,7 +228,7 @@ function HomeContent() {
 
   // Handle new workspace on same project
   const handleNewWorkspaceSession = (sessionId: string) => {
-    // analytics-exempt
+    track({ name: "session_new_workspace_initiated", category: "user_action" });
     getSession(sessionId).then((session) => {
       openOmnibar(session?.path);
     }).catch(() => {
@@ -328,7 +328,7 @@ function HomeContent() {
     },
     "R": () => {
       if (!loading) {
-        // analytics-exempt
+        track({ name: "sessions_refreshed", category: "user_action" });
         listSessions();
       }
     },
