@@ -76,6 +76,26 @@ var rePositionCodes = regexp.MustCompile(
 		`|\x1b\[[su]`, // CSI save/restore cursor: ESC[s, ESC[u
 )
 
+// Terminal escape sequence building blocks used when prefixing snapshot content.
+const (
+	// ansiDECSTR issues a Soft Terminal Reset (DECSTR). Resets scroll region,
+	// origin mode (DECOM), line-feed/newline mode (LNM), and other modal state
+	// that TUI applications may have set via the live PTY stream.
+	ansiDECSTR = "\x1b[!p"
+	// ansiEraseScreen erases the visible screen (ED2). Does not touch scrollback.
+	ansiEraseScreen = "\x1b[2J"
+	// ansiCursorHome moves the cursor to the top-left (CUP 1;1). With DECOM off
+	// (guaranteed by a preceding DECSTR) this is always the absolute screen origin.
+	ansiCursorHome = "\x1b[H"
+	// ansiSnapshotPrefix is prepended to every full-screen snapshot before it is
+	// sent to the client. The sequence order matters:
+	//   1. DECSTR — reset terminal modes so subsequent sequences are interpreted
+	//               in a known default state (scroll region = full screen, etc.)
+	//   2. ED2    — erase the now-full screen
+	//   3. CUP    — position cursor at the absolute origin before writing content
+	ansiSnapshotPrefix = ansiDECSTR + ansiEraseScreen + ansiCursorHome
+)
+
 // sanitizeInitialContent removes cursor-positioning and screen-control escape sequences
 // from tmux capture-pane output before it is sent as the initial terminal snapshot.
 // Without this, the captured content's absolute cursor positions conflict with the
@@ -83,6 +103,21 @@ var rePositionCodes = regexp.MustCompile(
 // New output (streaming after initial load) is unaffected and renders correctly.
 func sanitizeInitialContent(content string) string {
 	return rePositionCodes.ReplaceAllString(content, "")
+}
+
+// prepareSnapshotContent sanitizes and normalizes capture-pane output for use as a
+// full-screen snapshot in xterm.js.
+//
+// capture-pane -p separates rows with bare \n (LF). In xterm.js, a bare LF only
+// moves the cursor DOWN — it does not return to column 0 — unless convertEol/LNM
+// is enabled. Since LNM state is uncertain (DECSTR in ansiSnapshotPrefix resets it
+// to OFF), we normalize every \n to \r\n so rows always start at column 0
+// regardless of terminal mode state.
+func prepareSnapshotContent(content string) string {
+	sanitized := sanitizeInitialContent(content)
+	// Avoid creating \r\r\n from any pre-existing \r\n pairs.
+	sanitized = strings.ReplaceAll(sanitized, "\r\n", "\n")
+	return strings.ReplaceAll(sanitized, "\n", "\r\n")
 }
 
 // sessionSnapshot caches terminal capture-pane output per session.
@@ -541,8 +576,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 		// session. Replaying these in a fresh xterm.js terminal causes garbled output
 		// because the positions assume a prior terminal state that no longer exists.
 		// Colors (SGR) are preserved; only context-dependent positioning is removed.
-		clearAndHome := "\x1b[H"
-		fullContent := clearAndHome + sanitizeInitialContent(initialContent)
+		fullContent := ansiSnapshotPrefix + prepareSnapshotContent(initialContent)
 
 		terminalData := &sessionv1.TerminalData{
 			SessionId: sessionID,
@@ -720,6 +754,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 				if r.cols == last.cols && r.rows == last.rows && time.Since(last.t) < 50*time.Millisecond {
 					continue
 				}
+
 				if err := instance.SetWindowSize(r.cols, r.rows); err != nil {
 					log.Error("[streamViaControlMode] failed to resize", "err", err)
 					continue
@@ -766,7 +801,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 						SessionId: sessionID,
 						Data: &sessionv1.TerminalData_Output{
 							Output: &sessionv1.TerminalOutput{
-								Data: []byte("\x1b[H" + sanitizeInitialContent(snapContent)),
+								Data: []byte(ansiSnapshotPrefix + prepareSnapshotContent(snapContent)),
 							},
 						},
 					}
@@ -869,61 +904,54 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 					}
 				}
 
-				// Handle ScrollbackRequest — client requesting historical scrollback data (R2.4).
-				// FromSequence is the oldest sequence the client already has; we return
-				// the `limit` entries immediately BEFORE that sequence (older content).
-				// When FromSequence == 0, return the most recent lines instead.
+				// Handle ScrollbackRequest — client requesting historical terminal scrollback.
+				// FromSequence is treated as a line offset from the end of tmux's history:
+				//   offset=0   → capture-pane -S -(limit)   -E -1     (most recent history)
+				//   offset=500 → capture-pane -S -(500+limit) -E -501 (next page back)
+				// Uses -J to join tmux soft-wrapped lines, making content width-agnostic so
+				// it re-wraps correctly in xterm.js after a terminal resize.
 				if scrollbackReq := incomingData.GetScrollbackRequest(); scrollbackReq != nil {
-					if h.scrollbackManager != nil {
-						const maxScrollbackLimit = 1000
-						limit := int(scrollbackReq.Limit)
-						if limit <= 0 || limit > maxScrollbackLimit {
-							limit = maxScrollbackLimit
-						}
+					const maxScrollbackLimit = 1000
+					limit := int(scrollbackReq.Limit)
+					if limit <= 0 || limit > maxScrollbackLimit {
+						limit = maxScrollbackLimit
+					}
+					offset := scrollbackReq.FromSequence
 
-						var entries []scrollback.ScrollbackEntry
-						var sbErr error
-						if scrollbackReq.FromSequence == 0 {
-							// Client wants the most recent history.
-							var sbData []byte
-							sbData, sbErr = h.scrollbackManager.GetRecentLines(sessionID, limit)
-							if sbErr == nil && len(sbData) > 0 {
-								entries = []scrollback.ScrollbackEntry{{Data: sbData}}
-							}
-						} else {
-							// Client wants content older than FromSequence.
-							entries, sbErr = h.scrollbackManager.GetScrollbackBefore(sessionID, scrollbackReq.FromSequence, limit)
+					startLine := fmt.Sprintf("-%d", offset+uint64(limit))
+					endLine := fmt.Sprintf("-%d", offset+1)
+					content, sbErr := instance.GetScrollbackHistory(startLine, endLine)
+					if sbErr != nil {
+						log.Warn("[streamViaControlMode] ScrollbackRequest tmux capture failed", "session", sessionID, "err", sbErr)
+					} else {
+						trimmed := strings.TrimRight(content, "\n")
+						linesReturned := 0
+						if trimmed != "" {
+							linesReturned = strings.Count(trimmed, "\n") + 1
 						}
+						hasMore := linesReturned >= limit
+						oldestSeq := offset + uint64(linesReturned)
 
-						if sbErr != nil {
-							log.Warn("[streamViaControlMode] ScrollbackRequest failed", "session", sessionID, "err", sbErr)
-						} else {
-							sbStats, _ := h.scrollbackManager.GetStats(sessionID)
-							chunks := make([]*sessionv1.ScrollbackChunk, 0, len(entries))
-							for _, e := range entries {
-								chunks = append(chunks, &sessionv1.ScrollbackChunk{
-									Data:     e.Data,
-									Sequence: e.Sequence,
-								})
-							}
-							hasMore := scrollbackReq.Limit > 0 && len(entries) == limit
-							sbResp := &sessionv1.TerminalData{
-								SessionId: sessionID,
-								Data: &sessionv1.TerminalData_ScrollbackResponse{
-									ScrollbackResponse: &sessionv1.ScrollbackResponse{
-										Chunks:         chunks,
-										HasMore:        hasMore,
-										TotalLines:     uint64(sbStats.MemoryLines),
-										OldestSequence: sbStats.OldestSequence,
-										NewestSequence: sbStats.NewestSequence,
-									},
+						var chunks []*sessionv1.ScrollbackChunk
+						if linesReturned > 0 {
+							chunks = []*sessionv1.ScrollbackChunk{{Data: []byte(content)}}
+						}
+						sbResp := &sessionv1.TerminalData{
+							SessionId: sessionID,
+							Data: &sessionv1.TerminalData_ScrollbackResponse{
+								ScrollbackResponse: &sessionv1.ScrollbackResponse{
+									Chunks:         chunks,
+									HasMore:        hasMore,
+									TotalLines:     uint64(linesReturned),
+									OldestSequence: oldestSeq,
+									NewestSequence: offset,
 								},
-							}
-							if respBytes, merr := proto.Marshal(sbResp); merr != nil {
-								log.Error("[streamViaControlMode] failed to marshal scrollback response", "session", sessionID, "err", merr)
-							} else {
-								_ = stream.WriteMessage(websocket.BinaryMessage, protocol.CreateEnvelope(0, respBytes))
-							}
+							},
+						}
+						if respBytes, merr := proto.Marshal(sbResp); merr != nil {
+							log.Error("[streamViaControlMode] failed to marshal scrollback response", "session", sessionID, "err", merr)
+						} else {
+							_ = stream.WriteMessage(websocket.BinaryMessage, protocol.CreateEnvelope(0, respBytes))
 						}
 					}
 				}
@@ -1008,7 +1036,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 	// Send initial content to client
 	// Prepend clear-screen and cursor-home escape sequences since this is a full snapshot
 	// ESC[2J = Clear entire screen, ESC[H = Move cursor to home (1,1)
-	const clearAndHome = "\x1b[H"
+	const clearAndHome = ansiSnapshotPrefix
 	// For managed sessions that just had a forced redraw, capture fresh content directly.
 	// For external sessions, fall back to the streamer's cached snapshot.
 	var initialContent string
@@ -1023,7 +1051,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaTmuxCapturePane(stream *connectWeb
 		initialContent = streamer.GetContent()
 	}
 	if initialContent != "" {
-		fullContent := clearAndHome + sanitizeInitialContent(initialContent)
+		fullContent := clearAndHome + prepareSnapshotContent(initialContent)
 		terminalData := &sessionv1.TerminalData{
 			SessionId: sessionID,
 			Data: &sessionv1.TerminalData_Output{
