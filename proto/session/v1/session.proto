@@ -433,6 +433,11 @@ message WatchSessionsRequest {
 
   // Optional: Only watch sessions with this status.
   optional SessionStatus status_filter = 2;
+
+  // Optional: If non-zero, replay buffered events with seq > after_seq before
+  // going live. Pass the last seq received before disconnecting. Events up to
+  // one hour old are available; older events are not guaranteed to be present.
+  uint64 after_seq = 3;
 }
 
 message GetSessionDiffRequest {
