@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type { LucideIcon } from "lucide-react";
+import { Terminal, GitCompare, GitBranch, FolderOpen, ScrollText, Info } from "lucide-react";
 import dynamic from "next/dynamic";
 import { Session, InstanceType, SessionStatus, SessionType } from "@/gen/session/v1/types_pb";
 import { DiffViewer } from "./DiffViewer";
@@ -171,13 +173,13 @@ export function SessionDetailView({
     onFullscreenChange?.(isFullscreen);
   }, [isFullscreen, onFullscreenChange]);
 
-  const tabs: { id: SessionDetailTab; label: string; icon: string }[] = [
-    { id: "terminal", label: "Terminal", icon: "⌨️" },
-    { id: "diff", label: "Diff", icon: "📝" },
-    { id: "vcs", label: "VCS", icon: "🌿" },
-    { id: "files", label: "Files", icon: "📁" },
-    { id: "logs", label: "Logs", icon: "📋" },
-    { id: "info", label: "Info", icon: "ℹ️" },
+  const tabs: { id: SessionDetailTab; label: string; icon: LucideIcon }[] = [
+    { id: "terminal", label: "Terminal", icon: Terminal },
+    { id: "diff", label: "Diff", icon: GitCompare },
+    { id: "vcs", label: "VCS", icon: GitBranch },
+    { id: "files", label: "Files", icon: FolderOpen },
+    { id: "logs", label: "Logs", icon: ScrollText },
+    { id: "info", label: "Info", icon: Info },
   ];
 
   const handleTabChange = (tabId: SessionDetailTab) => {
@@ -418,19 +420,22 @@ export function SessionDetailView({
           }
         }}
       >
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            id={`tab-${tab.id}`}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            className={`${styles.tab} ${activeTab === tab.id ? styles.active : ""}`}
-            onClick={() => handleTabChange(tab.id)}
-          >
-            <span className={styles.tabIcon}>{tab.icon}</span>
-            <span className={styles.tabLabel}>{tab.label}</span>
-          </button>
-        ))}
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              id={`tab-${tab.id}`}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              className={`${styles.tab} ${activeTab === tab.id ? styles.active : ""}`}
+              onClick={() => handleTabChange(tab.id)}
+            >
+              <span className={styles.tabIcon}><Icon size={16} /></span>
+              <span className={styles.tabLabel}>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>}
 
       <div className={`${styles.content} ${isFullscreen ? styles.fullscreenContent : ""}`}>
