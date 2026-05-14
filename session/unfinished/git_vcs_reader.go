@@ -2,6 +2,8 @@ package unfinished
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -96,10 +98,30 @@ func (g *GitVCSReader) CommitMessages(worktreePath, base string, max int) ([]str
 
 func (g *GitVCSReader) DiffShortstat(worktreePath string) (DiffStat, error) {
 	exec3s := executor.MakeTimeoutExecutor(3 * time.Second)
+
+	// Tracked changes: staged new/modified/deleted files and unstaged modifications.
 	cmd := gitCmd(context.Background(), worktreePath, "diff", "--shortstat", "HEAD")
 	out, err := exec3s.CombinedOutput(cmd)
 	if err != nil {
 		return DiffStat{}, err
 	}
-	return parseDiffShortstat(strings.TrimSpace(string(out))), nil
+	d := parseDiffShortstat(strings.TrimSpace(string(out)))
+
+	// Untracked files: git diff HEAD omits them entirely, so enumerate and count lines.
+	cmd2 := gitCmd(context.Background(), worktreePath, "ls-files", "--others", "--exclude-standard")
+	out2, err := exec3s.CombinedOutput(cmd2)
+	if err != nil {
+		return DiffStat{}, err
+	}
+	for _, rel := range strings.Split(strings.TrimSpace(string(out2)), "\n") {
+		if rel == "" {
+			continue
+		}
+		d.Files++
+		data, rerr := os.ReadFile(filepath.Join(worktreePath, rel))
+		if rerr == nil {
+			d.Insertions += len(splitLines(string(data)))
+		}
+	}
+	return d, nil
 }

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tstapler/stapler-squad/session/unfinished"
@@ -194,7 +195,7 @@ func testVCSReaderContract(t *testing.T, r unfinished.VCSReader) {
 		// Most-recent commit should appear first.
 		foundFix := false
 		for _, m := range msgs {
-			if containsSubstring(m, "fix: add y") || containsSubstring(m, "add y") {
+			if strings.Contains(m, "fix: add y") || strings.Contains(m, "add y") {
 				foundFix = true
 			}
 		}
@@ -209,37 +210,55 @@ func testVCSReaderContract(t *testing.T, r unfinished.VCSReader) {
 		if err != nil {
 			t.Fatalf("DiffShortstat: %v", err)
 		}
-		if d.Files != 0 {
-			t.Errorf("expected 0 changed files on clean repo, got %d", d.Files)
+		if d.Files != 0 || d.Insertions != 0 || d.Deletions != 0 {
+			t.Errorf("expected empty DiffStat on clean repo, got %+v", d)
 		}
 	})
 
-	t.Run("DiffShortstat_detects_changes", func(t *testing.T) {
+	t.Run("DiffShortstat_counts_lines", func(t *testing.T) {
 		repo := initRepo(t)
-		if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("changed\n"), 0644); err != nil {
+		// README.md started as "hello\n" (1 line). Replace with 3 lines.
+		newContent := "line1\nline2\nline3\n"
+		if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte(newContent), 0644); err != nil {
 			t.Fatal(err)
 		}
 		d, err := r.DiffShortstat(repo)
 		if err != nil {
 			t.Fatalf("DiffShortstat: %v", err)
 		}
-		if d.Files == 0 {
-			t.Error("expected at least 1 changed file after editing README.md")
+		if d.Files != 1 {
+			t.Errorf("expected 1 changed file, got %d", d.Files)
+		}
+		// 1 old line deleted, 3 new lines inserted.
+		if d.Deletions != 1 {
+			t.Errorf("expected 1 deletion, got %d", d.Deletions)
+		}
+		if d.Insertions != 3 {
+			t.Errorf("expected 3 insertions, got %d", d.Insertions)
+		}
+	})
+
+	t.Run("DiffShortstat_new_file", func(t *testing.T) {
+		repo := initRepo(t)
+		if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("alpha\nbeta\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		d, err := r.DiffShortstat(repo)
+		if err != nil {
+			t.Fatalf("DiffShortstat: %v", err)
+		}
+		if d.Files != 1 {
+			t.Errorf("expected 1 changed file, got %d", d.Files)
+		}
+		if d.Insertions != 2 {
+			t.Errorf("expected 2 insertions for new file, got %d", d.Insertions)
+		}
+		if d.Deletions != 0 {
+			t.Errorf("expected 0 deletions for new file, got %d", d.Deletions)
 		}
 	})
 }
 
-func containsSubstring(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub ||
-		len(s) > 0 && func() bool {
-			for i := 0; i <= len(s)-len(sub); i++ {
-				if s[i:i+len(sub)] == sub {
-					return true
-				}
-			}
-			return false
-		}())
-}
 
 // TestFakeVCSReader verifies the scanner works correctly with an injected fake.
 func TestFakeVCSReader(t *testing.T) {
@@ -292,4 +311,181 @@ func (f *fakeVCSReader) CommitMessages(worktreePath, base string, max int) ([]st
 
 func (f *fakeVCSReader) DiffShortstat(worktreePath string) (unfinished.DiffStat, error) {
 	return unfinished.DiffStat{Files: f.diffStatFiles[worktreePath]}, nil
+}
+
+// ---------------------------------------------------------------------------
+// JJ tests
+// ---------------------------------------------------------------------------
+
+// initJJRepo creates a jj-backed git repo at a temp dir with one change.
+func initJJRepo(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("jj"); err != nil {
+		t.Skip("jj not installed")
+	}
+
+	raw := t.TempDir()
+	dir, err := filepath.EvalSymlinks(raw)
+	if err != nil {
+		t.Fatalf("EvalSymlinks: %v", err)
+	}
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"JJ_USER=Test User",
+			"JJ_EMAIL=test@test.com",
+		)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+	}
+
+	run("jj", "git", "init")
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	run("jj", "describe", "-m", "initial commit")
+	run("jj", "new") // move to a new empty change on top
+	return dir
+}
+
+// TestVCSReaderContractJJ runs the shared contract suite against JJVCSReader.
+func TestVCSReaderContractJJ(t *testing.T) {
+	if _, err := exec.LookPath("jj"); err != nil {
+		t.Skip("jj not installed")
+	}
+	testVCSReaderContractJJ(t, &unfinished.JJVCSReader{})
+}
+
+// testVCSReaderContractJJ is a jj-specific variant of the contract suite.
+// jj's model differs enough (no linked worktrees, change-based rather than
+// branch-based) that it gets its own focused suite.
+func testVCSReaderContractJJ(t *testing.T, r *unfinished.JJVCSReader) {
+	t.Helper()
+
+	t.Run("ListWorktrees_returns_single_entry", func(t *testing.T) {
+		repo := initJJRepo(t)
+		wts, err := r.ListWorktrees(repo)
+		if err != nil {
+			t.Fatalf("ListWorktrees: %v", err)
+		}
+		if len(wts) != 1 {
+			t.Fatalf("expected exactly 1 worktree for jj repo, got %d", len(wts))
+		}
+		if wts[0].Path != repo {
+			t.Errorf("worktree path = %q, want %q", wts[0].Path, repo)
+		}
+	})
+
+	t.Run("HasUncommitted_false_on_empty_change", func(t *testing.T) {
+		repo := initJJRepo(t)
+		// jj new creates a fresh empty change — no uncommitted files.
+		dirty, err := r.HasUncommitted(repo)
+		if err != nil {
+			t.Fatalf("HasUncommitted: %v", err)
+		}
+		if dirty {
+			t.Error("expected empty jj change to have no uncommitted files")
+		}
+	})
+
+	t.Run("HasUncommitted_true_when_file_modified", func(t *testing.T) {
+		repo := initJJRepo(t)
+		if err := os.WriteFile(filepath.Join(repo, "dirty.txt"), []byte("dirty"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		dirty, err := r.HasUncommitted(repo)
+		if err != nil {
+			t.Fatalf("HasUncommitted: %v", err)
+		}
+		if !dirty {
+			t.Error("expected dirty jj change to be detected")
+		}
+	})
+
+	t.Run("DiffShortstat_zero_on_empty_change", func(t *testing.T) {
+		repo := initJJRepo(t)
+		d, err := r.DiffShortstat(repo)
+		if err != nil {
+			t.Fatalf("DiffShortstat: %v", err)
+		}
+		if d.Files != 0 {
+			t.Errorf("expected 0 changed files on empty change, got %d", d.Files)
+		}
+	})
+
+	t.Run("DiffShortstat_detects_change", func(t *testing.T) {
+		repo := initJJRepo(t)
+		if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("alpha\nbeta\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		d, err := r.DiffShortstat(repo)
+		if err != nil {
+			t.Fatalf("DiffShortstat: %v", err)
+		}
+		if d.Files == 0 {
+			t.Error("expected at least 1 changed file")
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers — white-box tests for the go-git line-diff implementation
+// ---------------------------------------------------------------------------
+
+func TestLinesDiff(t *testing.T) {
+	cases := []struct {
+		name            string
+		old, new        string
+		wantIns, wantDel int
+	}{
+		{
+			name:    "identical",
+			old:     "a\nb\nc\n",
+			new:     "a\nb\nc\n",
+			wantIns: 0, wantDel: 0,
+		},
+		{
+			name:    "one line replaced",
+			old:     "hello\n",
+			new:     "world\n",
+			wantIns: 1, wantDel: 1,
+		},
+		{
+			name:    "lines appended",
+			old:     "a\n",
+			new:     "a\nb\nc\n",
+			wantIns: 2, wantDel: 0,
+		},
+		{
+			name:    "lines removed",
+			old:     "a\nb\nc\n",
+			new:     "a\n",
+			wantIns: 0, wantDel: 2,
+		},
+		{
+			name:    "empty to content",
+			old:     "",
+			new:     "alpha\nbeta\n",
+			wantIns: 2, wantDel: 0,
+		},
+		{
+			name:    "content to empty (deleted file)",
+			old:     "alpha\nbeta\n",
+			new:     "",
+			wantIns: 0, wantDel: 2,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ins, del := unfinished.LinesDiff(tc.old, tc.new)
+			if ins != tc.wantIns || del != tc.wantDel {
+				t.Errorf("LinesDiff(%q, %q) = ins:%d del:%d, want ins:%d del:%d",
+					tc.old, tc.new, ins, del, tc.wantIns, tc.wantDel)
+			}
+		})
+	}
 }

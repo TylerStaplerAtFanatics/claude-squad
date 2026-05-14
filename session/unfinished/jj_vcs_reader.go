@@ -68,11 +68,13 @@ func (j *JJVCSReader) ResolveDefaultBranch(repoPath string) string {
 
 // HasUncommitted reports whether the working-copy change (@) has any modified files.
 func (j *JJVCSReader) HasUncommitted(worktreePath string) (bool, error) {
-	out, err := j.run(worktreePath, "diff", "--stat", "-r", "@")
+	// Use the `empty` template property — more reliable than parsing diff output,
+	// which prints "0 files changed…" rather than empty string for an empty change.
+	out, err := j.run(worktreePath, "log", "-r", "@", "--no-graph", "-T", `if(empty,"e","d")`)
 	if err != nil {
-		return false, fmt.Errorf("jj diff --stat: %w", err)
+		return false, fmt.Errorf("jj log: %w", err)
 	}
-	return strings.TrimSpace(out) != "", nil
+	return strings.TrimSpace(out) == "d", nil
 }
 
 // AheadBehind counts revisions between the working copy and base.

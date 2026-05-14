@@ -169,7 +169,7 @@ type Scanner struct {
 
 // NewScanner constructs a Scanner. Call Start(ctx) to begin background processing.
 func NewScanner(eventBus *pkgevents.EventBus, stateStore *StateStore) *Scanner {
-	return NewScannerWithReader(eventBus, stateStore, &GitVCSReader{})
+	return NewScannerWithReader(eventBus, stateStore, &GoGitVCSReader{})
 }
 
 // NewScannerWithReader constructs a Scanner with an explicit VCSReader.
@@ -483,6 +483,11 @@ func (s *Scanner) publishResults(results []ScanResult) {
 	case s.scanDoneCh <- time.Now():
 	default:
 	}
+}
+
+// ResolveDefaultBranch delegates to the underlying VCSReader.
+func (s *Scanner) ResolveDefaultBranch(repoPath string) string {
+	return s.reader.ResolveDefaultBranch(repoPath)
 }
 
 // GetAllResults returns a snapshot of all stored scan results (excluding dismissed/snoozed).

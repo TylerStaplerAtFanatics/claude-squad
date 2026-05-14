@@ -231,34 +231,81 @@ func (g *GoGitVCSReader) DiffShortstat(worktreePath string) (DiffStat, error) {
 		return DiffStat{}, err
 	}
 
-	// Count files with any working-tree change; compute insertion/deletion
-	// approximation from the staged diff against HEAD tree.
 	var d DiffStat
-	for path, fs := range status {
+	for filePath, fs := range status {
 		if fs.Worktree == git.Unmodified && fs.Staging == git.Unmodified {
 			continue
 		}
 		d.Files++
-		// For a precise line count we'd need to diff each file; for an
-		// approximation compare staged tree entry sizes.
-		if fs.Staging != git.Unmodified {
-			_ = path
-			_ = headTree // used implicitly below
+
+		// HEAD content — empty string for new (untracked/added) files.
+		var headContent string
+		if f, ferr := headTree.File(filePath); ferr == nil {
+			headContent, _ = f.Contents()
+		}
+
+		// Working-tree content — empty string for deleted files.
+		var currentContent string
+		if data, rerr := os.ReadFile(filepath.Join(worktreePath, filePath)); rerr == nil {
+			currentContent = string(data)
+		}
+
+		ins, del := LinesDiff(headContent, currentContent)
+		d.Insertions += ins
+		d.Deletions += del
+	}
+	return d, nil
+}
+
+// LinesDiff returns inserted and deleted line counts between old and new using LCS.
+// Exported so tests can exercise the algorithm directly.
+func LinesDiff(old, newContent string) (insertions, deletions int) {
+	oldLines := splitLines(old)
+	newLines := splitLines(newContent)
+	lcs := lcsLength(oldLines, newLines)
+	return len(newLines) - lcs, len(oldLines) - lcs
+}
+
+// lcsLength computes the length of the longest common subsequence of two line slices.
+// Uses O(n*m) DP — acceptable for typical source files.
+func lcsLength(a, b []string) int {
+	if len(a) == 0 || len(b) == 0 {
+		return 0
+	}
+	// Use two rows to keep memory O(min(n,m)).
+	if len(a) < len(b) {
+		a, b = b, a
+	}
+	prev := make([]int, len(b)+1)
+	curr := make([]int, len(b)+1)
+	for i := 1; i <= len(a); i++ {
+		for j := 1; j <= len(b); j++ {
+			if a[i-1] == b[j-1] {
+				curr[j] = prev[j-1] + 1
+			} else if prev[j] > curr[j-1] {
+				curr[j] = prev[j]
+			} else {
+				curr[j] = curr[j-1]
+			}
+		}
+		prev, curr = curr, prev
+		for k := range curr {
+			curr[k] = 0
 		}
 	}
+	return prev[len(b)]
+}
 
-	// Full line-level diff via staged index vs HEAD tree.
-	idx, err := repo.Storer.Index()
-	if err != nil {
-		return d, nil // best-effort: return file count at minimum
+func splitLines(s string) []string {
+	if s == "" {
+		return nil
 	}
-	changes, err := object.DiffTree(headTree, nil)
-	_ = idx
-	_ = changes
-	// Line-level counting would require iterating patch hunks; omit for brevity.
-	// Callers receive an accurate file count; insertion/deletion counts are 0.
-
-	return d, nil
+	lines := strings.Split(s, "\n")
+	// Drop the empty string that results from a trailing newline.
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }
 
 // openWorktree opens a git repo that may be a linked worktree (has a .git file
@@ -298,10 +345,12 @@ func reachableSet(repo *git.Repository, start plumbing.Hash) (map[plumbing.Hash]
 		return nil, err
 	}
 	defer iter.Close()
-	_ = iter.ForEach(func(c *object.Commit) error {
+	if err := iter.ForEach(func(c *object.Commit) error {
 		seen[c.Hash] = true
 		return nil
-	})
+	}); err != nil {
+		return nil, err
+	}
 	return seen, nil
 }
 
