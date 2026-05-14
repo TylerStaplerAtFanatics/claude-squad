@@ -761,7 +761,7 @@ func TestAnsiSnapshotPrefixContainsRequiredSequences(t *testing.T) {
 	eIdx := strings.Index(ansiSnapshotPrefix, ed2)
 	cIdx := strings.Index(ansiSnapshotPrefix, cup)
 
-	if !(dIdx < eIdx && eIdx < cIdx) {
+	if dIdx >= eIdx || eIdx >= cIdx {
 		t.Errorf("ansiSnapshotPrefix sequence order wrong: DECSTR@%d ED2@%d CUP@%d; want DECSTR < ED2 < CUP; prefix = %q",
 			dIdx, eIdx, cIdx, ansiSnapshotPrefix)
 	}

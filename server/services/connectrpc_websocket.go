@@ -120,6 +120,26 @@ func prepareSnapshotContent(content string) string {
 	return strings.ReplaceAll(sanitized, "\n", "\r\n")
 }
 
+// withCursorSync appends a CUP escape to content so xterm.js cursor lands at the
+// same position as the tmux pane cursor after the snapshot is displayed. Without
+// this, the xterm.js cursor is left wherever the last byte of snapshot content
+// placed it, while tmux's cursor is at the running process's working position
+// (e.g. inside an Ink TUI animation). The mismatch causes subsequent cursor-up
+// sequences emitted by the process to rewind to the wrong lines — producing the
+// "billowing" effect where each animation frame stacks below the previous one
+// instead of overwriting it.
+func withCursorSync(content string, instance *session.Instance) string {
+	if instance == nil {
+		return content
+	}
+	x, y, err := instance.GetPaneCursorPosition()
+	if err != nil {
+		return content
+	}
+	// CUP is 1-based; tmux cursor coords are 0-based.
+	return content + fmt.Sprintf("\x1b[%d;%dH", y+1, x+1)
+}
+
 // sessionSnapshot caches terminal capture-pane output per session.
 // dirty is set true when new output arrives so the next connect gets a fresh capture.
 type sessionSnapshot struct {
@@ -576,7 +596,7 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 		// session. Replaying these in a fresh xterm.js terminal causes garbled output
 		// because the positions assume a prior terminal state that no longer exists.
 		// Colors (SGR) are preserved; only context-dependent positioning is removed.
-		fullContent := ansiSnapshotPrefix + prepareSnapshotContent(initialContent)
+		fullContent := withCursorSync(ansiSnapshotPrefix+prepareSnapshotContent(initialContent), instance)
 
 		terminalData := &sessionv1.TerminalData{
 			SessionId: sessionID,
