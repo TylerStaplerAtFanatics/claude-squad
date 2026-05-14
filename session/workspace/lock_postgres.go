@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"sync"
 	"time"
 
@@ -188,7 +189,7 @@ func (l *PostgresAdvisoryLock) Close() error {
 // Uses FNV-1a hash combined with namespace to create a unique key.
 func (l *PostgresAdvisoryLock) hashResource(resource string) int64 {
 	h := fnv.New64a()
-	h.Write([]byte(resource))
+	_, _ = io.WriteString(h, resource)
 	hash := h.Sum64()
 
 	// Combine with namespace (XOR to preserve distribution)
@@ -219,7 +220,7 @@ func (h *postgresHandle) Release() error {
 	_, err := h.conn.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1)", h.key)
 	if err != nil {
 		// Lock will be released when connection closes anyway
-		log.DebugLog.Printf("failed to explicitly release advisory lock: %v", err)
+		log.Debug("failed to explicitly release advisory lock", "err", err)
 	}
 
 	// Close the connection (also releases the lock if explicit unlock failed)

@@ -10,6 +10,7 @@ interface OmnibarSessionResultProps {
   id: string;
   onClick: (session: Session) => void;
   onClone?: (session: Session) => void;
+  onOpenInNewPane?: (session: Session) => void;
 }
 
 function statusDotVariant(
@@ -63,6 +64,7 @@ export function OmnibarSessionResult({
   id,
   onClick,
   onClone,
+  onOpenInNewPane,
 }: OmnibarSessionResultProps) {
   const { session } = result;
   const dotVariant = statusDotVariant(session.status);
@@ -79,7 +81,11 @@ export function OmnibarSessionResult({
       aria-selected={isHighlighted}
       onMouseDown={(e) => {
         e.preventDefault();
-        onClick(session);
+        if (e.altKey && onOpenInNewPane) {
+          onOpenInNewPane(session);
+        } else {
+          onClick(session);
+        }
       }}
     >
       <span className={styles.dotWrapper}>
@@ -102,6 +108,22 @@ export function OmnibarSessionResult({
         )}
       </span>
 
+      {onOpenInNewPane && (
+        <button
+          className={styles.cloneButton}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onOpenInNewPane(session);
+          }}
+          aria-label={`Open session ${session.title} in new pane`}
+          tabIndex={isHighlighted ? 0 : -1}
+          title="Open in new pane (or Alt+click)"
+          type="button"
+        >
+          ⊞
+        </button>
+      )}
       {onClone && (
         <button
           className={styles.cloneButton}

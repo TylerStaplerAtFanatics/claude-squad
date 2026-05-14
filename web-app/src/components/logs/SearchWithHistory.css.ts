@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { vars } from "@/styles/theme.css";
 
 export const container = style({
   position: "relative",
@@ -15,9 +16,9 @@ export const inputWrapper = style({
 export const input = style({
   width: "100%",
   padding: "0.5rem 2rem 0.5rem 0.5rem",
-  backgroundColor: "#0a0a0a",
-  border: "1px solid #444",
-  color: "#e5e5e5",
+  backgroundColor: vars.color.background,
+  border: `1px solid ${vars.color.inputBorder}`,
+  color: vars.color.textPrimary,
   borderRadius: "4px",
   fontSize: "0.9rem",
   fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
@@ -25,10 +26,10 @@ export const input = style({
   selectors: {
     "&:focus": {
       outline: "none",
-      borderColor: "#17a2b8",
+      borderColor: vars.color.inputFocusBorder,
     },
     "&::placeholder": {
-      color: "#666",
+      color: vars.color.textMuted,
     },
   },
 });
@@ -38,7 +39,7 @@ export const clearButton = style({
   right: "8px",
   background: "none",
   border: "none",
-  color: "#666",
+  color: vars.color.textMuted,
   cursor: "pointer",
   fontSize: "1.2rem",
   lineHeight: "1",
@@ -46,7 +47,7 @@ export const clearButton = style({
   transition: "color 0.15s",
   selectors: {
     "&:hover": {
-      color: "#ff6b6b",
+      color: vars.color.error,
     },
   },
 });
@@ -57,10 +58,10 @@ export const dropdown = style({
   left: "0",
   right: "0",
   marginTop: "4px",
-  backgroundColor: "#1a1a1a",
-  border: "1px solid #333",
+  backgroundColor: vars.color.cardBackground,
+  border: `1px solid ${vars.color.borderColor}`,
   borderRadius: "6px",
-  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
+  boxShadow: vars.shadow.md,
   zIndex: 100,
   overflow: "hidden",
 });
@@ -70,23 +71,23 @@ export const header = style({
   justifyContent: "space-between",
   alignItems: "center",
   padding: "0.5rem 0.75rem",
-  borderBottom: "1px solid #333",
+  borderBottom: `1px solid ${vars.color.borderColor}`,
   fontSize: "0.75rem",
-  color: "#666",
+  color: vars.color.textMuted,
   textTransform: "uppercase",
 });
 
 export const clearAllButton = style({
   background: "none",
   border: "none",
-  color: "#17a2b8",
+  color: vars.color.primary,
   cursor: "pointer",
   fontSize: "0.75rem",
   fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
   textTransform: "uppercase",
   selectors: {
     "&:hover": {
-      color: "#ff6b6b",
+      color: vars.color.error,
     },
   },
 });
@@ -105,23 +106,23 @@ export const item = style({
   transition: "background-color 0.15s",
   selectors: {
     "&:hover": {
-      backgroundColor: "#2a2a2a",
+      backgroundColor: vars.color.hoverBackground,
     },
   },
 });
 
 export const itemSelected = style({
-  backgroundColor: "#2a2a2a",
+  backgroundColor: vars.color.hoverBackground,
 });
 
 export const historyIcon = style({
   fontSize: "0.75rem",
-  color: "#666",
+  color: vars.color.textMuted,
 });
 
 export const query = style({
   flex: 1,
-  color: "#e5e5e5",
+  color: vars.color.textPrimary,
   fontSize: "0.85rem",
   whiteSpace: "nowrap",
   overflow: "hidden",
@@ -130,14 +131,14 @@ export const query = style({
 
 export const timestamp = style({
   fontSize: "0.7rem",
-  color: "#666",
+  color: vars.color.textMuted,
   whiteSpace: "nowrap",
 });
 
 export const removeButton = style({
   background: "none",
   border: "none",
-  color: "#666",
+  color: vars.color.textMuted,
   cursor: "pointer",
   fontSize: "1rem",
   lineHeight: "1",
@@ -149,7 +150,7 @@ export const removeButton = style({
       opacity: 1,
     },
     "&:hover": {
-      color: "#ff6b6b",
+      color: vars.color.error,
     },
   },
 });

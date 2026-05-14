@@ -109,7 +109,7 @@ export const fileShortcut = style({
   fontSize: "11px",
   padding: "2px 6px",
   borderRadius: "3px",
-  backgroundColor: "rgba(255, 255, 255, 0.1)",
+  backgroundColor: vars.color.accentBg,
   color: vars.color.textMuted,
   fontFamily: "monospace",
 });
@@ -120,7 +120,7 @@ export const unsavedCount = style({
   fontWeight: "normal",
   padding: "2px 8px",
   borderRadius: "10px",
-  backgroundColor: "rgba(245, 158, 11, 0.15)",
+  backgroundColor: vars.color.warningBg,
   color: vars.color.warning,
 });
 
@@ -192,9 +192,9 @@ export const validationBadgeValid = style({
   borderRadius: "4px",
   fontSize: "13px",
   fontWeight: 500,
-  backgroundColor: "rgba(40, 167, 69, 0.15)",
-  color: "#28a745",
-  border: "1px solid rgba(40, 167, 69, 0.3)",
+  backgroundColor: vars.color.successBg,
+  color: vars.color.success,
+  border: `1px solid ${vars.color.success}`,
 });
 
 export const validationBadgeError = style({
@@ -204,29 +204,29 @@ export const validationBadgeError = style({
   borderRadius: "4px",
   fontSize: "13px",
   fontWeight: 500,
-  backgroundColor: "rgba(220, 53, 69, 0.15)",
-  color: "#dc3545",
-  border: "1px solid rgba(220, 53, 69, 0.3)",
+  backgroundColor: vars.color.errorBg,
+  color: vars.color.error,
+  border: `1px solid ${vars.color.error}`,
 });
 
 export const validationPanel = style({
   marginTop: "10px",
-  border: "1px solid rgba(220, 53, 69, 0.3)",
+  border: `1px solid ${vars.color.error}`,
   borderRadius: "4px",
-  backgroundColor: "rgba(220, 53, 69, 0.05)",
+  backgroundColor: vars.color.errorBg,
   overflow: "hidden",
 });
 
 export const validationPanelHeader = style({
   padding: "8px 12px",
-  backgroundColor: "rgba(220, 53, 69, 0.1)",
-  borderBottom: "1px solid rgba(220, 53, 69, 0.2)",
+  backgroundColor: vars.color.errorBg,
+  borderBottom: `1px solid ${vars.color.error}`,
 });
 
 export const validationPanelTitle = style({
   fontSize: "13px",
   fontWeight: 600,
-  color: "#dc3545",
+  color: vars.color.error,
 });
 
 export const validationPanelContent = style({
@@ -241,23 +241,23 @@ export const validationError = style({
   padding: "8px 12px",
   cursor: "pointer",
   transition: "background-color 0.15s",
-  borderBottom: "1px solid rgba(220, 53, 69, 0.1)",
+  borderBottom: `1px solid ${vars.color.error}`,
   selectors: {
     "&:last-child": {
       borderBottom: "none",
     },
     "&:hover": {
-      backgroundColor: "rgba(220, 53, 69, 0.1)",
+      backgroundColor: vars.color.errorBg,
     },
   },
 });
 
 export const validationErrorSeverity = style({
-  color: "#dc3545",
+  color: vars.color.error,
 });
 
 export const validationWarningSeverity = style({
-  color: "#ffc107",
+  color: vars.color.warning,
 });
 
 export const validationErrorLocation = style({
@@ -277,7 +277,7 @@ export const shortcutsHelp = style({
   marginTop: "20px",
   padding: "12px",
   borderRadius: "6px",
-  backgroundColor: "rgba(255, 255, 255, 0.03)",
+  backgroundColor: vars.color.accentBg,
   border: `1px solid ${vars.color.borderColor}`,
   "@media": {
     "screen and (max-width: 768px)": {
@@ -350,7 +350,7 @@ export const networkValueText = style({
   fontFamily: "monospace",
   fontSize: "13px",
   color: vars.color.textPrimary,
-  background: "rgba(255, 255, 255, 0.05)",
+  background: vars.color.accentBg,
   border: `1px solid ${vars.color.borderColor}`,
   borderRadius: "4px",
   padding: "4px 8px",
@@ -365,14 +365,14 @@ export const networkCopyBtn = style({
   fontSize: "12px",
   border: `1px solid ${vars.color.borderColor}`,
   borderRadius: "4px",
-  background: "rgba(255, 255, 255, 0.05)",
+  background: vars.color.accentBg,
   color: vars.color.textSecondary,
   cursor: "pointer",
   whiteSpace: "nowrap",
   transition: "background-color 0.15s",
   selectors: {
     "&:hover": {
-      background: "rgba(255, 255, 255, 0.1)",
+      background: vars.color.accentHover,
     },
   },
 });
@@ -424,7 +424,7 @@ export const securityLabel = style({
 });
 
 export const statusEnabled = style({
-  color: "#28a745",
+  color: vars.color.success,
   fontWeight: 600,
   fontSize: "14px",
 });
@@ -445,8 +445,8 @@ export const securityError = style({
   margin: 0,
   fontSize: "0.85rem",
   color: vars.color.error,
-  background: "rgba(248, 81, 73, 0.1)",
-  border: "1px solid rgba(248, 81, 73, 0.3)",
+  background: vars.color.errorBg,
+  border: `1px solid ${vars.color.error}`,
   borderRadius: "6px",
   padding: "0.5rem 0.75rem",
 });
@@ -454,9 +454,9 @@ export const securityError = style({
 export const securitySuccess = style({
   margin: 0,
   fontSize: "0.85rem",
-  color: "#28a745",
-  background: "rgba(40, 167, 69, 0.1)",
-  border: "1px solid rgba(40, 167, 69, 0.3)",
+  color: vars.color.success,
+  background: vars.color.successBg,
+  border: `1px solid ${vars.color.success}`,
   borderRadius: "6px",
   padding: "0.5rem 0.75rem",
 });
@@ -465,7 +465,7 @@ export const hostnamesList = style({
   display: "flex",
   flexDirection: "column",
   gap: "8px",
-  background: "rgba(0, 0, 0, 0.1)",
+  background: vars.color.accentBg,
   padding: "10px",
   borderRadius: "6px",
   border: `1px solid ${vars.color.borderColor}`,

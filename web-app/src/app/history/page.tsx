@@ -2,6 +2,7 @@
 // +feature: history-search history-list
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { usePageView } from "@/lib/analytics/usePageView";
 import { useRouter } from "next/navigation";
 import { SessionService } from "@/gen/session/v1/session_pb";
 import { ClaudeHistoryEntry, ClaudeMessage } from "@/gen/session/v1/session_pb";
@@ -15,9 +16,12 @@ import {
 import { useHistoryFullTextSearch, SearchResultItem } from "@/lib/hooks/useHistoryFullTextSearch";
 import { useHistoryFilters, GroupingStrategyLabels } from "@/lib/hooks/useHistoryFilters";
 import { useHistoryGrouping } from "@/lib/hooks/useHistoryGrouping";
+import { useAnalytics } from "@/lib/contexts/AnalyticsContext";
 import * as styles from "./history.css";
 
 export default function HistoryBrowserPage() {
+  usePageView();
+  const { track } = useAnalytics();
   const router = useRouter();
 
   // Core state
@@ -58,7 +62,6 @@ export default function HistoryBrowserPage() {
     const transport = createConnectTransport({ baseUrl: getApiBaseUrl() });
     clientRef.current = createClient(SessionService, transport);
   }, []);
-  useEffect(() => { loadHistory(); }, []);
 
   // Data loading callbacks
   const loadHistory = useCallback(async (query?: string) => {
@@ -71,6 +74,8 @@ export default function HistoryBrowserPage() {
     } catch (err) { setError(`Failed to load history: ${err}`); }
     finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
 
   const loadMoreHistory = useCallback(async () => {
     if (!clientRef.current || !nextPageToken || loadingMore) return;
@@ -169,13 +174,14 @@ export default function HistoryBrowserPage() {
     const title = resumeTitle.trim() || resumeTarget.name.substring(0, 60);
     try {
       setResuming(true); setError(null);
+      track({ name: "history_resume_session", category: "user_action" });
       const response = await clientRef.current.createSession({
         title, path: resumeTarget.project, resumeId: resumeTarget.id, category: "Resumed",
       });
       if (response.session) { setResumeTarget(null); router.push("/"); }
     } catch (err) { setError(`Failed to resume session: ${err}`); }
     finally { setResuming(false); }
-  }, [router, resumeTarget, resumeTitle]);
+  }, [router, resumeTarget, resumeTitle, track]);
 
   // Keyboard navigation
   useEffect(() => {

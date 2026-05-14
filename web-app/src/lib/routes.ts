@@ -12,6 +12,7 @@ export const routes = {
   logs: "/logs",
   errors: "/errors",
   config: "/config",
+  notifications: "/notifications",
   settings: "/settings",
   settingsDefaults: "/settings/defaults",
   settingsUnfinished: "/settings/unfinished",

@@ -1,14 +1,15 @@
 import { style } from "@vanilla-extract/css";
+import { vars } from "@/styles/theme.css";
 
 // DiffViewer uses a dark code-editor aesthetic regardless of theme.
-// Terminal/code colors are not in the theme contract, so we use literal values.
+// Terminal tokens from the theme contract are used for structural colors.
 
 export const container = style({
   display: "flex",
   flexDirection: "column",
   height: "100%",
-  background: "#1e1e1e",
-  color: "#d4d4d4",
+  background: vars.color.terminalBackground,
+  color: vars.color.terminalForeground,
   fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace",
 });
 
@@ -17,8 +18,8 @@ export const toolbar = style({
   alignItems: "center",
   justifyContent: "space-between",
   padding: "0.75rem 1rem",
-  background: "#2d2d30",
-  borderBottom: "1px solid #3e3e42",
+  background: vars.color.terminalHeaderBg,
+  borderBottom: `1px solid ${vars.color.terminalBorder}`,
   flexShrink: 0,
   "@media": {
     "(max-width: 768px)": {
@@ -43,23 +44,23 @@ export const stats = style({
 });
 
 export const filesChanged = style({
-  color: "#cccccc",
+  color: vars.color.terminalForeground,
 });
 
 export const additions = style({
-  color: "#4ec9b0",
+  color: vars.color.success,
   fontWeight: 500,
 });
 
 export const deletions = style({
-  color: "#f48771",
+  color: vars.color.error,
   fontWeight: 500,
 });
 
 export const viewModeToggle = style({
   display: "flex",
   gap: "0.25rem",
-  background: "#3e3e42",
+  background: vars.color.terminalHoverBg,
   borderRadius: "4px",
   padding: "0.25rem",
   "@media": {
@@ -74,18 +75,18 @@ export const viewModeButton = style({
   background: "transparent",
   border: "none",
   borderRadius: "3px",
-  color: "#cccccc",
+  color: vars.color.terminalForeground,
   fontSize: "0.875rem",
   cursor: "pointer",
   transition: "background 0.2s, color 0.2s",
   selectors: {
-    "&:hover": { background: "#505050" },
+    "&:hover": { background: vars.color.terminalHoverBg },
   },
 });
 
 export const viewModeButtonActive = style({
-  background: "#0e639c",
-  color: "white",
+  background: vars.color.primary,
+  color: vars.color.primaryText,
 });
 
 export const diffContent = style({
@@ -94,13 +95,13 @@ export const diffContent = style({
   padding: "1rem",
   selectors: {
     "&::-webkit-scrollbar": { width: "12px", height: "12px" },
-    "&::-webkit-scrollbar-track": { background: "#1e1e1e" },
+    "&::-webkit-scrollbar-track": { background: vars.color.terminalBackground },
     "&::-webkit-scrollbar-thumb": {
-      background: "#424242",
+      background: vars.color.terminalHoverBg,
       borderRadius: "6px",
-      border: "2px solid #1e1e1e",
+      border: `2px solid ${vars.color.terminalBackground}`,
     },
-    "&::-webkit-scrollbar-thumb:hover": { background: "#4e4e4e" },
+    "&::-webkit-scrollbar-thumb:hover": { background: vars.color.terminalBorder },
   },
   "@media": {
     "(max-width: 768px)": {
@@ -111,7 +112,7 @@ export const diffContent = style({
 
 export const file = style({
   marginBottom: "1.5rem",
-  border: "1px solid #3e3e42",
+  border: `1px solid ${vars.color.terminalBorder}`,
   borderRadius: "6px",
   overflow: "hidden",
 });
@@ -121,8 +122,8 @@ export const fileHeader = style({
   alignItems: "center",
   justifyContent: "space-between",
   padding: "0.75rem 1rem",
-  background: "#2d2d30",
-  borderBottom: "1px solid #3e3e42",
+  background: vars.color.terminalHeaderBg,
+  borderBottom: `1px solid ${vars.color.terminalBorder}`,
   "@media": {
     "(max-width: 768px)": {
       flexDirection: "column",
@@ -134,7 +135,7 @@ export const fileHeader = style({
 
 export const filename = style({
   fontWeight: 600,
-  color: "#dcdcaa",
+  color: vars.color.terminalForeground,
 });
 
 export const fileStats = style({
@@ -144,19 +145,19 @@ export const fileStats = style({
 });
 
 export const hunk = style({
-  borderTop: "1px solid #3e3e42",
+  borderTop: `1px solid ${vars.color.terminalBorder}`,
 });
 
 export const hunkHeader = style({
   padding: "0.5rem 1rem",
-  background: "#37373d",
-  color: "#8c8c8c",
+  background: vars.color.terminalHoverBg,
+  color: vars.color.terminalTextMuted,
   fontSize: "0.875rem",
   fontFamily: "inherit",
 });
 
 export const lines = style({
-  background: "#1e1e1e",
+  background: vars.color.terminalBackground,
 });
 
 export const line = style({
@@ -168,17 +169,17 @@ export const line = style({
 });
 
 export const lineAdd = style({
-  background: "rgba(78, 201, 176, 0.1)",
-  borderLeftColor: "#4ec9b0",
+  background: vars.color.successBg,
+  borderLeftColor: vars.color.success,
 });
 
 export const lineDelete = style({
-  background: "rgba(244, 135, 113, 0.1)",
-  borderLeftColor: "#f48771",
+  background: vars.color.errorBg,
+  borderLeftColor: vars.color.error,
 });
 
 export const lineContext = style({
-  background: "#1e1e1e",
+  background: vars.color.terminalBackground,
 });
 
 export const lineNumber = style({
@@ -186,7 +187,7 @@ export const lineNumber = style({
   width: "50px",
   padding: "0 0.75rem",
   textAlign: "right",
-  color: "#858585",
+  color: vars.color.terminalTextMuted,
   userSelect: "none",
   flexShrink: 0,
   "@media": {
@@ -204,13 +205,13 @@ export const lineContent = style({
   overflowX: "auto",
   selectors: {
     "&::-webkit-scrollbar": { width: "12px", height: "12px" },
-    "&::-webkit-scrollbar-track": { background: "#1e1e1e" },
+    "&::-webkit-scrollbar-track": { background: vars.color.terminalBackground },
     "&::-webkit-scrollbar-thumb": {
-      background: "#424242",
+      background: vars.color.terminalHoverBg,
       borderRadius: "6px",
-      border: "2px solid #1e1e1e",
+      border: `2px solid ${vars.color.terminalBackground}`,
     },
-    "&::-webkit-scrollbar-thumb:hover": { background: "#4e4e4e" },
+    "&::-webkit-scrollbar-thumb:hover": { background: vars.color.terminalBorder },
   },
   "@media": {
     "(max-width: 768px)": {
@@ -238,13 +239,13 @@ export const empty = style({
   height: "100%",
   padding: "2rem",
   textAlign: "center",
-  color: "#8c8c8c",
+  color: vars.color.terminalTextMuted,
 });
 
 export const emptyHint = style({
   marginTop: "0.5rem",
   fontSize: "0.875rem",
-  color: "#9ca3af",
+  color: vars.color.terminalTextMuted,
 });
 
 export const errorState = style({
@@ -255,5 +256,5 @@ export const errorState = style({
   height: "100%",
   padding: "2rem",
   textAlign: "center",
-  color: "#f48771",
+  color: vars.color.error,
 });

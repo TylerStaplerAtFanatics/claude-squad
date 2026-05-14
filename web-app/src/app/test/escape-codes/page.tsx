@@ -1,4 +1,5 @@
 'use client';
+// analytics-exempt
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -92,6 +93,20 @@ export default function EscapeCodesTestPage() {
     };
   }, []);
 
+  // Stop test
+  const stopTest = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    setTestState(prev => ({
+      ...prev,
+      isRunning: false,
+      currentCode: null,
+    }));
+  }, []);
+
   // Start test
   const startTest = useCallback(() => {
     const codes = getFilteredCodes();
@@ -138,21 +153,7 @@ export default function EscapeCodesTestPage() {
         stopTest();
       }
     }, 1000 / frameRate);
-  }, [getFilteredCodes, frameRate, duration, generateTestFrame]);
-
-  // Stop test
-  const stopTest = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-
-    setTestState(prev => ({
-      ...prev,
-      isRunning: false,
-      currentCode: null,
-    }));
-  }, []);
+  }, [getFilteredCodes, frameRate, duration, generateTestFrame, stopTest]);
 
   // Apply preset
   const applyPreset = (presetName: keyof typeof ESCAPE_CODE_TEST_PRESETS) => {

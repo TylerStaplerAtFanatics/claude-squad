@@ -1,4 +1,5 @@
 import { style, keyframes, globalStyle } from "@vanilla-extract/css";
+import { vars } from "@/styles/theme.css";
 
 const pulse = keyframes({
   "0%, 100%": { opacity: 1 },
@@ -16,8 +17,8 @@ export const container = style({
   height: "100%",
   minHeight: 0,
   flex: 1,
-  background: "#1e1e1e",
-  color: "#d4d4d4",
+  background: vars.color.terminalBackground,
+  color: vars.color.terminalForeground,
   fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace",
 });
 
@@ -26,8 +27,8 @@ export const toolbar = style({
   alignItems: "center",
   justifyContent: "space-between",
   padding: "0.75rem 1rem",
-  background: "#2d2d30",
-  borderBottom: "1px solid #3e3e42",
+  background: vars.color.cardBackground,
+  borderBottom: `1px solid ${vars.color.borderColor}`,
   flexShrink: 0,
   "@media": {
     "screen and (max-width: 768px)": {
@@ -50,28 +51,29 @@ export const statusIndicator = style({
 });
 
 export const connected = style({
-  background: "#4ec9b0",
-  boxShadow: "0 0 8px #4ec9b0",
+  background: vars.color.success,
+  boxShadow: `0 0 8px ${vars.color.success}`,
 });
 
 export const disconnected = style({
-  background: "#f48771",
-  boxShadow: "0 0 8px #f48771",
+  background: vars.color.error,
+  boxShadow: `0 0 8px ${vars.color.error}`,
   animationName: "none",
 });
 
 export const stabilizing = style({
-  background: "#e5c07b",
-  boxShadow: "0 0 8px #e5c07b",
+  background: vars.color.warning,
+  boxShadow: `0 0 8px ${vars.color.warning}`,
   animation: `${pulse} 0.8s infinite`,
 });
 
 export const statusText = style({
   fontSize: "0.875rem",
-  color: "#cccccc",
+  color: vars.color.textSecondary,
   "@media": {
+    // Keep a compact label visible so connectivity state isn't color-only (WCAG 1.4.1)
     "screen and (max-width: 768px)": {
-      display: "none",
+      fontSize: "0.7rem",
     },
   },
 });
@@ -79,16 +81,16 @@ export const statusText = style({
 export const externalLabel = style({
   fontSize: "12px",
   fontWeight: 600,
-  color: "#6366f1",
+  color: vars.color.primary,
   padding: "2px 8px",
-  background: "rgba(99, 102, 241, 0.1)",
+  background: vars.color.accentBg,
   borderRadius: "4px",
-  border: "1px solid rgba(99, 102, 241, 0.3)",
+  border: `1px solid ${vars.color.borderSubtle}`,
 });
 
 export const errorText = style({
   fontSize: "0.875rem",
-  color: "#f48771",
+  color: vars.color.error,
   marginLeft: "0.5rem",
 });
 
@@ -109,20 +111,20 @@ export const actions = style({
 
 export const toolbarButton = style({
   padding: "0.5rem 0.75rem",
-  background: "#3e3e42",
-  border: "1px solid #555555",
+  background: vars.color.hoverBackground,
+  border: `1px solid ${vars.color.borderColor}`,
   borderRadius: "4px",
-  color: "#cccccc",
+  color: vars.color.textPrimary,
   fontSize: "0.875rem",
   cursor: "pointer",
   transition: "background 0.2s, border-color 0.2s",
   selectors: {
     "&:hover": {
-      background: "#505050",
-      borderColor: "#6e6e6e",
+      background: vars.color.panelBgSecondary,
+      borderColor: vars.color.borderHover,
     },
     "&:active": {
-      background: "#2d2d30",
+      background: vars.color.cardBackground,
     },
   },
   "@media": {
@@ -137,13 +139,13 @@ export const toolbarButton = style({
 
 export const debugActive = style({});
 
-// Toolbar toggle button — always visible on mobile, hidden on desktop
+// Toolbar toggle button — visible on all screen sizes
 export const toolbarToggle = style({
   padding: "0.5rem",
-  background: "#3e3e42",
-  border: "1px solid #555555",
+  background: vars.color.hoverBackground,
+  border: `1px solid ${vars.color.borderColor}`,
   borderRadius: "4px",
-  color: "#cccccc",
+  color: vars.color.textPrimary,
   fontSize: "0.75rem",
   cursor: "pointer",
   minWidth: "var(--min-touch-target, 44px)",
@@ -154,13 +156,8 @@ export const toolbarToggle = style({
   flexShrink: 0,
   selectors: {
     "&:hover": {
-      background: "#505050",
-    },
-  },
-  "@media": {
-    // On desktop always show the full toolbar; hide the toggle
-    "screen and (min-width: 1024px)": {
-      display: "none",
+      background: vars.color.panelBgSecondary,
+      borderColor: vars.color.borderHover,
     },
   },
 });
@@ -169,6 +166,7 @@ export const toolbarToggle = style({
 export const toolbarActions = style({
   display: "flex",
   gap: "0.5rem",
+  flexWrap: "wrap",
   "@media": {
     "screen and (max-width: 768px)": {
       gap: "0.25rem",
@@ -177,10 +175,9 @@ export const toolbarActions = style({
       whiteSpace: "nowrap",
       scrollbarWidth: "none",
       msOverflowStyle: "none",
-    },
-    // On desktop toolbarActions always visible regardless of toolbarExpanded
-    "screen and (min-width: 1024px)": {
-      display: "flex !important" as "flex",
+      // Fade the right edge to signal swipeable overflow content
+      maskImage: "linear-gradient(to right, black calc(100% - 32px), transparent 100%)" as string,
+      WebkitMaskImage: "linear-gradient(to right, black calc(100% - 32px), transparent 100%)" as string,
     },
   },
 });
@@ -221,8 +218,8 @@ export const mobileMoreButton = style({
 
 // Active state for the More button when overflow is open
 export const mobileMoreActive = style({
-  background: "#505050 !important",
-  borderColor: "#6e6e6e !important",
+  background: `${vars.color.panelBgSecondary} !important`,
+  borderColor: `${vars.color.borderHover} !important`,
 });
 
 // Overflow row — rendered below the toolbar when More is open; never shown on desktop
@@ -233,8 +230,8 @@ export const mobileOverflowRow = style({
       display: "flex",
       gap: "0.25rem",
       padding: "0.3rem 0.75rem 0.4rem",
-      background: "#252526",
-      borderBottom: "1px solid #3e3e42",
+      background: vars.color.cardBackground,
+      borderBottom: `1px solid ${vars.color.borderColor}`,
       overflowX: "auto",
       WebkitOverflowScrolling: "touch" as "auto",
       scrollbarWidth: "none",
@@ -258,23 +255,23 @@ export const mobileKeyboardToggle = style({
 
 // Sticky modifier active state (CTRL / ALT armed)
 export const mobileKeyActive = style({
-  background: "#1e4976 !important",
-  borderColor: "#4a8fc7 !important",
-  color: "#93d0ff !important",
+  background: `${vars.color.accentBg} !important`,
+  borderColor: `${vars.color.primary} !important`,
+  color: `${vars.color.primaryText} !important`,
 });
 
 // Mouse-mode toolbar button active state
 export const mouseModeActive = style({
-  background: "#1e4976 !important",
-  borderColor: "#4a8fc7 !important",
-  color: "#93d0ff !important",
+  background: `${vars.color.accentBg} !important`,
+  borderColor: `${vars.color.primary} !important`,
+  color: `${vars.color.primaryText} !important`,
 });
 
 export const error = style({
   padding: "1rem",
-  background: "rgba(244, 135, 113, 0.1)",
-  borderBottom: "1px solid #f48771",
-  color: "#f48771",
+  background: vars.color.errorBg,
+  borderBottom: `1px solid ${vars.color.error}`,
+  color: vars.color.error,
   fontSize: "0.875rem",
 });
 
@@ -283,19 +280,20 @@ export const terminal = style({
   minHeight: 0,
   margin: 0,
   padding: 0,
-  background: "#1e1e1e",
-  color: "#d4d4d4",
+  background: vars.color.terminalBackground,
+  color: vars.color.terminalForeground,
   overflow: "hidden",
   position: "relative",
   // Safe-area padding for landscape notch (horizontal insets only)
   paddingLeft: "var(--safe-area-left, 0px)",
   paddingRight: "var(--safe-area-right, 0px)",
   "@media": {
+    // Keep zero top/bottom padding — FitAddon measures the container; padding
+    // causes it to undercount rows. Only respect horizontal safe-area insets.
     "screen and (max-width: 768px)": {
-      padding: "0.75rem",
-      paddingLeft: "max(0.75rem, var(--safe-area-left, 0px))",
-      paddingRight: "max(0.75rem, var(--safe-area-right, 0px))",
-      fontSize: "13px",
+      padding: 0,
+      paddingLeft: "var(--safe-area-left, 0px)",
+      paddingRight: "var(--safe-area-right, 0px)",
     },
   },
 });
@@ -306,7 +304,7 @@ export const loadingOverlay = style({
   left: 0,
   right: 0,
   bottom: 0,
-  background: "rgba(30, 30, 30, 0.95)",
+  background: vars.color.overlayBackground,
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -319,15 +317,15 @@ export const loadingOverlay = style({
 export const loadingSpinner = style({
   width: "48px",
   height: "48px",
-  border: "4px solid #3e3e42",
-  borderTop: "4px solid #4ec9b0",
+  border: `4px solid ${vars.color.terminalBorder}`,
+  borderTop: `4px solid ${vars.color.success}`,
   borderRadius: "50%",
   animation: `${spin} 1s linear infinite`,
 });
 
 export const loadingText = style({
   fontSize: "0.875rem",
-  color: "#cccccc",
+  color: vars.color.terminalForeground,
   fontWeight: 500,
 });
 
@@ -337,7 +335,7 @@ export const unavailableOverlay = style({
   left: 0,
   right: 0,
   bottom: 0,
-  background: "rgba(30, 30, 30, 0.92)",
+  background: vars.color.overlayBackground,
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -348,18 +346,46 @@ export const unavailableOverlay = style({
 
 export const unavailableIcon = style({
   fontSize: "2rem",
-  color: "#6b7280",
+  color: vars.color.textMuted,
 });
 
 export const unavailableText = style({
   fontSize: "1rem",
-  color: "#9ca3af",
+  color: vars.color.textSecondary,
   fontWeight: 600,
 });
 
 export const unavailableSubtext = style({
   fontSize: "0.8125rem",
-  color: "#6b7280",
+  color: vars.color.textMuted,
+});
+
+// ---- Resize overlay (Task 4.2.1 / R1.4) ----
+// Non-blocking dimmed overlay shown while the server waits for tmux quiescence after resize.
+// pointer-events: none ensures the user can still interact with the terminal.
+export const resizingOverlay = style({
+  position: "absolute",
+  inset: 0,
+  background: "rgba(0, 0, 0, 0.3)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  pointerEvents: "none",
+  zIndex: 5,
+});
+
+const resizeSpin = keyframes({
+  "0%": { transform: "rotate(0deg)" },
+  "100%": { transform: "rotate(360deg)" },
+});
+
+export const resizingSpinner = style({
+  width: "32px",
+  height: "32px",
+  border: `3px solid ${vars.color.terminalBorder}`,
+  borderTop: `3px solid ${vars.color.primary}`,
+  borderRadius: "50%",
+  animation: `${resizeSpin} 0.8s linear infinite`,
 });
 
 export const mobileKeyboard = style({
@@ -367,8 +393,8 @@ export const mobileKeyboard = style({
   flexDirection: "column",
   gap: "0.25rem",
   padding: "0.4rem 0.5rem",
-  background: "#252526",
-  borderTop: "1px solid #3e3e42",
+  background: vars.color.terminalTabsBg,
+  borderTop: `1px solid ${vars.color.terminalBorder}`,
   flexShrink: 0,
   "@media": {
     "screen and (max-width: 768px)": {
@@ -393,13 +419,13 @@ export const mobileKey = style({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#3c3c3c",
-  border: "1px solid #555",
-  borderBottom: "3px solid #333",
+  background: vars.color.terminalHoverBg,
+  border: `1px solid ${vars.color.terminalBorder}`,
+  borderBottom: `3px solid ${vars.color.terminalBorder}`,
   borderRadius: "5px",
-  color: "#d4d4d4",
+  color: vars.color.terminalForeground,
   fontFamily: "inherit",
-  fontSize: "0.78rem",
+  fontSize: "0.8rem",
   fontWeight: 500,
   cursor: "pointer",
   userSelect: "none",
@@ -410,11 +436,20 @@ export const mobileKey = style({
   transition: "background 0.08s, border-bottom-width 0.08s, transform 0.08s",
   selectors: {
     "&:active": {
-      background: "#555",
+      background: vars.color.terminalHoverBg,
       borderBottomWidth: "1px",
       transform: "translateY(2px)",
     },
   },
+});
+
+// Highlight ^C so users can find the interrupt key instantly
+export const mobileKeyCtrlC = style({
+  background: `${vars.color.errorBg} !important`,
+  borderColor: `${vars.color.error} !important`,
+  color: `${vars.color.errorText} !important`,
+  fontWeight: "700",
+  boxShadow: `0 0 0 1px ${vars.color.error}`,
 });
 
 // Global styles for xterm.js selectors within the terminal class
@@ -424,25 +459,25 @@ globalStyle(`${terminal} .xterm-viewport::-webkit-scrollbar`, {
 });
 
 globalStyle(`${terminal} .xterm-viewport::-webkit-scrollbar-track`, {
-  background: "#1e1e1e",
+  background: vars.color.terminalBackground,
 });
 
 globalStyle(`${terminal} .xterm-viewport::-webkit-scrollbar-thumb`, {
-  background: "#424242",
+  background: vars.color.terminalBorder,
   borderRadius: "6px",
-  border: "2px solid #1e1e1e",
+  border: `2px solid ${vars.color.terminalBackground}`,
 });
 
 globalStyle(`${terminal} .xterm-viewport::-webkit-scrollbar-thumb:hover`, {
-  background: "#4e4e4e",
+  background: vars.color.terminalHoverBg,
 });
 
 globalStyle(`${terminal} .xterm-viewport::-webkit-scrollbar-corner`, {
-  background: "#1e1e1e",
+  background: vars.color.terminalBackground,
 });
 
 globalStyle(`${terminal} .xterm-selection`, {
-  background: "#264f78",
+  background: vars.color.accentBg,
 });
 
 globalStyle(`${terminal} .xterm-helper-textarea`, {

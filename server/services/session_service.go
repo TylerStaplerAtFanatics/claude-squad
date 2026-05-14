@@ -23,6 +23,7 @@ import (
 	"github.com/tstapler/stapler-squad/server/events"
 	"github.com/tstapler/stapler-squad/server/notifications"
 	"github.com/tstapler/stapler-squad/session"
+	"github.com/tstapler/stapler-squad/session/detection"
 	"github.com/tstapler/stapler-squad/session/ent"
 	"github.com/tstapler/stapler-squad/session/namegen"
 	"github.com/tstapler/stapler-squad/session/prompts"
@@ -40,6 +41,7 @@ var _ sessionv1connect.SessionServiceHandler = (*SessionService)(nil)
 type ReactiveQueueManager interface {
 	AddStreamClient(ctx context.Context, filters interface{}) (<-chan *sessionv1.ReviewQueueEvent, string)
 	RemoveStreamClient(clientID string)
+	OnControllerStatusChange(inst *session.Instance, newStatus detection.DetectedStatus)
 }
 
 // SessionService implements the SessionServiceHandler interface for ConnectRPC.
@@ -91,7 +93,7 @@ type SessionService struct {
 
 	// scrollbackMgr provides access to per-session scrollback sequence numbers
 	// for checkpoint creation. May be nil if not wired (seq defaults to 0).
-	scrollbackMgr scrollbackSequencer
+	scrollbackMgr ScrollbackSequencer
 
 	// mcpServerURL is the URL of the stapler-squad HTTP MCP endpoint.
 	// When non-empty, passed to new sessions via InstanceOptions.MCPServerURL.
@@ -105,8 +107,9 @@ type SessionService struct {
 	errorRegistry *ErrorRegistry
 }
 
-// scrollbackSequencer is the minimal interface SessionService needs from ScrollbackManager.
-type scrollbackSequencer interface {
+// ScrollbackSequencer is the minimal interface SessionService needs from ScrollbackManager.
+// Exported so server/dependencies.go can use warren.Set to validate this wiring at startup.
+type ScrollbackSequencer interface {
 	CurrentSequence(sessionID string) uint64
 }
 
@@ -128,16 +131,15 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 	var searchEngine *search.SearchEngine
 	indexStore, err := search.NewIndexStore()
 	if err != nil {
-		log.WarningLog.Printf("Failed to create index store, using in-memory search: %v", err)
+		log.Warn("failed to create index store, using in-memory search", "err", err)
 		searchEngine = search.NewSearchEngine()
 	} else {
 		searchEngine = search.NewSearchEngineWithPersistence(indexStore)
 		if loadErr := searchEngine.LoadIndex(); loadErr != nil {
-			log.WarningLog.Printf("Failed to load persisted search index: %v", loadErr)
+			log.Warn("failed to load persisted search index", "err", loadErr)
 		} else if searchEngine.GetSyncMetadata() != nil {
 			meta := searchEngine.GetSyncMetadata()
-			log.InfoLog.Printf("Loaded persisted search index: %d sessions, %d documents",
-				meta.TotalSessions, meta.TotalDocuments)
+			log.Info("loaded persisted search index", "sessions", meta.TotalSessions, "documents", meta.TotalDocuments)
 		}
 	}
 
@@ -147,7 +149,7 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 	if configErr == nil {
 		approvalFilePath = configDir + "/pending_approvals.json"
 	} else {
-		log.WarningLog.Printf("Failed to get config dir for approval persistence: %v", configErr)
+		log.Warn("failed to get config dir for approval persistence", "err", configErr)
 	}
 	approvalStore := NewApprovalStore(approvalFilePath)
 	reviewQueueSvc := NewReviewQueueService(reviewQueue, concStorage, eventBus)
@@ -155,12 +157,13 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 
 	notificationSvc := NewNotificationService(NewNotificationRateLimiter(10, 20), eventBus)
 	approvalSvc := NewApprovalService(approvalStore)
+	approvalSvc.SetEventBus(eventBus)
 	utilitySvc := NewUtilityService(approvalStore)
 
 	// Build rules store, analytics store, and classifier for approval rules service.
 	rulesStore, rulesErr := NewRulesStore(concStorage)
 	if rulesErr != nil {
-		log.WarningLog.Printf("Failed to load rules store, using empty store: %v", rulesErr)
+		log.Warn("failed to load rules store, using empty store", "err", rulesErr)
 		rulesStore = &RulesStore{storage: concStorage}
 	}
 	analyticsStore := NewAnalyticsStore(concStorage)
@@ -200,7 +203,7 @@ func NewSessionService(storage session.InstanceStore, eventBus *events.EventBus)
 func newPromptStore() *prompts.PromptStore {
 	dir, err := config.GetConfigDir()
 	if err != nil {
-		log.WarningLog.Printf("[PromptStore] Failed to get config dir: %v", err)
+		log.Warn("[PromptStore] failed to get config dir", "err", err)
 		return prompts.NewPromptStore(os.TempDir() + "/stapler-squad-prompts.json")
 	}
 	return prompts.NewPromptStore(dir + "/prompts.json")
@@ -221,6 +224,7 @@ func (s *SessionService) loadInstancesWithWiring() ([]*session.Instance, error) 
 			inst.SetStatusManager(s.statusManager)
 		}
 		s.wireRateLimitCallbacks(inst)
+		s.wireStatusChangeCallback(inst)
 	}
 
 	return instances, nil
@@ -246,7 +250,7 @@ func NewSessionServiceFromConfig() (*SessionService, error) {
 
 	// Auto-migrate from state.json if Ent DB is empty and legacy data exists
 	if migrateErr := maybeAutoMigrateToEnt(repo); migrateErr != nil {
-		log.WarningLog.Printf("auto-migration to Ent skipped or failed: %v", migrateErr)
+		log.Warn("auto-migration to Ent skipped or failed", "err", migrateErr)
 	}
 
 	storage, err := session.NewStorageWithRepository(repo)
@@ -367,15 +371,15 @@ func maybeAutoMigrateToEnt(repo *session.EntRepository) error {
 		return nil // nothing to migrate
 	}
 
-	log.InfoLog.Printf("Auto-migrating %d sessions from state.json to Ent repository", len(stateFile.Instances))
+	log.Info("auto-migrating sessions from state.json to Ent repository", "count", len(stateFile.Instances))
 
 	for _, inst := range stateFile.Instances {
 		if createErr := repo.Create(ctx, inst); createErr != nil {
-			log.WarningLog.Printf("auto-migrate: failed to create session '%s': %v", inst.Title, createErr)
+			log.Warn("auto-migrate: failed to create session", "session", inst.Title, "err", createErr)
 		}
 	}
 
-	log.InfoLog.Printf("Auto-migration to Ent complete")
+	log.Info("auto-migration to Ent complete")
 	return nil
 }
 
@@ -592,7 +596,7 @@ func (s *SessionService) CreateSession(
 	var clonedRepoPath string
 
 	if session.IsGitHubURL(req.Msg.Path) {
-		log.InfoLog.Printf("[CreateSession] Detected GitHub URL: %s", req.Msg.Path)
+		log.Info("[CreateSession] detected GitHub URL", "path", req.Msg.Path)
 		localPath, ref, err := session.ResolveGitHubInput(req.Msg.Path)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("failed to resolve GitHub URL: %w", err))
@@ -606,7 +610,7 @@ func (s *SessionService) CreateSession(
 			branch = ref.Branch
 		}
 
-		log.InfoLog.Printf("[CreateSession] Resolved to local path: %s (branch: %s)", resolvedPath, branch)
+		log.Info("[CreateSession] resolved to local path", "path", resolvedPath, "branch", branch)
 	}
 
 	// One-off session: generate a fresh directory and override resolvedPath.
@@ -698,18 +702,18 @@ func (s *SessionService) CreateSession(
 	// Start the session (initializes tmux + git worktree)
 	// Use Start(true) to indicate this is a first-time setup
 	if err := instance.Start(true); err != nil {
-		log.ErrorLog.Printf("[CreateSession] failed to start session '%s': %v", instance.Title, err)
-		log.ForSession(instance.Title).Error("[CreateSession] failed to start: %v", err)
+		log.Error("[CreateSession] failed to start session", "session", instance.Title, "err", err)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start session: %w", err))
 	}
 
 	// Wire rate limit event callbacks so detection/recovery fire server-level notifications.
 	s.wireRateLimitCallbacks(instance)
+	s.wireStatusChangeCallback(instance)
 
 	// Inject Claude Code HTTP hook config for remote approval from the web UI.
 	// Non-fatal: session is fully functional even without this config.
 	if err := InjectHookConfig(instance.GetEffectiveRootDir(), instance.Title); err != nil {
-		log.WarningLog.Printf("[CreateSession] Failed to inject hook config for session '%s': %v", instance.Title, err)
+		log.Warn("[CreateSession] failed to inject hook config", "session", instance.Title, "err", err)
 	}
 
 	// Save only the new instance to storage.
@@ -720,7 +724,7 @@ func (s *SessionService) CreateSession(
 		// Cleanup on save failure
 		if destroyErr := instance.Destroy(); destroyErr != nil {
 			// Log cleanup error but return original save error
-			log.ErrorLog.Printf("Failed to cleanup after save error: %v", destroyErr)
+			log.Error("failed to cleanup after save error", "err", destroyErr)
 		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save instance: %w", err))
 	}
@@ -729,7 +733,7 @@ func (s *SessionService) CreateSession(
 	// Using AddInstance (not SetInstances) avoids replacing live instances with cold copies.
 	if s.reviewQueuePoller != nil {
 		s.reviewQueuePoller.AddInstance(instance)
-		log.InfoLog.Printf("[ReviewQueue] Added new session '%s' to poller", instance.Title)
+		log.Info("[ReviewQueue] added new session to poller", "session", instance.Title)
 	}
 
 	// Record initial_prompt in prompt history so it appears in the recent-prompts dropdown.
@@ -850,8 +854,7 @@ func (s *SessionService) UpdateSession(
 		// If the session is running, restart it with the new program
 		if instance.Status == session.Running {
 			if err := instance.Restart(true); err != nil {
-				log.ErrorLog.Printf("[UpdateSession] failed to restart session '%s' after program change: %v", instance.Title, err)
-				log.ForSession(instance.Title).Error("[UpdateSession] failed to restart after program change: %v", err)
+				log.Error("[UpdateSession] failed to restart session after program change", "session", instance.Title, "err", err)
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart session after program change: %w", err))
 			}
 		}
@@ -906,7 +909,7 @@ func (s *SessionService) UpdateSession(
 	// CRITICAL: Update the ReviewQueuePoller's instance references after updating session
 	if s.reviewQueuePoller != nil {
 		s.reviewQueuePoller.SetInstances(instances)
-		log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after UpdateSession for '%s'", instance.Title)
+		log.Info("[ReviewQueue] updated poller instance references after UpdateSession", "session", instance.Title)
 	}
 
 	// Publish events based on what was updated
@@ -976,7 +979,7 @@ func (s *SessionService) DeleteSession(
 	if inst := s.FindLiveInstance(sessionTitle); inst != nil {
 		go func() {
 			if err := inst.Destroy(); err != nil {
-				log.WarningLog.Printf("Failed to cleanup session resources for '%s': %v", req.Msg.Id, err)
+				log.Warn("failed to cleanup session resources", "session", req.Msg.Id, "err", err)
 			}
 		}()
 	}
@@ -1027,45 +1030,49 @@ func (s *SessionService) WatchSessions(
 	req *connect.Request[sessionv1.WatchSessionsRequest],
 	stream *connect.ServerStream[sessionv1.SessionEvent],
 ) error {
-	// Send initial snapshot using in-memory poller cache — avoids a full SQLite
-	// scan on every new WatchSessions connection (same approach as ListSessions).
-	var instances []*session.Instance
-	if s.reviewQueuePoller != nil {
-		instances = s.reviewQueuePoller.GetInstances()
-	} else {
-		var err error
-		instances, err = s.loadInstancesWithWiring()
-		if err != nil {
-			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
-		}
-	}
-
-	// Apply optional filters from request
-	for _, inst := range instances {
-		// Filter by category if specified
-		if req.Msg.CategoryFilter != nil && *req.Msg.CategoryFilter != "" {
-			if inst.Category != *req.Msg.CategoryFilter {
-				continue
-			}
-		}
-
-		// Filter by status if specified
-		if req.Msg.StatusFilter != nil && *req.Msg.StatusFilter != sessionv1.SessionStatus_SESSION_STATUS_UNSPECIFIED {
-			if adapters.StatusToProto(inst.Status) != *req.Msg.StatusFilter {
-				continue
-			}
-		}
-
-		// Send as SessionCreated event for initial snapshot
-		event := createInitialSnapshotEvent(inst)
-		if err := stream.Send(event); err != nil {
-			return fmt.Errorf("failed to send initial snapshot: %w", err)
-		}
-	}
-
-	// Subscribe to real-time events from event bus
+	// Subscribe before building the snapshot so no events are lost between the
+	// two phases (snapshot races are resolved by client-side upsert semantics).
 	eventCh, subID := s.eventBus.Subscribe(ctx)
 	defer s.eventBus.Unsubscribe(subID)
+
+	if req.Msg.AfterSeq > 0 {
+		// Reconnecting client: replay events missed since last disconnect.
+		// This covers the period between disconnect and the new subscription above.
+		for _, event := range s.eventBus.EventsSince(req.Msg.AfterSeq) {
+			if err := stream.Send(convertEventToProto(event)); err != nil {
+				return fmt.Errorf("failed to send replayed event: %w", err)
+			}
+		}
+	} else {
+		// Fresh connection: send initial snapshot using in-memory poller cache —
+		// avoids a full SQLite scan on every new WatchSessions connection.
+		var instances []*session.Instance
+		if s.reviewQueuePoller != nil {
+			instances = s.reviewQueuePoller.GetInstances()
+		} else {
+			var err error
+			instances, err = s.loadInstancesWithWiring()
+			if err != nil {
+				return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
+			}
+		}
+
+		for _, inst := range instances {
+			if req.Msg.CategoryFilter != nil && *req.Msg.CategoryFilter != "" {
+				if inst.Category != *req.Msg.CategoryFilter {
+					continue
+				}
+			}
+			if req.Msg.StatusFilter != nil && *req.Msg.StatusFilter != sessionv1.SessionStatus_SESSION_STATUS_UNSPECIFIED {
+				if adapters.StatusToProto(inst.Status) != *req.Msg.StatusFilter {
+					continue
+				}
+			}
+			if err := stream.Send(createInitialSnapshotEvent(inst)); err != nil {
+				return fmt.Errorf("failed to send initial snapshot: %w", err)
+			}
+		}
+	}
 
 	// Stream events until client disconnects or context is canceled
 	for {
@@ -1133,7 +1140,7 @@ func (s *SessionService) StreamTerminal(
 
 	// Fallback to storage if poller doesn't have it (shouldn't happen normally)
 	if instance == nil {
-		log.WarningLog.Printf("[StreamTerminal] Instance '%s' not found in poller, loading from storage (timestamps may desync)", initialMsg.SessionId)
+		log.Warn("[StreamTerminal] instance not found in poller, loading from storage (timestamps may desync)", "session", initialMsg.SessionId)
 		instances, err := s.loadInstancesWithWiring()
 		if err != nil {
 			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load instances: %w", err))
@@ -1162,8 +1169,7 @@ func (s *SessionService) StreamTerminal(
 	// Get PTY for reading terminal output
 	ptyFile, err := instance.GetPTYReader()
 	if err != nil {
-		log.ErrorLog.Printf("[StreamSession] failed to get PTY reader for session '%s': %v", instance.Title, err)
-		log.ForSession(instance.Title).Error("[StreamSession] failed to get PTY reader: %v", err)
+		log.Error("[StreamSession] failed to get PTY reader", "session", instance.Title, "err", err)
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get PTY reader: %w", err))
 	}
 
@@ -1200,7 +1206,7 @@ func (s *SessionService) StreamTerminal(
 					return
 				case ptyPaused = <-pauseCh:
 					if !ptyPaused {
-						log.InfoLog.Printf("[FlowControl] PTY reading RESUMED for session %s", initialMsg.SessionId)
+						log.Info("[FlowControl] PTY reading RESUMED", "session", initialMsg.SessionId)
 					}
 				}
 				continue
@@ -1212,7 +1218,7 @@ func (s *SessionService) StreamTerminal(
 			case paused := <-pauseCh:
 				ptyPaused = paused
 				if paused {
-					log.InfoLog.Printf("[FlowControl] PTY reading PAUSED for session %s", initialMsg.SessionId)
+					log.Info("[FlowControl] PTY reading PAUSED", "session", initialMsg.SessionId)
 				}
 			default:
 
@@ -1224,7 +1230,7 @@ func (s *SessionService) StreamTerminal(
 
 					// Process PTY output through terminal state
 					if processErr := terminalState.ProcessOutput(buf[:n]); processErr != nil {
-						log.WarningLog.Printf("Failed to process terminal output: %v", processErr)
+						log.Warn("failed to process terminal output", "err", processErr)
 						// Fallback to raw output on parse errors
 						outputMsg := &sessionv1.TerminalData{
 							SessionId: initialMsg.SessionId,
@@ -1351,15 +1357,14 @@ func (s *SessionService) StreamTerminal(
 					} else {
 						// Also resize terminal state to match
 						terminalState.Resize(rows, cols)
-						log.InfoLog.Printf("Resized terminal state to %dx%d for session %s", cols, rows, msg.SessionId)
+						log.Info("resized terminal state", "cols", cols, "rows", rows, "session", msg.SessionId)
 					}
 
 				case *sessionv1.TerminalData_FlowControl:
 					// Handle flow control signals from client
 					// Reference: https://xtermjs.org/docs/guides/flowcontrol/
 					if data.FlowControl.Paused {
-						log.InfoLog.Printf("[FlowControl] Client requested PAUSE (watermark: %d bytes) for session %s",
-							data.FlowControl.Watermark, msg.SessionId)
+						log.Info("[FlowControl] client requested PAUSE", "watermark_bytes", data.FlowControl.Watermark, "session", msg.SessionId)
 						// Signal PTY reading goroutine to pause
 						select {
 						case pauseCh <- true:
@@ -1367,8 +1372,7 @@ func (s *SessionService) StreamTerminal(
 							// Channel already has pause signal, skip
 						}
 					} else {
-						log.InfoLog.Printf("[FlowControl] Client requested RESUME (watermark: %d bytes) for session %s",
-							data.FlowControl.Watermark, msg.SessionId)
+						log.Info("[FlowControl] client requested RESUME", "watermark_bytes", data.FlowControl.Watermark, "session", msg.SessionId)
 						// Signal PTY reading goroutine to resume
 						select {
 						case pauseCh <- false:
@@ -1385,11 +1389,11 @@ func (s *SessionService) StreamTerminal(
 					//
 					// If this handler becomes active, the CurrentPaneRequest resize logic is implemented
 					// in connectrpc_websocket.go:524-550 and should be synchronized here.
-					log.WarningLog.Printf("[StreamTerminal] CurrentPaneRequest received (unexpected - WebSocket handler should intercept this)")
+					log.Warn("[StreamTerminal] CurrentPaneRequest received (unexpected - WebSocket handler should intercept this)")
 
 				case *sessionv1.TerminalData_Error:
 					// Client sent an error, log it
-					log.ErrorLog.Printf("Client error: %s (%s)", data.Error.Message, data.Error.Code)
+					log.Error("client error", "message", data.Error.Message, "code", data.Error.Code)
 				}
 			}
 		}
@@ -1398,11 +1402,10 @@ func (s *SessionService) StreamTerminal(
 	// Wait for either context cancellation or error
 	select {
 	case <-streamCtx.Done():
-		log.InfoLog.Printf("StreamTerminal: context done for session %s", initialMsg.SessionId)
+		log.Info("StreamTerminal: context done", "session", initialMsg.SessionId)
 		return nil // Clean shutdown
 	case err := <-errCh:
-		log.ErrorLog.Printf("StreamTerminal: error for session %s: %v", initialMsg.SessionId, err)
-		log.ForSession(initialMsg.SessionId).Error("StreamTerminal: stream error: %v", err)
+		log.Error("StreamTerminal error", "session", initialMsg.SessionId, "err", err)
 		return connect.NewError(connect.CodeInternal, err)
 	}
 }
@@ -1423,7 +1426,7 @@ func (s *SessionService) GetSessionDiff(
 
 	// Update diff stats to get fresh data (the cached version may be stale or nil)
 	if err := instance.UpdateDiffStats(); err != nil {
-		log.WarningLog.Printf("Failed to update diff stats for session %s: %v", req.Msg.Id, err)
+		log.Warn("failed to update diff stats", "session", req.Msg.Id, "err", err)
 		// Continue anyway - we'll return empty stats if unavailable
 	}
 
@@ -1668,14 +1671,13 @@ func (s *SessionService) RenameSession(
 	// Update the ReviewQueuePoller's instance references after renaming
 	if s.reviewQueuePoller != nil {
 		s.reviewQueuePoller.SetInstances(instances)
-		log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after RenameSession from '%s' to '%s'",
-			oldTitle, req.Msg.NewTitle)
+		log.Info("[ReviewQueue] updated poller instance references after RenameSession", "from", oldTitle, "to", req.Msg.NewTitle)
 	}
 
 	// Publish SessionUpdated event
 	s.eventBus.Publish(events.NewSessionUpdatedEvent(instance, []string{"title"}))
 
-	log.InfoLog.Printf("Successfully renamed session from '%s' to '%s'", oldTitle, req.Msg.NewTitle)
+	log.Info("successfully renamed session", "from", oldTitle, "to", req.Msg.NewTitle)
 
 	return connect.NewResponse(&sessionv1.RenameSessionResponse{
 		Session: adapters.InstanceToProto(instance),
@@ -1715,8 +1717,7 @@ func (s *SessionService) RestartSession(
 
 	// Restart the instance
 	if err := instance.Restart(req.Msg.PreserveOutput); err != nil {
-		log.ErrorLog.Printf("[RestartSession] failed to restart session '%s': %v", instance.Title, err)
-		log.ForSession(instance.Title).Error("[RestartSession] failed to restart: %v", err)
+		log.Error("[RestartSession] failed to restart session", "session", instance.Title, "err", err)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart session: %w", err))
 	}
 
@@ -1733,7 +1734,7 @@ func (s *SessionService) RestartSession(
 		message += " (terminal output preserved)"
 	}
 
-	log.InfoLog.Printf("%s", message)
+	log.Info(message)
 
 	return connect.NewResponse(&sessionv1.RestartSessionResponse{
 		Session: adapters.InstanceToProto(instance),
@@ -1889,7 +1890,7 @@ func (s *SessionService) MergeDatabase(
 }
 
 // SetScrollbackManager wires a scrollback sequence provider for checkpoint creation.
-func (s *SessionService) SetScrollbackManager(mgr scrollbackSequencer) {
+func (s *SessionService) SetScrollbackManager(mgr ScrollbackSequencer) {
 	s.scrollbackMgr = mgr
 }
 
@@ -1921,7 +1922,7 @@ func (s *SessionService) CreateCheckpoint(
 	}
 
 	if err := s.storage.SaveInstances(s.allInstances()); err != nil {
-		log.WarningLog.Printf("CreateCheckpoint: failed to persist checkpoint for '%s': %v", inst.Title, err)
+		log.Warn("CreateCheckpoint: failed to persist checkpoint", "session", inst.Title, "err", err)
 	}
 
 	return connect.NewResponse(&sessionv1.CreateCheckpointResponse{
@@ -1998,17 +1999,17 @@ func (s *SessionService) ForkSession(
 	if s.reviewQueuePoller != nil {
 		updatedInstances := append(s.reviewQueuePoller.GetInstances(), newInst)
 		s.reviewQueuePoller.SetInstances(updatedInstances)
-		log.InfoLog.Printf("[ReviewQueue] Updated poller instance references after ForkSession for '%s'", newInst.Title)
+		log.Info("[ReviewQueue] updated poller instance references after ForkSession", "session", newInst.Title)
 	}
 
 	respProto := adapters.InstanceToProto(newInst)
 
 	go func() {
 		if startErr := newInst.Start(true); startErr != nil {
-			log.WarningLog.Printf("ForkSession: failed to start forked session '%s': %v", newInst.Title, startErr)
+			log.Warn("ForkSession: failed to start forked session", "session", newInst.Title, "err", startErr)
 			newInst.Status = session.Stopped
 			if saveErr := s.storage.SaveInstances(s.allInstances()); saveErr != nil {
-				log.WarningLog.Printf("ForkSession: failed to persist Stopped status for '%s': %v", newInst.Title, saveErr)
+				log.Warn("ForkSession: failed to persist Stopped status", "session", newInst.Title, "err", saveErr)
 			}
 		}
 	}()
@@ -2054,7 +2055,7 @@ func (s *SessionService) ClearConversationState(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to persist cleared state: %w", err))
 	}
 
-	log.InfoLog.Printf("Cleared conversation state for session '%s'", instance.Title)
+	log.Info("cleared conversation state", "session", instance.Title)
 	s.eventBus.Publish(events.NewSessionUpdatedEvent(instance, []string{"claude_session"}))
 
 	return connect.NewResponse(&sessionv1.ClearConversationStateResponse{
@@ -2149,7 +2150,7 @@ func (s *SessionService) ListBranches(
 	start := time.Now()
 	runErr := cmd.Run()
 	latencyMs := time.Since(start).Milliseconds()
-	log.InfoLog.Printf("[ListBranches] branch_list_latency_ms=%d repo=%s", latencyMs, absPath)
+	log.Info("[ListBranches] branch list", "latency_ms", latencyMs, "repo", absPath)
 
 	truncated := false
 	if runErr != nil {
@@ -2158,7 +2159,7 @@ func (s *SessionService) ListBranches(
 			truncated = true
 		} else {
 			// git failed (not a git repo, etc.): return empty list, not an error.
-			log.InfoLog.Printf("[ListBranches] git for-each-ref failed for %s: %v", absPath, runErr)
+			log.Warn("[ListBranches] git for-each-ref failed", "repo", absPath, "err", runErr)
 			return connect.NewResponse(&sessionv1.ListBranchesResponse{
 				Branches:   []string{},
 				TotalCount: 0,
@@ -2530,7 +2531,7 @@ func (s *SessionService) RunOneShot(
 	if prURL != "" {
 		inst.GitHubPRURL = prURL
 		if err := s.storage.SaveInstances(s.allInstances()); err != nil {
-			log.WarningLog.Printf("RunOneShot: failed to persist PR URL for session '%s': %v", inst.Title, err)
+			log.Warn("RunOneShot: failed to persist PR URL", "session", inst.Title, "err", err)
 		} else {
 			s.eventBus.Publish(events.NewSessionUpdatedEvent(inst, []string{"github_pr_url"}))
 		}
@@ -2671,7 +2672,7 @@ func (s *SessionService) GetTerminalSnapshot(
 	content, err := inst.Preview()
 	if err != nil {
 		// Non-fatal: return empty snapshot rather than error
-		log.WarningLog.Printf("[GetTerminalSnapshot] Preview failed for session %s: %v", req.Msg.SessionId, err)
+		log.Warn("[GetTerminalSnapshot] preview failed", "session", req.Msg.SessionId, "err", err)
 		content = ""
 	}
 
@@ -2704,6 +2705,22 @@ func (s *SessionService) LogClientEvents(
 		logClientEntry(entry)
 	}
 	return connect.NewResponse(&sessionv1.LogClientEventsResponse{}), nil
+}
+
+// wireStatusChangeCallback registers a ReactiveQueueManager callback on inst so that
+// ClaudeController status transitions immediately trigger a CheckSession call, bypassing
+// the poll cycle. Safe to call before or after the controller is started.
+func (s *SessionService) wireStatusChangeCallback(inst *session.Instance) {
+	if inst == nil || s.reviewQueueSvc == nil {
+		return
+	}
+	mgr := s.reviewQueueSvc.GetReactiveQueueManager()
+	if mgr == nil {
+		return
+	}
+	inst.SetStatusChangeCallback(func(newStatus detection.DetectedStatus, _ string) {
+		mgr.OnControllerStatusChange(inst, newStatus)
+	})
 }
 
 // wireRateLimitCallbacks registers server-level callbacks on an Instance so that
@@ -2758,7 +2775,6 @@ func (s *SessionService) wireRateLimitCallbacks(inst *session.Instance) {
 	)
 }
 
-
 // logClientEntry writes a single browser log entry to the server log.
 func logClientEntry(e *sessionv1.ClientLogEntry) {
 	msg := sanitizeClientLogField(e.GetMessage(), 200)
@@ -2767,11 +2783,12 @@ func logClientEntry(e *sessionv1.ClientLogEntry) {
 	lvl := sanitizeClientLogField(e.GetLevel(), 16)
 	url := sanitizeClientLogField(e.GetUrl(), 256)
 
-	logger := log.InfoLog
+	args := []any{"level", lvl, "session", sid, "url", url, "ua", ua}
 	if lvl == "error" {
-		logger = log.ErrorLog
+		log.Error("[client-log] "+msg, args...)
+	} else {
+		log.Info("[client-log] "+msg, args...)
 	}
-	logger.Printf("[client-log] %s session=%s %s (url: %s ua: %s)", lvl, sid, msg, url, ua)
 }
 
 // sanitizeClientLogField strips control characters and truncates to maxLen runes.

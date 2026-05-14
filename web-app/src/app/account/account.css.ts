@@ -228,7 +228,7 @@ export const qrImage = style({
   height: "120px",
   borderRadius: vars.radii.sm,
   border: `1px solid ${vars.color.borderColor}`,
-  background: "#fff",
+  background: vars.color.cardBackground,
 });
 
 export const qrLabel = style({

@@ -14,6 +14,7 @@ import {
 import { SessionEvent, NotificationEvent } from "@/gen/session/v1/events_pb";
 import { getApiBaseUrl, createAuthInterceptor } from "@/lib/config";
 import { createRpcTimingInterceptor } from "@/lib/telemetry/rpcTiming";
+import { useAnalytics } from "@/lib/contexts/AnalyticsContext";
 import { useAppDispatch, useAppSelector } from "@/lib/store";
 import {
   setSessions,
@@ -41,6 +42,12 @@ interface UseSessionServiceOptions {
    * during the gap (e.g. notification history).
    */
   onReconnect?: () => void;
+  /**
+   * Called when an approval_response event arrives on the stream. Use this to
+   * refresh notification history so all connected clients stay in sync when any
+   * device resolves an approval.
+   */
+  onApprovalResponse?: () => void;
 }
 
 interface UseSessionServiceReturn {
@@ -76,15 +83,21 @@ interface UseSessionServiceReturn {
 export function useSessionService(
   options: UseSessionServiceOptions = {}
 ): UseSessionServiceReturn {
-  const { baseUrl = getApiBaseUrl(), autoWatch = false, enabled = true, onNotification, onReconnect } = options;
+  const { baseUrl = getApiBaseUrl(), autoWatch = false, enabled = true, onNotification, onReconnect, onApprovalResponse } = options;
+  const analytics = useAnalytics();
   const onReconnectRef = useRef(onReconnect);
   useEffect(() => { onReconnectRef.current = onReconnect; }, [onReconnect]);
   const onNotificationRef = useRef(onNotification);
+  const onApprovalResponseRef = useRef(onApprovalResponse);
 
   // Keep ref updated for callback in streaming loop
   useEffect(() => {
     onNotificationRef.current = onNotification;
   }, [onNotification]);
+
+  useEffect(() => {
+    onApprovalResponseRef.current = onApprovalResponse;
+  }, [onApprovalResponse]);
 
   const dispatch = useAppDispatch();
   const sessions = useAppSelector(selectAllSessions);
@@ -100,15 +113,20 @@ export function useSessionService(
   const reconnectDelayRef = useRef(1000);
   // Timestamp of last received stream event, used to detect staleness
   const lastEventTimeRef = useRef<number | null>(null);
+  // Last seen event sequence number — passed as after_seq on reconnect so the
+  // server replays any events missed during the disconnect window (up to 1 hour).
+  const lastSeqRef = useRef<bigint>(0n);
 
   // Initialize ConnectRPC client — uses HTTP for unary, WebSocket for streaming Watch* RPCs
   useEffect(() => {
     const transport = createWatchTransport({
       baseUrl,
-      interceptors: [createAuthInterceptor(), createRpcTimingInterceptor()],
+      interceptors: [createAuthInterceptor(), createRpcTimingInterceptor(analytics)],
     });
 
     clientRef.current = createClient(SessionService, transport);
+  // analytics identity is stable (memoized in AnalyticsContextProvider); baseUrl is the only real dep
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseUrl]);
 
   // List sessions with retry logic
@@ -451,6 +469,11 @@ export function useSessionService(
 
   // Handle session events from watch stream
   const handleSessionEvent = useCallback((event: SessionEvent) => {
+    // Advance the sequence cursor so reconnects can request a targeted replay.
+    if (event.seq > lastSeqRef.current) {
+      lastSeqRef.current = event.seq;
+    }
+
     // Handle different event types based on oneof case
     switch (event.event.case) {
       case "sessionCreated": {
@@ -491,6 +514,12 @@ export function useSessionService(
         }
         break;
       }
+      case "approvalResponse": {
+        // An approval was resolved on another device — refresh history so all
+        // clients show the updated state (resolved badge, not live Approve/Deny).
+        onApprovalResponseRef.current?.();
+        break;
+      }
     }
   }, [dispatch]);
 
@@ -520,6 +549,7 @@ export function useSessionService(
             {
               categoryFilter: watchOptions?.categoryFilter,
               statusFilter: watchOptions?.statusFilter,
+              afterSeq: lastSeqRef.current,
             },
             { signal: abortControllerRef.current.signal }
           );

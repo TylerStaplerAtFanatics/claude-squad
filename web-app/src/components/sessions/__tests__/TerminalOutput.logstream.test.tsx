@@ -52,7 +52,10 @@ jest.mock("@/lib/terminal/TerminalStreamManager", () => ({
   })),
 }));
 
-jest.mock("@/lib/telemetry", () => ({ track: jest.fn() }));
+const mockTrack = jest.fn();
+jest.mock("@/lib/contexts/AnalyticsContext", () => ({
+  useAnalytics: () => ({ track: mockTrack }),
+}));
 
 // Mock useBrowserLogStream so hook side-effects (console patching) don't bleed
 // into the test environment.
@@ -101,6 +104,8 @@ function renderTerminal(sessionId = "session-abc", baseUrl = "/api") {
 beforeEach(() => {
   jest.clearAllMocks();
   localStorage.clear();
+  // Toolbar starts collapsed by default; expand it so toolbar buttons are rendered
+  localStorage.setItem("stapler-squad-toolbar-expanded", "true");
   (useTerminalStream as jest.Mock).mockReturnValue(makeStreamMock());
   mockUseBrowserLogStream.mockReset();
   jest.spyOn(console, "log").mockImplementation(() => {});

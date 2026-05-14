@@ -47,7 +47,7 @@ func NewHTTPHandler(store session.InstanceStore, svc *services.SessionService, s
 // store is used for read-only discovery tools. svc provides lifecycle operations.
 // sbMgr provides read access to terminal scrollback data persisted on disk.
 func RunServer(ctx context.Context, store session.InstanceStore, svc *services.SessionService, sbMgr *scrollback.ScrollbackManager) error {
-	log.InfoLog.Printf("[mcp] server starting on stdio transport")
+	log.Info("mcp server starting on stdio transport")
 	stdio := mcpserver.NewStdioServer(NewCore(store, svc, sbMgr))
 	return stdio.Listen(ctx, os.Stdin, os.Stdout)
 }

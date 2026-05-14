@@ -37,7 +37,11 @@ jest.mock("@connectrpc/connect", () => ({
 }));
 
 jest.mock("@connectrpc/connect-web", () => ({
-  createConnectTransport: jest.fn().mockReturnValue({}),
+  createConnectTransport: jest.fn().mockReturnValue({ unary: jest.fn(), stream: jest.fn() }),
+}));
+
+jest.mock("@/lib/transport/watch-ws-transport", () => ({
+  createWatchTransport: jest.fn().mockReturnValue({ unary: jest.fn(), stream: jest.fn() }),
 }));
 
 jest.mock("@/lib/config", () => ({
@@ -74,9 +78,10 @@ function makeTestStore() {
 }
 
 function makeWrapper(store: ReturnType<typeof makeTestStore>) {
-  // Pass children as a prop (not a 3rd arg) to satisfy Provider's TS type signature
-  return ({ children }: { children: React.ReactNode }) =>
-    React.createElement(Provider, { store, children });
+  function Wrapper({ children }: { children: React.ReactNode }) {
+    return React.createElement(Provider, { store } as any, children);
+  }
+  return Wrapper;
 }
 
 // Simple queue item factory

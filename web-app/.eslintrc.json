@@ -1,6 +1,6 @@
 {
   "extends": ["next/core-web-vitals"],
-  "plugins": ["boundaries"],
+  "plugins": ["boundaries", "analytics", "@typescript-eslint"],
   "settings": {
     "boundaries/elements": [
       { "type": "app",        "pattern": "src/app/**" },
@@ -25,6 +25,7 @@
     ]
   },
   "rules": {
+    "react/jsx-max-props-per-line": "off",
     "no-restricted-syntax": [
       "error",
       {
@@ -34,8 +35,36 @@
       {
         "selector": "TemplateElement[value.raw=/\\b100vh\\b/]",
         "message": "Use var(--viewport-height) instead of '100vh' in template literals. See project_plans/ux-overhaul/."
+      },
+      {
+        "selector": "Literal[value='100dvh']",
+        "message": "Use var(--viewport-height, 100dvh) instead of bare '100dvh'. dvh alone bypasses ViewportProvider's iOS keyboard handling (visualViewport API). The CSS variable is the single source of truth for both Android URL-bar and iOS keyboard shrinkage."
+      },
+      {
+        "selector": "TemplateElement[value.raw=/\\b100dvh\\b/]",
+        "message": "Use var(--viewport-height, 100dvh) instead of bare '100dvh' in template literals. See previous note on ViewportProvider."
+      },
+      {
+        "selector": "Literal[value='100lvh']",
+        "message": "Do not use '100lvh' — it equals the large (URL-bar-hidden) viewport height, the same problematic behaviour as '100vh' on Android Chrome. Use var(--viewport-height, 100dvh) instead."
+      },
+      {
+        "selector": "TemplateElement[value.raw=/\\b100lvh\\b/]",
+        "message": "Do not use '100lvh' in template literals — same issue as '100vh' on Android Chrome. Use var(--viewport-height, 100dvh)."
+      },
+      {
+        "selector": "JSXAttribute[name.name='style'] > JSXExpressionContainer > ObjectExpression > Property > Literal[value=/^#[0-9a-fA-F]{3,8}$/]",
+        "message": "Use vars.color.* tokens from theme.css.ts instead of hardcoded hex values in style props."
+      },
+      {
+        "selector": "ImportDeclaration[source.value='@/lib/telemetry']",
+        "message": "Use useAnalytics().track() instead of the legacy track() from lib/telemetry."
       }
     ],
+    "analytics/require-on-click":         "warn",
+    "analytics/require-omnibar-dispatch": "error",
+    "analytics/require-page-analytics":   "error",
+    "analytics/require-rpc-analytics":    "error",
     "boundaries/dependencies": [
       "error",
       {
@@ -67,9 +96,40 @@
   },
   "overrides": [
     {
+      "files": ["**/*.ts", "**/*.tsx"],
+      "rules": {
+        "@typescript-eslint/no-non-null-assertion": "warn",
+        "@typescript-eslint/consistent-type-imports": "warn"
+      }
+    },
+    {
       "files": ["src/app/test/**/*.tsx", "src/app/test/**/*.ts"],
       "rules": {
         "no-restricted-syntax": "off"
+      }
+    },
+    {
+      "files": ["**/*.css.ts"],
+      "rules": {
+        "no-restricted-syntax": [
+          "warn",
+          {
+            "selector": "Property > Literal[value=/^#[0-9a-fA-F]{3,8}$/]",
+            "message": "Hardcoded hex colors are not allowed in .css.ts files. Use vars.color.* tokens from theme-contract.css.ts."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/components/**/*.tsx"],
+      "rules": {
+        "no-restricted-syntax": [
+          "warn",
+          {
+            "selector": "TSInterfaceDeclaration[id.name=/Props$/] > TSInterfaceBody > TSPropertySignature:nth-child(13) ~ TSPropertySignature",
+            "message": "Component props interface has >12 props. Consider splitting the component or grouping props into a sub-interface."
+          }
+        ]
       }
     }
   ]

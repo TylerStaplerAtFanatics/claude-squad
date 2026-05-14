@@ -750,7 +750,11 @@ type WatchSessionsRequest struct {
 	// Optional: Only watch sessions matching this category.
 	CategoryFilter *string `protobuf:"bytes,1,opt,name=category_filter,json=categoryFilter,proto3,oneof" json:"category_filter,omitempty"`
 	// Optional: Only watch sessions with this status.
-	StatusFilter  *SessionStatus `protobuf:"varint,2,opt,name=status_filter,json=statusFilter,proto3,enum=session.v1.SessionStatus,oneof" json:"status_filter,omitempty"`
+	StatusFilter *SessionStatus `protobuf:"varint,2,opt,name=status_filter,json=statusFilter,proto3,enum=session.v1.SessionStatus,oneof" json:"status_filter,omitempty"`
+	// Optional: If non-zero, replay buffered events with seq > after_seq before
+	// going live. Pass the last seq received before disconnecting. Events up to
+	// one hour old are available; older events are not guaranteed to be present.
+	AfterSeq      uint64 `protobuf:"varint,3,opt,name=after_seq,json=afterSeq,proto3" json:"after_seq,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -797,6 +801,13 @@ func (x *WatchSessionsRequest) GetStatusFilter() SessionStatus {
 		return *x.StatusFilter
 	}
 	return SessionStatus_SESSION_STATUS_UNSPECIFIED
+}
+
+func (x *WatchSessionsRequest) GetAfterSeq() uint64 {
+	if x != nil {
+		return x.AfterSeq
+	}
+	return 0
 }
 
 type GetSessionDiffRequest struct {
@@ -10193,10 +10204,11 @@ const file_session_v1_session_proto_rawDesc = "" +
 	"\x05force\x18\x02 \x01(\bR\x05force\"K\n" +
 	"\x15DeleteSessionResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\xaf\x01\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xcc\x01\n" +
 	"\x14WatchSessionsRequest\x12,\n" +
 	"\x0fcategory_filter\x18\x01 \x01(\tH\x00R\x0ecategoryFilter\x88\x01\x01\x12C\n" +
-	"\rstatus_filter\x18\x02 \x01(\x0e2\x19.session.v1.SessionStatusH\x01R\fstatusFilter\x88\x01\x01B\x12\n" +
+	"\rstatus_filter\x18\x02 \x01(\x0e2\x19.session.v1.SessionStatusH\x01R\fstatusFilter\x88\x01\x01\x12\x1b\n" +
+	"\tafter_seq\x18\x03 \x01(\x04R\bafterSeqB\x12\n" +
 	"\x10_category_filterB\x10\n" +
 	"\x0e_status_filter\"'\n" +
 	"\x15GetSessionDiffRequest\x12\x0e\n" +

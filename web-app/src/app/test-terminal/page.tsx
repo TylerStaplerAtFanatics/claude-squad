@@ -1,4 +1,5 @@
 'use client';
+// analytics-exempt
 
 import React, { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
@@ -201,7 +202,7 @@ export default function TestTerminalPage() {
     <div style={{ padding: '20px', fontFamily: 'monospace' }}>
       <h1>Terminal Flickering Test</h1>
       <p>
-        This page tests the StateApplicator's incremental rendering and RAF batching.
+        This page tests the StateApplicator&apos;s incremental rendering and RAF batching.
         <br />
         Rapid updates (50/sec) are batched to 60fps with only changed lines redrawn.
       </p>
@@ -244,7 +245,7 @@ export default function TestTerminalPage() {
           data-testid="reset-test"
           style={{
             padding: '10px 20px',
-            background: '#2196F3',
+            background: 'var(--primary)',
             color: 'white',
             border: 'none',
             borderRadius: '4px',
@@ -260,7 +261,7 @@ export default function TestTerminalPage() {
         style={{
           marginBottom: '20px',
           padding: '15px',
-          background: '#f5f5f5',
+          background: 'var(--card-background)',
           borderRadius: '4px',
         }}
       >
@@ -314,7 +315,7 @@ export default function TestTerminalPage() {
           border: '1px solid #ccc',
           borderRadius: '4px',
           padding: '10px',
-          background: '#1e1e1e',
+          background: 'var(--terminal-background)',
         }}
       />
     </div>

@@ -2,6 +2,7 @@
 // +feature: config-management settings
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { usePageView } from "@/lib/analytics/usePageView";
 import { SessionService } from "@/gen/session/v1/session_pb";
 import { ClaudeConfigFile } from "@/gen/session/v1/session_pb";
 import { createClient } from "@connectrpc/connect";
@@ -52,6 +53,7 @@ interface ServerInfo {
 }
 
 export default function ConfigEditorPage() {
+  usePageView();
   const [configs, setConfigs] = useState<ClaudeConfigFile[]>([]);
   const [selectedConfig, setSelectedConfig] = useState<ClaudeConfigFile | null>(null);
   const [content, setContent] = useState("");
@@ -206,7 +208,7 @@ export default function ConfigEditorPage() {
     }
   };
 
-  const loadConfig = async (filename: string) => {
+  const loadConfig = useCallback(async (filename: string) => {
     if (!clientRef.current) return;
 
     // Save current file state before switching
@@ -252,9 +254,9 @@ export default function ConfigEditorPage() {
     } catch (err) {
       setError(`Failed to load config: ${err}`);
     }
-  };
+  }, [selectedConfig, content, originalContent, fileStates, configs]);
 
-  const saveConfig = async () => {
+  const saveConfig = useCallback(async () => {
     if (!selectedConfig || !clientRef.current) return;
 
     try {
@@ -285,7 +287,7 @@ export default function ConfigEditorPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [selectedConfig, content]);
 
   const hasUnsavedChanges = content !== originalContent;
 
@@ -392,7 +394,7 @@ export default function ConfigEditorPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasUnsavedChanges, saving, canSave, content, selectedConfig, configs, loadConfig]);
+  }, [hasUnsavedChanges, saving, canSave, content, selectedConfig, configs, loadConfig, saveConfig]);
 
   return (
     <main id="main-content" className={styles.container}>

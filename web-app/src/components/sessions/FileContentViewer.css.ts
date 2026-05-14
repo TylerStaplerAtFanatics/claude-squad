@@ -80,9 +80,9 @@ export const breadcrumbSep = style({
 
 export const truncationWarning = style({
   padding: "6px 12px",
-  background: "rgba(204, 167, 0, 0.1)",
-  borderBottom: "1px solid rgba(204, 167, 0, 0.3)",
-  color: "#cca700",
+  background: vars.color.warningBg,
+  borderBottom: `1px solid ${vars.color.warning}`,
+  color: vars.color.warning,
   fontSize: 12,
 });
 
@@ -215,4 +215,40 @@ export const imagePreview = style({
   maxWidth: "100%",
   maxHeight: "100%",
   objectFit: "contain",
+});
+
+export const pdfViewer = style({
+  flex: 1,
+  height: 0,
+  overflow: "hidden",
+});
+
+export const pdfEmbed = style({
+  width: "100%",
+  height: "100%",
+  border: "none",
+  display: "block",
+});
+
+export const videoViewer = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  flex: 1,
+  overflow: "auto",
+  padding: vars.space[4],
+  gap: vars.space[3],
+});
+
+export const videoPlayer = style({
+  maxWidth: "100%",
+  maxHeight: "calc(100% - 48px)",
+});
+
+export const videoMeta = style({
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textMuted,
+  textAlign: "center",
+  margin: 0,
 });

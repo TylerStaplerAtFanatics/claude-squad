@@ -22,6 +22,12 @@ message SessionEvent {
     ApprovalResponseEvent approval_response = 8;
     NotificationEvent notification = 9;
   }
+
+  // Monotonically increasing sequence number assigned by the server EventBus.
+  // Clients should track the highest seq they have received and pass it as
+  // after_seq in WatchSessionsRequest on reconnect to replay missed events.
+  // Events are retained for up to one hour.
+  uint64 seq = 10;
 }
 
 // SessionCreatedEvent is emitted when a new session is created
@@ -84,7 +90,20 @@ message TerminalData {
     TerminalDiff diff = 13;           // Minimal ANSI diff (server → client)
     InputWithEcho input_echo = 14;    // Input with echo tracking (client → server)
     SSPNegotiation ssp_negotiation = 15;  // Feature negotiation (bidirectional)
+
+    // Resize quiescence signal — sent before/after server-side tmux reflow wait
+    ResizeQuiescence resize_quiescence = 16;
   }
+}
+
+// ResizeQuiescence signals the client that the server is waiting for tmux to
+// finish reflowing after a resize (resizing=true) or that the stable post-resize
+// snapshot has been sent (resizing=false). Enables the frontend to show/hide a
+// non-blocking overlay during the reflow window.
+message ResizeQuiescence {
+  bool resizing = 1;  // true=reflow in progress, false=reflow complete
+  int32 cols = 2;     // Target columns for this resize event
+  int32 rows = 3;     // Target rows for this resize event
 }
 
 // TerminalOutput contains data from the terminal (server to client)

@@ -52,7 +52,10 @@ jest.mock("@/lib/terminal/TerminalStreamManager", () => ({
   })),
 }));
 
-jest.mock("@/lib/telemetry", () => ({ track: jest.fn() }));
+const mockTrack = jest.fn();
+jest.mock("@/lib/contexts/AnalyticsContext", () => ({
+  useAnalytics: () => ({ track: mockTrack }),
+}));
 
 // ── Imports (after mocks) ──────────────────────────────────────────────────────
 
@@ -98,6 +101,8 @@ beforeEach(() => {
   jest.spyOn(console, "log").mockImplementation(() => {});
   jest.spyOn(console, "warn").mockImplementation(() => {});
   jest.spyOn(console, "error").mockImplementation(() => {});
+  // Toolbar starts collapsed by default; expand it so toolbar buttons are rendered
+  localStorage.setItem("stapler-squad-toolbar-expanded", "true");
 });
 
 afterEach(() => {

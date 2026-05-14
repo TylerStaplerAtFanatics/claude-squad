@@ -1,4 +1,5 @@
 import { style, keyframes } from "@vanilla-extract/css";
+import { vars } from "@/styles/theme.css";
 
 const pulse = keyframes({
   "0%, 100%": { opacity: 1 },
@@ -10,8 +11,8 @@ export const container = style({
   flexDirection: "column",
   height: "var(--viewport-height, 100dvh)",
   overflow: "hidden",
-  background: "#1e1e1e",
-  color: "#d4d4d4",
+  background: vars.color.terminalBackground,
+  color: vars.color.terminalForeground,
   fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
 });
 
@@ -20,15 +21,15 @@ export const header = style({
   justifyContent: "space-between",
   alignItems: "center",
   padding: "1rem 2rem",
-  background: "#2d2d30",
-  borderBottom: "1px solid #3e3e42",
+  background: vars.color.terminalHeaderBg,
+  borderBottom: `1px solid ${vars.color.terminalBorder}`,
 });
 
 export const stats = style({
   display: "flex",
   gap: "1.5rem",
   fontSize: "0.9rem",
-  color: "#cccccc",
+  color: vars.color.terminalForeground,
 });
 
 export const mainContent = style({
@@ -46,8 +47,8 @@ export const leftPanel = style({
   width: "400px",
   display: "flex",
   flexDirection: "column",
-  borderRight: "1px solid #3e3e42",
-  background: "#252526",
+  borderRight: `1px solid ${vars.color.terminalBorder}`,
+  background: vars.color.terminalHeaderBg,
   "@media": {
     "screen and (max-width: 1400px)": {
       width: "350px",
@@ -55,7 +56,7 @@ export const leftPanel = style({
     "screen and (max-width: 1024px)": {
       width: "100%",
       border: "none",
-      borderBottom: "1px solid #3e3e42",
+      borderBottom: `1px solid ${vars.color.terminalBorder}`,
       maxHeight: "300px",
     },
   },
@@ -63,7 +64,7 @@ export const leftPanel = style({
 
 export const panelHeader = style({
   padding: "1rem",
-  borderBottom: "1px solid #3e3e42",
+  borderBottom: `1px solid ${vars.color.terminalBorder}`,
 });
 
 export const filters = style({
@@ -74,16 +75,16 @@ export const filters = style({
 export const select = style({
   flex: 1,
   padding: "0.5rem",
-  background: "#3e3e42",
-  border: "1px solid #555555",
+  background: vars.color.terminalHeaderBg,
+  border: `1px solid ${vars.color.terminalBorder}`,
   borderRadius: "4px",
-  color: "#cccccc",
+  color: vars.color.terminalForeground,
   fontSize: "0.875rem",
   cursor: "pointer",
   selectors: {
     "&:hover": {
-      background: "#505050",
-      borderColor: "#6e6e6e",
+      background: vars.color.terminalHoverBg,
+      borderColor: vars.color.terminalBorder,
     },
     "&:disabled": {
       opacity: 0.5,
@@ -94,7 +95,7 @@ export const select = style({
 
 export const presets = style({
   padding: "1rem",
-  borderBottom: "1px solid #3e3e42",
+  borderBottom: `1px solid ${vars.color.terminalBorder}`,
 });
 
 export const presetButtons = style({
@@ -110,17 +111,17 @@ export const presetButtons = style({
 
 export const presetButton = style({
   padding: "0.5rem",
-  background: "#3e3e42",
-  border: "1px solid #555555",
+  background: vars.color.terminalHeaderBg,
+  border: `1px solid ${vars.color.terminalBorder}`,
   borderRadius: "4px",
-  color: "#cccccc",
+  color: vars.color.terminalForeground,
   fontSize: "0.8rem",
   cursor: "pointer",
   transition: "all 0.2s",
   selectors: {
     "&:hover": {
-      background: "#4e4e4e",
-      borderColor: "#6e6e6e",
+      background: vars.color.terminalHoverBg,
+      borderColor: vars.color.terminalBorder,
       transform: "translateY(-1px)",
     },
   },
@@ -135,28 +136,28 @@ export const codeList = style({
 export const codeItem = style({
   marginBottom: "0.5rem",
   padding: "0.75rem",
-  background: "#2d2d30",
-  border: "1px solid #3e3e42",
+  background: vars.color.terminalHeaderBg,
+  border: `1px solid ${vars.color.terminalBorder}`,
   borderRadius: "4px",
   cursor: "pointer",
   transition: "all 0.2s",
   selectors: {
     "&:hover": {
-      background: "#3e3e42",
-      borderColor: "#555555",
+      background: vars.color.terminalHoverBg,
+      borderColor: vars.color.terminalBorder,
     },
     "&.selected": {
-      background: "#3e3e42",
-      borderColor: "#4ec9b0",
-      boxShadow: "0 0 0 1px #4ec9b0 inset",
+      background: vars.color.terminalHoverBg,
+      borderColor: vars.color.success,
+      boxShadow: `0 0 0 1px ${vars.color.success} inset`,
     },
   },
 });
 
 export const selected = style({
-  background: "#3e3e42",
-  borderColor: "#4ec9b0",
-  boxShadow: "0 0 0 1px #4ec9b0 inset",
+  background: vars.color.terminalHoverBg,
+  borderColor: vars.color.success,
+  boxShadow: `0 0 0 1px ${vars.color.success} inset`,
 });
 
 export const codeHeader = style({
@@ -170,7 +171,7 @@ export const codeTitle = style({
   flex: 1,
   fontSize: "0.9rem",
   fontWeight: 500,
-  color: "#ffffff",
+  color: vars.color.terminalForeground,
 });
 
 export const priority = style({
@@ -182,47 +183,47 @@ export const priority = style({
 });
 
 export const critical = style({
-  background: "#d73a49",
-  color: "#ffffff",
+  background: vars.color.error,
+  color: vars.color.primaryText,
 });
 
 export const high = style({
-  background: "#fb8500",
-  color: "#ffffff",
+  background: vars.color.warning,
+  color: vars.color.primaryText,
 });
 
 export const medium = style({
-  background: "#219ebc",
-  color: "#ffffff",
+  background: vars.color.primary,
+  color: vars.color.primaryText,
 });
 
 export const low = style({
-  background: "#595959",
-  color: "#cccccc",
+  background: vars.color.panelBgSecondary,
+  color: vars.color.textSecondary,
 });
 
 export const codeDetails = style({
   display: "flex",
   gap: "0.75rem",
   fontSize: "0.8rem",
-  color: "#999999",
+  color: vars.color.terminalTextMuted,
   paddingLeft: "1.5rem",
 });
 
 export const category = style({
   padding: "0.125rem 0.375rem",
-  background: "#1e1e1e",
+  background: vars.color.terminalBackground,
   borderRadius: "3px",
-  color: "#cccccc",
+  color: vars.color.terminalForeground,
 });
 
 export const count = style({
-  color: "#999999",
+  color: vars.color.terminalTextMuted,
 });
 
 export const sequence = style({
   fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace",
-  color: "#d7ba7d",
+  color: vars.color.warningText,
   fontSize: "0.75rem",
 });
 
@@ -230,7 +231,7 @@ export const middlePanel = style({
   flex: 1,
   display: "flex",
   flexDirection: "column",
-  background: "#1e1e1e",
+  background: vars.color.terminalBackground,
   "@media": {
     "screen and (max-width: 1024px)": {
       minHeight: "400px",
@@ -243,16 +244,16 @@ export const terminalHeader = style({
   justifyContent: "space-between",
   alignItems: "center",
   padding: "1rem",
-  background: "#2d2d30",
-  borderBottom: "1px solid #3e3e42",
+  background: vars.color.terminalHeaderBg,
+  borderBottom: `1px solid ${vars.color.terminalBorder}`,
 });
 
 export const currentCode = style({
   padding: "0.25rem 0.75rem",
-  background: "#3e3e42",
+  background: vars.color.terminalHoverBg,
   borderRadius: "4px",
   fontSize: "0.875rem",
-  color: "#4ec9b0",
+  color: vars.color.success,
   animationName: pulse,
   animationDuration: "1s",
   animationIterationCount: "infinite",
@@ -261,16 +262,16 @@ export const currentCode = style({
 export const terminal = style({
   flex: 1,
   padding: "1rem",
-  background: "#1e1e1e",
+  background: vars.color.terminalBackground,
   fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace",
   fontSize: "14px",
   lineHeight: "1.5",
   overflowY: "auto",
-  color: "#d4d4d4",
+  color: vars.color.terminalForeground,
 });
 
 export const placeholder = style({
-  color: "#666666",
+  color: vars.color.terminalTextMuted,
   fontStyle: "italic",
   textAlign: "center",
   marginTop: "2rem",
@@ -285,8 +286,8 @@ export const rightPanel = style({
   width: "350px",
   display: "flex",
   flexDirection: "column",
-  borderLeft: "1px solid #3e3e42",
-  background: "#252526",
+  borderLeft: `1px solid ${vars.color.terminalBorder}`,
+  background: vars.color.terminalHeaderBg,
   "@media": {
     "screen and (max-width: 1400px)": {
       width: "300px",
@@ -294,14 +295,14 @@ export const rightPanel = style({
     "screen and (max-width: 1024px)": {
       width: "100%",
       border: "none",
-      borderTop: "1px solid #3e3e42",
+      borderTop: `1px solid ${vars.color.terminalBorder}`,
     },
   },
 });
 
 export const controls = style({
   padding: "1rem",
-  borderBottom: "1px solid #3e3e42",
+  borderBottom: `1px solid ${vars.color.terminalBorder}`,
 });
 
 export const controlGroup = style({
@@ -311,15 +312,15 @@ export const controlGroup = style({
 export const input = style({
   width: "100%",
   padding: "0.5rem",
-  background: "#3e3e42",
-  border: "1px solid #555555",
+  background: vars.color.terminalHoverBg,
+  border: `1px solid ${vars.color.terminalBorder}`,
   borderRadius: "4px",
-  color: "#cccccc",
+  color: vars.color.terminalForeground,
   fontSize: "0.875rem",
   selectors: {
     "&:hover": {
-      background: "#505050",
-      borderColor: "#6e6e6e",
+      background: vars.color.terminalHoverBg,
+      borderColor: vars.color.terminalBorder,
     },
     "&:disabled": {
       opacity: 0.5,
@@ -343,11 +344,11 @@ export const startButton = style({
   fontWeight: 600,
   cursor: "pointer",
   transition: "all 0.2s",
-  background: "#4ec9b0",
-  color: "#1e1e1e",
+  background: vars.color.success,
+  color: vars.color.terminalBackground,
   selectors: {
     "&:hover": {
-      background: "#5ed9c0",
+      background: vars.color.successBg,
       transform: "translateY(-1px)",
     },
   },
@@ -362,11 +363,11 @@ export const stopButton = style({
   fontWeight: 600,
   cursor: "pointer",
   transition: "all 0.2s",
-  background: "#f48771",
-  color: "#1e1e1e",
+  background: vars.color.error,
+  color: vars.color.terminalBackground,
   selectors: {
     "&:hover": {
-      background: "#ff9780",
+      background: vars.color.errorBg,
       transform: "translateY(-1px)",
     },
   },
@@ -374,7 +375,7 @@ export const stopButton = style({
 
 export const metrics = style({
   padding: "1rem",
-  borderBottom: "1px solid #3e3e42",
+  borderBottom: `1px solid ${vars.color.terminalBorder}`,
 });
 
 export const metricItem = style({
@@ -385,34 +386,34 @@ export const metricValue = style({
   display: "block",
   fontSize: "1.25rem",
   fontWeight: 600,
-  color: "#ffffff",
+  color: vars.color.terminalForeground,
   marginBottom: "0.5rem",
 });
 
 export const progressBar = style({
   height: "8px",
-  background: "#3e3e42",
+  background: vars.color.terminalHoverBg,
   borderRadius: "4px",
   overflow: "hidden",
 });
 
 export const progressFill = style({
   height: "100%",
-  background: "#4ec9b0",
+  background: vars.color.success,
   transition: "width 0.3s ease",
 });
 
 export const errors = style({
   marginTop: "1rem",
   padding: "0.75rem",
-  background: "rgba(244, 135, 113, 0.1)",
-  border: "1px solid #f48771",
+  background: vars.color.errorBg,
+  border: `1px solid ${vars.color.error}`,
   borderRadius: "4px",
 });
 
 export const error = style({
   fontSize: "0.8rem",
-  color: "#f48771",
+  color: vars.color.error,
   marginBottom: "0.25rem",
 });
 
@@ -430,10 +431,10 @@ export const categoryName = style({
   alignItems: "center",
   marginBottom: "0.25rem",
   fontSize: "0.85rem",
-  color: "#cccccc",
+  color: vars.color.terminalForeground,
 });
 
 export const categoryCount = style({
   fontSize: "0.75rem",
-  color: "#999999",
+  color: vars.color.terminalTextMuted,
 });

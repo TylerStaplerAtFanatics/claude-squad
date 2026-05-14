@@ -1,4 +1,5 @@
 import { style, globalStyle } from "@vanilla-extract/css";
+import { vars } from "@/styles/theme.css";
 
 export const container = style({
   position: "relative",
@@ -10,9 +11,9 @@ export const trigger = style({
   alignItems: "center",
   gap: "0.5rem",
   padding: "0.5rem 0.75rem",
-  backgroundColor: "#1a1a1a",
-  border: "1px solid #333",
-  color: "#e5e5e5",
+  backgroundColor: vars.color.cardBackground,
+  border: `1px solid ${vars.color.borderColor}`,
+  color: vars.color.textPrimary,
   borderRadius: "4px",
   cursor: "pointer",
   fontSize: "0.9rem",
@@ -20,13 +21,13 @@ export const trigger = style({
   transition: "border-color 0.2s, background-color 0.2s",
   selectors: {
     "&:hover": {
-      backgroundColor: "#2a2a2a",
-      borderColor: "#444",
+      backgroundColor: vars.color.hoverBackground,
+      borderColor: vars.color.inputBorder,
     },
     "&:focus": {
       outline: "none",
-      borderColor: "#17a2b8",
-      boxShadow: "0 0 0 2px rgba(23, 162, 184, 0.2)",
+      borderColor: vars.color.inputFocusBorder,
+      boxShadow: `0 0 0 2px ${vars.color.accentBg}`,
     },
   },
 });
@@ -43,7 +44,7 @@ export const label = style({
 
 export const chevron = style({
   fontSize: "0.7rem",
-  color: "#666",
+  color: vars.color.textMuted,
 });
 
 export const dropdown = style({
@@ -51,10 +52,10 @@ export const dropdown = style({
   top: "100%",
   left: "0",
   marginTop: "4px",
-  backgroundColor: "#1a1a1a",
-  border: "1px solid #333",
+  backgroundColor: vars.color.cardBackground,
+  border: `1px solid ${vars.color.borderColor}`,
   borderRadius: "6px",
-  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
+  boxShadow: vars.shadow.md,
   zIndex: 100,
   minWidth: "200px",
   overflow: "hidden",
@@ -70,7 +71,7 @@ export const presetButton = style({
   padding: "0.5rem 0.75rem",
   background: "none",
   border: "none",
-  color: "#e5e5e5",
+  color: vars.color.textPrimary,
   textAlign: "left",
   cursor: "pointer",
   borderRadius: "4px",
@@ -79,23 +80,23 @@ export const presetButton = style({
   transition: "background-color 0.15s",
   selectors: {
     "&:hover": {
-      backgroundColor: "#2a2a2a",
+      backgroundColor: vars.color.hoverBackground,
     },
     "&:focus": {
       outline: "none",
-      boxShadow: "inset 0 0 0 2px rgba(23, 162, 184, 0.5)",
+      boxShadow: `inset 0 0 0 2px ${vars.color.accentHover}`,
     },
   },
 });
 
 export const presetButtonActive = style({
-  backgroundColor: "#17a2b8",
-  color: "#fff",
+  backgroundColor: vars.color.primary,
+  color: vars.color.primaryText,
 });
 
 export const divider = style({
   height: "1px",
-  backgroundColor: "#333",
+  backgroundColor: vars.color.borderColor,
   margin: "0.25rem 0",
 });
 
@@ -104,7 +105,7 @@ export const customButton = style({
   padding: "0.5rem 0.75rem",
   background: "none",
   border: "none",
-  color: "#17a2b8",
+  color: vars.color.primary,
   textAlign: "left",
   cursor: "pointer",
   fontSize: "0.85rem",
@@ -112,7 +113,7 @@ export const customButton = style({
   transition: "background-color 0.15s",
   selectors: {
     "&:hover": {
-      backgroundColor: "#2a2a2a",
+      backgroundColor: vars.color.hoverBackground,
     },
   },
 });
@@ -127,13 +128,13 @@ export const customHeader = style({
   gap: "0.5rem",
   marginBottom: "0.75rem",
   fontSize: "0.85rem",
-  color: "#999",
+  color: vars.color.textMuted,
 });
 
 export const backButton = style({
   background: "none",
   border: "none",
-  color: "#17a2b8",
+  color: vars.color.primary,
   cursor: "pointer",
   fontSize: "0.85rem",
   padding: "0",
@@ -158,20 +159,20 @@ export const inputGroup = style({
   gap: "0.25rem",
 });
 
-globalStyle(`${inputGroup} span`, { fontSize: "0.75rem", color: "#999" });
+globalStyle(`${inputGroup} span`, { fontSize: "0.75rem", color: vars.color.textMuted });
 
 export const dateInput = style({
   padding: "0.5rem",
-  backgroundColor: "#0a0a0a",
-  border: "1px solid #444",
-  color: "#e5e5e5",
+  backgroundColor: vars.color.background,
+  border: `1px solid ${vars.color.inputBorder}`,
+  color: vars.color.textPrimary,
   borderRadius: "4px",
   fontSize: "0.85rem",
   fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
   selectors: {
     "&:focus": {
       outline: "none",
-      borderColor: "#17a2b8",
+      borderColor: vars.color.inputFocusBorder,
     },
   },
 });
@@ -179,9 +180,9 @@ export const dateInput = style({
 export const applyButton = style({
   width: "100%",
   padding: "0.5rem",
-  backgroundColor: "#17a2b8",
+  backgroundColor: vars.color.primary,
   border: "none",
-  color: "#fff",
+  color: vars.color.primaryText,
   borderRadius: "4px",
   cursor: "pointer",
   fontSize: "0.85rem",
@@ -189,11 +190,11 @@ export const applyButton = style({
   transition: "background-color 0.2s",
   selectors: {
     "&:hover:not(:disabled)": {
-      backgroundColor: "#138496",
+      backgroundColor: vars.color.primaryHover,
     },
     "&:disabled": {
-      backgroundColor: "#333",
-      color: "#666",
+      backgroundColor: vars.color.borderColor,
+      color: vars.color.textMuted,
       cursor: "not-allowed",
     },
   },

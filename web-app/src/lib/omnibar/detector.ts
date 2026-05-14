@@ -4,6 +4,7 @@
  */
 
 import { InputType, DetectionResult, GitHubRef } from "./types";
+import { CommandDetector } from "./detectors/CommandDetector";
 import { toSessionSlug } from "./slugify";
 
 export interface Detector {
@@ -346,6 +347,7 @@ export class DetectorRegistry {
 // Create default registry with all detectors
 export function createDefaultRegistry(): DetectorRegistry {
   const registry = new DetectorRegistry();
+  registry.register(new CommandDetector());
   registry.register(new GitHubPRDetector());
   registry.register(new GitHubBranchDetector());
   registry.register(new GitHubRepoDetector());

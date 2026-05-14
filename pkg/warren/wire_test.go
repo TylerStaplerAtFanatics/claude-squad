@@ -142,3 +142,60 @@ func TestWire_TotalAndApplied(t *testing.T) {
 		t.Errorf("Applied() = %d, want 2 (B was nil)", w.Applied())
 	}
 }
+
+// TestWarrenWire_PhaseValidation_Sequential verifies that the three-phase
+// BuildXxxDeps pattern — CoreDeps → ServiceDeps → RuntimeDeps — is enforced
+// by independent Wire instances at each phase, matching the pattern used in
+// server/dependencies.go.
+func TestWarrenWire_PhaseValidation_Sequential(t *testing.T) {
+	type phase1 struct{ db string }
+	type phase2 struct{ cache string }
+	type phase3 struct{ worker string }
+
+	p1 := &phase1{}
+	p2 := &phase2{}
+	p3 := &phase3{}
+
+	// Phase 1
+	w1 := warren.NewWire("CoreDeps")
+	warren.Set(w1, "DB", func(v string) { p1.db = v }, "postgres")
+	if err := w1.Validate(); err != nil {
+		t.Fatalf("phase 1 failed: %v", err)
+	}
+
+	// Phase 2 — depends on phase 1 completing successfully
+	w2 := warren.NewWire("ServiceDeps")
+	warren.Set(w2, "Cache", func(v string) { p2.cache = v }, "redis")
+	if err := w2.Validate(); err != nil {
+		t.Fatalf("phase 2 failed: %v", err)
+	}
+
+	// Phase 3 — depends on phase 2
+	w3 := warren.NewWire("RuntimeDeps")
+	warren.Set(w3, "Worker", func(v string) { p3.worker = v }, "queue")
+	if err := w3.Validate(); err != nil {
+		t.Fatalf("phase 3 failed: %v", err)
+	}
+
+	if p1.db != "postgres" || p2.cache != "redis" || p3.worker != "queue" {
+		t.Errorf("phase wiring incomplete: p1=%+v p2=%+v p3=%+v", p1, p2, p3)
+	}
+	if w1.Applied() != 1 || w2.Applied() != 1 || w3.Applied() != 1 {
+		t.Errorf("each phase wire should have exactly 1 applied setter")
+	}
+}
+
+// TestWarrenWire_PhaseValidation_FailedPhase1_BlocksPhase2 demonstrates the
+// intended usage: callers propagate the phase-1 error and never reach phase 2.
+func TestWarrenWire_PhaseValidation_FailedPhase1_BlocksPhase2(t *testing.T) {
+	w1 := warren.NewWire("CoreDeps")
+	warren.Set(w1, "DB", func(*int) {}, (*int)(nil)) // nil — will fail validation
+
+	if err := w1.Validate(); err != nil {
+		// Caller stops here and never enters phase 2.
+		return
+	}
+
+	// If we reach here, phase 1 incorrectly reported success.
+	t.Fatal("phase 1 should have failed for nil DB")
+}

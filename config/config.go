@@ -71,8 +71,8 @@ const (
 	defaultProgram = "proxy-claude"
 )
 
-// isTestMode detects if the application is running in test/benchmark mode
-func isTestMode() bool {
+// IsTestMode detects if the application is running in test/benchmark mode
+func IsTestMode() bool {
 
 	// Check command line arguments for test/benchmark indicators
 	for _, arg := range os.Args {
@@ -117,7 +117,7 @@ func GetConfigDir() (string, error) {
 		legacyDir := filepath.Join(homeDir, ".claude-squad")
 		if _, legacyErr := os.Stat(legacyDir); legacyErr == nil {
 			if migrateErr := os.Rename(legacyDir, baseDir); migrateErr == nil {
-				log.InfoLog.Printf("Migrated data directory: %s → %s\n", legacyDir, baseDir)
+				log.Info("migrated data directory", "from", legacyDir, "to", baseDir)
 			}
 		}
 	}
@@ -134,7 +134,7 @@ func GetConfigDir() (string, error) {
 	// Priority 3: Test mode auto-detection (automatic isolation)
 	// Must be checked before the preferred workspace file so that a workspace
 	// preference set by a production instance cannot leak into test runs.
-	if isTestMode() {
+	if IsTestMode() {
 		// Each test/benchmark process gets its own isolated state
 		pid := os.Getpid()
 		return filepath.Join(baseDir, "test", fmt.Sprintf("test-%d", pid)), nil
@@ -164,7 +164,7 @@ func GetConfigDir() (string, error) {
 			return filepath.Join(baseDir, "workspaces", workspaceID), nil
 		}
 		// If we can't get working directory, fall through to shared state
-		log.WarningLog.Printf("Failed to get working directory for workspace isolation: %v", err)
+		log.Warn("failed to get working directory for workspace isolation", "err", err)
 	}
 
 	// Priority 5: Global shared state (fallback, backward compatibility)
@@ -252,6 +252,14 @@ type Config struct {
 	// Default: "~/Projects". Tilde is expanded at runtime. Created on first use.
 	// Zero-value (empty string) is backwards-compatible — existing configs load without change.
 	NewProjectBaseDir string `json:"new_project_base_dir,omitempty"`
+	// AnalyticsMaxRows is the maximum number of analytics events to retain in the database.
+	// When exceeded, the oldest rows are deleted. 0 means no row-count limit.
+	// Default: 100_000.
+	AnalyticsMaxRows int `json:"analytics_max_rows,omitempty"`
+	// AnalyticsMaxAgeDays is the maximum age in days of analytics events to retain.
+	// Events older than this are deleted. 0 means no age limit.
+	// Default: 90.
+	AnalyticsMaxAgeDays int `json:"analytics_max_age_days,omitempty"`
 }
 
 // SessionDefaults is the top-level container for all session default configuration.
@@ -307,7 +315,7 @@ func defaultConfigWithExecutor(exec CommandExecutor) *Config {
 
 	program, err := cfg.GetClaudeCommand()
 	if err != nil {
-		log.ErrorLog.Printf("failed to get claude command: %v", err)
+		log.Error("failed to get claude command", "err", err)
 		program = defaultProgram
 	}
 
@@ -320,7 +328,7 @@ func defaultConfigWithExecutor(exec CommandExecutor) *Config {
 	cfg.BranchPrefix = func() string {
 		user, err := user.Current()
 		if err != nil || user == nil || user.Username == "" {
-			log.ErrorLog.Printf("failed to get current user: %v", err)
+			log.Error("failed to get current user", "err", err)
 			return "session/"
 		}
 		return fmt.Sprintf("%s/", strings.ToLower(user.Username))
@@ -329,17 +337,17 @@ func defaultConfigWithExecutor(exec CommandExecutor) *Config {
 	cfg.SessionDetectionInterval = 5000
 	cfg.StateRefreshInterval = 3000
 	cfg.LogsEnabled = true
-	cfg.LogsDir = "" // Empty string means use default location
+	cfg.LogsDir = ""    // Empty string means use default location
 	cfg.LogMaxSize = 10 // 10MB
-	cfg.LogMaxFiles = 5  // Keep 5 rotated files
-	cfg.LogMaxAge = 30 // 30 days
+	cfg.LogMaxFiles = 5 // Keep 5 rotated files
+	cfg.LogMaxAge = 30  // 30 days
 	cfg.LogCompress = true
 	cfg.UseSessionLogs = true
-	cfg.TmuxSessionPrefix = "staplersquad_" // Default prefix for backward compatibility
+	cfg.TmuxSessionPrefix = "staplersquad_"  // Default prefix for backward compatibility
 	cfg.PerformBackgroundHealthChecks = true // Enabled by default for automated session maintenance
 	cfg.KeyCategories = getDefaultKeyCategories()
-	cfg.TerminalStreamingMode = "raw"  // Default to raw streaming (simpler, more reliable)
-	cfg.VCSPreference = "auto" // Default to auto-detection (prefer JJ if available)
+	cfg.TerminalStreamingMode = "raw" // Default to raw streaming (simpler, more reliable)
+	cfg.VCSPreference = "auto"        // Default to auto-detection (prefer JJ if available)
 	cfg.AvailablePrograms = availablePrograms
 	return cfg
 }
@@ -390,6 +398,24 @@ func (c *Config) NewProjectBaseDirOrDefault() (string, error) {
 		dir = home
 	}
 	return dir, nil
+}
+
+// AnalyticsMaxRowsOrDefault returns the configured max analytics rows, or 100_000
+// if not set (zero value).
+func (c *Config) AnalyticsMaxRowsOrDefault() int {
+	if c.AnalyticsMaxRows <= 0 {
+		return 100_000
+	}
+	return c.AnalyticsMaxRows
+}
+
+// AnalyticsMaxAgeDaysOrDefault returns the configured max analytics age in days,
+// or 90 if not set (zero value).
+func (c *Config) AnalyticsMaxAgeDaysOrDefault() int {
+	if c.AnalyticsMaxAgeDays <= 0 {
+		return 90
+	}
+	return c.AnalyticsMaxAgeDays
 }
 
 // GetClaudeCommand attempts to find the "claude" command in the user's shell
@@ -522,7 +548,7 @@ func GetAvailablePrograms() []string {
 func LoadConfig() *Config {
 	configDir, err := GetConfigDir()
 	if err != nil {
-		log.ErrorLog.Printf("failed to get config directory: %v", err)
+		log.Error("failed to get config directory", "err", err)
 		return DefaultConfig()
 	}
 
@@ -532,11 +558,11 @@ func LoadConfig() *Config {
 		if os.IsNotExist(err) {
 			defaultCfg := DefaultConfig()
 			if saveErr := saveConfig(defaultCfg); saveErr != nil {
-				log.WarningLog.Printf("failed to save default config: %v", saveErr)
+				log.Warn("failed to save default config", "err", saveErr)
 			}
 			return defaultCfg
 		}
-		log.WarningLog.Printf("failed to load config file: %v", err)
+		log.Warn("failed to load config file", "err", err)
 		return DefaultConfig()
 	}
 

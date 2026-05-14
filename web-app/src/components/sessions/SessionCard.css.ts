@@ -1,14 +1,10 @@
 import { style, keyframes, globalStyle, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/styles/theme.css";
+import { pulseGlowKeyframes } from "@/styles/animations.css";
 
 const cardFadeSlideIn = keyframes({
   from: { opacity: 0, transform: "translateY(8px)" },
   to: { opacity: 1, transform: "translateY(0)" },
-});
-
-const attentionPulse = keyframes({
-  "0%, 100%": { boxShadow: "0 0 0 0 rgba(239, 68, 68, 0)" },
-  "50%": { boxShadow: "0 0 0 4px rgba(239, 68, 68, 0.3)" },
 });
 
 const fadeIn = keyframes({
@@ -38,10 +34,17 @@ export const card = style({
   // Runtime: animation-delay set via --card-index inline style
   // Cap stagger at 5 cards (300ms max) to prevent long lists from having excessive delays
   animationDelay: "calc(min(var(--card-index, 0), 5) * 60ms)",
+  "@media": {
+    "(prefers-reduced-motion: reduce)": {
+      animationDuration: "0.01ms",
+      animationDelay: "0ms",
+    },
+  },
   selectors: {
     "&:hover": {
       borderColor: vars.color.borderHover,
-      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+      // Story 4.2: Theme-aware glow on hover
+      boxShadow: `0 2px 8px rgba(0, 0, 0, 0.1), 0 0 0 1px ${vars.color.glowSecondary}`,
     },
   },
 });
@@ -60,12 +63,12 @@ export const cardSelectMode = style({
 
 export const cardSelected = style({
   borderColor: vars.color.primary,
-  background: "rgba(0, 112, 243, 0.05)", // design-token: pending (no alpha-variant token)
+  background: vars.color.accentBg, // design-token: pending (no alpha-variant token)
 });
 
 export const cardExternal = style({
-  borderLeft: "4px solid #6366f1", // TODO: add vars.color.externalIndicator token
-  backgroundImage: `linear-gradient(to right, rgba(99, 102, 241, 0.05), ${vars.color.cardBackground})`,
+  borderLeft: `4px solid ${vars.color.primary}`,
+  backgroundImage: `linear-gradient(to right, ${vars.color.accentBg}, ${vars.color.cardBackground})`,
 });
 
 export const checkbox = style({
@@ -125,17 +128,17 @@ export const externalBadge = style({
   alignItems: "center",
   gap: vars.space["1"],
   padding: `${vars.space["1"]} 10px`,
-  background: "#6366f1", // TODO: add vars.color.externalIndicator token
-  color: "white",
+  background: vars.color.primary,
+  color: vars.color.primaryText,
   borderRadius: vars.radii.full,
   fontSize: vars.fontSize.sm,
   fontWeight: 600,
-  border: "1px solid #4f46e5", // TODO: add vars.color.externalIndicator token
+  border: `1px solid ${vars.color.primaryDark}`,
 });
 
 export const muxIndicator = style({
   fontSize: "0.625rem",
-  background: "rgba(255, 255, 255, 0.3)",
+  background: "rgba(255, 255, 255, 0.3)", // intentional: translucent white overlay on colored badge bg
   padding: `2px ${vars.space["1"]}`,
   borderRadius: vars.radii.sm,
   marginLeft: vars.space["1"],
@@ -167,70 +170,42 @@ export const status = style({
 });
 
 export const statusRunning = style({
-  background: "#dcfce7",
-  color: "#14532d", // bumped from #166534 (~4.6:1) for better contrast safety margin
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#166534",
-      color: "#dcfce7",
-    },
-  },
+  background: vars.statusBadge.completeBg,
+  color: vars.statusBadge.completeFg,
 });
 
 export const statusReady = style({
-  background: "#dbeafe",
-  color: "#1e40af",
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#1e40af",
-      color: "#dbeafe",
-    },
-  },
+  background: vars.statusBadge.inputBg,
+  color: vars.statusBadge.inputFg,
 });
 
 export const statusPaused = style({
-  background: "#fef3c7",
-  color: "#78350f", // bumped from #92400e (~4.5:1) for better contrast safety margin
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#92400e",
-      color: "#fef3c7",
-    },
-  },
+  background: vars.statusBadge.uncommittedBg,
+  color: vars.statusBadge.uncommittedFg,
 });
 
 export const statusLoading = style({
-  background: "#e0e7ff",
-  color: "#4338ca",
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#3730a3",
-      color: "#e0e7ff",
-    },
-  },
+  background: vars.statusBadge.processingBg,
+  color: vars.statusBadge.processingFg,
 });
 
 export const statusNeedsApproval = style({
-  background: "#fecaca",
-  color: "#991b1b",
-  animationName: attentionPulse,
-  animationDuration: "2s",
-  animationTimingFunction: "ease-in-out",
-  animationIterationCount: "infinite",
+  background: vars.color.errorBg,
+  color: vars.color.errorText,
+  // Story 4.2: Use theme-aware glow pulse from animations.css.ts
   "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#991b1b",
-      color: "#fecaca",
-    },
-    "(prefers-reduced-motion: reduce)": {
-      animationName: "none",
+    "(prefers-reduced-motion: no-preference)": {
+      animationName: pulseGlowKeyframes,
+      animationDuration: "2s",
+      animationTimingFunction: "ease-in-out",
+      animationIterationCount: "infinite",
     },
   },
 });
 
 export const statusUnknown = style({
-  background: "#f3f4f6",
-  color: "#374151",
+  background: vars.statusBadge.idleBg,
+  color: vars.statusBadge.idleFg,
 });
 
 export const category = style({
@@ -262,17 +237,12 @@ export const tag = style({
   padding: `${vars.space["1"]} 10px`,
   fontSize: "0.6875rem",
   fontWeight: 500,
-  background: "#1e40af",
-  color: "#dbeafe",
+  background: vars.statusBadge.inputBg,
+  color: vars.statusBadge.inputFg,
   borderRadius: vars.radii.full,
   transition: "background 0.2s ease",
   selectors: {
-    "&:hover": { background: "#1e3a8a" },
-  },
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      color: "#dbeafe",
-    },
+    "&:hover": { background: vars.color.accentHover },
   },
 });
 
@@ -281,19 +251,16 @@ export const editTagsButton = style({
   fontSize: "0.6875rem",
   fontWeight: 600,
   background: "transparent",
-  color: "#1e40af",
-  border: "1px solid #1e40af",
+  color: vars.color.textSecondary,
+  border: `1px solid ${vars.color.primary}`,
   borderRadius: vars.radii.full,
   cursor: "pointer",
-  transition: "all 0.2s ease",
+  opacity: 0,
+  transition: "all 0.2s ease, opacity 0.15s ease",
   selectors: {
-    "&:hover": { background: "#1e40af", color: "#dbeafe" },
-  },
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      color: "#dbeafe",
-      borderColor: "#1e40af",
-    },
+    [`${card}:hover &`]: { opacity: 1 },
+    [`${card}:focus-within &`]: { opacity: 1 },
+    "&:hover": { background: vars.color.primary, color: vars.color.primaryText },
   },
 });
 
@@ -327,20 +294,12 @@ export const value = style({
 });
 
 export const githubLink = style({
-  color: "#0969da",
+  color: vars.color.primary,
   textDecoration: "none",
   fontWeight: 500,
   transition: "color 0.2s ease",
   selectors: {
-    "&:hover": { color: "#0550ae", textDecoration: "underline" },
-  },
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      color: "#58a6ff",
-      selectors: {
-        "&:hover": { color: "#79c0ff" },
-      },
-    },
+    "&:hover": { color: vars.color.primaryDark, textDecoration: "underline" },
   },
 });
 
@@ -389,13 +348,6 @@ export const footer = style({
   alignItems: "center",
   paddingTop: vars.space["3"],
   borderTop: `1px solid ${vars.color.borderColor}`,
-  "@media": {
-    "(max-width: 768px)": {
-      flexDirection: "column",
-      alignItems: "stretch",
-      gap: vars.space["2"],
-    },
-  },
 });
 
 export const timestamps = style({
@@ -413,11 +365,6 @@ export const desktopActions = style({
   display: "flex",
   alignItems: "center",
   gap: vars.space["2"],
-  "@media": {
-    "(max-width: 768px)": {
-      display: "none",
-    },
-  },
 });
 
 export const overflowContainer = style({
@@ -443,15 +390,13 @@ export const overflowButton = style({
 });
 
 export const overflowMenu = style({
-  position: "absolute",
-  right: 0,
-  top: "calc(100% + 4px)",
+  position: "fixed",
   minWidth: "180px",
   background: vars.color.cardBackground,
   border: `1px solid ${vars.color.borderColor}`,
   borderRadius: vars.radii.lg,
   boxShadow: "0 8px 24px rgba(0, 0, 0, 0.15)",
-  zIndex: 200,
+  zIndex: 1000,
   padding: "4px",
   display: "flex",
   flexDirection: "column",
@@ -484,51 +429,6 @@ export const overflowMenuItemDanger = style({
   },
 });
 
-export const actions = style({
-  display: "flex",
-  gap: vars.space["2"],
-  "@media": {
-    "(max-width: 768px)": {
-      display: "none",
-      width: "100%",
-    },
-  },
-});
-
-export const actionsOpen = style({
-  "@media": {
-    "(max-width: 768px)": {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gap: vars.space["2"],
-    },
-  },
-});
-
-export const actionsToggle = style({
-  display: "none",
-  "@media": {
-    "(max-width: 768px)": {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      width: "100%",
-      minHeight: "44px",
-      padding: `10px ${vars.space["4"]}`,
-      border: `1px solid ${vars.color.borderColor}`,
-      borderRadius: vars.radii.md,
-      background: vars.color.cardBackground,
-      color: vars.color.textPrimary,
-      fontSize: "0.875rem",
-      fontWeight: 500,
-      cursor: "pointer",
-      transition: "background 0.2s ease",
-      selectors: {
-        "&:hover": { background: vars.color.hoverBackground },
-      },
-    },
-  },
-});
 
 export const actionButton = style({
   padding: `6px ${vars.space["4"]}`,
@@ -560,13 +460,13 @@ export const actionButton = style({
 export const deleteButton = style({
   background: vars.color.errorBg, // was #fee2e2
   color: vars.color.errorText, // was #991b1b
-  borderColor: "#fca5a5", // design-token: pending (no light-error-border token)
+  borderColor: vars.color.error, // design-token: pending (no light-error-border token)
   selectors: {
-    "&:hover:not(:disabled)": { background: "#fecaca", borderColor: "#f87171" },
+    "&:hover:not(:disabled)": { background: vars.color.errorDark, borderColor: vars.color.errorDark, color: vars.color.primaryText },
     "&:disabled": {
-      background: "#fca5a5",
-      color: "#7f1d1d",
-      borderColor: vars.color.error, // was #ef4444
+      background: vars.color.errorBg,
+      color: vars.color.errorText,
+      borderColor: vars.color.error,
       opacity: 0.8,
       cursor: "not-allowed",
     },
@@ -575,33 +475,15 @@ export const deleteButton = style({
     "(max-width: 768px)": {
       gridColumn: "1 / -1",
     },
-    "(prefers-color-scheme: dark)": {
-      background: "#7f1d1d",
-      color: "#fecaca",
-      borderColor: "#991b1b",
-      selectors: {
-        "&:hover:not(:disabled)": { background: "#991b1b", borderColor: "#b91c1c" },
-      },
-    },
   },
 });
 
 export const restartButton = style({
-  background: "#fef3c7",
-  color: "#92400e",
-  borderColor: "#fde68a",
+  background: vars.color.warningBg,
+  color: vars.color.warningText,
+  borderColor: vars.color.warning,
   selectors: {
-    "&:hover": { background: "#fcd34d", borderColor: "#fbbf24" },
-  },
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#713f12",
-      color: "#fef3c7",
-      borderColor: "#92400e",
-      selectors: {
-        "&:hover": { background: "#92400e", borderColor: "#a16207" },
-      },
-    },
+    "&:hover": { background: vars.color.warning, borderColor: vars.color.warning, color: vars.color.textPrimary },
   },
 });
 
@@ -611,7 +493,7 @@ export const renameDialog = style({
   left: 0,
   right: 0,
   bottom: 0,
-  background: "rgba(0, 0, 0, 0.5)",
+  background: vars.color.overlayBackground,
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
@@ -643,11 +525,6 @@ export const warningText = style({
   color: `${vars.color.error} !important` as string,
   fontWeight: 500,
   fontSize: `0.8125rem !important` as string,
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      color: `#fca5a5 !important` as string,
-    },
-  },
 });
 
 export const renameInput = style({
@@ -700,7 +577,7 @@ export const submitButton = style({
   transition: "all 0.2s ease",
   border: `1px solid ${vars.color.primary}`,
   background: vars.color.primary,
-  color: "white",
+  color: vars.color.primaryText,
   selectors: {
     "&:hover:not(:disabled)": {
       background: vars.color.primaryHover,
@@ -735,22 +612,12 @@ export const dangerButton = style({
   fontWeight: 600,
   cursor: "pointer",
   transition: "all 0.2s ease",
-  background: "#ef4444",
-  color: "white",
-  border: "1px solid #ef4444",
+  background: vars.color.error,
+  color: vars.color.primaryText,
+  border: `1px solid ${vars.color.error}`,
   selectors: {
-    "&:hover:not(:disabled)": { background: "#dc2626", borderColor: "#dc2626" },
+    "&:hover:not(:disabled)": { background: vars.color.errorDark, borderColor: vars.color.errorDark },
     "&:disabled": { opacity: 0.5, cursor: "not-allowed" },
-  },
-  "@media": {
-    "(prefers-color-scheme: dark)": {
-      background: "#991b1b",
-      color: "#fecaca",
-      borderColor: "#b91c1c",
-      selectors: {
-        "&:hover:not(:disabled)": { background: "#b91c1c", borderColor: "#dc2626" },
-      },
-    },
   },
 });
 
@@ -843,8 +710,8 @@ export const snapshotPane = style({
   fontFamily: '"Menlo", "Monaco", "Courier New", monospace',
   fontSize: "0.72rem",
   lineHeight: 1.5,
-  background: "#1e1e1e",
-  color: "#d4d4d4",
+  background: vars.color.terminalBackground,
+  color: vars.color.terminalForeground,
   whiteSpace: "pre-wrap",
   wordBreak: "break-all",
 });

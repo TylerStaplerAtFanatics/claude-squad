@@ -2,22 +2,21 @@
 // +feature: review-queue session-approval session-triage
 
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { usePageView } from "@/lib/analytics/usePageView";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Session, SessionSchema, ReviewItem } from "@/gen/session/v1/types_pb";
 import { create } from "@bufbuild/protobuf";
 import { ReviewQueuePanel } from "@/components/sessions/ReviewQueuePanel";
 import { SessionDetail, SessionDetailTab } from "@/components/sessions/SessionDetail";
-import { useSessionService } from "@/lib/hooks/useSessionService";
+import { useSessionServiceContext } from "@/lib/contexts/SessionServiceContext";
 import { useReviewQueueContext } from "@/lib/contexts/ReviewQueueContext";
-import { useAuth } from "@/lib/contexts/AuthContext";
-import { getApiBaseUrl } from "@/lib/config";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { useKeyboard } from "@/lib/hooks/useKeyboard";
 import { KeyboardHints } from "@/components/ui/KeyboardHint";
 import * as styles from "./page.css";
 
 // Construct a minimal Session from ReviewItem data for immediate modal opening
-// before useSessionService has finished loading.
+// before the session list has finished loading.
 function sessionFromReviewItem(item: ReviewItem): Session {
   return create(SessionSchema, {
     id: item.sessionId,
@@ -34,7 +33,6 @@ function sessionFromReviewItem(item: ReviewItem): Session {
 function ReviewQueueContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { authEnabled, authenticated, loading: authLoading } = useAuth();
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [selectedTab, setSelectedTab] = useState<SessionDetailTab>("terminal");
   const [isSessionFullscreen, setIsSessionFullscreen] = useState(false);
@@ -52,12 +50,8 @@ function ReviewQueueContent() {
   // Ref for focus trap inside the session-detail modal
   const modalContentRef = useRef<HTMLDivElement>(null);
 
-  // Use WebSocket streaming for real-time session updates
-  const { sessions, runOneShot } = useSessionService({
-    baseUrl: getApiBaseUrl(),
-    autoWatch: true, // Enable WebSocket streaming for session list
-    enabled: !authLoading && (!authEnabled || authenticated),
-  });
+  // Use the global session service context — avoids a competing WebSocket stream
+  const { sessions, runOneShot } = useSessionServiceContext();
 
   // S3-3: Adapter from RunOneShotResponse to the shape ReviewQueuePanel expects
   const handleRunOneShot = useCallback(
@@ -100,7 +94,7 @@ function ReviewQueueContent() {
   });
 
   // Handle deep linking from notifications - auto-open session from URL.
-  // Uses queueItems as fallback so the modal opens even before useSessionService loads.
+  // Uses queueItems as fallback so the modal opens even before the session list loads.
   useEffect(() => {
     const sessionId = searchParams.get("session");
     if (!sessionId) return;
@@ -115,7 +109,7 @@ function ReviewQueueContent() {
 
   const handleSessionClick = (sessionId: string) => {
     // Try full session data first; fall back to queue item data so the modal
-    // always opens immediately regardless of whether useSessionService has loaded.
+    // always opens immediately regardless of whether the session list has loaded.
     const fromSessions = sessions.find((s) => s.id === sessionId);
     const fromQueue = queueItems.find((i) => i.sessionId === sessionId);
     const session = fromSessions ?? (fromQueue ? sessionFromReviewItem(fromQueue) : undefined);
@@ -361,6 +355,7 @@ function ReviewQueueSkeleton() {
 }
 
 export default function ReviewQueuePage() {
+  usePageView();
   return (
     <Suspense fallback={<ReviewQueueSkeleton />}>
       <ReviewQueueContent />
