@@ -14,9 +14,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/gorilla/websocket"
+	"github.com/tstapler/stapler-squad/executor/safeexec"
 	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
 	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
-	"github.com/tstapler/stapler-squad/executor/safeexec"
 	"github.com/tstapler/stapler-squad/log"
 	"github.com/tstapler/stapler-squad/server/protocol"
 	"github.com/tstapler/stapler-squad/session"
@@ -650,11 +650,11 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 				SessionId: sessionID,
 				Data: &sessionv1.TerminalData_ScrollbackResponse{
 					ScrollbackResponse: &sessionv1.ScrollbackResponse{
-						Chunks:          chunks,
-						HasMore:         hasMore,
-						TotalLines:      uint64(sbStats.MemoryLines),
-						OldestSequence:  oldestSeq,
-						NewestSequence:  newestSeq,
+						Chunks:         chunks,
+						HasMore:        hasMore,
+						TotalLines:     uint64(sbStats.MemoryLines),
+						OldestSequence: oldestSeq,
+						NewestSequence: newestSeq,
 					},
 				},
 			}
