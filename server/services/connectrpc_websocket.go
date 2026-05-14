@@ -4,13 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/tstapler/stapler-squad/executor/safeexec"
-	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
-	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
-	"github.com/tstapler/stapler-squad/log"
-	"github.com/tstapler/stapler-squad/server/protocol"
-	"github.com/tstapler/stapler-squad/session"
-	"github.com/tstapler/stapler-squad/session/scrollback"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,6 +14,13 @@ import (
 	"unicode/utf8"
 
 	"github.com/gorilla/websocket"
+	"github.com/tstapler/stapler-squad/executor/safeexec"
+	sessionv1 "github.com/tstapler/stapler-squad/gen/proto/go/session/v1"
+	"github.com/tstapler/stapler-squad/gen/proto/go/session/v1/sessionv1connect"
+	"github.com/tstapler/stapler-squad/log"
+	"github.com/tstapler/stapler-squad/server/protocol"
+	"github.com/tstapler/stapler-squad/session"
+	"github.com/tstapler/stapler-squad/session/scrollback"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -650,11 +650,11 @@ func (h *ConnectRPCWebSocketHandler) streamViaControlMode(stream *connectWebSock
 				SessionId: sessionID,
 				Data: &sessionv1.TerminalData_ScrollbackResponse{
 					ScrollbackResponse: &sessionv1.ScrollbackResponse{
-						Chunks:          chunks,
-						HasMore:         hasMore,
-						TotalLines:      uint64(sbStats.MemoryLines),
-						OldestSequence:  oldestSeq,
-						NewestSequence:  newestSeq,
+						Chunks:         chunks,
+						HasMore:        hasMore,
+						TotalLines:     uint64(sbStats.MemoryLines),
+						OldestSequence: oldestSeq,
+						NewestSequence: newestSeq,
 					},
 				},
 			}
