@@ -1,13 +1,14 @@
 package unfinished_test
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"testing"
 
+	"github.com/tstapler/stapler-squad/executor/safeexec"
 	"github.com/tstapler/stapler-squad/session/unfinished"
 )
 
@@ -30,7 +31,7 @@ func newBenchRepo(b *testing.B, nCommits int) *benchRepo {
 
 	run := func(args ...string) string {
 		b.Helper()
-		cmd := exec.Command(args[0], args[1:]...) //nolint:forbidigo,norawexec // bench helper: short-lived CombinedOutput, no Start
+		cmd := safeexec.CommandContext(context.Background(), args[0], args[1:]...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(),
 			"GIT_AUTHOR_NAME=Bench", "GIT_AUTHOR_EMAIL=bench@test.com",
