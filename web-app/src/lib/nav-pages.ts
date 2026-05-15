@@ -10,6 +10,7 @@ import {
   SlidersHorizontal,
   ScrollText,
   AlertTriangle,
+  HelpCircle,
   BarChart2,
 } from "lucide-react";
 import { routes } from "./routes";
@@ -37,9 +38,10 @@ export const NAV_PAGES: NavPage[] = [
   // Secondary — hamburger / More-sheet only
   { href: routes.rules,   label: "Rules",   icon: BookOpen,          headerNav: false },
   { href: routes.history, label: "History", icon: History,           headerNav: false },
-  { href: routes.config,  label: "Config",  icon: SlidersHorizontal, headerNav: false },
+  { href: routes.settings + "?tab=config-files", label: "Config Files", icon: SlidersHorizontal, headerNav: false },
   { href: routes.logs,    label: "Logs",    icon: ScrollText,  mobileNav: false, headerNav: false },
   { href: routes.errors,  label: "Errors",  icon: AlertTriangle, mobileNav: false, headerNav: false },
+  { href: routes.help,    label: "Help",    icon: HelpCircle,  mobileNav: false, headerNav: false },
   { href: routes.escapeAnalytics, label: "Escape Analytics", icon: BarChart2, mobileNav: false, headerNav: false },
 ];
 
