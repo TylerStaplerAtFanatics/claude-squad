@@ -129,7 +129,7 @@ func hasNolintComment(pass *analysis.Pass, pos token.Pos) bool {
 				commentLine := file.Line(c.Pos())
 				if commentLine == targetLine || commentLine == targetLine-1 {
 					text := strings.TrimPrefix(c.Text, "//")
-					if strings.HasPrefix(strings.TrimSpace(text), "nolint:norawexec") {
+					if strings.Contains(strings.TrimSpace(text), "norawexec") {
 						return true
 					}
 				}

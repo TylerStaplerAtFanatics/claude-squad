@@ -24,7 +24,7 @@ func initRepo(t *testing.T) string {
 
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", args...) //nolint:forbidigo,norawexec // test helper: short-lived CombinedOutput, no Start
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(),
 			"GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@test.com",
@@ -57,7 +57,7 @@ func addCommit(t *testing.T, repoPath, filename, message string) {
 	}
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", args...) //nolint:forbidigo,norawexec // test helper: short-lived CombinedOutput, no Start
 		cmd.Dir = repoPath
 		cmd.Env = append(os.Environ(),
 			"GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@test.com",
@@ -136,7 +136,7 @@ func testVCSReaderContract(t *testing.T, r unfinished.VCSReader) {
 	t.Run("AheadBehind_zero_on_single_commit_repo", func(t *testing.T) {
 		repo := initRepo(t)
 		// Set up a "base" branch pointing at the same commit.
-		cmd := exec.Command("git", "branch", "base")
+		cmd := exec.Command("git", "branch", "base") //nolint:forbidigo,norawexec // test helper: short-lived CombinedOutput, no Start
 		cmd.Dir = repo
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git branch: %v\n%s", err, out)
@@ -154,7 +154,7 @@ func testVCSReaderContract(t *testing.T, r unfinished.VCSReader) {
 		repo := initRepo(t)
 
 		// Create base branch at initial commit.
-		cmd := exec.Command("git", "branch", "base")
+		cmd := exec.Command("git", "branch", "base") //nolint:forbidigo,norawexec // test helper: short-lived CombinedOutput, no Start
 		cmd.Dir = repo
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git branch: %v\n%s", err, out)
@@ -176,7 +176,7 @@ func testVCSReaderContract(t *testing.T, r unfinished.VCSReader) {
 	t.Run("CommitMessages_returns_messages_ahead", func(t *testing.T) {
 		repo := initRepo(t)
 
-		cmd := exec.Command("git", "branch", "base")
+		cmd := exec.Command("git", "branch", "base") //nolint:forbidigo,norawexec // test helper: short-lived CombinedOutput, no Start
 		cmd.Dir = repo
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git branch: %v\n%s", err, out)
@@ -332,7 +332,7 @@ func initJJRepo(t *testing.T) string {
 
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command(args[0], args[1:]...)
+		cmd := exec.Command(args[0], args[1:]...) //nolint:forbidigo,norawexec // test helper: short-lived CombinedOutput, no Start
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(),
 			"JJ_USER=Test User",
