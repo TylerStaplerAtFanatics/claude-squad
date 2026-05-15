@@ -1,15 +1,19 @@
 package unfinished
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
+	"github.com/tstapler/stapler-squad/executor/safeexec"
 )
 
 // GoGitVCSReader implements VCSReader using the go-git library.
@@ -135,29 +139,29 @@ func (g *GoGitVCSReader) HasUncommitted(worktreePath string) (bool, error) {
 }
 
 func (g *GoGitVCSReader) AheadBehind(worktreePath, base string) (int, int, error) {
-	repo, err := openWorktree(worktreePath)
+	// Use git rev-list --count instead of an in-process commit walk to avoid
+	// building large map[Hash]bool sets on long histories.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	aheadOut, err := safeexec.CommandContext(ctx, "git", "-C", worktreePath, "rev-list", "--count", base+"..HEAD").Output()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("rev-list ahead: %w", err)
+	}
+	ahead, err := strconv.Atoi(strings.TrimSpace(string(aheadOut)))
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse ahead count: %w", err)
 	}
 
-	headRef, err := repo.Head()
+	behindOut, err := safeexec.CommandContext(ctx, "git", "-C", worktreePath, "rev-list", "--count", "HEAD.."+base).Output()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("rev-list behind: %w", err)
+	}
+	behind, err := strconv.Atoi(strings.TrimSpace(string(behindOut)))
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse behind count: %w", err)
 	}
 
-	baseHash, err := resolveRef(repo, base)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	ahead, err := countCommitsNotIn(repo, headRef.Hash(), baseHash)
-	if err != nil {
-		return 0, 0, err
-	}
-	behind, err := countCommitsNotIn(repo, baseHash, headRef.Hash())
-	if err != nil {
-		return 0, 0, err
-	}
 	return ahead, behind, nil
 }
 
@@ -352,29 +356,6 @@ func reachableSet(repo *git.Repository, start plumbing.Hash) (map[plumbing.Hash]
 		return nil, err
 	}
 	return seen, nil
-}
-
-// countCommitsNotIn counts commits reachable from 'from' that are not
-// reachable from 'exclude'.
-func countCommitsNotIn(repo *git.Repository, from, exclude plumbing.Hash) (int, error) {
-	excludeSet, err := reachableSet(repo, exclude)
-	if err != nil {
-		return 0, err
-	}
-	iter, err := repo.Log(&git.LogOptions{From: from})
-	if err != nil {
-		return 0, err
-	}
-	defer iter.Close()
-	count := 0
-	err = iter.ForEach(func(c *object.Commit) error {
-		if excludeSet[c.Hash] {
-			return storer.ErrStop
-		}
-		count++
-		return nil
-	})
-	return count, err
 }
 
 func firstLine(s string) string {
