@@ -17,6 +17,7 @@ import (
 	"github.com/tstapler/stapler-squad/session/ent"
 	"github.com/tstapler/stapler-squad/session/scrollback"
 	"github.com/tstapler/stapler-squad/session/tmux"
+	"github.com/tstapler/stapler-squad/session/tokens"
 	"github.com/tstapler/stapler-squad/session/unfinished"
 )
 
@@ -45,6 +46,9 @@ type ServerDependencies struct {
 	UnfinishedStateStore  *unfinished.StateStore
 	UnfinishedWorkService *services.UnfinishedWorkService
 
+	// Token usage analytics.
+	InsightsService *services.InsightsService
+
 	// Analytics storage. Nil when the analytics DB failed to open (LogAnalyticsProvider
 	// is used as a fallback in that case).
 	AnalyticsEntClient *ent.Client
@@ -72,6 +76,7 @@ func (rt *RuntimeDeps) ToServerDeps() *ServerDependencies {
 		UnfinishedScanner:       rt.UnfinishedScanner,
 		UnfinishedStateStore:    rt.UnfinishedStateStore,
 		UnfinishedWorkService:   rt.UnfinishedWorkService,
+		InsightsService:         rt.InsightsService,
 		AnalyticsEntClient:      rt.AnalyticsEntClient,
 	}
 }
@@ -321,6 +326,9 @@ type RuntimeDeps struct {
 	UnfinishedScanner     *unfinished.Scanner
 	UnfinishedStateStore  *unfinished.StateStore
 	UnfinishedWorkService *services.UnfinishedWorkService
+
+	// Token usage analytics.
+	InsightsService *services.InsightsService
 
 	// Analytics storage.
 	AnalyticsEntClient *ent.Client
@@ -597,6 +605,27 @@ func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, e
 		log.Warn("could not determine config dir for analytics DB", "err", configErr)
 	}
 
+	// Initialize TokenStore and InsightsService for token usage analytics.
+	// The Claude JSONL history directory is ~/.claude/projects (default location).
+	var insightsSvc *services.InsightsService
+	if homeDir, homeDirErr := os.UserHomeDir(); homeDirErr == nil {
+		historyDir := filepath.Join(homeDir, ".claude", "projects")
+		tokenStore := tokens.NewTokenStore(historyDir)
+		pricing := tokens.DefaultPricingTable()
+		associator := tokens.NewAssociator(storage)
+
+		// Register the token store as a file-change callback so it receives
+		// fsnotify events from the existing HistoryLinker infrastructure.
+		// This avoids creating a second fsnotify watcher on the same directory.
+		historyLinker.RegisterFileCallback(tokenStore.OnHistoryFileChanged)
+
+		tokenStore.Start(context.Background())
+		insightsSvc = services.NewInsightsService(tokenStore, pricing, associator)
+		log.Info("InsightsService initialized", "historyDir", historyDir)
+	} else {
+		log.Warn("could not determine home dir for InsightsService token store", "err", homeDirErr)
+	}
+
 	return &RuntimeDeps{
 		ServiceDeps:             svc,
 		Instances:               instances,
@@ -611,6 +640,7 @@ func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, e
 		UnfinishedScanner:       unfinishedScanner,
 		UnfinishedStateStore:    unfinishedStateStore,
 		UnfinishedWorkService:   unfinishedWorkSvc,
+		InsightsService:         insightsSvc,
 		AnalyticsEntClient:      analyticsClient,
 	}, nil
 }

@@ -315,6 +315,14 @@ func wireDepsIntoServer(srv *Server, deps *ServerDependencies, serverCtx context
 		log.Info("Registered UnfinishedWorkService handler", "path", uwAPIPath)
 	}
 
+	// Register InsightsService handler for token usage analytics.
+	if deps.InsightsService != nil {
+		insightsPath, insightsHandler := sessionv1connect.NewInsightsServiceHandler(deps.InsightsService, ConnectOptions(deps.ErrorRegistry)...)
+		insightsAPIPath := "/api" + insightsPath
+		srv.RegisterConnectHandler(insightsAPIPath, http.StripPrefix("/api", insightsHandler))
+		log.Info("Registered InsightsService handler", "path", insightsAPIPath)
+	}
+
 	// Wire external session support into the unified WebSocket handler
 	wsHandler.SetExternalSessionSupport(deps.ExternalDiscovery)
 	log.Info("Unified WebSocket handler configured for external session support")

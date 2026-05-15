@@ -16,6 +16,7 @@ export const routes = {
   settings: "/settings",
   settingsDefaults: "/settings/defaults",
   settingsUnfinished: "/settings/unfinished",
+  insights: "/insights",
   login: "/login",
   account: "/account",
   sessionDetail: (id: string) => `/?session=${id}`,
