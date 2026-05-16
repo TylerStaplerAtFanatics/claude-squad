@@ -16,6 +16,8 @@ type Tx struct {
 	AnalyticsEvent *AnalyticsEventClient
 	// ApprovalRule is the client for interacting with the ApprovalRule builders.
 	ApprovalRule *ApprovalRuleClient
+	// BacklogItem is the client for interacting with the BacklogItem builders.
+	BacklogItem *BacklogItemClient
 	// ClassificationAnalytics is the client for interacting with the ClassificationAnalytics builders.
 	ClassificationAnalytics *ClassificationAnalyticsClient
 	// ClaudeMetadata is the client for interacting with the ClaudeMetadata builders.
@@ -28,10 +30,18 @@ type Tx struct {
 	ErrorEvent *ErrorEventClient
 	// EscapeEvent is the client for interacting with the EscapeEvent builders.
 	EscapeEvent *EscapeEventClient
+	// ItemSession is the client for interacting with the ItemSession builders.
+	ItemSession *ItemSessionClient
+	// ItemSource is the client for interacting with the ItemSource builders.
+	ItemSource *ItemSourceClient
 	// Project is the client for interacting with the Project builders.
 	Project *ProjectClient
+	// ReviewVerdict is the client for interacting with the ReviewVerdict builders.
+	ReviewVerdict *ReviewVerdictClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
+	// SourceSyncEvent is the client for interacting with the SourceSyncEvent builders.
+	SourceSyncEvent *SourceSyncEventClient
 	// Tag is the client for interacting with the Tag builders.
 	Tag *TagClient
 	// Worktree is the client for interacting with the Worktree builders.
@@ -169,14 +179,19 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.AnalyticsEvent = NewAnalyticsEventClient(tx.config)
 	tx.ApprovalRule = NewApprovalRuleClient(tx.config)
+	tx.BacklogItem = NewBacklogItemClient(tx.config)
 	tx.ClassificationAnalytics = NewClassificationAnalyticsClient(tx.config)
 	tx.ClaudeMetadata = NewClaudeMetadataClient(tx.config)
 	tx.ClaudeSession = NewClaudeSessionClient(tx.config)
 	tx.DiffStats = NewDiffStatsClient(tx.config)
 	tx.ErrorEvent = NewErrorEventClient(tx.config)
 	tx.EscapeEvent = NewEscapeEventClient(tx.config)
+	tx.ItemSession = NewItemSessionClient(tx.config)
+	tx.ItemSource = NewItemSourceClient(tx.config)
 	tx.Project = NewProjectClient(tx.config)
+	tx.ReviewVerdict = NewReviewVerdictClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
+	tx.SourceSyncEvent = NewSourceSyncEventClient(tx.config)
 	tx.Tag = NewTagClient(tx.config)
 	tx.Worktree = NewWorktreeClient(tx.config)
 }

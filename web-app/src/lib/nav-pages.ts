@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   HelpCircle,
   BarChart2,
+  LayoutList,
 } from "lucide-react";
 import { routes } from "./routes";
 
@@ -31,6 +32,7 @@ export interface NavPage {
 
 export const NAV_PAGES: NavPage[] = [
   { href: routes.home,          label: "Sessions",      icon: LayoutGrid },
+  { href: routes.backlog,       label: "Backlog",       icon: LayoutList },
   { href: routes.unfinished,    label: "Unfinished",    icon: Clock4 },
   { href: routes.reviewQueue,   label: "Review Queue",  shortLabel: "Review", icon: ClipboardCheck },
   { href: routes.notifications, label: "Notifications", shortLabel: "Alerts", icon: Bell },
@@ -39,6 +41,7 @@ export const NAV_PAGES: NavPage[] = [
   { href: routes.rules,   label: "Rules",   icon: BookOpen,          headerNav: false },
   { href: routes.history, label: "History", icon: History,           headerNav: false },
   { href: routes.settings + "?tab=config-files", label: "Config Files", icon: SlidersHorizontal, headerNav: false },
+  { href: routes.settingsFeatures, label: "Features", icon: Settings, headerNav: false },
   { href: routes.logs,    label: "Logs",    icon: ScrollText,  mobileNav: false, headerNav: false },
   { href: routes.errors,  label: "Errors",  icon: AlertTriangle, mobileNav: false, headerNav: false },
   { href: routes.help,    label: "Help",    icon: HelpCircle,  mobileNav: false, headerNav: false },

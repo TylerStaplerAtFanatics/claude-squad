@@ -1,0 +1,12 @@
+{
+  "id": "backlog:transition-status",
+  "type": "backend",
+  "service": "BacklogService",
+  "method": "TransitionBacklogItemStatus",
+  "protoFile": "proto/session/v1/backlog.proto",
+  "markerFound": true,
+  "handlerFile": "server/services/backlog_service.go",
+  "tested": false,
+  "testIds": [],
+  "lastModified": "2026-05-14T11:42:01.29751718-07:00"
+}

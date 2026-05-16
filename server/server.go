@@ -316,6 +316,14 @@ func wireDepsIntoServer(srv *Server, deps *ServerDependencies, serverCtx context
 		log.Info("Registered UnfinishedWorkService handler", "path", uwAPIPath)
 	}
 
+	// Register BacklogService handler.
+	if deps.BacklogService != nil {
+		blPath, blHandler := sessionv1connect.NewBacklogServiceHandler(deps.BacklogService, ConnectOptions(deps.ErrorRegistry)...)
+		blAPIPath := "/api" + blPath
+		srv.RegisterConnectHandler(blAPIPath, http.StripPrefix("/api", blHandler))
+		log.InfoLog.Printf("Registered BacklogService handler at %s", blAPIPath)
+	}
+
 	// Wire external session support into the unified WebSocket handler
 	wsHandler.SetExternalSessionSupport(deps.ExternalDiscovery)
 	log.Info("Unified WebSocket handler configured for external session support")
@@ -365,9 +373,16 @@ func wireDepsIntoServer(srv *Server, deps *ServerDependencies, serverCtx context
 	// Register MCP HTTP transport at /mcp so Claude sessions can connect
 	// without spawning a subprocess. The URL is passed via --mcp-server to
 	// claude when creating new sessions (no settings-file injection needed).
-	mcpHTTPHandler := servermcp.NewHTTPHandler(deps.Storage, deps.SessionService, deps.ScrollbackManager)
-	srv.mux.Handle("/mcp", mcpHTTPHandler)
-	srv.mux.Handle("/mcp/", mcpHTTPHandler)
+	mcpHTTPHandler := servermcp.NewHTTPHandler(deps.Storage, deps.SessionService, deps.ScrollbackManager, deps.Storage)
+	// Wrap with middleware that injects session UUID from X-Stapler-Session-UUID header.
+	mcpWithUUID := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if uuid := r.Header.Get("X-Stapler-Session-UUID"); uuid != "" {
+			r = r.WithContext(servermcp.WithSessionUUID(r.Context(), uuid))
+		}
+		mcpHTTPHandler.ServeHTTP(w, r)
+	})
+	srv.mux.Handle("/mcp", mcpWithUUID)
+	srv.mux.Handle("/mcp/", mcpWithUUID)
 	mcpURL := "http://" + srv.addr + "/mcp"
 	deps.SessionService.SetMCPServerURL(mcpURL)
 	log.Info("Registered MCP HTTP handler at /mcp", "url", mcpURL)

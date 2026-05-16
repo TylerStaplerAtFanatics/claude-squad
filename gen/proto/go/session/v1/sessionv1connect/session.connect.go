@@ -261,6 +261,12 @@ const (
 	// SessionServiceAcknowledgeErrorProcedure is the fully-qualified name of the SessionService's
 	// AcknowledgeError RPC.
 	SessionServiceAcknowledgeErrorProcedure = "/session.v1.SessionService/AcknowledgeError"
+	// SessionServiceGetFeatureFlagsProcedure is the fully-qualified name of the SessionService's
+	// GetFeatureFlags RPC.
+	SessionServiceGetFeatureFlagsProcedure = "/session.v1.SessionService/GetFeatureFlags"
+	// SessionServiceUpdateFeatureFlagProcedure is the fully-qualified name of the SessionService's
+	// UpdateFeatureFlag RPC.
+	SessionServiceUpdateFeatureFlagProcedure = "/session.v1.SessionService/UpdateFeatureFlag"
 	// SessionServiceQueryEscapeAnalyticsProcedure is the fully-qualified name of the SessionService's
 	// QueryEscapeAnalytics RPC.
 	SessionServiceQueryEscapeAnalyticsProcedure = "/session.v1.SessionService/QueryEscapeAnalytics"
@@ -467,6 +473,10 @@ type SessionServiceClient interface {
 	// AcknowledgeError marks an error event as acknowledged so it no longer appears
 	// in the default (unacknowledged) listing.
 	AcknowledgeError(context.Context, *connect.Request[v1.AcknowledgeErrorRequest]) (*connect.Response[v1.AcknowledgeErrorResponse], error)
+	// GetFeatureFlags returns all known feature flags and their current state.
+	GetFeatureFlags(context.Context, *connect.Request[v1.GetFeatureFlagsRequest]) (*connect.Response[v1.GetFeatureFlagsResponse], error)
+	// UpdateFeatureFlag enables or disables a named feature flag.
+	UpdateFeatureFlag(context.Context, *connect.Request[v1.UpdateFeatureFlagRequest]) (*connect.Response[v1.UpdateFeatureFlagResponse], error)
 	// QueryEscapeAnalytics returns paginated escape event records for a session.
 	QueryEscapeAnalytics(context.Context, *connect.Request[v1.QueryEscapeAnalyticsRequest]) (*connect.Response[v1.QueryEscapeAnalyticsResponse], error)
 	// GetEscapeAnalyticsSummary returns aggregate escape sequence statistics for a session.
@@ -946,6 +956,18 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("AcknowledgeError")),
 			connect.WithClientOptions(opts...),
 		),
+		getFeatureFlags: connect.NewClient[v1.GetFeatureFlagsRequest, v1.GetFeatureFlagsResponse](
+			httpClient,
+			baseURL+SessionServiceGetFeatureFlagsProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("GetFeatureFlags")),
+			connect.WithClientOptions(opts...),
+		),
+		updateFeatureFlag: connect.NewClient[v1.UpdateFeatureFlagRequest, v1.UpdateFeatureFlagResponse](
+			httpClient,
+			baseURL+SessionServiceUpdateFeatureFlagProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("UpdateFeatureFlag")),
+			connect.WithClientOptions(opts...),
+		),
 		queryEscapeAnalytics: connect.NewClient[v1.QueryEscapeAnalyticsRequest, v1.QueryEscapeAnalyticsResponse](
 			httpClient,
 			baseURL+SessionServiceQueryEscapeAnalyticsProcedure,
@@ -1040,6 +1062,8 @@ type sessionServiceClient struct {
 	logClientEvents           *connect.Client[v1.LogClientEventsRequest, v1.LogClientEventsResponse]
 	listErrors                *connect.Client[v1.ListErrorsRequest, v1.ListErrorsResponse]
 	acknowledgeError          *connect.Client[v1.AcknowledgeErrorRequest, v1.AcknowledgeErrorResponse]
+	getFeatureFlags           *connect.Client[v1.GetFeatureFlagsRequest, v1.GetFeatureFlagsResponse]
+	updateFeatureFlag         *connect.Client[v1.UpdateFeatureFlagRequest, v1.UpdateFeatureFlagResponse]
 	queryEscapeAnalytics      *connect.Client[v1.QueryEscapeAnalyticsRequest, v1.QueryEscapeAnalyticsResponse]
 	getEscapeAnalyticsSummary *connect.Client[v1.GetEscapeAnalyticsSummaryRequest, v1.GetEscapeAnalyticsSummaryResponse]
 }
@@ -1429,6 +1453,16 @@ func (c *sessionServiceClient) AcknowledgeError(ctx context.Context, req *connec
 	return c.acknowledgeError.CallUnary(ctx, req)
 }
 
+// GetFeatureFlags calls session.v1.SessionService.GetFeatureFlags.
+func (c *sessionServiceClient) GetFeatureFlags(ctx context.Context, req *connect.Request[v1.GetFeatureFlagsRequest]) (*connect.Response[v1.GetFeatureFlagsResponse], error) {
+	return c.getFeatureFlags.CallUnary(ctx, req)
+}
+
+// UpdateFeatureFlag calls session.v1.SessionService.UpdateFeatureFlag.
+func (c *sessionServiceClient) UpdateFeatureFlag(ctx context.Context, req *connect.Request[v1.UpdateFeatureFlagRequest]) (*connect.Response[v1.UpdateFeatureFlagResponse], error) {
+	return c.updateFeatureFlag.CallUnary(ctx, req)
+}
+
 // QueryEscapeAnalytics calls session.v1.SessionService.QueryEscapeAnalytics.
 func (c *sessionServiceClient) QueryEscapeAnalytics(ctx context.Context, req *connect.Request[v1.QueryEscapeAnalyticsRequest]) (*connect.Response[v1.QueryEscapeAnalyticsResponse], error) {
 	return c.queryEscapeAnalytics.CallUnary(ctx, req)
@@ -1637,6 +1671,10 @@ type SessionServiceHandler interface {
 	// AcknowledgeError marks an error event as acknowledged so it no longer appears
 	// in the default (unacknowledged) listing.
 	AcknowledgeError(context.Context, *connect.Request[v1.AcknowledgeErrorRequest]) (*connect.Response[v1.AcknowledgeErrorResponse], error)
+	// GetFeatureFlags returns all known feature flags and their current state.
+	GetFeatureFlags(context.Context, *connect.Request[v1.GetFeatureFlagsRequest]) (*connect.Response[v1.GetFeatureFlagsResponse], error)
+	// UpdateFeatureFlag enables or disables a named feature flag.
+	UpdateFeatureFlag(context.Context, *connect.Request[v1.UpdateFeatureFlagRequest]) (*connect.Response[v1.UpdateFeatureFlagResponse], error)
 	// QueryEscapeAnalytics returns paginated escape event records for a session.
 	QueryEscapeAnalytics(context.Context, *connect.Request[v1.QueryEscapeAnalyticsRequest]) (*connect.Response[v1.QueryEscapeAnalyticsResponse], error)
 	// GetEscapeAnalyticsSummary returns aggregate escape sequence statistics for a session.
@@ -2112,6 +2150,18 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("AcknowledgeError")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceGetFeatureFlagsHandler := connect.NewUnaryHandler(
+		SessionServiceGetFeatureFlagsProcedure,
+		svc.GetFeatureFlags,
+		connect.WithSchema(sessionServiceMethods.ByName("GetFeatureFlags")),
+		connect.WithHandlerOptions(opts...),
+	)
+	sessionServiceUpdateFeatureFlagHandler := connect.NewUnaryHandler(
+		SessionServiceUpdateFeatureFlagProcedure,
+		svc.UpdateFeatureFlag,
+		connect.WithSchema(sessionServiceMethods.ByName("UpdateFeatureFlag")),
+		connect.WithHandlerOptions(opts...),
+	)
 	sessionServiceQueryEscapeAnalyticsHandler := connect.NewUnaryHandler(
 		SessionServiceQueryEscapeAnalyticsProcedure,
 		svc.QueryEscapeAnalytics,
@@ -2280,6 +2330,10 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceListErrorsHandler.ServeHTTP(w, r)
 		case SessionServiceAcknowledgeErrorProcedure:
 			sessionServiceAcknowledgeErrorHandler.ServeHTTP(w, r)
+		case SessionServiceGetFeatureFlagsProcedure:
+			sessionServiceGetFeatureFlagsHandler.ServeHTTP(w, r)
+		case SessionServiceUpdateFeatureFlagProcedure:
+			sessionServiceUpdateFeatureFlagHandler.ServeHTTP(w, r)
 		case SessionServiceQueryEscapeAnalyticsProcedure:
 			sessionServiceQueryEscapeAnalyticsHandler.ServeHTTP(w, r)
 		case SessionServiceGetEscapeAnalyticsSummaryProcedure:
@@ -2599,6 +2653,14 @@ func (UnimplementedSessionServiceHandler) ListErrors(context.Context, *connect.R
 
 func (UnimplementedSessionServiceHandler) AcknowledgeError(context.Context, *connect.Request[v1.AcknowledgeErrorRequest]) (*connect.Response[v1.AcknowledgeErrorResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.SessionService.AcknowledgeError is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) GetFeatureFlags(context.Context, *connect.Request[v1.GetFeatureFlagsRequest]) (*connect.Response[v1.GetFeatureFlagsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.SessionService.GetFeatureFlags is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) UpdateFeatureFlag(context.Context, *connect.Request[v1.UpdateFeatureFlagRequest]) (*connect.Response[v1.UpdateFeatureFlagResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("session.v1.SessionService.UpdateFeatureFlag is not implemented"))
 }
 
 func (UnimplementedSessionServiceHandler) QueryEscapeAnalytics(context.Context, *connect.Request[v1.QueryEscapeAnalyticsRequest]) (*connect.Response[v1.QueryEscapeAnalyticsResponse], error) {
