@@ -5,6 +5,7 @@ import { Tooltip } from "../ui/Tooltip";
 import {
   row,
   statusDot,
+  nameCell as nameCellStyle,
   name as nameStyle,
   agentIcon as agentIconStyle,
   path as pathStyle,
@@ -119,13 +120,18 @@ export function SessionRow({ session, onClick, onPause, onResume, onDelete }: Se
         />
       </Tooltip>
 
-      {/* Branch / name */}
-      <span
-        className={nameStyle}
-        aria-label={displayName}
-        title={displayName}
-      >
-        {displayName}
+      {/* Name + path stacked — name always visible, path wraps below */}
+      <span className={nameCellStyle}>
+        <span className={nameStyle} aria-label={displayName} title={displayName}>
+          {displayName}
+        </span>
+        {session.path && (
+          <Tooltip label={session.path} side="bottom">
+            <span className={pathStyle} aria-label={`Path: ${session.path}`}>
+              {session.path}
+            </span>
+          </Tooltip>
+        )}
       </span>
 
       {/* Agent icon */}
@@ -136,17 +142,6 @@ export function SessionRow({ session, onClick, onPause, onResume, onDelete }: Se
       >
         {getAgentEmoji(session.program)}
       </span>
-
-      {/* Path — tooltip shows full path when column is too narrow */}
-      <Tooltip label={session.path} side="bottom">
-        <span
-          className={pathStyle}
-          dir="ltr"
-          aria-label={`Path: ${session.path}`}
-        >
-          {session.path}
-        </span>
-      </Tooltip>
 
       {/* Elapsed time */}
       <time

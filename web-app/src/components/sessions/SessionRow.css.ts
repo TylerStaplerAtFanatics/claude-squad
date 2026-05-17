@@ -10,12 +10,12 @@ const pulseOpacity = keyframes({
 
 export const row = style({
   display: "grid",
-  // name (1fr) always wins — path shrinks to 0 before name does
-  gridTemplateColumns: "8px 1fr auto minmax(0, 220px) 32px auto",
+  // dot | name+path cell | icon | elapsed | actions
+  gridTemplateColumns: "8px 1fr auto 32px auto",
   alignItems: "center",
   gap: vars.space["2"],
-  padding: "0 12px",
-  height: "38px",
+  padding: "6px 12px",
+  minHeight: "38px",
   cursor: "pointer",
   borderRadius: vars.radii.sm,
   listStyle: "none",
@@ -28,6 +28,14 @@ export const row = style({
   ":hover": {
     background: vars.color.hoverBackground,
   },
+});
+
+export const nameCell = style({
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  gap: "2px",
 });
 
 export const statusDot = style({
@@ -90,13 +98,6 @@ export const path = style({
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
-  direction: "ltr",
-  // Below 480px the path column collapses to nothing — tooltip still works
-  "@media": {
-    "(max-width: 480px)": {
-      display: "none",
-    },
-  },
 });
 
 export const elapsed = style({
