@@ -49,6 +49,9 @@ type ServerDependencies struct {
 	// Token usage analytics.
 	InsightsService *services.InsightsService
 
+	BacklogService *services.BacklogService
+	SyncLoop       *session.SyncLoop
+
 	// Analytics storage. Nil when the analytics DB failed to open (LogAnalyticsProvider
 	// is used as a fallback in that case).
 	AnalyticsEntClient *ent.Client
@@ -77,6 +80,8 @@ func (rt *RuntimeDeps) ToServerDeps() *ServerDependencies {
 		UnfinishedStateStore:    rt.UnfinishedStateStore,
 		UnfinishedWorkService:   rt.UnfinishedWorkService,
 		InsightsService:         rt.InsightsService,
+		BacklogService:          rt.BacklogService,
+		SyncLoop:                rt.SyncLoop,
 		AnalyticsEntClient:      rt.AnalyticsEntClient,
 	}
 }
@@ -87,6 +92,9 @@ func (rt *RuntimeDeps) ToServerDeps() *ServerDependencies {
 //
 // Delegates to the three-phase constructors: BuildCoreDeps -> BuildServiceDeps -> BuildRuntimeDeps.
 func BuildDependencies() (*ServerDependencies, error) {
+	// Load config early for encryption key support
+	cfg := config.LoadConfig()
+
 	// Phase 1 (core): SessionService, Storage, EventBus, ReviewQueue, ApprovalStore
 	// was: step 1 - SessionService + getter calls
 	core, err := BuildCoreDeps()
@@ -107,7 +115,7 @@ func BuildDependencies() (*ServerDependencies, error) {
 	if err != nil {
 		log.Warn("BuildDependencies: failed to ensure tmux server running", "err", err)
 	}
-	rt, err := BuildRuntimeDeps(tmuxReady, svc)
+	rt, err := BuildRuntimeDeps(tmuxReady, svc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("phase 3 (runtime): %w", err)
 	}
@@ -330,6 +338,10 @@ type RuntimeDeps struct {
 	// Token usage analytics.
 	InsightsService *services.InsightsService
 
+	BacklogService *services.BacklogService
+	SyncLoop       *session.SyncLoop
+	Config         *config.Config // Used for encryption of sensitive data
+
 	// Analytics storage.
 	AnalyticsEntClient *ent.Client
 }
@@ -352,7 +364,8 @@ type RuntimeDeps struct {
 // tmux.EnsureServerRunning was called before sessions are loaded. Without this
 // ordering, DoesSessionExist() may trigger recoverFromServerFailure, which starts
 // a fresh server that considers all sessions non-existent and cold-restores them.
-func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, error) {
+// cfg may be nil; when non-nil, is used for token encryption in backlog sources.
+func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps, cfg *config.Config) (*RuntimeDeps, error) {
 	if svc == nil {
 		return nil, fmt.Errorf("BuildRuntimeDeps: ServiceDeps is nil (Phase 2 not completed)")
 	}
@@ -371,12 +384,16 @@ func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, e
 		return nil, fmt.Errorf("load instances: %w", err)
 	}
 
+	// Backlog lifecycle listener — always created, enabled state set from config below.
+	backlogLifecycleListener := session.NewBacklogLifecycleListenerWithSpawner(storage, sessionService)
+
 	// Step 5 (continued): wire dependencies to each instance
 	// inst.SetReviewQueue and inst.SetStatusManager are called per-instance in a loop;
 	// Warren is designed for named scalar setters, not loop iterations. Left unwrapped.
 	for _, inst := range instances {
 		inst.SetReviewQueue(reviewQueue)
 		inst.SetStatusManager(statusManager)
+		backlogLifecycleListener.WireToInstance(inst)
 	}
 
 	// Wire instances to pollers.
@@ -500,6 +517,7 @@ func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, e
 		reviewQueuePoller.AddInstance(instance)
 		svc.PRStatusPoller.AddInstance(instance)
 		historyLinker.AddInstance(instance)
+		backlogLifecycleListener.WireToInstance(instance)
 		log.Info("added external session to review queue poller, PR status poller, and history linker", "session", instance.Title)
 	})
 	externalDiscovery.OnSessionRemoved(func(instance *session.Instance) {
@@ -605,20 +623,44 @@ func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, e
 		log.Warn("could not determine config dir for analytics DB", "err", configErr)
 	}
 
+	// 60 s reconcile ticker: safety net for abnormal exits where EventExited cannot fire.
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		ctx := context.Background()
+		for range ticker.C {
+			backlogLifecycleListener.ReconcileStuck(ctx)
+		}
+	}()
+
+	// Build the BacklogController and initialize its enabled state from config.
+	syncRegistry := session.NewDefaultRegistry()
+	var keyFunc func() ([]byte, error)
+	if cfg != nil {
+		keyFunc = cfg.GetOrCreateEncryptionKey
+	}
+	backlogCtrl := session.NewBacklogController(backlogLifecycleListener, storage, syncRegistry, keyFunc)
+	if cfg.GetFeatureFlag("backlog") {
+		if err := backlogCtrl.Enable(context.Background()); err != nil {
+			log.Warn("failed to enable backlog feature on startup", "err", err)
+		}
+		log.Info("backlog feature enabled")
+	} else {
+		log.Info("backlog feature disabled (toggle via Settings → Features)")
+	}
+
+	backlogSvc := services.NewBacklogService(storage, sessionService, cfg)
+	sessionService.SetBacklogLifecycleListener(backlogLifecycleListener)
+	sessionService.SetFeatureController("backlog", backlogCtrl)
+
 	// Initialize TokenStore and InsightsService for token usage analytics.
-	// The Claude JSONL history directory is ~/.claude/projects (default location).
 	var insightsSvc *services.InsightsService
 	if homeDir, homeDirErr := os.UserHomeDir(); homeDirErr == nil {
 		historyDir := filepath.Join(homeDir, ".claude", "projects")
 		tokenStore := tokens.NewTokenStore(historyDir)
 		pricing := tokens.DefaultPricingTable()
 		associator := tokens.NewAssociator(storage)
-
-		// Register the token store as a file-change callback so it receives
-		// fsnotify events from the existing HistoryLinker infrastructure.
-		// This avoids creating a second fsnotify watcher on the same directory.
 		historyLinker.RegisterFileCallback(tokenStore.OnHistoryFileChanged)
-
 		tokenStore.Start(context.Background())
 		insightsSvc = services.NewInsightsService(tokenStore, pricing, associator)
 		log.Info("InsightsService initialized", "historyDir", historyDir)
@@ -641,6 +683,9 @@ func BuildRuntimeDeps(_ tmux.TmuxServerReady, svc *ServiceDeps) (*RuntimeDeps, e
 		UnfinishedStateStore:    unfinishedStateStore,
 		UnfinishedWorkService:   unfinishedWorkSvc,
 		InsightsService:         insightsSvc,
+		BacklogService:          backlogSvc,
+		SyncLoop:                nil, // managed by BacklogController
+		Config:                  cfg,
 		AnalyticsEntClient:      analyticsClient,
 	}, nil
 }
