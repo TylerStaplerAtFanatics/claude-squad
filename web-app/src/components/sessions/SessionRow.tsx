@@ -2,6 +2,7 @@
 
 import { Session, SessionStatus } from "@/gen/session/v1/types_pb";
 import { Tooltip } from "../ui/Tooltip";
+import { SessionActionsOverflow } from "./SessionActionsOverflow";
 import {
   row,
   statusDot,
@@ -11,7 +12,6 @@ import {
   path as pathStyle,
   elapsed as elapsedStyle,
   actions as actionsStyle,
-  actionButton,
 } from "./SessionRow.css";
 
 interface SessionRowProps {
@@ -73,8 +73,6 @@ function getLastActivity(session: Session): { seconds: bigint; nanos: number } |
 
 export function SessionRow({ session, onClick, onPause, onResume, onDelete }: SessionRowProps) {
   const dotStatus = getStatusDotValue(session.status);
-  const isRunning = session.status === SessionStatus.RUNNING;
-  const isPaused = session.status === SessionStatus.PAUSED || session.status === SessionStatus.STOPPED;
   const lastActivity = getLastActivity(session);
   const elapsedText = formatElapsed(lastActivity ?? session.updatedAt);
   const displayName = session.branch || session.title;
@@ -84,21 +82,6 @@ export function SessionRow({ session, onClick, onPause, onResume, onDelete }: Se
       e.preventDefault();
       onClick?.();
     }
-  };
-
-  const handlePauseClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onPause?.();
-  };
-
-  const handleResumeClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onResume?.();
-  };
-
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onDelete?.();
   };
 
   return (
@@ -152,41 +135,15 @@ export function SessionRow({ session, onClick, onPause, onResume, onDelete }: Se
         {elapsedText}
       </time>
 
-      {/* Hover actions */}
+      {/* Actions — overflow menu with pause/resume shortcut and confirmed delete */}
       <span className={actionsStyle} aria-label="Session actions">
-        {isRunning && onPause && (
-          <Tooltip label="Pause session">
-            <button
-              className={actionButton}
-              onClick={handlePauseClick}
-              aria-label={`Pause ${session.title}`}
-            >
-              ⏸
-            </button>
-          </Tooltip>
-        )}
-        {isPaused && onResume && (
-          <Tooltip label="Resume session">
-            <button
-              className={actionButton}
-              onClick={handleResumeClick}
-              aria-label={`Resume ${session.title}`}
-            >
-              ▶
-            </button>
-          </Tooltip>
-        )}
-        {onDelete && (
-          <Tooltip label="Delete session">
-            <button
-              className={actionButton}
-              onClick={handleDeleteClick}
-              aria-label={`Delete ${session.title}`}
-            >
-              ✕
-            </button>
-          </Tooltip>
-        )}
+        <SessionActionsOverflow
+          session={session}
+          showPrimaryAction
+          onPause={onPause}
+          onResume={onResume}
+          onDelete={onDelete}
+        />
       </span>
     </li>
   );
