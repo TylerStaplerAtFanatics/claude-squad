@@ -20,6 +20,15 @@ interface SessionRowProps {
   onPause?: () => void;
   onResume?: () => void;
   onDelete?: () => Promise<void> | void;
+  onClone?: () => void;
+  onOpenInNewPane?: () => void;
+  onNewWorkspace?: () => void;
+  onRestart?: (sessionId: string) => Promise<boolean | void>;
+  onCreateCheckpoint?: (sessionId: string, label: string) => Promise<boolean>;
+  onRunOneShot?: (sessionId: string) => Promise<void>;
+  onSetRateLimitEnabled?: (sessionId: string, enabled: boolean) => void;
+  onClearConversationState?: (sessionId: string) => Promise<boolean>;
+  onUpdateTags?: (sessionId: string, tags: string[]) => void;
 }
 
 function getStatusDotValue(status: SessionStatus): string {
@@ -71,7 +80,13 @@ function getLastActivity(session: Session): { seconds: bigint; nanos: number } |
   return moSecs >= tuSecs ? session.lastMeaningfulOutput : session.lastTerminalUpdate;
 }
 
-export function SessionRow({ session, onClick, onPause, onResume, onDelete }: SessionRowProps) {
+export function SessionRow({
+  session, onClick,
+  onPause, onResume, onDelete,
+  onClone, onOpenInNewPane, onNewWorkspace,
+  onRestart, onCreateCheckpoint, onRunOneShot,
+  onSetRateLimitEnabled, onClearConversationState, onUpdateTags,
+}: SessionRowProps) {
   const dotStatus = getStatusDotValue(session.status);
   const lastActivity = getLastActivity(session);
   const elapsedText = formatElapsed(lastActivity ?? session.updatedAt);
@@ -143,6 +158,15 @@ export function SessionRow({ session, onClick, onPause, onResume, onDelete }: Se
           onPause={onPause}
           onResume={onResume}
           onDelete={onDelete}
+          onClone={onClone}
+          onOpenInNewPane={onOpenInNewPane}
+          onNewWorkspace={onNewWorkspace}
+          onRestart={onRestart}
+          onCreateCheckpoint={onCreateCheckpoint}
+          onRunOneShot={onRunOneShot}
+          onSetRateLimitEnabled={onSetRateLimitEnabled}
+          onClearConversationState={onClearConversationState}
+          onUpdateTags={onUpdateTags}
         />
       </span>
     </li>

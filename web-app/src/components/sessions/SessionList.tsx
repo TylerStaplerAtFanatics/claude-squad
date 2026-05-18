@@ -844,6 +844,15 @@ export function SessionList({
                       onPause={onPauseSession ? () => onPauseSession(session.id) : undefined}
                       onResume={onResumeSession ? () => onResumeSession(session) : undefined}
                       onDelete={onDeleteSession ? () => onDeleteSession(session.id) : undefined}
+                      onClone={onCloneSession ? () => onCloneSession(session.id) : undefined}
+                      onOpenInNewPane={onSessionOpenInNewPane ? () => onSessionOpenInNewPane(session) : undefined}
+                      onNewWorkspace={onNewWorkspaceSession ? () => onNewWorkspaceSession(session.id) : undefined}
+                      onRestart={onRestartSession}
+                      onCreateCheckpoint={onCreateCheckpoint}
+                      onRunOneShot={onRunOneShot}
+                      onSetRateLimitEnabled={onSetRateLimitEnabled}
+                      onClearConversationState={onClearConversationState}
+                      onUpdateTags={onUpdateTags}
                     />
                   ))}
                 </ul>
