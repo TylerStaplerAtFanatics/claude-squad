@@ -35,7 +35,7 @@ describe("FileChipList", () => {
         onRemove={jest.fn()}
       />
     );
-    const img = screen.getByRole("img", { hidden: true });
+    const img = screen.getByRole("img", { name: "photo.png" });
     expect(img).toHaveAttribute("src", "blob:fake-url");
   });
 

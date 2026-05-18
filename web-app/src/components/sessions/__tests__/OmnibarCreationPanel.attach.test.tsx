@@ -229,7 +229,7 @@ describe("FT3-06: removing thumbnail revokes object URL and removes from list", 
     });
 
     await waitFor(() => {
-      expect(screen.getAllByRole("img", { hidden: true }).some((img) => img.getAttribute("src")?.startsWith("blob:"))).toBe(true);
+      expect(screen.getAllByRole("img").some((img) => img.getAttribute("src")?.startsWith("blob:"))).toBe(true);
     });
 
     // Click the remove button
@@ -242,7 +242,7 @@ describe("FT3-06: removing thumbnail revokes object URL and removes from list", 
     expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
 
     // Thumbnail should be gone
-    const imgs = screen.queryAllByRole("img", { hidden: true }).filter((img) =>
+    const imgs = screen.queryAllByRole("img").filter((img) =>
       img.getAttribute("src")?.startsWith("blob:")
     );
     expect(imgs).toHaveLength(0);
