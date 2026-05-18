@@ -1,15 +1,19 @@
 package unfinished
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
+	"github.com/tstapler/stapler-squad/executor/safeexec"
 )
 
 // GoGitVCSReader implements VCSReader using the go-git library.
@@ -38,7 +42,8 @@ func (g *GoGitVCSReader) ListWorktrees(repoPath string) ([]WorktreeInfo, error) 
 	}
 	worktrees := []WorktreeInfo{main}
 
-	// Linked worktrees live in .git/worktrees/<name>/.
+	// Linked worktrees live in $GIT_COMMON_DIR/worktrees/<name>/.
+	// Use gitCommonDir to handle the case where repoPath is itself a linked worktree.
 	worktreesDir := filepath.Join(gitCommonDir(repoPath), "worktrees")
 	entries, err := os.ReadDir(worktreesDir)
 	if err != nil {
@@ -135,30 +140,30 @@ func (g *GoGitVCSReader) HasUncommitted(worktreePath string) (bool, error) {
 }
 
 func (g *GoGitVCSReader) AheadBehind(worktreePath, base string) (int, int, error) {
-	repo, err := openWorktree(worktreePath)
+	// Use git rev-list --count instead of an in-process commit walk to avoid
+	// building large map[Hash]bool sets on long histories.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	aheadOut, err := safeexec.CommandContext(ctx, "git", "-C", worktreePath, "rev-list", "--count", base+"..HEAD").Output()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("rev-list ahead: %w", err)
+	}
+	ahead, err := strconv.Atoi(strings.TrimSpace(string(aheadOut)))
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse ahead count: %w", err)
 	}
 
-	headRef, err := repo.Head()
+	behindOut, err := safeexec.CommandContext(ctx, "git", "-C", worktreePath, "rev-list", "--count", "HEAD.."+base).Output()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("rev-list behind: %w", err)
+	}
+	behind, err := strconv.Atoi(strings.TrimSpace(string(behindOut)))
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse behind count: %w", err)
 	}
 
-	baseHash, err := resolveRef(repo, base)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	headSet, err := reachableSet(repo, headRef.Hash())
-	if err != nil {
-		return 0, 0, err
-	}
-	baseSet, err := reachableSet(repo, baseHash)
-	if err != nil {
-		return 0, 0, err
-	}
-	return countNotIn(headSet, baseSet), countNotIn(baseSet, headSet), nil
+	return ahead, behind, nil
 }
 
 func (g *GoGitVCSReader) CommitMessages(worktreePath, base string, max int) ([]string, error) {
@@ -262,28 +267,8 @@ func (g *GoGitVCSReader) DiffShortstat(worktreePath string) (DiffStat, error) {
 func LinesDiff(old, newContent string) (insertions, deletions int) {
 	oldLines := splitLines(old)
 	newLines := splitLines(newContent)
-
-	// Trim common prefix and suffix — reduces the LCS problem size significantly
-	// for typical edits that touch a small region of a large file.
-	start := 0
-	for start < len(oldLines) && start < len(newLines) && oldLines[start] == newLines[start] {
-		start++
-	}
-	end := 0
-	for end < len(oldLines)-start && end < len(newLines)-start &&
-		oldLines[len(oldLines)-1-end] == newLines[len(newLines)-1-end] {
-		end++
-	}
-	trimOld := oldLines[start : len(oldLines)-end]
-	trimNew := newLines[start : len(newLines)-end]
-
-	// Avoid O(n*m) DP on very large diffs — treat all remaining lines as changed.
-	const lcsMaxCells = 5_000_000
-	if len(trimOld)*len(trimNew) > lcsMaxCells {
-		return len(trimNew), len(trimOld)
-	}
-	lcs := lcsLength(trimOld, trimNew)
-	return len(trimNew) - lcs, len(trimOld) - lcs
+	lcs := lcsLength(oldLines, newLines)
+	return len(newLines) - lcs, len(oldLines) - lcs
 }
 
 // lcsLength computes the length of the longest common subsequence of two line slices.
@@ -328,9 +313,8 @@ func splitLines(s string) []string {
 	return lines
 }
 
-// gitCommonDir returns the path to the common git directory (the real .git dir)
-// for both regular repos (where .git is a directory) and linked worktrees (where
-// .git is a file pointing at the per-worktree gitdir, which contains a commondir file).
+// gitCommonDir returns the path to the common git directory (the main .git dir),
+// resolving through the .git file in linked worktrees.
 func gitCommonDir(repoPath string) string {
 	gitPath := filepath.Join(repoPath, ".git")
 	data, err := os.ReadFile(gitPath)
@@ -353,7 +337,6 @@ func gitCommonDir(repoPath string) string {
 		}
 		return commondir
 	}
-	// Fallback: parent of the per-worktree gitdir is typically the main .git.
 	return filepath.Dir(wtGitDir)
 }
 
@@ -401,17 +384,6 @@ func reachableSet(repo *git.Repository, start plumbing.Hash) (map[plumbing.Hash]
 		return nil, err
 	}
 	return seen, nil
-}
-
-// countNotIn counts entries in a that are absent from b.
-func countNotIn(a, b map[plumbing.Hash]bool) int {
-	n := 0
-	for h := range a {
-		if !b[h] {
-			n++
-		}
-	}
-	return n
 }
 
 func firstLine(s string) string {
