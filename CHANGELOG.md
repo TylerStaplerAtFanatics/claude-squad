@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.0](https://github.com/TylerStaplerAtFanatics/stapler-squad/compare/v1.29.0...v1.30.0) (2026-05-18)
+
+
+### Features
+
+* **insights:** token & spend monitoring dashboard with model-over-time chart ([#104](https://github.com/TylerStaplerAtFanatics/stapler-squad/issues/104)) ([6b682cb](https://github.com/TylerStaplerAtFanatics/stapler-squad/commit/6b682cbc02f25dcda630cce13724b38f5d94b01a))
+
 ## [1.29.0](https://github.com/TylerStaplerAtFanatics/stapler-squad/compare/v1.28.0...v1.29.0) (2026-05-18)
 
 
